@@ -1,0 +1,13 @@
+{
+  "taskId": "demo/hello",
+  "title": "Rich demo hello (input + reference + software + 3 variants)",
+  "summary": "Smallest task that covers the standard input/reference/software/output surface, with 3 variants exercising variant-param injection and multi-line output.",
+  "category": "demo",
+  "vm": {
+    "snapshot": "cpu-free-ubuntu",
+    "vcpus": 4,
+    "memory_gb": 16,
+    "disk_gb": 200,
+    "timeout_s": 1800
+  }
+}

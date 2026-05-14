@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.uv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# On-disk run artifacts — never check in
+.logs/
+.final_logs/
+
+# Per-developer experiment configs (workflow notes, model-swap probes).
+# Templates for users live at the top-level example_exp.yaml; anything
+# under experiments/ is treated as local-only state.
+experiments/
+
+# Per-session working notes / planning docs — not part of the public repo.
+docs/sessions/

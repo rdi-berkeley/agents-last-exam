@@ -1,0 +1,161 @@
+# =============================================================================
+# example_exp.yaml — fully annotated experiment config template
+# =============================================================================
+# Copy this file into your own experiments/ (gitignored) and edit. Run with:
+#
+#     uv run python -m ale run experiments/your_copy.yaml
+#
+# Dry-run (print the matrix without executing):
+#
+#     uv run python -m ale run experiments/your_copy.yaml --dry-run
+#
+# Filter (subset the matrix):
+#
+#     uv run python -m ale run experiments/your_copy.yaml \
+#       --agent cc_sonnet --task demo/hello
+#
+# All ${env:VARNAME} placeholders are substituted at load time; missing
+# env vars raise loudly (you will not accidentally run with empty creds).
+# =============================================================================
+
+
+# Human-readable batch name. Becomes the top dir under output.root, so
+# every run inside this experiment lives at
+# `<output.root>/<name>/<agent_id>/<model_slug>/<task_slug>/v<i>/<ts>/`.
+name: my_experiment
+
+
+# ---------------------------------------------------------------------------
+# output: where on-disk artifacts land. The ALE-v1.0 log spec writes per-run:
+#   run.json / events.jsonl / trajectory.json / eval_result.json
+#   output/<files mirrored from task's remote_output_dir>
+#   origin_log/<agent>/<deployer work_dir mirror>
+# ---------------------------------------------------------------------------
+output:
+  root: .logs        # directory; created if missing. .logs/ is gitignored.
+
+
+# ---------------------------------------------------------------------------
+# provider: VM lifecycle backend. Pick `kind` and supply matching config.
+# Only ONE provider per experiment.
+# ---------------------------------------------------------------------------
+provider:
+  # === Option A: gcs_direct ===
+  # Ephemeral VMs created via `gcloud compute instances create`. Each
+  # `acquire()` brings up a fresh VM matching the task's snapshot, polled
+  # via cua-computer-server :5000/cmd until ready.
+  kind: gcs_direct
+  project: sunblaze-4              # required
+  zone: us-west1-b                 # default us-west1-b
+  machine_type: e2-standard-4      # default e2-standard-4
+  network: agenthle-vpc            # ⚠️ must be a VPC where port 5000 is open
+  subnet: agenthle-vpc             # subnet within the network (same name OK)
+  boot_disk_gb: 600                # ≥ image size (agenthle-ubuntu-0505 = 600GB)
+  data_disk_gb: 200                # extra data disk; default 200GB
+  data_disk_type: pd-balanced
+  instance_prefix: ale             # VM names look like `ale-<snapshot>-<ts>-<6>`
+  # Map per-task snapshot tags → real image names. Tags come from each
+  # task's task_card.json (`vm.snapshot`).
+  images:
+    cpu-free-ubuntu: agenthle-ubuntu-0505
+    cpu-free: agenthle-dev-cpu-free-0505
+    cpu-license: agenthle-dev-cpu-licensed-0505
+    gpu-free: agenthle-dev-gpu-free-0505
+    gpu-license: agenthle-dev-gpu-licensed-0505
+  # cua-server readiness polling
+  ready_timeout_s: 600.0           # default 600s; raise for slow boots
+  ready_poll_interval_s: 10.0      # default 10s between probes
+  ready_stable_successes: 2        # need N consecutive 200s before "ready"
+
+  # === Option B: static (uncomment to use; comment out the gcs_direct block above) ===
+  # No VM lifecycle. Points at a pre-existing VM by endpoint. Use for
+  # image-baking iteration and dev debug — release is a no-op.
+  #
+  # kind: static
+  # endpoint: http://34.94.42.143:5000   # required: cua-server URL
+  # os: linux                            # linux | windows
+  # vm_id: my_dev_vm                     # informational label in logs
+  # cleanup_on_release: false            # if true + cleanup_script set, runs script on release
+  # cleanup_script: null                 # shell snippet (rm -rf work_dir, etc.)
+
+
+# ---------------------------------------------------------------------------
+# agents: one or more agents to run. The full matrix is agents × tasks × variants.
+# Each agent gets a stable `id` (used in output paths) so multiple configs
+# of the same class don't collide.
+# ---------------------------------------------------------------------------
+agents:
+  # Shortcut class form: `claude_code` → ClaudeCodeDeployer + ClaudeCodeConfig
+  - id: cc_sonnet
+    class: claude_code
+    config:
+      # ---- core BaseAgentConfig fields (every agent has these) ----
+      model: anthropic/claude-sonnet-4-6        # OpenRouter slug (or anthropic-direct id)
+      max_turns: 20                             # null | int; null = use deployer default
+      timeout_s: 900                            # wall budget for the whole episode
+      save_screenshots: true                    # hint to deployer (CLI-specific)
+      api_keys: {}                              # bag of name→value for arbitrary env vars
+      # ---- ClaudeCode-specific ----
+      anthropic_api_key: ""                     # set this OR openrouter_api_key
+      openrouter_api_key: ${env:OPENROUTER_API_KEY}
+      base_url: null                            # custom OpenAI-compatible base URL
+      max_budget_usd: null                      # null = unbounded
+      disabled_tools: []                        # e.g. ["WebSearch", "Bash"]
+      dangerously_skip_permissions: true        # default true for benchmark eval
+
+  # Same class, different model — no separate yaml file needed.
+  - id: cc_opus
+    class: claude_code
+    config:
+      model: anthropic/claude-opus-4-7
+      openrouter_api_key: ${env:OPENROUTER_API_KEY}
+      max_turns: 30
+      max_budget_usd: 10.0
+      timeout_s: 1800
+
+  # Fully-qualified class path (for agents not in the shortcut registry).
+  # Config class is inferred from the deployer's __init__ signature.
+  # - id: my_custom_agent
+  #   class: ale.agents.installed.claude_code.deployer.ClaudeCodeDeployer
+  #   config:
+  #     model: claude-opus-4-7
+  #     anthropic_api_key: ${env:ANTHROPIC_API_KEY}
+
+
+# ---------------------------------------------------------------------------
+# tasks: paths under tasks/<...>/main.py (no leading "tasks/" prefix).
+# variants: list of integer indices into the task's load() return value.
+# ---------------------------------------------------------------------------
+tasks:
+  - path: demo/hello
+    variants: [0, 1, 2]            # runs all 3 variants of demo/hello
+
+  # - path: bioinformatics/spatial_transcriptomics
+  #   variants: [0]                # just one variant
+
+
+# ---------------------------------------------------------------------------
+# artifacts: how to mirror VM-side work_dir + output_dir back to local disk.
+# Primary path: VM `gsutil` pushes to a GCS bucket, local `gsutil` pulls down.
+# Fallback (fallback_to_cua=true): if GCS is unreachable, mirror via the
+# cua-computer-server file API directly. Slow but always available.
+# ---------------------------------------------------------------------------
+artifacts:
+  gcs_bucket: null                              # null → always CUA direct
+  # gcs_bucket: agenthle-artifacts              # uncomment to enable GCS bridge
+  gcs_local_key_file: null                      # path to SA JSON on this machine
+  # gcs_local_key_file: ${env:ALE_ARTIFACT_GCS_KEY_FILE}
+  gcs_vm_key_file: null                         # path to SA JSON inside the VM (pre-staged)
+  # gcs_vm_key_file: /etc/ale/artifact-sa.json
+  fallback_to_cua: true                         # if GCS fails, fall back transparently
+
+
+# ---------------------------------------------------------------------------
+# concurrency: max simultaneous run units. The Runner uses asyncio.Semaphore.
+#
+#   1   → strictly sequential. ALWAYS use 1 with `static` provider — one VM
+#         is shared across all units, and the deployer's work_dir collides.
+#   N   → parallel. Safe with `gcs_direct` (each acquire() = new VM).
+#         Cap by GCP quota + your API rate limits.
+# ---------------------------------------------------------------------------
+concurrency: 1
