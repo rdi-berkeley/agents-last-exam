@@ -69,8 +69,8 @@ async def run_one_unit(
     state we have (status=cancelled, eval_status=not_executed, etc.)
     before returning.
     """
-    # 1. Construct agent + env.
-    agent, deployer = build_agent(unit.agent_spec)
+    # 1. Construct deployer + env.
+    deployer = build_agent(unit.agent_spec)
     env = ale.make(unit.task_path, provider=provider)
 
     # 2. Open RunWriter (creates the run dir + events.jsonl).
@@ -103,7 +103,7 @@ async def run_one_unit(
     try:
         try:
             rw.emit_event("agent_run_started")
-            result = await agent.run(env, variant_index=unit.variant_index)
+            result = await deployer.run(env, variant_index=unit.variant_index)
             rw.emit_event(
                 "agent_finished", status=result.status, score=result.reward,
             )
@@ -126,7 +126,7 @@ async def run_one_unit(
             ))
             rw.emit_event("artifact_mirror_started",
                           gcs_bucket=mirror._cfg.gcs_bucket or "(cua direct)")
-            report = await agent.mirror_artifacts(env, mirror)
+            report = await deployer.mirror_artifacts(env, mirror)
             rw.emit_event("artifact_mirror_done", report=report)
         except (KeyboardInterrupt, asyncio.CancelledError) as exc:
             status = "cancelled"

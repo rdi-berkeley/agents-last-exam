@@ -1,4 +1,4 @@
-"""Shared install helpers for installed-agent deployers.
+"""Shared install helpers for in-VM agent deployers.
 
 These run against a ``cua_bench.DesktopSession`` and stage the toolchain a
 generic CLI agent needs:

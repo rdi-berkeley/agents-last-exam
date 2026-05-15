@@ -2,7 +2,7 @@
 
 ``install()`` is verify-or-install: if Node / claude / MCP server are baked
 into the image, it skips; otherwise it runs the shared
-:mod:`ale.agents.installed.runtime_install` helpers to stage them.
+:mod:`ale.agents.runtime_install` helpers to stage them.
 
 ``launch()`` dispatches by ``session.os_type``:
 
@@ -21,18 +21,18 @@ import shlex
 import time
 from typing import TYPE_CHECKING, Any
 
-from ale.agents.installed.base import (
+from ale.agents.base import (
     AgentRunResult,
-    InstalledAgentDeployer,
+    BaseAgentDeployer,
 )
-from ale.agents.installed.cli_flags import (
+from ale.agents.cli_flags import (
     CliFlag,
     EnvVar,
     build_cli_args,
     build_env,
     render_env_lines,
 )
-from ale.agents.installed.runtime_install import (
+from ale.agents.runtime_install import (
     ensure_node,
     npm_install_global,
     upload_mcp_server,
@@ -120,7 +120,7 @@ CLAUDE_NPM_PACKAGE = "@anthropic-ai/claude-code@2.1.85"
 # Deployer
 # =============================================================================
 
-class ClaudeCodeDeployer(InstalledAgentDeployer):
+class ClaudeCodeDeployer(BaseAgentDeployer):
     """Three-phase deployer for the Claude Code CLI."""
 
     def __init__(self, config: ClaudeCodeConfig):

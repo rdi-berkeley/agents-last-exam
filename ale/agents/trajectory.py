@@ -4,14 +4,11 @@ Sized to be a strict subset of harbor's `ATIF <https://github.com/openai/...>`_
 (omitting fields we don't need yet) plus a small ``extra`` dict on Step and
 Trajectory for agent-specific metadata that doesn't fit the standard shape.
 
-Two agent flavors populate this:
-
-- :class:`NativeAgent` builds it incrementally via :class:`TrajectoryBuilder`
-  inside the framework step loop — one ``Step`` per ``act()`` ↔ ``env.step()``
-  pair, plus a leading ``user`` step for the instruction.
-- :class:`InstalledAgent` parses its CLI's structured log (stream-json for
-  claude-code, event jsonl for openclaw, ...) into the same Steps in
-  :meth:`InstalledAgentDeployer.collect`.
+Deployers populate this from their agent's structured logs (stream-json for
+claude-code, event jsonl for openclaw, ...). The framework seeds a leading
+``user``-source Step (the instruction); :meth:`BaseAgentDeployer.collect`
+appends the rest. Sub-agents (claude-code's ``Task`` tool, native agents
+that spawn sub-loops) attach under :attr:`Trajectory.subagent_trajectories`.
 
 Storage is the Runner's job: ``trajectory.model_dump_json(indent=2)`` to a
 file. Screenshots are referenced **by path** (see :class:`ImageSource`) and

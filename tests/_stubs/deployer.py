@@ -1,4 +1,4 @@
-"""StubInstalledAgentDeployer: pretends to be an in-VM agent for tests.
+"""StubAgentDeployer: pretends to be an agent for tests.
 
 ``solver(session)`` is the test-injected "agent behavior" — called inside
 ``launch``. The deployer appends one synthetic ``agent`` Step to the
@@ -9,10 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Awaitable, Callable, ClassVar
 
-from ale.agents.installed.base import (
+from ale.agents.base import (
     AgentRunResult,
-    InstalledAgentConfig,
-    InstalledAgentDeployer,
+    BaseAgentConfig,
+    BaseAgentDeployer,
 )
 from ale.agents.trajectory import TrajectoryBuilder
 
@@ -20,26 +20,26 @@ SolverFn = Callable[[object], Awaitable[None]]
 
 
 @dataclass
-class StubInstalledAgentConfig(InstalledAgentConfig):
-    name: ClassVar[str] = "stub-installed"
+class StubAgentConfig(BaseAgentConfig):
+    name: ClassVar[str] = "stub-agent"
     model: str = "stub-model"
 
 
-class StubInstalledAgentDeployer(InstalledAgentDeployer):
+class StubAgentDeployer(BaseAgentDeployer):
     def __init__(
         self,
         solver: SolverFn,
         *,
-        config: StubInstalledAgentConfig | None = None,
+        config: StubAgentConfig | None = None,
     ):
         self._solver = solver
-        self._cfg = config or StubInstalledAgentConfig()
+        self._cfg = config or StubAgentConfig()
         self.install_calls = 0
         self.launch_calls = 0
         self.collect_calls = 0
 
     @property
-    def config(self) -> StubInstalledAgentConfig:
+    def config(self) -> StubAgentConfig:
         return self._cfg
 
     @property
@@ -63,4 +63,4 @@ class StubInstalledAgentDeployer(InstalledAgentDeployer):
         )
 
     def work_dir(self, session) -> str | None:
-        return None      # stub doesn't write anything on a "VM"
+        return None      # stub doesn't write anything anywhere

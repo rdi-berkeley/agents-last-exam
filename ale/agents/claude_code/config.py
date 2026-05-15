@@ -1,7 +1,7 @@
 """ClaudeCodeConfig: per-episode knobs for the Claude Code CLI deployer.
 
 API keys are **never auto-read** from the environment — callers pass them
-in explicitly. Inherits :class:`InstalledAgentConfig` for the shared
+in explicitly. Inherits :class:`BaseAgentConfig` for the shared
 ``model`` / ``max_turns`` / ``timeout_s`` / ``api_keys`` / ``install_paths``
 surface; adds Claude-specific knobs below.
 
@@ -20,11 +20,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-from ale.agents.installed.base import InstalledAgentConfig
+from ale.agents.base import BaseAgentConfig
 
 
 @dataclass
-class ClaudeCodeConfig(InstalledAgentConfig):
+class ClaudeCodeConfig(BaseAgentConfig):
     """Tunables for :class:`ClaudeCodeDeployer`."""
 
     name: ClassVar[str] = "claude-code"

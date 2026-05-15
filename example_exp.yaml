@@ -116,7 +116,7 @@ agents:
   # Fully-qualified class path (for agents not in the shortcut registry).
   # Config class is inferred from the deployer's __init__ signature.
   # - id: my_custom_agent
-  #   class: ale.agents.installed.claude_code.deployer.ClaudeCodeDeployer
+  #   class: ale.agents.claude_code.deployer.ClaudeCodeDeployer
   #   config:
   #     model: claude-opus-4-7
   #     anthropic_api_key: ${env:ANTHROPIC_API_KEY}

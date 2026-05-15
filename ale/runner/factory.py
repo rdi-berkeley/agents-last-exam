@@ -9,7 +9,7 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
-from ale.agents.installed.base import InstalledAgent
+from ale.agents.base import BaseAgentDeployer
 from ale.core.provider import Provider
 
 from .spec import AgentSpec, ProviderSpec
@@ -56,8 +56,8 @@ def build_provider(spec: ProviderSpec) -> Provider:
 
 AGENT_REGISTRY: dict[str, tuple[str, str]] = {
     "claude_code": (
-        "ale.agents.installed.claude_code.deployer.ClaudeCodeDeployer",
-        "ale.agents.installed.claude_code.config.ClaudeCodeConfig",
+        "ale.agents.claude_code.deployer.ClaudeCodeDeployer",
+        "ale.agents.claude_code.config.ClaudeCodeConfig",
     ),
     # Add more here as deployers come online:
     # "openclaw_cli": ("ale...OpenClawDeployer", "ale...OpenClawConfig"),
@@ -65,8 +65,8 @@ AGENT_REGISTRY: dict[str, tuple[str, str]] = {
 }
 
 
-def build_agent(spec: AgentSpec) -> tuple[InstalledAgent, Any]:
-    """Return ``(InstalledAgent, deployer)`` ready for use.
+def build_agent(spec: AgentSpec) -> BaseAgentDeployer:
+    """Return a configured deployer ready for ``deployer.run(env)``.
 
     ``spec.class_`` may be either:
       - a shortcut key from :data:`AGENT_REGISTRY` (e.g. ``"claude_code"``)
@@ -87,9 +87,7 @@ def build_agent(spec: AgentSpec) -> tuple[InstalledAgent, Any]:
         raise TypeError(
             f"agent id={spec.id!r} (class {spec.class_}) got bad config: {exc}"
         ) from exc
-    deployer = dep_cls(cfg)
-    agent = InstalledAgent(deployer=deployer)
-    return agent, deployer
+    return dep_cls(cfg)
 
 
 # =============================================================================

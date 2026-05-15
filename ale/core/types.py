@@ -27,7 +27,7 @@ class Submit(Action):
 
 
 class RunCommand(Action):
-    """Execute a shell command in the VM (for NativeAgent step loops)."""
+    """Execute a shell command in the VM (ad-hoc env.step pass-through)."""
 
     cmd: str | list[str]
     timeout: float | None = None

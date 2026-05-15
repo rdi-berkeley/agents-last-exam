@@ -161,8 +161,9 @@ class AgenthleEnv(Environment[Action, AgenthleObservation, AgenthleState]):
                 eval_error=eval_error,
             )
 
-        # Pass-through actions for NativeAgent loops. The DesktopSession
-        # surface is what's available; we forward to its named methods.
+        # Pass-through actions (RunCommand / ReadFile / WriteFile / Screenshot).
+        # The DesktopSession surface is what's available; we forward to its
+        # named methods. Useful for ad-hoc env stepping in tests / probes.
         s = self._session
         if isinstance(action, RunCommand):
             cr = await s.run_command(action.cmd)  # type: ignore[attr-defined]
@@ -198,12 +199,12 @@ class AgenthleEnv(Environment[Action, AgenthleObservation, AgenthleState]):
         return self._st
 
     # -------------------------------------------------------------------------
-    # Public handles for Agent / Deployer co-location
+    # Public handles for Deployer co-location
     # -------------------------------------------------------------------------
-    # InstalledAgent's deployer needs the session to install/launch/collect the
-    # in-VM CLI. We expose these read-only after reset_async(); before that
-    # they're None. Agents/runners are the intended callers, not arbitrary
-    # task code (tasks see the session via their setup/evaluate signatures).
+    # BaseAgentDeployer subclasses need the session to install/launch/collect.
+    # We expose these read-only after reset_async(); before that they're None.
+    # Deployers/runners are the intended callers, not arbitrary task code
+    # (tasks see the session via their setup/evaluate signatures).
 
     @property
     def session(self) -> "cb.DesktopSession":

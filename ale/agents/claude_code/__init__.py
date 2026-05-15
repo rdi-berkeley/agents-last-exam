@@ -1,4 +1,4 @@
-"""Claude Code installed-agent deployer."""
+"""Claude Code in-VM deployer."""
 
 from .config import ClaudeCodeConfig
 from .deployer import ClaudeCodeDeployer

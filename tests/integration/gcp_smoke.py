@@ -35,8 +35,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import ale
-from ale.agents.installed.base import InstalledAgent
-from ale.agents.installed.claude_code import ClaudeCodeConfig, ClaudeCodeDeployer
+from ale.agents.claude_code import ClaudeCodeConfig, ClaudeCodeDeployer
 from ale.io import RunWriter, slug_task
 from ale.io.artifact_mirror import ArtifactMirror, ArtifactMirrorConfig
 from ale.providers.gcs_direct import GCSDirectConfig, GCSDirectProvider
@@ -170,7 +169,6 @@ async def run_once(os_kind: str, variant_index: int = 0) -> int:
     provider = build_provider(profile, os_kind)
     env = ale.make("demo/hello", provider=provider)
     deployer = ClaudeCodeDeployer(cfg)
-    agent = InstalledAgent(deployer=deployer)
 
     t0 = time.monotonic()
     status = "not_executed"
@@ -191,7 +189,7 @@ async def run_once(os_kind: str, variant_index: int = 0) -> int:
                 "snapshot": profile["snapshot_label"],
                 "image": profile["image"],
             })
-            result = await agent.run(env, variant_index=variant_index)
+            result = await deployer.run(env, variant_index=variant_index)
             rw.emit_event("agent_finished",
                           status=result.status, reward=result.reward)
             status = result.status
@@ -208,7 +206,7 @@ async def run_once(os_kind: str, variant_index: int = 0) -> int:
             ))
             rw.emit_event("artifact_mirror_started",
                           gcs_bucket=mirror._cfg.gcs_bucket or "(none, cua direct)")
-            mirror_report = await agent.mirror_artifacts(env, mirror)
+            mirror_report = await deployer.mirror_artifacts(env, mirror)
             rw.emit_event("artifact_mirror_done", report=mirror_report)
         except (KeyboardInterrupt, asyncio.CancelledError) as exc:
             status = "cancelled"

@@ -110,18 +110,35 @@ Each implements: ``acquire``, ``release``, ``open_session``, ``heartbeat``,
 ``cancel_external``. Heartbeat is now a Provider concern, not a top-level
 loop in `engine.py` with silent excepts.
 
-## Agent + Deployer (next slice)
+## Agent: BaseAgentDeployer
 
-Out of scope for v0.1.0. Sketch:
+One ABC, no `BaseAgent` wrapper. Each CLI / runtime is one concrete deployer:
 
 ```
-BaseAgent.run(env: AgenthleEnv) -> EpisodeResult
+BaseAgentDeployer (abc)
+    install(session)            stage prereqs (in-VM file writes / docker pull / ...)
+    launch(session, prompt, t)  spawn the agent, wait → AgentRunResult
+    collect(session, run, b)    parse logs → ATIF Trajectory steps
+    work_dir(session)           where the deployer writes (mirror source)
+    work_dir_on_vm: ClassVar[bool] = True
 
-NativeAgent(BaseAgent)         # orchestrator-side step loop
-InstalledAgent(BaseAgent)      # in-VM CLI: claude-code / openclaw / ...
-    └── InstalledAgentDeployer ABC  (install / launch / collect)
-        └── 12 concrete deployers sharing a Toolchain mixin (Node/MCP)
+    # framework-provided concrete:
+    run(env, *, variant_index)  reset → install → launch → collect → submit
+    mirror_artifacts(env, m)    pull work_dir + task.remote_output_dir → run dir
 ```
 
-Deployer becomes Agent-side, **not** env-side. One implementation per CLI,
+Two flavors share this base, distinguished only by `work_dir_on_vm`:
+
+- **In-VM** (default `True`). Agent CLI runs inside the guest; install
+  stages binaries on the VM via `session`; mirror pulls VM dirs via cua
+  direct or the GCS bridge. Example: `ClaudeCodeDeployer`.
+- **Native** (`False`). Agent process runs on the ALE host (local
+  subprocess, docker container, ...). `install` may use `session` only
+  to read VM info (os_type, endpoint) needed by the local process; mirror
+  does a `shutil.copytree` from local disk.
+
+Both produce uniform `EpisodeResult` carrying an ALE-v1.0 `Trajectory`.
+Downstream consumers don't branch on flavor.
+
+Deployer is Agent-side, **not** env-side. One implementation per CLI,
 shared by all Providers (no more simprun/cuahouse double-tracked code).
