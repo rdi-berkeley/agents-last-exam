@@ -9,15 +9,10 @@ description = "Agent benchmark framework. Upper-layer-only replacement for agent
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+    # Framework essentials only. Per-agent deps live in
+    # `ale/agents/<agent>/pyproject.toml` (uv workspace members below).
     "openenv-core",
-    # cua chain — pin all to path so the editable cua submodule is the single
-    # source of truth (avoids PyPI drift). cua-agent + cua-computer + cua-core
-    # were added when we brought OpenClaw harness in-tree (ale.agents.ale_claw
-    # imports `from agent import ComputerAgent` etc.); litellm is transitive.
-    "cua-bench",
-    "cua-agent",
-    "cua-computer",
-    "cua-core",
+    "cua-bench",        # framework needs cb.DesktopSession for env/session
     "pydantic>=2.0",
     "httpx>=0.27",
     "anyio>=4",
@@ -30,7 +25,22 @@ dev = [
     "ruff>=0.5",
 ]
 
+[tool.uv.workspace]
+# Each agent declares its own deps in ale/agents/<agent>/pyproject.toml.
+# Per-agent docker images can `uv sync` against just their own pyproject
+# for true isolation.
+#
+# IMPORTANT: To install agent deps into the dev venv, you must use:
+#     uv sync --all-packages --extra dev
+# Plain `uv sync` only installs root deps (cua-bench / pydantic / etc.)
+# and skips every agent's deps. There's no "default install all members"
+# uv setting; it's an explicit flag.
+members = ["ale/agents/*"]
+exclude = ["ale/agents/_assets"]  # vendored MCP server JS, not a Python package
+
 [tool.uv.sources]
+# Shared across the workspace — root sources apply to all members so
+# each per-agent pyproject can just declare `cua-agent` (etc.) by name.
 openenv-core = { path = "../OpenEnv", editable = true }
 cua-bench    = { path = "../agenthle/submodules/cua/libs/cua-bench",   editable = true }
 cua-agent    = { path = "../agenthle/submodules/cua/libs/python/agent",    editable = true }

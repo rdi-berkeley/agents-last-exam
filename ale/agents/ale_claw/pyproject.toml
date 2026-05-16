@@ -1,0 +1,29 @@
+[project]
+name = "ale-ale-claw"
+version = "0.1.0"
+description = "OpenClaw harness native (host/docker) deployer for ALE."
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    # The OpenClaw harness lives in-tree at ale/agents/ale_claw/harness/.
+    # It imports from cua_bench/agent (cua SDK chain) and litellm/Pillow.
+    "cua-agent",
+    "cua-computer",
+    "cua-core",
+    # litellm + Pillow + typing_extensions are transitive via cua-agent
+    # but pin them explicitly so a cua-agent bump can't silently strip them.
+    "litellm>=1.80",
+    "Pillow>=10.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Per-agent member; the real package is `ale.agents.ale_claw` shipped by
+# the parent `agent-last-exam` wheel. Here we package just an empty marker
+# so uv workspace installs this member (and pulls its deps) without
+# duplicating the actual code.
+only-include = []
+sources = {}
+bypass-selection = true

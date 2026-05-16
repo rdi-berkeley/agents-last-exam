@@ -10,16 +10,20 @@ resolution-markers = [
     "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
+[manifest]
+members = [
+    "agent-last-exam",
+    "ale-ale-claw",
+    "ale-claude-code",
+]
+
 [[package]]
 name = "agent-last-exam"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
-    { name = "cua-agent" },
     { name = "cua-bench" },
-    { name = "cua-computer" },
-    { name = "cua-core" },
     { name = "httpx" },
     { name = "openenv-core" },
     { name = "pydantic" },
@@ -35,10 +39,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = ">=4" },
-    { name = "cua-agent", editable = "../agenthle/submodules/cua/libs/python/agent" },
     { name = "cua-bench", editable = "../agenthle/submodules/cua/libs/cua-bench" },
-    { name = "cua-computer", editable = "../agenthle/submodules/cua/libs/python/computer" },
-    { name = "cua-core", editable = "../agenthle/submodules/cua/libs/python/core" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "openenv-core", editable = "../OpenEnv" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -141,6 +142,32 @@ sdist = { url = "https://files.pythonhosted.org/packages/61/62/06741b57915636024
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/76/641ae371508676492379f16e2fa48f4e2c11741bd63c48be4b12a6b09cba/aiosignal-1.4.0-py3-none-any.whl", hash = "sha256:053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e", size = 7490, upload-time = "2025-07-03T22:54:42.156Z" },
 ]
+
+[[package]]
+name = "ale-ale-claw"
+version = "0.1.0"
+source = { editable = "ale/agents/ale_claw" }
+dependencies = [
+    { name = "cua-agent" },
+    { name = "cua-computer" },
+    { name = "cua-core" },
+    { name = "litellm" },
+    { name = "pillow" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cua-agent", editable = "../agenthle/submodules/cua/libs/python/agent" },
+    { name = "cua-computer", editable = "../agenthle/submodules/cua/libs/python/computer" },
+    { name = "cua-core", editable = "../agenthle/submodules/cua/libs/python/core" },
+    { name = "litellm", specifier = ">=1.80" },
+    { name = "pillow", specifier = ">=10.0" },
+]
+
+[[package]]
+name = "ale-claude-code"
+version = "0.1.0"
+source = { editable = "ale/agents/claude_code" }
 
 [[package]]
 name = "annotated-doc"

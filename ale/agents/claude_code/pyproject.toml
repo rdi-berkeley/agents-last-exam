@@ -1,0 +1,23 @@
+[project]
+name = "ale-claude-code"
+version = "0.1.0"
+description = "Claude Code in-VM deployer for ALE."
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    # No runtime Python deps — claude_code's install/launch use stdlib only
+    # (subprocess, pathlib, json). The deployer module imports cb.DesktopSession
+    # only for typing; cua-bench is in ALE root for env/session purposes.
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Per-agent member; the real package is `ale.agents.claude_code` shipped by
+# the parent `agent-last-exam` wheel. Here we package just an empty marker
+# so uv workspace installs this member (and pulls its deps) without
+# duplicating the actual code.
+only-include = []
+sources = {}
+bypass-selection = true
