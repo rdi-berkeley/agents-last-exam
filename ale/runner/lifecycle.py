@@ -207,10 +207,22 @@ async def _output_pipeline(
     if lt is None or lt.cb_task is None or not lt.cb_task.metadata:
         rw.emit_event("output_gather_skipped", reason="no_metadata")
         return
-    output_dir = lt.cb_task.metadata.get("remote_output_dir")
+    md = lt.cb_task.metadata
+    # Primary key (used by 226+ LinuxTaskConfig-based tasks + most Windows).
+    # Fallbacks cover a small tail surveyed in agenthle/tasks/:
+    #   - `output_path`        — 10 tasks (CTF/forensics in computing_math)
+    #   - `runtime_output_dir` — 2 tasks (transport_safety)
+    # Without these fallbacks, eval still scores correctly (eval reads on VM),
+    # but our <run_dir>/output/ would be empty for those tasks.
+    output_dir = (
+        md.get("remote_output_dir")
+        or md.get("output_path")
+        or md.get("runtime_output_dir")
+    )
     if not output_dir:
         rw.emit_event("output_gather_skipped",
-                      reason="no_remote_output_dir_in_metadata")
+                      reason="no_output_dir_in_metadata",
+                      checked_keys=["remote_output_dir", "output_path", "runtime_output_dir"])
         return
     try:
         session = await runtime.make_vm_session()

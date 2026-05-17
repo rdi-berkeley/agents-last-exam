@@ -132,8 +132,11 @@ class AgenthleEnv(Environment[Action, AgenthleObservation, AgenthleState]):
             raise RuntimeError("step_async() before reset_async()")
 
         # Final submission — call the task's evaluate() directly. Agenthle's
-        # convention returns `[float]` with exactly one element (legacy list
-        # shape); we take that element as the reward.
+        # convention is ``list[float]`` (legacy shape); we surface element 0
+        # as the reward. A scan of 398 agenthle tasks found ~13 that lack
+        # the ``list[float]`` annotation and a few that might return a bare
+        # number/None — :func:`_coerce_reward` accepts list, tuple, bare
+        # numeric, or None gracefully so downstream sees a clean float.
         if isinstance(action, Submit):
             t0 = time.monotonic()
             reward: float | None
@@ -141,7 +144,7 @@ class AgenthleEnv(Environment[Action, AgenthleObservation, AgenthleState]):
             eval_error: dict[str, Any] | None = None
             try:
                 scores = await self._lt.evaluate_fn(self._lt.cb_task, self._session)
-                reward = float(scores[0]) if scores else 0.0
+                reward = _coerce_reward(scores)
                 eval_status = "success"
             except Exception as exc:
                 reward = None
@@ -242,3 +245,37 @@ class AgenthleEnv(Environment[Action, AgenthleObservation, AgenthleState]):
             loop.create_task(self.close_async())
         else:
             loop.run_until_complete(self.close_async())
+
+
+def _coerce_reward(scores: Any) -> float:
+    """Normalize agenthle's evaluate() return into a single reward float.
+
+    Accepts:
+      - ``list[float]`` / ``tuple[float, ...]`` — canonical agenthle shape; take [0]
+      - bare ``int`` / ``float``                — return as-is
+      - ``None`` / empty list                   — 0.0
+      - anything else                           — 0.0 with a log line
+
+    Defensive because a 398-task survey turned up ~13 tasks whose
+    ``evaluate`` lacks a ``list[float]`` annotation; if any of them return
+    a bare scalar we don't want a TypeError to crash the run.
+    """
+    if scores is None:
+        return 0.0
+    if isinstance(scores, bool):
+        return float(scores)
+    if isinstance(scores, (int, float)):
+        return float(scores)
+    if isinstance(scores, (list, tuple)):
+        if not scores:
+            return 0.0
+        try:
+            return float(scores[0])
+        except (TypeError, ValueError):
+            return 0.0
+    # Unknown shape — log + 0.0 (don't crash the run)
+    import logging
+    logging.getLogger(__name__).warning(
+        "evaluate() returned unsupported shape %r; treating as 0.0", type(scores).__name__,
+    )
+    return 0.0
