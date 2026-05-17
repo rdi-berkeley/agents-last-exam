@@ -84,24 +84,27 @@ provider:
 # Each agent gets a stable `id` (used in output paths) so multiple configs
 # of the same class don't collide.
 # ---------------------------------------------------------------------------
+#
+# Each `agents[]` entry can also set `runtime: vm | local | docker`. If
+# omitted, the factory picks from the deployer's `supported_runtimes`
+# ClassVar: a single supported runtime is the default; with multiple
+# supported, "local" wins as the dev-ergonomic default. Mismatch
+# (e.g. claude_code + runtime: docker) raises at spec-load.
 agents:
-  # Shortcut class form: `claude_code` → ClaudeCodeDeployer + ClaudeCodeConfig
+  # ── claude_code ── in-VM only (deployer's CLI must live next to eval files)
+  # runtime: vm                          # implicit — claude_code only supports vm
   - id: cc_sonnet
     class: claude_code
     config:
-      # ---- core BaseAgentConfig fields (every agent has these) ----
-      model: anthropic/claude-sonnet-4-6        # OpenRouter slug (or anthropic-direct id)
-      max_turns: 20                             # null | int; null = use deployer default
-      timeout_s: 900                            # wall budget for the whole episode
-      save_screenshots: true                    # hint to deployer (CLI-specific)
-      api_keys: {}                              # bag of name→value for arbitrary env vars
-      # ---- ClaudeCode-specific ----
-      anthropic_api_key: ""                     # set this OR openrouter_api_key
+      model: anthropic/claude-sonnet-4-6        # OpenRouter slug
       openrouter_api_key: ${env:OPENROUTER_API_KEY}
-      base_url: null                            # custom OpenAI-compatible base URL
-      max_budget_usd: null                      # null = unbounded
-      disabled_tools: []                        # e.g. ["WebSearch", "Bash"]
-      dangerously_skip_permissions: true        # default true for benchmark eval
+      # anthropic_api_key: ""                  # alternative to openrouter
+      max_turns: 20
+      timeout_s: 900
+      dangerously_skip_permissions: true        # default for benchmark eval
+      # max_budget_usd: 5.0                     # optional spending cap
+      # disabled_tools: ["WebSearch"]           # claude CLI disallowedTools flag
+      # base_url: null                          # custom openai-compatible base
 
   # Same class, different model — no separate yaml file needed.
   - id: cc_opus
@@ -113,22 +116,34 @@ agents:
       max_budget_usd: 10.0
       timeout_s: 1800
 
-  # Native (host-side, in-process) deployer — OpenClaw harness.
-  # The agent runs in this Python process; uses env.session.computer to
-  # drive the VM. work_dir lives in /tmp/ale/ale_claw/<task_id>-<run_id>/
-  # and is shutil.copytree'd to <run_dir>/origin_log/ale-claw/ after the run.
-  # - id: ale_claw_sonnet
-  #   class: ale_claw
-  #   config:
-  #     model: openrouter/anthropic/claude-sonnet-4-20250514
-  #     openrouter_api_key: ${env:OPENROUTER_API_KEY}
-  #     max_turns: 100             # mapped to OpenClaw max_steps
-  #     timeout_s: 3600            # wall budget
-  #     # disabled_tools: ["web_search"]  # default; set [] + brave_api_key to enable
-  #     # summary_model: openrouter/anthropic/claude-haiku-4-5
-  #     # lightweight_model: openrouter/anthropic/claude-haiku-4-5
-  #     # thinking_level: medium     # off | low | medium | high
-  #     # image_retention_mode: openclaw   # or "cua"
+  # ── ale_claw ── native (host) — runs in this Python process by default;
+  # uses runtime.make_vm_session() to drive the VM via cua RPC.
+  - id: aleclaw_local
+    class: ale_claw
+    # runtime: local                     # implicit — local is the default for ale_claw
+    config:
+      model: openrouter/anthropic/claude-sonnet-4.6
+      openrouter_api_key: ${env:OPENROUTER_API_KEY}
+      max_turns: 100                            # mapped to OpenClaw max_steps
+      timeout_s: 3600                           # wall budget
+      # disabled_tools: ["web_search"]          # default; set [] + brave_api_key to enable
+      # summary_model: openrouter/anthropic/claude-haiku-4-5
+      # lightweight_model: openrouter/anthropic/claude-haiku-4-5
+      # thinking_level: medium                  # off | low | medium | high
+      # image_retention_mode: openclaw          # or "cua"
+
+  # ── ale_claw ── sandboxed in docker (same code, same config, just flips
+  # where it runs). Requires `ale/native-base:0.1.0` image built locally:
+  #   docker build -t ale/native-base:0.1.0 \
+  #     -f ale/runtime/Dockerfile.native_base ale/runtime/
+  - id: aleclaw_docker
+    class: ale_claw
+    runtime: docker
+    config:
+      model: openrouter/anthropic/claude-sonnet-4.6
+      openrouter_api_key: ${env:OPENROUTER_API_KEY}
+      max_turns: 100
+      timeout_s: 3600
 
   # Fully-qualified class path (for agents not in the shortcut registry).
   # Config class is inferred from the deployer's __init__ signature.
@@ -136,7 +151,7 @@ agents:
   #   class: ale.agents.claude_code.deployer.ClaudeCodeDeployer
   #   config:
   #     model: claude-opus-4-7
-  #     anthropic_api_key: ${env:ANTHROPIC_API_KEY}
+  #     openrouter_api_key: ${env:OPENROUTER_API_KEY}
 
 
 # ---------------------------------------------------------------------------

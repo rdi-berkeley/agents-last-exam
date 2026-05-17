@@ -1,446 +1,374 @@
 # How to add a new agent to ALE
 
-This is the SOP for implementing a new agent deployer. Pair it with:
+This is the SOP for implementing a new agent deployer. Companion docs:
 
-- `docs/DESIGN.md` — overall architecture (what `AgenthleEnv`, `Provider`, `BaseAgentDeployer` are and how they fit)
-- `docs/SESSION_API.md` — the in-VM RPC surface (`computer.interface.*`) you'll use inside `install` / `launch` / `collect`
-- `ale/agents/claude_code/deployer.py` — the only complete reference impl right now
+- `docs/DESIGN.md` — overall architecture (Env, Provider, Runtime, Deployer)
+- `docs/SESSION_API.md` — `cb.DesktopSession` / `computer.interface.*` surface
+- `ale/agents/claude_code/deployer.py` — in-VM (Phase 3 reference impl)
+- `ale/agents/ale_claw/deployer.py` — host / docker native (Phase 2/4 reference impl)
 
-> **Status**: covers in-VM agents (claude-code) and native (ale_claw / OpenClaw) end-to-end. Both reference impls in-tree. The Native cookbook (§7) is the post-mortem of the OpenClaw migration — read it before adding another native agent.
-
----
-
-## 0. Pick a flavor
-
-| Flavor | Where the agent process runs | `work_dir_on_vm` | Examples |
-|---|---|---|---|
-| **In-VM** (default) | Inside the guest. You stage binaries on the VM via the `computer` handle. | `True` | claude-code CLI, codex CLI, openclaw_cli |
-| **Native** | On the ALE host (local subprocess, docker container, …). You use `computer` only for VM info (`os_type`, endpoint) and to give the agent process a way to reach the VM. | `False` | openhands-in-docker, host-side computer-use loops |
-
-Two-line decision: if the agent is *one binary you can install + invoke inside the guest with stdin/argv*, go in-VM. Otherwise native.
+> **Status (post Runtime refactor)**: 3 runtimes wired & smoke-verified on
+> Linux dev VM 34.94.212.100 — `claude_code × vm` (22s), `ale_claw × local`
+> (20s), `ale_claw × docker` (57s first / ~10s cached). Both deployers
+> end-to-end on the same `BaseAgentDeployer` contract.
 
 ---
 
-## 1. File layout
+## 1. The contract — 1 ClassVar + 3 methods
+
+```python
+class BaseAgentDeployer(abc.ABC):
+    supported_runtimes: ClassVar[frozenset[str]]   # subset of {"vm","local","docker"}
+
+    def __init__(self, runtime: AgentRuntime):     # framework injects
+        self.runtime = runtime
+        self.config = runtime.config               # convenience alias
+
+    @abc.abstractmethod
+    async def install(self) -> None: ...           # stage prereqs
+
+    @abc.abstractmethod
+    async def launch(self, prompt: str) -> AgentRunResult: ...
+
+    @classmethod
+    @abc.abstractmethod
+    def parse_artifacts(
+        cls, *, work_dir, config, run_result, builder,
+    ) -> None: ...                                 # always runs on host
+```
+
+That's the whole deployer surface. **No `session`, no `env`, no work_dir
+method, no collect, no mirror_artifacts, no run.** The framework owns env
+lifecycle, runtime construction, artifact gathering, trajectory finalize.
+
+### What runtime gives you
+
+```python
+@dataclass
+class AgentRuntime:
+    work_dir: Path                                 # scratch dir framework created
+    vm_endpoint: str                               # e.g. http://34.94.212.100:5000
+    vm_os: Literal["linux","windows"]
+    config: BaseAgentConfig                        # your config dataclass
+
+    async def make_vm_session(self) -> cb.DesktopSession: ...   # ONE helper
+```
+
+Pure data. No API methods to learn — your deployer uses **stdlib**
+(`subprocess`, `pathlib`, `json`) for execution. Where `self` happens to
+live (VM Python / docker container / host process) is the framework's
+concern, decided by the runtime kind.
+
+---
+
+## 2. Pick a runtime
+
+| Runtime | Where deployer code runs | When to use |
+|---|---|---|
+| `vm` | Inside the eval VM (via `cua.python_exec`) | CLI-style agents that need to live next to eval files (claude-code, codex CLI) |
+| `local` | This Python process | Lightweight host-side harnesses; fastest dev iteration (ale_claw default) |
+| `docker` | A host docker container (`--network host`) | Same as local but with isolation: API-key env-bag, fs/dep sandboxing |
+
+Declare the supported set on your deployer; yaml `runtime: <kind>`
+validates against it (factory raises with the allowed set on mismatch):
+
+```python
+class MyAgentDeployer(BaseAgentDeployer):
+    supported_runtimes = frozenset({"local", "docker"})       # ale_claw style
+    # or:
+    supported_runtimes = frozenset({"vm"})                    # claude_code style
+```
+
+---
+
+## 3. File layout
 
 ```
 ale/agents/<your_agent>/
-├── __init__.py        # re-exports Config + Deployer
-├── config.py          # <Name>Config(BaseAgentConfig)
-└── deployer.py        # <Name>Deployer(BaseAgentDeployer)
+├── __init__.py             — re-exports YourConfig, YourDeployer
+├── pyproject.toml          — declares this agent's Python deps (uv workspace member)
+├── config.py               — YourConfig(BaseAgentConfig); sets `name` ClassVar
+├── deployer.py             — YourDeployer(BaseAgentDeployer)
+└── (whatever else: helpers, vendored harness, Dockerfile if docker-only)
 ```
 
-If your deployer needs static assets that ship with the package (e.g. a vendored MCP server, a runner script template), put them in `ale/agents/_assets/<your_agent>/`.
+The framework auto-discovers via `ale/runner/factory.py:AGENT_REGISTRY`
+— add a shortcut entry there pointing at your deployer + config classes
+(or yaml callers can use the fqdn `ale.agents.<x>.deployer.YourDeployer`).
 
 ---
 
-## 2. Implement the Config
+## 4. Per-agent dependencies
 
-```python
-# ale/agents/foo/config.py
-from dataclasses import dataclass
-from typing import ClassVar
-from ale.agents.base import BaseAgentConfig
+ALE root `pyproject.toml` carries only framework essentials
+(`openenv-core`, `cua-bench`, `pydantic`, `httpx`, `anyio`). All
+agent-specific deps live in `ale/agents/<your_agent>/pyproject.toml`:
 
+```toml
+[project]
+name = "ale-my-agent"
+version = "0.1.0"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "cua-agent",           # if you need cua's ComputerAgent SDK
+    "litellm>=1.80",       # for LLM routing
+    # any deps your agent harness imports
+]
 
-@dataclass
-class FooConfig(BaseAgentConfig):
-    name: ClassVar[str] = "foo"           # ← REQUIRED; goes into trajectory.agent.name + run.json
-    model: str = "foo-default-model"      # override base default
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-    # Routing / auth
-    foo_api_key: str = ""
-
-    # Knobs the framework already gives you on BaseAgentConfig:
-    #   model, max_turns, timeout_s, save_screenshots, api_keys, install_paths
-    # Subclasses MAY add fields. Do NOT redefine the standard six.
-
-    def __post_init__(self) -> None:
-        if not self.foo_api_key:
-            raise ValueError("FooConfig requires foo_api_key")
+[tool.hatch.build.targets.wheel]
+# Workspace member for dep-declaration only; actual code is in the parent
+# `agent-last-exam` wheel.
+only-include = []
+sources = {}
+bypass-selection = true
 ```
 
-Rules:
+uv workspace at the root picks up `ale/agents/*/pyproject.toml` automatically.
 
-1. `name` is a `ClassVar[str]` — class attribute, **not** an `__init__` field.
-2. **Never auto-read API keys from `os.environ`** in the config. Caller (yaml, test, integration smoke) passes them explicitly. Reasons: prevents cross-experiment key leak; redaction in `run.json` works.
-3. Validate at construction (`__post_init__`); fail loudly on missing required fields.
-4. Use `install_paths: InstallPaths` (inherited) for any in-VM path that varies per image (node binary, agent bin dir, work dir root). Don't hardcode `/usr/local/bin/node`.
+Install in dev: `uv sync --all-packages --extra dev`.
 
 ---
 
-## 3. Implement the Deployer
+## 5. Writing each method
+
+### `install()`
+
+Stage prereqs. The substrate is wherever the framework decided to place
+you. Use stdlib only.
 
 ```python
-# ale/agents/foo/deployer.py
-from typing import TYPE_CHECKING
-from ale.agents.base import AgentRunResult, BaseAgentDeployer
-from ale.agents.trajectory import TrajectoryBuilder
-from .config import FooConfig
-
-if TYPE_CHECKING:
-    from computer import Computer
-
-
-class FooDeployer(BaseAgentDeployer):
-    # ★ Flip this to False for native agents.
-    work_dir_on_vm = True
-
-    def __init__(self, config: FooConfig):
-        self._cfg = config
-
-    @property
-    def config(self) -> FooConfig:
-        return self._cfg
-
-    @property
-    def version(self) -> str | None:
-        return "@foo/cli@1.2.3"   # surfaces in trajectory.agent.version
-
-    async def install(self, computer: "Computer") -> None:
-        """Stage prereqs on the VM (verify-or-install pattern)."""
-
-    async def launch(
-        self, computer: "Computer", *, prompt: str, timeout_s: float,
-    ) -> AgentRunResult:
-        """Spawn the agent and wait. Always return AgentRunResult; raise only
-        if even *starting* fails."""
-
-    async def collect(
-        self, computer: "Computer", run: AgentRunResult,
-        builder: TrajectoryBuilder,
-    ) -> None:
-        """Parse on-VM logs into Trajectory Steps. Partial logs are valid;
-        emit a system step and continue rather than raising."""
-
-    def work_dir(self, computer: "Computer") -> str | None:
-        """Where everything you wrote lives. None skips origin_log mirroring."""
-        return self._cfg.install_paths.work_dir(computer.os_type, "foo")
+async def install(self) -> None:
+    import subprocess
+    from pathlib import Path
+    # self.runtime.work_dir exists; create whatever you need under it
+    Path(self.runtime.work_dir).mkdir(parents=True, exist_ok=True)
+    # Verify CLI is present (for vm-runtime: image-baked check)
+    if not Path("/usr/local/bin/mycli").exists():
+        raise RuntimeError("mycli missing on this image")
+    # Or for local/docker: assume your pyproject's deps are installed
+    # in this process and just sanity-check API keys.
 ```
 
-The framework owns `run()` and `mirror_artifacts()` on the base class — you don't override them.
+### `launch(prompt)`
 
-### 3.1 `install` — verify-or-install
-
-The pattern: assume the image *may* be baked with your CLI, and only install when missing.
+Spawn the agent. Block until done. Always return an `AgentRunResult`
+(set `status="failed"` + `error=...` on internal errors; only raise if
+*starting* failed).
 
 ```python
-async def install(self, computer):
-    iface = computer.interface
-    paths = self._paths(computer)
-
-    # 1. Node (image-baked on Linux; runtime-installable on Windows)
-    await ensure_node(computer, self._cfg.install_paths)
-
-    # 2. The CLI itself
-    if not await iface.file_exists(paths.cli_bin):
-        await npm_install_global(computer, "@foo/cli@1.2.3", self._cfg.install_paths)
-        if not await iface.file_exists(paths.cli_bin):
-            raise RuntimeError(f"foo CLI still missing at {paths.cli_bin}")
-
-    # 3. Per-run work dir + config files
-    await iface.create_dir(paths.work_dir)
-    await iface.write_text(paths.config_file, json.dumps({...}))
+async def launch(self, prompt: str) -> AgentRunResult:
+    import time, subprocess
+    # write prompt to work_dir, spawn process, poll until done, classify outcome
+    ...
+    return AgentRunResult(
+        status="completed",       # | "timeout" | "failed"
+        exit_code=0,
+        transcript_path=str(self.runtime.work_dir / "transcript.jsonl"),
+        duration_s=time.monotonic() - t0,
+    )
 ```
 
-Helpers in `ale/agents/runtime_install.py` you can reuse:
+If your launch needs to drive the eval VM (host-runtime agents only):
 
-- `ensure_node(computer, install_paths)` — verifies on Linux, downloads + extracts on Windows
-- `npm_install_global(computer, "pkg@ver", install_paths)` — handles PATH for Windows npm prefix
-- `upload_mcp_server(computer, install_paths)` — uploads the vendored `cua-mcp-server/` tree
+```python
+session = await self.runtime.make_vm_session()
+await session.computer.interface.run_command("...")    # ssh/api into VM
+```
 
-Use `computer.interface.run_command(cmd)` for arbitrary shell — it returns a `CommandResult(stdout, stderr, returncode)`. **Do not** use `session.run_command` (broken; see `docs/SESSION_API.md` §13).
+### `parse_artifacts(...)` — host-side classmethod
 
-### 3.2 `launch` — fire-and-poll
+```python
+@classmethod
+def parse_artifacts(
+    cls, *, work_dir, config, run_result, builder,
+) -> None:
+    """Always runs on framework host AFTER gather pulls work_dir locally.
+    Read files in work_dir, append Steps to builder."""
+    transcript = work_dir / "transcript.jsonl"
+    if not transcript.exists():
+        builder.add_step(source="system", message="no transcript",
+                         extra={"reason": "no_transcript"})
+        return
+    for line in transcript.read_text().splitlines():
+        event = json.loads(line)
+        # map to ATIF: source ∈ {"user","agent","environment","system"}
+        builder.add_step(source="agent", message=..., tool_calls=...,
+                         metrics=StepMetrics(input_tokens=..., output_tokens=...))
+```
 
-Pattern (Linux, demonstrated in `claude_code/deployer.py`):
+`builder` is a `TrajectoryBuilder` whose `add_step()` signature you can
+see in `ale/agents/trajectory.py`. The framework seeds the leading
+`source="user"` step (the instruction) before calling you.
 
-1. Write `prompt.txt`, `run_<agent>.sh`, and a `launch.sh` that does `setsid bash run_<agent>.sh &` then captures `$!` into a PID file.
-2. The runner script redirects stdout → `transcript.jsonl`, stderr → `stderr.log`, and ends with `echo $? > done.marker`.
-3. `run_command(launch.sh)` returns immediately. Poll: read `done.marker` (if present → done, classify by exit code); else check `kill -0 <pid>`; else `time.monotonic() ≥ deadline` → kill PID and return `timeout`.
+---
 
-Why setsid + PID file + done.marker: cua-server's HTTP `/cmd` returns when the spawned process is detached, so we can't rely on its return. PID + marker give us a robust poll surface that survives reconnects.
+## 6. Config
 
-Always return an `AgentRunResult` even on failure (`status="failed"` + `error=...`). Diagnose from `stderr.log` tail + transcript pattern matching; see `_diagnose_failure` in `claude_code/deployer.py`.
+Subclass `BaseAgentConfig` (which gives `model`, `max_turns`, `timeout_s`,
+`save_screenshots`, `api_keys`). Add your fields. **API keys are config
+fields, never read from `os.environ` in the config itself** — caller
+passes them explicitly. For docker/local-runtime agents, the executor
+injects them into the substrate via `--env-file` (docker) or
+`os.environ` patching (local) at runtime.
 
 ```python
 @dataclass
-class AgentRunResult:
-    status: str                  # "completed" | "timeout" | "failed"
-    transcript_path: str | None  # for collect()
-    stderr_path: str | None
-    pid: int | None
-    exit_code: int | None
-    duration_s: float | None
-    error: str | None
+class MyAgentConfig(BaseAgentConfig):
+    name: ClassVar[str] = "my-agent"
+    model: str = "anthropic/claude-sonnet-4.6"
+    openrouter_api_key: str | None = None
+    # ... agent-specific tunables ...
+
+    def __post_init__(self):
+        if not self.openrouter_api_key:
+            raise ValueError("openrouter_api_key required")
 ```
-
-### 3.3 `collect` — log → trajectory
-
-Steps you append must use one of:
-
-| `source` | When | Filled fields |
-|---|---|---|
-| `"agent"` | One LLM turn (your CLI's "assistant" event) | `message` (text), `tool_calls`, `metrics` (tokens, cost), `extra` |
-| `"environment"` | Tool result from the VM (your CLI's "tool_result"/"user" event reflecting back) | `observation.results: list[ToolResult]` |
-| `"system"` | Framework note: cancellation, timeout, collect error | `message`, `extra={"reason": ...}` |
-
-The framework has **already** seeded a `"user"` source step (the instruction) before `collect` runs. Don't duplicate it.
-
-Reference: `ClaudeCodeDeployer._consume_assistant` / `_consume_user` for stream-json → Trajectory. Other CLIs will need their own parser but the target shape is the same.
-
-If logs are partial / empty, emit a single `"system"` step explaining what was missing and return cleanly. Never raise out of `collect` — the framework wraps it but it's clearer if you handle it yourself.
-
-### 3.4 `work_dir` — the mirror source
-
-```python
-def work_dir(self, computer):
-    # In-VM: absolute VM path. Convention: install_paths.work_dir(os, "<agent_name>")
-    return self._cfg.install_paths.work_dir(computer.os_type, "foo")
-    # Native: an absolute LOCAL path you wrote to.
-    # Return None to skip origin_log mirroring entirely.
-```
-
-After your run ends, the framework calls `mirror_artifacts(env, mirror)` which:
-
-- If `work_dir_on_vm = True` → `mirror.pull_dir(computer, work_dir, "origin_log/<name>/")` (GCS bridge with cua-direct fallback)
-- If `work_dir_on_vm = False` → `shutil.copytree(work_dir, run_dir/"origin_log"/<name>/)`
-
-In either case, the task's `remote_output_dir` (always VM-side by definition) is mirrored separately to `output/`.
 
 ---
 
-## 4. Register the agent (optional)
+## 7. Runtime-specific notes
 
-For yaml shortcut keys, add to `ale/runner/factory.py`:
+### `vm` runtime (claude_code reference)
+
+- Deployer runs INSIDE the test VM via `cua.python_exec`. Framework
+  scp's `ale/runtime/` + `ale/agents/<your_agent>/` to
+  `/home/user/.ale-src/` on the VM (idempotent hash-skip).
+- `self.runtime.work_dir` is a VM path
+  (e.g. `/home/user/.ale/<your_agent>/<run_id>/`).
+- `subprocess.run("npm i -g ...")` executes ON the VM.
+- `VmRuntime` provides image-baked path conventions: `node_exe`,
+  `agent_bin_dir`, `cli_path("foo")`, etc.
+- **No `from X import Y` in install/launch method body** — cua's
+  `python_exec` source-generator lifts those to module level, before
+  `sys.path.insert(0, '/home/user/.ale-src')` runs. Use
+  `importlib.import_module` for any `ale.*` imports inside method bodies.
+  (Framework-side static `from ...` is fine; only the function shipped
+  to VM matters.) **`_vm_entry.py` is the framework's bootstrap; deployer
+  code generally won't hit this restriction directly.**
+
+### `local` runtime (ale_claw default)
+
+- Deployer runs in this Python process.
+- `self.runtime.work_dir` = `<run_dir>/origin_log/<agent>/` directly
+  (no copy needed).
+- Use `await self.runtime.make_vm_session()` to get a `cb.DesktopSession`
+  pointing at the eval VM.
+- API keys patched into `os.environ` only inside `launch()`'s scope
+  (via a context manager); cleaned up on exit. **Concurrency caveat**:
+  `concurrency > 1` with different API keys per unit races on
+  `os.environ` — use `docker` runtime if you need true isolation.
+
+### `docker` runtime (ale_claw isolation mode)
+
+- Deployer runs in a host docker container started from `ale/native-base:0.1.0`.
+- Build the base image once:
+  ```bash
+  docker build -t ale/native-base:0.1.0 \
+    -f ale/runtime/Dockerfile.native_base ale/runtime/
+  ```
+- Container bind-mounts:
+  - host `~/.cache/uv` → container `/root/.cache/uv` (uv cache, persists)
+  - host repo parent dir → container `/projects` (so uv sync resolves
+    path-pinned cua-* deps)
+  - host `<run_dir>/origin_log/<agent>/` → container `/work`
+    (this IS `self.runtime.work_dir`)
+- API keys via `--env-file` (kept out of `docker inspect` and cmdline).
+- Container entrypoint runs `uv sync --all-packages` then
+  `python -m ale.runtime._docker_entry`. First run ~30-60s, cached ~5-10s.
+- `--network host` so the container reaches the eval VM's public IP
+  directly.
+
+---
+
+## 8. Registry + yaml
+
+Add to `ale/runner/factory.py:AGENT_REGISTRY`:
 
 ```python
 AGENT_REGISTRY: dict[str, tuple[str, str]] = {
-    "claude_code": (".../ClaudeCodeDeployer", ".../ClaudeCodeConfig"),
-    "foo":         ("ale.agents.foo.deployer.FooDeployer",
-                    "ale.agents.foo.config.FooConfig"),
+    "claude_code": ("ale.agents.claude_code.deployer.ClaudeCodeDeployer",
+                    "ale.agents.claude_code.config.ClaudeCodeConfig"),
+    "ale_claw":    ("ale.agents.ale_claw.deployer.AleClawDeployer",
+                    "ale.agents.ale_claw.config.AleClawConfig"),
+    "my_agent":    ("ale.agents.my_agent.deployer.MyAgentDeployer",
+                    "ale.agents.my_agent.config.MyAgentConfig"),
 }
 ```
 
-Without registration, users can still reference your deployer by fqdn in yaml:
+yaml usage:
 
 ```yaml
 agents:
-  - id: foo_sonnet
-    class: ale.agents.foo.deployer.FooDeployer
-    config: { foo_api_key: ..., ... }
+  - id: my_local
+    class: my_agent
+    # runtime: local         # implicit if single supported, or local preferred
+    config:
+      model: anthropic/claude-sonnet-4.6
+      openrouter_api_key: ${env:OPENROUTER_API_KEY}
+
+  - id: my_sandboxed
+    class: my_agent
+    runtime: docker          # explicit override
+    config: {...}
 ```
 
-The factory infers the config class from `__init__(self, config: FooConfig)`'s annotation.
+The factory validates `runtime ∈ supported_runtimes` and raises with
+the allowed set on mismatch.
 
 ---
 
-## 5. Smoke test
+## 9. Testing
 
-### 5.1 Unit smoke (stubbed VM)
+Three layers, ordered by speed:
 
-Copy `tests/smoke_installed_agent.py` and swap the stub deployer for yours. Use `StubProvider` + `tests/_stubs/computer.py` (a fake `Computer` with the methods you'll call). Validate:
+1. **Validation unit** — copy `tests/smoke_runtime_validation.py` and add
+   cases for your deployer (auto-pick default, accept/reject runtimes).
+   No LLM, no VM.
 
-- `reward == 1.0` on the success path
-- `result.status == "completed"`
-- Trajectory step sources are `["user", "agent", ...]` in order
-- `result.trajectory.agent.name == "<your name>"`
+2. **Parser unit** — fabricate a fake on-disk `work_dir` with sample
+   transcript files, call `YourDeployer.parse_artifacts(...)`, assert
+   the trajectory builder's steps. Pattern in
+   `tests/smoke_ale_claw_transcript.py`.
 
-### 5.2 Real-VM smoke (optional but recommended)
-
-Copy `tests/integration/gcp_smoke.py` and:
-
-1. Swap the `ClaudeCodeDeployer` for yours.
-2. Pick an image that satisfies your prereqs (or set `work_dir_on_vm = False` and bring up the agent on the host instead).
-3. Run against `demo/hello` — the simplest task. Reward should be 1.0 if your agent can call `write_text` on the VM.
-
-Cost: ~$0.20/hour VM + your model's token cost.
+3. **Integration smoke** — full lifecycle against a real VM.
+   Models: `tests/integration/runtime_smoke_ale_claw_local.py`,
+   `runtime_smoke_ale_claw_docker.py`, `runtime_smoke_claude_code_vm.py`.
+   Set `OPENROUTER_API_KEY` env var; run against Linux dev VM
+   `34.94.212.100`.
 
 ---
 
-## 6. Dos and don'ts
+## 10. Dos and don'ts
 
-✅ Use `computer.interface.*` for all VM I/O. The full surface is in `docs/SESSION_API.md`.
+✅ Use stdlib (`subprocess`, `pathlib`, `json`) in install/launch — they
+work the same way on host, in container, or in VM.
 
-✅ Use `computer.os_type` for OS branching. Do not parse `uname` / `ver`.
+✅ Write everything to `self.runtime.work_dir`; framework handles
+mirroring to host.
 
-✅ Make `install` idempotent / verify-or-install — image-baked tools should be detected and skipped.
+✅ Return `AgentRunResult` (don't raise) for agent-internal errors.
 
-✅ Make `launch` always return `AgentRunResult`. Raise only if `setsid` itself fails.
+✅ Declare deps in `ale/agents/<your_agent>/pyproject.toml`, not in root.
 
-✅ Make `collect` safe on partial / missing logs.
+✅ Use `importlib.import_module` for `ale.*` imports inside vm-runtime
+deployer methods (cua python_exec gotcha).
 
-✅ Use `setsid + PID file + done.marker` on Linux, `Start-Process + PID + done.marker` on Windows. Don't rely on the cua `run_command` return code to know when the agent finished.
+❌ Don't take `session` / `env` as parameters — the contract gives you
+`runtime` at init, that's it.
 
-✅ Diagnose failures from `stderr.log` tail + transcript signature. Surface the diagnosis on `AgentRunResult.error`.
+❌ Don't decide where `work_dir` lives — the runtime owns it.
 
-✅ Pin your CLI version (npm package coord with `@X.Y.Z`). Surface it via `version` property.
+❌ Don't read API keys from `os.environ` in config code. Take them as
+explicit fields; the runtime puts them into the right place at run time.
 
-❌ Never auto-read API keys from `os.environ` in config. Caller passes them.
+❌ Don't write into `parse_artifacts`-only paths from install/launch
+without using `self.runtime.work_dir` — the framework only gathers
+work_dir, anything else is lost.
 
-❌ Never put the API key in the runner script body unredacted if you log the script. Build env via `EnvVar` descriptors (`ale/agents/cli_flags.py`) so it's contained.
-
-❌ Don't redefine `BaseAgentConfig`'s six standard fields (`model`, `max_turns`, `timeout_s`, `save_screenshots`, `api_keys`, `install_paths`). Override the default value with `= ...` if you want a different default.
-
-❌ Don't reach into `env._session` / `env._lt`. Use `env.computer`, `env.task_path`, `env.vm`.
-
-❌ Don't try to short-circuit Submit in `launch`. Your agent finishes; the framework runs `task.evaluate` separately.
-
----
-
-## 7. Native cookbook
-
-> Reference impl: `ale/agents/ale_claw/` (the OpenClaw harness — first native deployer in ALE). Read its `deployer.py` end-to-end before writing your own; this section pulls out the patterns you'll reuse.
-
-A native deployer runs the agent process **in this Python process** (or as a host-side subprocess / container), and uses `env.session` only to drive the test VM. Set `work_dir_on_vm: ClassVar[bool] = False` so `mirror_artifacts` does `shutil.copytree(work_dir, run_dir/origin_log/<name>/)` instead of pulling from the VM.
-
-### 7.1 Source layout — "rebuild not vendor"
-
-If your agent's value lives in an upstream Python package (claude-code is a CLI we install at runtime; OpenClaw is a Python library we **call**), don't black-box it as a `_vendor/` blob with `sys.modules` install tricks. Instead:
-
-1. Copy the upstream source files into `ale/agents/<your_agent>/<harness>/` (we use `harness/` for ale_claw — pick a name that makes sense).
-2. Sweep imports: anywhere upstream code says `from cua_bench.agents.openclaw.X` (etc.), rewrite to `from .X` (relative within your harness/) or to your new namespace. Anything that resolves under our existing deps (`cua_bench.agents.base`, `agent.*`, `core.telemetry`) stays.
-3. Drop the upstream's "wrapper class" file outright; fold its body into your `BaseAgentDeployer.launch()` directly (no inheritance, no hook gymnastics — just procedural code).
-4. Track the source commit in your config's `upstream_version` field so consumers know what to bump and `version` property surfaces it.
-
-Net result: the harness IS your code now. You can freely modify, simplify, drop dead branches, etc.
-
-### 7.2 Where to write logs
-
-The framework calls `mirror_artifacts(env, mirror)` after `launch` returns and before VM release. For native deployers it copies your `work_dir(...)` to `<run_dir>/origin_log/<config.name>/`. So your `launch()` should:
-
-```python
-async def launch(self, session, *, prompt, timeout_s):
-    run_id = uuid.uuid4().hex[:12]
-    self._work_dir = (
-        Path(tempfile.gettempdir()) / "ale" / "<your_agent>" / f"{self._task_id}-{run_id}"
-    )
-    self._work_dir.mkdir(parents=True, exist_ok=True)
-    # ... point your harness's session/memory dirs underneath self._work_dir ...
-```
-
-Then `work_dir(self, session) -> str | None` returns `str(self._work_dir)`. The framework handles the copy.
-
-`task_id` (used by some harnesses as a memory keying string) isn't passed to `launch()` directly. Override `run()` to capture it from `env.task_path` before delegating to base:
-
-```python
-async def run(self, env, *, variant_index=0):
-    self._task_id = (env.task_path or "default").replace("/", "__")
-    return await super().run(env, variant_index=variant_index)
-```
-
-### 7.3 API keys → `os.environ` patch
-
-Most LLM SDKs (litellm, anthropic, openai) read keys from `os.environ`. ALE convention forbids `os.environ.get(...)` reads from configs (cross-experiment leak risk), so the deployer sets them just-in-time and unwinds:
-
-```python
-@contextlib.contextmanager
-def _patched_environ(self, env: dict[str, str]):
-    old = {k: os.environ.get(k) for k in env}
-    os.environ.update(env)
-    try: yield
-    finally:
-        for k, v in old.items():
-            if v is None: os.environ.pop(k, None)
-            else:         os.environ[k] = v
-
-# in launch():
-with self._patched_environ(self._prepare_env()):
-    await asyncio.wait_for(_drive(), timeout=timeout_s)
-```
-
-**Concurrency caveat**: `os.environ` is process-wide. With `concurrency > 1` and DIFFERENT keys per unit, this races. Document the caveat; same-key batches are fine. v2 fix is subprocess wrapping per unit (out of scope for first native deployer).
-
-### 7.4 Wall-clock timeout
-
-The agent's own `max_turns` / `max_steps` controls step count, but native agents can hang on stuck LLM calls or runaway tool execution. Wrap the run loop:
-
-```python
-try:
-    await asyncio.wait_for(self._drive(), timeout=timeout_s)
-except asyncio.TimeoutError:
-    return AgentRunResult(status="timeout", duration_s=..., error=f"wall budget {timeout_s}s exceeded")
-```
-
-### 7.5 Status mapping
-
-Native agents typically have richer outcome semantics than just exit_code. Map them onto ALE's three:
-
-| Internal outcome | `AgentRunResult.status` |
-|---|---|
-| Agent emitted "done" signal explicitly | `completed` |
-| Hit `max_steps` budget without errors | `completed` (finished, just at budget — not a failure) |
-| Loop exited without "done" and not at max_steps | `failed` (suspect — should not happen) |
-| `asyncio.TimeoutError` from wait_for | `timeout` |
-| Any other exception | `failed`, error from `f"{type(exc).__name__}: {exc}"` |
-
-### 7.6 Trajectory translation
-
-For agents that write structured logs to disk (most do), put the parser in a sibling file like `transcript_to_trajectory.py` and call it from `collect()`:
-
-```python
-async def collect(self, session, run, builder):
-    if not self._work_dir or not self._work_dir.exists():
-        builder.add_step(source="system", message="...", extra={"reason": "no_work_dir"})
-        return
-    try:
-        parse_transcripts_into(self._work_dir, builder)
-    except Exception as exc:
-        builder.add_step(source="system", message=f"parse failed: ...", extra={"reason": "parse_error"})
-    builder.trajectory.extra.setdefault("<your_agent>", {}).update({...})
-```
-
-The parser emits `builder.add_step(source=..., message=..., tool_calls=..., observation=..., metrics=...)` calls. Mapping table:
-
-| Agent log event | ALE Step source | Filled fields |
-|---|---|---|
-| LLM turn (assistant text + function_call(s) + thinking) | `agent` | `message`, `reasoning`, `tool_calls`, `metrics` (one Step per assistant turn — merge all blocks into one) |
-| Tool result returned to agent | `environment` | `observation.results: list[ToolResult]` (link via `tool_call_id`) |
-| Framework / runtime note | `system` | `message`, `extra={"reason": ...}` |
-
-If the agent writes accurate token totals to a sidecar file (e.g. `state.json` for OpenClaw), prefer that over summing per-step transcript usage — the sidecar usually captures helper / compaction calls that bypass the transcript writer. Land the aggregated totals in `builder.trajectory.extra["<your_agent>"]["usage"]` for downstream consumers.
-
-### 7.7 Test isolation
-
-Unit smoke for native agents can validate the trajectory parser without ever calling the LLM. See `tests/smoke_ale_claw_transcript.py` for the pattern: hand-craft a fake transcript on disk, run your `parse_transcripts_into(...)`, assert step shape + metric aggregation. **Always doable in CI without API keys.**
-
-End-to-end smoke against a real VM + LLM has cost; gate it on env-var presence and run manually. See `tests/integration/static_smoke_ale_claw.py`.
-
-### 7.8 Dependency story
-
-Native deployers usually pull in heavy LLM SDKs (`litellm`, `anthropic`, `openai`, ...) and the cua `agent` SDK. Add them to ALE's `pyproject.toml`:
-
-```toml
-dependencies = [
-    "cua-bench",
-    "cua-agent",        # for `from agent import ComputerAgent` etc.
-    "cua-computer",     # transitive but pin to keep the chain consistent
-    "cua-core",         # for `core.telemetry`
-    # ...
-]
-
-[tool.uv.sources]
-cua-bench    = { path = "../agenthle/submodules/cua/libs/cua-bench",   editable = true }
-cua-agent    = { path = "../agenthle/submodules/cua/libs/python/agent",    editable = true }
-cua-computer = { path = "../agenthle/submodules/cua/libs/python/computer", editable = true }
-cua-core     = { path = "../agenthle/submodules/cua/libs/python/core",     editable = true }
-```
-
-Pin all cua-* siblings to the same submodule path (avoid PyPI drift between sibling versions). litellm + Pillow + typing-extensions usually come transitively via `cua-agent`.
-
----
-
-## 8. Reviewer checklist (paste into PR description)
-
-```
-[ ] Config subclasses BaseAgentConfig; name is ClassVar; __post_init__ validates required fields
-[ ] No os.environ reads in config
-[ ] install is verify-or-install (skips when image-baked)
-[ ] launch returns AgentRunResult on all paths; uses setsid (Linux) / Start-Process (Win)
-[ ] collect maps to {user, agent, environment, system} step sources; partial logs OK
-[ ] work_dir returns an absolute path under install_paths.work_dir(os, agent_name) (in-VM)
-       or under a host-side run-local dir (native; work_dir_on_vm=False)
-[ ] Registered in AGENT_REGISTRY (or documented to use fqdn)
-[ ] Unit smoke passes (smoke_<agent>.py via StubProvider)
-[ ] cli_version / version property surfaces the pinned CLI version
-```
+❌ Don't store the deployer's `cb.DesktopSession` on `self` — construct
+fresh via `runtime.make_vm_session()` each launch (multiple session
+clients on one cua-server is fine).

@@ -190,9 +190,6 @@ async def _ship_ale_subtree(session, *, agent_subdir: str) -> None:
     agent_root = ale_root / agent_subdir
     if agent_root.is_dir():
         for p in sorted(agent_root.rglob("*.py")):
-            # skip legacy / vendor noise
-            if p.name == "deployer_legacy.py":
-                continue
             files.append(p)
 
     await session.run_command(f"mkdir -p {VM_ALE_SRC_ROOT}/ale/runtime")
