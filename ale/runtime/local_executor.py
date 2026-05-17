@@ -1,13 +1,13 @@
 """LocalExecutor — runs the deployer in this Python process.
 
 Minimal. Constructs the deployer with the given runtime, awaits install
-then launch, returns the result. Gather is a no-op (work_dir is already
-on the host fs).
+then launch, returns the result. No gather is needed — lifecycle creates
+work_dir at ``<run_dir>/origin_log/<agent>/`` upfront, so the deployer
+writes directly to the final destination.
 """
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .executor import EXECUTORS, Executor
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class LocalExecutor(Executor):
-    """In-process executor. work_dir is already on the host fs."""
+    """In-process executor."""
 
     kind = "local"
 
@@ -50,15 +50,5 @@ class LocalExecutor(Executor):
         )
         return result
 
-    async def gather_to_host(
-        self,
-        runtime: "AgentRuntime",
-        *,
-        dest: Path,
-    ) -> Path:
-        """work_dir is already on host fs — return it directly, no copy."""
-        return runtime.work_dir
 
-
-# Register at import time
 EXECUTORS["local"] = LocalExecutor()

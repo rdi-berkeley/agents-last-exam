@@ -7,10 +7,16 @@ EXECUTORS instead of calling deployer.run(env) directly):
   2. env.reset_async              — task.setup on VM (framework session)
   3. make_runtime(kind, env, ...) — passive AgentRuntime context
   4. EXECUTORS[kind].run_deployer — place + run install + launch
-  5. EXECUTORS[kind].gather_to_host — materialize work_dir locally
-  6. deployer_cls.parse_artifacts — pure-fn host-side parse → builder
-  7. env.step_async(Submit())     — task.evaluate on VM
-  8. builder.finalize + RunWriter — disk-side finalization
+  5. POST-LAUNCH FAN-OUT — three concurrent pipelines:
+       (a) origin_log_pipeline — gather work_dir (vm: via ArtifactMirror;
+           local/docker: no-op — work_dir is already at run_dir/origin_log/),
+           then run deployer_cls.parse_artifacts → builder
+       (b) output_pipeline — pull task.metadata['remote_output_dir'] from
+           VM to run_dir/output/ via ArtifactMirror (GCS bridge if configured)
+       (c) eval_pipeline — env.step_async(Submit()) runs task.evaluate on VM
+     All three awaited via asyncio.gather; each pipeline that needs a
+     VM session creates a fresh one (cb.DesktopSession is not task-safe).
+  6. builder.finalize + RunWriter — disk-side finalization
 
 The 3-tier try/except/finally pattern is preserved so SIGTERM mid-flight
 still finalizes run.json / eval_result.json / events.jsonl.
@@ -33,6 +39,7 @@ from ale.agents.trajectory import TrajectoryBuilder
 from ale.core.provider import Provider
 from ale.core.types import Submit
 from ale.io import RunWriter, slug_task
+from ale.io.artifact_mirror import ArtifactMirror, ArtifactMirrorConfig
 from ale.runtime import EXECUTORS, AgentRuntime
 from ale.runtime.docker import DockerRuntime
 from ale.runtime.local import LocalRuntime
@@ -105,7 +112,7 @@ def make_runtime(
         vm_work_dir = Path(
             f"/home/user/.ale/{agent_name}/{run_id}"
         )
-        # Ensure host gather dest exists before executor runs gather_to_host
+        # Ensure host gather dest exists ahead of post-launch fan-out
         host_origin_dir.mkdir(parents=True, exist_ok=True)
         return VmRuntime(
             work_dir=vm_work_dir,
@@ -126,56 +133,94 @@ def make_runtime(
     raise ValueError(f"unknown runtime kind: {kind!r}")
 
 
-async def _gather_task_output(env, *, dest: Path, rw, slug: str) -> None:
-    """Pull task.metadata['remote_output_dir'] from VM → host dest.
+# =============================================================================
+# Post-launch concurrent pipelines (called via asyncio.gather in run_one_unit)
+# =============================================================================
 
-    The task's setup() typically writes a path string to its metadata so the
-    framework knows where on the VM the eval evaluator will read from. We
-    mirror that dir to host for debug + record-keeping. Best-effort: if no
-    such metadata or pull fails, we log + skip (the eval already ran on VM).
+async def _origin_log_pipeline(
+    *,
+    runtime: AgentRuntime,
+    mirror: ArtifactMirror,
+    deployer_cls,
+    cfg,
+    run_result,
+    builder: TrajectoryBuilder,
+    origin_dest: Path,
+    rw,
+    slug: str,
+) -> None:
+    """Gather deployer work_dir → host, then parse_artifacts into builder.
+
+    For local/docker runtimes the work_dir was already created at
+    `<run_dir>/origin_log/<agent>/` so the gather is a no-op. For vm
+    runtime, mirror.pull_dir does the VM → host copy (GCS bridge if
+    configured, cua-direct otherwise).
+    """
+    # 1. Materialize artifacts on host
+    if runtime.kind == "vm":
+        # work_dir is a VM path; pull to <run_dir>/origin_log/<agent>/
+        session = await runtime.make_vm_session()
+        try:
+            report = await mirror.pull_dir(
+                session, str(runtime.work_dir), f"origin_log/{cfg.name}",
+            )
+            rw.emit_event("origin_log_gather_done", report=report)
+        except Exception as exc:                                # noqa: BLE001
+            rw.emit_event("origin_log_gather_failed", error=str(exc))
+            raise
+    # else: local + docker — work_dir is already at origin_dest on host
+
+    # 2. parse_artifacts (pure-fn classmethod)
+    try:
+        deployer_cls.parse_artifacts(
+            work_dir=origin_dest,
+            config=cfg,
+            run_result=run_result,
+            builder=builder,
+        )
+    except Exception as parse_exc:                              # noqa: BLE001
+        logger.exception("[%s] parse_artifacts threw", slug)
+        builder.add_step(
+            source="system",
+            message=f"parse_artifacts failed: "
+                    f"{type(parse_exc).__name__}: {parse_exc}",
+            extra={"reason": "parse_error"},
+        )
+
+
+async def _output_pipeline(
+    *,
+    env,
+    runtime: AgentRuntime,
+    mirror: ArtifactMirror,
+    rw,
+    slug: str,
+) -> None:
+    """Pull task.metadata['remote_output_dir'] → <run_dir>/output/.
+
+    Always on VM regardless of agent runtime — the task wrote there on
+    the VM. We use a fresh session (via runtime.make_vm_session) so we
+    don't race with env.session (which is being used concurrently by
+    env.step(Submit())).
     """
     lt = getattr(env, "_lt", None)
     if lt is None or lt.cb_task is None or not lt.cb_task.metadata:
-        rw.emit_event("task_output_gather_skipped", reason="no_metadata")
+        rw.emit_event("output_gather_skipped", reason="no_metadata")
         return
     output_dir = lt.cb_task.metadata.get("remote_output_dir")
     if not output_dir:
-        rw.emit_event("task_output_gather_skipped",
+        rw.emit_event("output_gather_skipped",
                       reason="no_remote_output_dir_in_metadata")
         return
     try:
-        dest.mkdir(parents=True, exist_ok=True)
-        session = env.session
-        n = await _pull_vm_dir(session, output_dir, dest)
-        rw.emit_event("task_output_gather_done",
-                      vm_path=output_dir, host_dest=str(dest), files=n)
+        session = await runtime.make_vm_session()
+        report = await mirror.pull_dir(session, output_dir, "output")
+        rw.emit_event("output_gather_done",
+                      vm_path=output_dir, report=report)
     except Exception as exc:                                    # noqa: BLE001
-        logger.warning("[%s] task output gather failed: %s", slug, exc)
-        rw.emit_event("task_output_gather_failed",
+        rw.emit_event("output_gather_failed",
                       vm_path=output_dir, error=str(exc))
-
-
-async def _pull_vm_dir(session, vm_dir: str, host_dir: Path) -> int:
-    """Recursive walk of VM dir → host. Same pattern as VmExecutor's
-    _pull_dir_recursive but defined locally to avoid coupling lifecycle to
-    a specific runtime kind."""
-    count = 0
-    try:
-        entries = await session.list_dir(vm_dir)
-    except Exception:                                           # noqa: BLE001
-        return 0
-    for name in entries:
-        vm_sub = f"{vm_dir}/{name}"
-        host_sub = host_dir / name
-        try:
-            data = await session.read_bytes(vm_sub)
-            host_sub.parent.mkdir(parents=True, exist_ok=True)
-            host_sub.write_bytes(data)
-            count += 1
-        except Exception:                                       # noqa: BLE001
-            host_sub.mkdir(parents=True, exist_ok=True)
-            count += await _pull_vm_dir(session, vm_sub, host_sub)
-    return count
+        # don't raise — output gather is best-effort; eval result is what matters
 
 
 def _vm_endpoint(env) -> str:
@@ -305,44 +350,71 @@ async def run_one_unit(
             status = run_result.status
             error = run_result.error
 
-            # d. gather work_dir → host (vm: pull, docker: bind, local: already there)
-            local_work_dir = await executor.gather_to_host(runtime, dest=origin_dest)
+            # d-f. POST-LAUNCH FAN-OUT — three things run concurrently:
+            #   (1) origin_log: gather deployer work_dir from substrate +
+            #       parse_artifacts → builder. Sequential within (1) (parse
+            #       needs gather), but runs in parallel with (2) and (3).
+            #   (2) output:     pull task.remote_output_dir from VM → run_dir/output/
+            #   (3) evaluate:   env.step(Submit()) — task.evaluate runs on VM
+            #
+            # All three need the VM still alive (env.close_async runs in
+            # `finally`). To avoid concurrent-RPC race on a single session
+            # (cua.DesktopSession is not task-safe), each pipeline that
+            # needs a session creates a fresh one. Evaluate uses env.session
+            # (framework's existing).
+            mirror = ArtifactMirror(ArtifactMirrorConfig(
+                local_root=rw.run_dir,
+                run_id=rw.run_id,
+                gcs_bucket=artifacts.gcs_bucket,
+                gcs_local_key_file=artifacts.gcs_local_key_file,
+                gcs_vm_key_file=artifacts.gcs_vm_key_file,
+                fallback_to_cua=artifacts.fallback_to_cua,
+            ))
             rw.emit_event(
-                "artifact_gather_done",
-                work_dir=str(local_work_dir),
+                "post_launch_fanout_started",
+                gcs_bucket=mirror._cfg.gcs_bucket or "(cua direct)",   # noqa: SLF001
             )
 
-            # d2. gather task remote_output_dir → <run_dir>/output/
-            #     (Agent writes its solution there on the VM; eval reads from
-            #     it. We mirror it back to host for inspection/debug. The
-            #     task-side path is set by the task's setup() via
-            #     task.metadata["remote_output_dir"]. Always VM-side regardless
-            #     of runtime kind, so we use env.session directly.)
-            await _gather_task_output(env, dest=rw.run_dir / "output", rw=rw,
-                                       slug=unit.slug)
+            origin_co = _origin_log_pipeline(
+                runtime=runtime, mirror=mirror, deployer_cls=deployer_cls,
+                cfg=cfg, run_result=run_result, builder=builder,
+                origin_dest=origin_dest, rw=rw, slug=unit.slug,
+            )
+            output_co = _output_pipeline(
+                env=env, runtime=runtime, mirror=mirror, rw=rw, slug=unit.slug,
+            )
+            eval_co = env.step_async(Submit())
 
-            # e. parse_artifacts on host (pure fn)
-            try:
-                deployer_cls.parse_artifacts(
-                    work_dir=local_work_dir,
-                    config=cfg,
-                    run_result=run_result,
-                    builder=builder,
-                )
-            except Exception as parse_exc:                      # noqa: BLE001
-                logger.exception("[%s] parse_artifacts threw", unit.slug)
-                builder.add_step(
-                    source="system",
-                    message=f"parse_artifacts failed: {type(parse_exc).__name__}: {parse_exc}",
-                    extra={"reason": "parse_error"},
-                )
+            origin_outcome, output_outcome, eval_outcome = await asyncio.gather(
+                origin_co, output_co, eval_co, return_exceptions=True,
+            )
 
-            # f. evaluate (task.evaluate on VM via framework session)
-            final_obs = await env.step_async(Submit())
-            score = final_obs.reward
-            eval_status = final_obs.eval_status or "not_executed"
-            eval_duration_s = final_obs.eval_duration_s
-            eval_error = final_obs.eval_error
+            # ---- handle eval outcome ----
+            if isinstance(eval_outcome, BaseException):
+                if isinstance(eval_outcome, (KeyboardInterrupt, asyncio.CancelledError)):
+                    raise eval_outcome
+                logger.exception("[%s] evaluate threw", unit.slug,
+                                 exc_info=eval_outcome)
+                error = error or f"{type(eval_outcome).__name__}: {eval_outcome}"
+                eval_status = "failed"
+            else:
+                final_obs = eval_outcome
+                score = final_obs.reward
+                eval_status = final_obs.eval_status or "not_executed"
+                eval_duration_s = final_obs.eval_duration_s
+                eval_error = final_obs.eval_error
+
+            # ---- log origin/output outcomes (already added system steps if failed) ----
+            if isinstance(origin_outcome, BaseException) and not isinstance(
+                origin_outcome, (KeyboardInterrupt, asyncio.CancelledError)
+            ):
+                logger.warning("[%s] origin_log pipeline failed: %s",
+                               unit.slug, origin_outcome)
+            if isinstance(output_outcome, BaseException) and not isinstance(
+                output_outcome, (KeyboardInterrupt, asyncio.CancelledError)
+            ):
+                logger.warning("[%s] output pipeline failed: %s",
+                               unit.slug, output_outcome)
 
         except (KeyboardInterrupt, asyncio.CancelledError) as exc:
             status = "cancelled"

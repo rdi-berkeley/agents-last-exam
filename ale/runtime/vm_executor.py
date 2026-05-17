@@ -138,25 +138,6 @@ class VmExecutor(Executor):
             duration_s=result_dict.get("duration_s"),
         )
 
-    async def gather_to_host(
-        self,
-        runtime: "AgentRuntime",
-        *,
-        dest: Path,
-    ) -> Path:
-        """Pull VM work_dir → host dest via session.read_bytes walking."""
-        if runtime.kind != "vm":
-            raise TypeError(
-                f"VmExecutor.gather_to_host needs VmRuntime, got {type(runtime).__name__}"
-            )
-        vm_runtime: VmRuntime = runtime          # type: ignore[assignment]
-        session = await vm_runtime.make_vm_session()
-        dest.mkdir(parents=True, exist_ok=True)
-        await _pull_dir_recursive(session, str(vm_runtime.work_dir), dest)
-        logger.info("vm: gathered work_dir → %s", dest)
-        return dest
-
-
 # =============================================================================
 # helpers
 # =============================================================================
@@ -221,25 +202,6 @@ async def _ship_ale_subtree(session, *, agent_subdir: str) -> None:
         parent = vm_path.rsplit("/", 1)[0]
         await session.run_command(f"mkdir -p {parent}")
         await session.write_bytes(vm_path, data)
-
-
-async def _pull_dir_recursive(session, vm_dir: str, host_dir: Path) -> None:
-    """Recursive walk of VM dir → host. Uses session.list_dir + read_bytes."""
-    try:
-        entries = await session.list_dir(vm_dir)
-    except Exception:                                           # noqa: BLE001
-        return
-    for name in entries:
-        vm_sub = f"{vm_dir}/{name}"
-        host_sub = host_dir / name
-        try:
-            data = await session.read_bytes(vm_sub)
-            host_sub.parent.mkdir(parents=True, exist_ok=True)
-            host_sub.write_bytes(data)
-        except Exception:                                       # noqa: BLE001
-            # probably a directory
-            host_sub.mkdir(parents=True, exist_ok=True)
-            await _pull_dir_recursive(session, vm_sub, host_sub)
 
 
 def _config_to_kwargs(cfg) -> dict:

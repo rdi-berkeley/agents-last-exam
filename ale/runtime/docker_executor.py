@@ -177,16 +177,6 @@ class DockerExecutor(Executor):
             duration_s=out.get("duration_s") or duration,
         )
 
-    async def gather_to_host(
-        self,
-        runtime: "AgentRuntime",
-        *,
-        dest: Path,
-    ) -> Path:
-        """No-op: work_dir is bind-mounted to host. Just return the host path."""
-        return runtime.work_dir
-
-
 # =============================================================================
 # helpers
 # =============================================================================
