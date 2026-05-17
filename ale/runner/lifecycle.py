@@ -126,6 +126,58 @@ def make_runtime(
     raise ValueError(f"unknown runtime kind: {kind!r}")
 
 
+async def _gather_task_output(env, *, dest: Path, rw, slug: str) -> None:
+    """Pull task.metadata['remote_output_dir'] from VM → host dest.
+
+    The task's setup() typically writes a path string to its metadata so the
+    framework knows where on the VM the eval evaluator will read from. We
+    mirror that dir to host for debug + record-keeping. Best-effort: if no
+    such metadata or pull fails, we log + skip (the eval already ran on VM).
+    """
+    lt = getattr(env, "_lt", None)
+    if lt is None or lt.cb_task is None or not lt.cb_task.metadata:
+        rw.emit_event("task_output_gather_skipped", reason="no_metadata")
+        return
+    output_dir = lt.cb_task.metadata.get("remote_output_dir")
+    if not output_dir:
+        rw.emit_event("task_output_gather_skipped",
+                      reason="no_remote_output_dir_in_metadata")
+        return
+    try:
+        dest.mkdir(parents=True, exist_ok=True)
+        session = env.session
+        n = await _pull_vm_dir(session, output_dir, dest)
+        rw.emit_event("task_output_gather_done",
+                      vm_path=output_dir, host_dest=str(dest), files=n)
+    except Exception as exc:                                    # noqa: BLE001
+        logger.warning("[%s] task output gather failed: %s", slug, exc)
+        rw.emit_event("task_output_gather_failed",
+                      vm_path=output_dir, error=str(exc))
+
+
+async def _pull_vm_dir(session, vm_dir: str, host_dir: Path) -> int:
+    """Recursive walk of VM dir → host. Same pattern as VmExecutor's
+    _pull_dir_recursive but defined locally to avoid coupling lifecycle to
+    a specific runtime kind."""
+    count = 0
+    try:
+        entries = await session.list_dir(vm_dir)
+    except Exception:                                           # noqa: BLE001
+        return 0
+    for name in entries:
+        vm_sub = f"{vm_dir}/{name}"
+        host_sub = host_dir / name
+        try:
+            data = await session.read_bytes(vm_sub)
+            host_sub.parent.mkdir(parents=True, exist_ok=True)
+            host_sub.write_bytes(data)
+            count += 1
+        except Exception:                                       # noqa: BLE001
+            host_sub.mkdir(parents=True, exist_ok=True)
+            count += await _pull_vm_dir(session, vm_sub, host_sub)
+    return count
+
+
 def _vm_endpoint(env) -> str:
     """Extract ``http://<host>:<port>`` from env.session.computer."""
     sess = env.session
@@ -259,6 +311,15 @@ async def run_one_unit(
                 "artifact_gather_done",
                 work_dir=str(local_work_dir),
             )
+
+            # d2. gather task remote_output_dir → <run_dir>/output/
+            #     (Agent writes its solution there on the VM; eval reads from
+            #     it. We mirror it back to host for inspection/debug. The
+            #     task-side path is set by the task's setup() via
+            #     task.metadata["remote_output_dir"]. Always VM-side regardless
+            #     of runtime kind, so we use env.session directly.)
+            await _gather_task_output(env, dest=rw.run_dir / "output", rw=rw,
+                                       slug=unit.slug)
 
             # e. parse_artifacts on host (pure fn)
             try:
