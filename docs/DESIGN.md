@@ -1,144 +1,307 @@
 # `ale` architecture
 
+`agent-last-exam` is the orchestration framework for evaluating
+computer-use agents against task VMs. This doc is the
+**single-page map**: what each module owns, how they fit, and the
+exact lifecycle of one task × one agent.
+
+Companion docs:
+- `docs/AGENTS.md` — SOP for implementing a new agent deployer
+- `docs/SESSION_API.md` — `cb.DesktopSession` / `computer.interface.*` surface
+
+---
+
 ## One paragraph
 
-`agent-last-exam` (`ale`) is the upper-layer-only replacement for the
-agenthle orchestration code. Tasks stay in their current format
-(``main.py`` with cua-bench decorators, ``DesktopSession`` as the VM RPC
-surface, ``evaluate()`` returning a score). The framework above tasks is
-rebuilt against OpenEnv's ``Environment`` abstraction: a single
-``AgenthleEnv`` consumes any task at ``reset()`` time, delegates VM
-lifecycle to a ``Provider``, and reports the task's score directly as
-``observation.reward``. No new Task base class. No new Computer/session
-wrapper. No Rubric layer.
+ALE is built around three orthogonal abstractions: **`AgenthleEnv`**
+(OpenEnv-shape, one class for every task), **`Provider`** (acquires +
+releases the test VM), and **`Runtime`** (decides where + how an agent
+deployer executes — `vm` / `local` / `docker`). A `Runner` reads a yaml
+experiment spec, fans out (agent × task × variant) into RunUnits, and
+for each one drives: `env.reset` → `executor.run_deployer` →
+`gather work_dir` → `parse_artifacts` → `env.step(Submit)` → finalize
+trajectory + run.json. Task files stay in agenthle's format unchanged.
 
-## Layers
+---
 
-```
-       AgenthleEnv  (OpenEnv Environment; one class for the whole benchmark)
-              │
-              ├── LoadedTask   (file-based: tasks/<path>/main.py + task_card.json)
-              │       └── start_fn / evaluate_fn  (the existing agenthle decorator-tagged functions)
-              │
-              ├── Provider  (acquire / release / heartbeat / cancel_external)
-              │       └── VMHandle
-              │
-              └── DesktopSession  (cua-bench Protocol; unchanged)
-```
-
-## Concrete contract
-
-### What a task file looks like (unchanged from agenthle)
-
-```python
-# tasks/demo/hello/main.py
-import cua_bench as cb
-from tasks.linux_runtime import LinuxTaskConfig
-from dataclasses import dataclass
-
-@dataclass
-class TaskConfig(LinuxTaskConfig):
-    DOMAIN_NAME = "demo"
-    TASK_NAME = "hello"
-    # ... properties, to_metadata(), etc.
-
-config = TaskConfig()
-
-@cb.tasks_config(split="train")
-def load(): return [cb.Task(description=..., metadata=..., computer=...)]
-
-@cb.setup_task(split="train")
-async def start(task, session: cb.DesktopSession): ...
-
-@cb.evaluate_task(split="train")
-async def evaluate(task, session: cb.DesktopSession) -> list[float]: ...
-```
-
-`task_card.json` sits next to `main.py` and declares VM resources:
-
-```json
-{"snapshot": "cpu-free-ubuntu", "vm": {"vcpus": 4, "memory_gb": 16}, "timeout_s": 600}
-```
-
-### What AgenthleEnv does
+## Overview picture
 
 ```
-env = AgenthleEnv(provider=StubProvider())
-obs = await env.reset_async(task_path="demo/hello", variant_index=0)
-#   1. loader.load_task("demo/hello", 0)
-#         → LoadedTask{cb_task, start_fn, evaluate_fn, task_card}
-#   2. spec = lt.env_spec   (from task_card + cb_task.computer.setup_config.os_type)
-#   3. vm = await provider.acquire(spec)
-#   4. session = provider.open_session(vm)
-#   5. await start_fn(cb_task, session)
-#   6. return Observation(instruction=cb_task.description, done=False)
-
-obs = await env.step_async(Submit())
-#   1. scores = await evaluate_fn(cb_task, session)
-#   2. reward = float(scores[0])
-#   3. return Observation(done=True, reward=reward)
-
-await env.close_async()
-#      provider.release(vm)
+                                ┌────────────────────────────────────────────┐
+                                │             experiment yaml                │
+                                │   (provider, agents[], tasks[], runtime)   │
+                                └─────────────────┬──────────────────────────┘
+                                                  │ loader.load_experiment
+                                                  ▼
+                                          ┌──────────────┐
+                                          │  Runner      │  ale/runner/runner.py
+                                          │ (asyncio    │
+                                          │ Semaphore N) │
+                                          └──────┬───────┘
+                                                  │ for unit in RunUnit[…]:
+                                                  ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ lifecycle.run_one_unit(unit)                  ale/runner/lifecycle.py                  │
+│  ┌──────────────────────────────────────────────────────────────────────────────────┐ │
+│  │ ① resolve_agent(spec)                                                            │ │
+│  │      → (deployer_cls, config, runtime_kind)   ale/runner/factory.py              │ │
+│  │      validates: runtime_kind ∈ deployer_cls.supported_runtimes                   │ │
+│  │                                                                                  │ │
+│  │ ② env = ale.make(task_path, provider)                                            │ │
+│  │      → AgenthleEnv  (one class for all tasks)   ale/core/env.py                  │ │
+│  │                                                                                  │ │
+│  │ ③ obs = await env.reset_async(variant_index)                                     │ │
+│  │      provider.acquire(spec) → VMHandle                                           │ │
+│  │      session = provider.open_session(vm)                                         │ │
+│  │      await task.setup(session)        ── runs on VM                              │ │
+│  │      return Observation(instruction=…)                                           │ │
+│  │                                                                                  │ │
+│  │ ④ runtime = make_runtime(kind, env, agent_name, run_id, host_origin_dir)         │ │
+│  │      LocalRuntime  → work_dir = <run_dir>/origin_log/<agent>/                    │ │
+│  │      VmRuntime     → work_dir = /home/user/.ale/<agent>/<run_id>  (VM path)      │ │
+│  │      DockerRuntime → work_dir = <run_dir>/origin_log/<agent>/  (host;            │ │
+│  │                       container bind-mounts it as /work)                         │ │
+│  │                                                                                  │ │
+│  │ ⑤ result = await EXECUTORS[kind].run_deployer(                                   │ │
+│  │       deployer_cls, runtime, prompt, timeout_s)                                  │ │
+│  │      LocalExecutor:  in-process — construct deployer, await install + launch     │ │
+│  │      VmExecutor:     scp ale subtree to VM, python_exec _vm_entry bootstrap      │ │
+│  │      DockerExecutor: docker run with bind mounts + entry script                  │ │
+│  │      → AgentRunResult{status, transcript_path, exit_code, ...}                   │ │
+│  │                                                                                  │ │
+│  │ ⑥ local_work_dir = await executor.gather_to_host(runtime, dest=…)                │ │
+│  │      vm:     session.read_bytes recursive pull from VM                           │ │
+│  │      docker: no-op (work_dir was bind-mounted)                                   │ │
+│  │      local:  no-op (already there)                                               │ │
+│  │                                                                                  │ │
+│  │ ⑦ _gather_task_output(env, dest=<run_dir>/output/)                               │ │
+│  │      pull task.metadata['remote_output_dir'] from VM via env.session             │ │
+│  │      (this is where the AGENT'S produced output lives; eval reads it)            │ │
+│  │                                                                                  │ │
+│  │ ⑧ deployer_cls.parse_artifacts(work_dir, config, run_result, builder)            │ │
+│  │      pure classmethod, ALWAYS on host                                            │ │
+│  │      reads files in work_dir → builder.add_step(source=…)                        │ │
+│  │                                                                                  │ │
+│  │ ⑨ final_obs = await env.step_async(Submit())                                     │ │
+│  │      await task.evaluate(session) → reward                                       │ │
+│  │      runs on VM via the framework's env.session                                  │ │
+│  │                                                                                  │ │
+│  │ ⑩ builder.finalize + RunWriter writes:                                           │ │
+│  │      <run_dir>/{run.json, trajectory.json, eval_result.json, events.jsonl}       │ │
+│  └──────────────────────────────────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+                                                  │
+                                                  ▼
+                                          ┌──────────────┐
+                                          │  UnitResult  │
+                                          └──────────────┘
 ```
 
-That's the whole hot path. Five function calls in `reset`, three in
-`step(Submit)`. Everything else (heartbeat, timeout, concurrency) is on
-the Provider.
+---
 
-## Why these choices
+## Module map (what owns what)
+
+```
+ale/
+├── __init__.py / registry.py     gym-style ale.register / ale.make
+│
+├── core/                         the task/env contract
+│   ├── env.py                    AgenthleEnv (one class for all tasks)
+│   ├── loader.py                 tasks/<path>/main.py → LoadedTask
+│   ├── provider.py               Provider ABC + VMHandle
+│   ├── types.py                  Action types (Submit/RunCommand/.../)
+│   └── cmd_result.py             cua dict vs stub attr compat
+│
+├── providers/                    Provider impls (which VM, where?)
+│   ├── gcs_direct.py             ephemeral VM via `gcloud compute instances create`
+│   └── static.py                 pre-existing VM at a fixed endpoint (dev mode)
+│
+├── runtime/                      where + how the agent runs
+│   ├── base.py                   AgentRuntime (passive context dataclass)
+│   ├── executor.py               Executor ABC + EXECUTORS dict
+│   ├── local.py / local_executor.py     in-process; trivial
+│   ├── vm.py / vm_executor.py / _vm_entry.py
+│   │                             scp ale subtree → cua python_exec bootstrap
+│   ├── docker.py / docker_executor.py / _docker_entry.py
+│   │                             docker run --network host + bind mount + entry
+│   └── Dockerfile.native_base    ale/native-base:0.1.0 image
+│
+├── agents/                       agent deployers (per CLI / harness)
+│   ├── base.py                   BaseAgentDeployer ABC + AgentRunResult etc.
+│   ├── trajectory.py             ATIF-v1.0 Trajectory schema
+│   ├── claude_code/              vm-runtime: @anthropic-ai/claude-code CLI
+│   │   ├── pyproject.toml         (workspace member; no Python deps)
+│   │   ├── config.py
+│   │   └── deployer.py
+│   └── ale_claw/                 local|docker-runtime: OpenClaw harness
+│       ├── pyproject.toml         (cua-agent, cua-computer, litellm, ...)
+│       ├── config.py
+│       ├── deployer.py
+│       ├── transcript_to_trajectory.py
+│       └── harness/               vendored OpenClaw upstream
+│
+├── runner/                       yaml → matrix → execute
+│   ├── spec.py                   ExperimentSpec / AgentSpec / RunUnit / ...
+│   ├── loader.py                 yaml + ${env:X} substitution
+│   ├── factory.py                resolve_agent(spec) → (cls, cfg, runtime_kind)
+│   ├── lifecycle.py              run_one_unit (the orchestration above)
+│   └── runner.py                 Runner (asyncio.Semaphore concurrency)
+│
+├── io/                           on-disk artifact layout
+│   ├── run_writer.py             <run_dir>/{run.json, trajectory.json, events.jsonl}
+│   └── artifact_mirror.py        GCS-bridge / cua-direct pull (used by Vm-style)
+│
+└── cli.py / __main__.py          python -m ale run <yaml> [--dry-run]
+```
+
+---
+
+## Three orthogonal abstractions
+
+### 1. `AgenthleEnv` — the task surface
+
+One Python class for every benchmark task. OpenEnv-shape (`reset_async`,
+`step_async`, `state`). Doesn't know about agents — just runs the task's
+`setup` and `evaluate` against a session.
+
+```
+env = ale.make("demo/hello", provider=provider)
+obs = await env.reset_async(variant_index=0)   # task.setup(session) on VM
+# ... agent runs ...
+obs = await env.step_async(Submit())            # task.evaluate(session) on VM
+await env.close_async()                         # provider.release(vm)
+```
+
+**Owned by**: `ale/core/env.py`.
+**Task files**: unchanged from agenthle's format
+(`main.py` with `@cb.tasks_config / @cb.setup_task / @cb.evaluate_task`).
+
+### 2. `Provider` — VM lifecycle
+
+How to get + release a test VM. The session is built by the provider.
+
+| Impl | Use |
+|---|---|
+| `StaticProvider` | pre-existing VM at a fixed endpoint (dev mode) |
+| `GCSDirectProvider` | gcloud-create an ephemeral VM, wait for cua-server, release on close |
+
+**Owned by**: `ale/providers/` + the ABC at `ale/core/provider.py`.
+
+### 3. `AgentRuntime` + `Executor` — where the agent code runs
+
+The deployer (which is just Python code) is **placed** by the framework
+into one of three substrates:
+
+| `runtime` kind | Where deployer runs | Executor does |
+|---|---|---|
+| `vm` | Inside the test VM's Python (via cua `python_exec`) | scp ale subtree → ship bootstrap fn → pull work_dir back |
+| `local` | This Python process | direct `await deployer.install() / .launch()` |
+| `docker` | Host docker container (`--network host`) | `docker run` + bind mounts + entry script |
+
+**`AgentRuntime`** is a **passive dataclass** (work_dir, vm_endpoint, vm_os,
+config) injected at deployer init. Deployer code uses **stdlib**
+(subprocess, pathlib, json) — substrate differences are absorbed by
+WHERE the deployer is constructed, not by what its code calls.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Deployer contract — 1 ClassVar + 3 methods, no env, no session  │
+│                                                                 │
+│   class MyDeployer(BaseAgentDeployer):                          │
+│       supported_runtimes = frozenset({"local", "docker"})       │
+│                                                                 │
+│       def __init__(self, runtime: AgentRuntime): ...            │
+│       async def install(self): ...                              │
+│       async def launch(self, prompt) -> AgentRunResult: ...     │
+│       @classmethod                                              │
+│       def parse_artifacts(cls, *, work_dir, config, run_result, │
+│                           builder) -> None: ...                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Owned by**: `ale/runtime/` (Runtime + Executor) and `ale/agents/base.py`
+(the deployer ABC).
+
+---
+
+## On-disk run output
+
+```
+<exp_root>/<exp_name>/<agent_id>/<model_slug>/<task_slug>/v<i>/<ts>/
+├── run.json              one-shot summary {agent, runtime, task, status, score, ...}
+├── trajectory.json       ATIF-v1.0 (steps[source ∈ {user,agent,environment,system}])
+├── eval_result.json      {eval_status, score, eval_duration_s, error}
+├── events.jsonl          timestamped events: run_started, agent_run_started,
+│                          agent_finished, artifact_gather_done,
+│                          task_output_gather_done, run_completed
+├── origin_log/<agent>/   deployer's work_dir (transcripts, scripts, etc.)
+└── output/               task's remote_output_dir mirrored from VM
+                          (= the AGENT'S produced output; what eval read)
+```
+
+---
+
+## Concurrency model
+
+- `Runner` uses `asyncio.Semaphore(concurrency)` to cap parallel units.
+- Each unit has its own env + provider acquire + runtime + executor.
+- `static` provider serves one VM, so concurrency MUST be 1 with it.
+- `gcs_direct` provider creates per-acquire VMs, parallel safe.
+- `local` runtime: in-process; API keys patched in `os.environ` per-launch
+  — concurrent units with DIFFERENT keys race. Same-key batches are fine.
+- `docker` runtime: each unit gets its own container with `--env-file`,
+  no env race.
+
+---
+
+## Design choices (recap)
 
 | Decision | Why |
 |---|---|
-| One `AgenthleEnv` class, tasks-as-data | OpenEnv standard (echo / coding / opencode each one Environment). Maintaining 700+ Env subclasses is a waste; tasks differ in data, not behavior |
-| Keep ``DesktopSession`` | The cua-bench Protocol works; reinventing it costs 200+ LOC and we lose accessibility-tree / PTY support |
-| Keep ``evaluate() -> [float]`` | Migration cost of 700 tasks dominates any "cleaner" API; we accept the list[float] vestigial shape and pick element 0 |
-| No Rubric | OpenEnv's `_apply_rubric` is overkill when tasks already return a score. We assign `reward = scores[0]` directly. Rubric can be reintroduced if/when we want composable scoring or ablations |
-| Tasks at `tasks/<path>/main.py`, PEP 420 namespace | Mirrors agenthle's layout exactly. `from tasks.linux_runtime import LinuxTaskConfig` resolves identically. Zero migration friction |
-| File-based loader, not registry | Discovery via filesystem (`tasks/<task_path>/main.py`) keeps task addition pure-data — no registry edits |
+| One `AgenthleEnv` class, tasks-as-data | OpenEnv standard. Tasks differ in data, not behavior — 700+ Env subclasses is waste. |
+| Keep `cb.DesktopSession` | Works, has accessibility-tree + PTY support. Reinventing costs 200+ LOC. |
+| Keep `evaluate() → [float]` | Migration cost of 700 tasks dominates any "cleaner" API. Pick element 0. |
+| No Rubric layer | Tasks already return a score. Add Rubric only if we want composable scoring later. |
+| Runtime is a passive context dataclass, not an API | Deployer uses stdlib; substrate differences absorbed in WHERE deployer is constructed, not in what it calls. (Less learning surface for new deployer authors.) |
+| `supported_runtimes: frozenset[str]` ClassVar | Strings match yaml `runtime:` enum 1:1. Factory validates at spec-load. |
+| Per-agent `pyproject.toml` + uv workspace | Agent deps self-contained. New agent = drop a folder. Docker images can `uv sync` agent-specific. |
+| `parse_artifacts` is a classmethod (host-side) | Pure-fn translation; no need for an Executor to ship the parser. Same code path regardless of runtime kind. |
+| `gather_to_host` separated from deployer | Mirroring is a runtime concern, not an agent concern (vm: cua pull; docker: bind mount = free; local: same path = free). |
+| `_gather_task_output` in lifecycle (not executor) | Task output is always on VM regardless of agent runtime; framework owns env.session and does it once. |
 
-## Provider concrete impls (next slice)
+---
 
-| Provider | Status | Replaces |
-|---|---|---|
-| `StubProvider` (in tests) | ✅ tests/_stubs/ | — |
-| `GCSDirectProvider` | TODO | `agenthle/scripts/web_console/lib/simprun` |
-| `CuaHouseProvider` | TODO | `agenthle/agenthle/orchestration` |
-| `LocalVMwareProvider` | TODO | none (new use case) |
+## Reference impls
 
-Each implements: ``acquire``, ``release``, ``open_session``, ``heartbeat``,
-``cancel_external``. Heartbeat is now a Provider concern, not a top-level
-loop in `engine.py` with silent excepts.
+| Agent | Runtime | LOC (deployer + entry) | Notes |
+|---|---|---|---|
+| `claude_code` | `vm` only | ~350 | install verifies image-baked `/usr/local/bin/claude`; launch = setsid + done.marker poll on VM; parse stream-json transcript |
+| `ale_claw` | `local` (default) / `docker` | ~360 + ~5000 vendored OpenClaw harness | install = sanity; launch builds session via `runtime.make_vm_session()` and runs the OpenClaw harness end-to-end |
 
-## Agent: BaseAgentDeployer
+Both produce identical-shape `<run_dir>/{run.json, trajectory.json, ...}`.
 
-One ABC, no `BaseAgent` wrapper. Each CLI / runtime is one concrete deployer:
+---
 
-```
-BaseAgentDeployer (abc)
-    install(session)            stage prereqs (in-VM file writes / docker pull / ...)
-    launch(session, prompt, t)  spawn the agent, wait → AgentRunResult
-    collect(session, run, b)    parse logs → ATIF Trajectory steps
-    work_dir(session)           where the deployer writes (mirror source)
-    work_dir_on_vm: ClassVar[bool] = True
+## Verified smoke matrix
 
-    # framework-provided concrete:
-    run(env, *, variant_index)  reset → install → launch → collect → submit
-    mirror_artifacts(env, m)    pull work_dir + task.remote_output_dir → run dir
-```
+All three combinations pass on the Linux dev VM `34.94.212.100`:
 
-Two flavors share this base, distinguished only by `work_dir_on_vm`:
+| Agent × Runtime | Duration | Origin files | Output mirror |
+|---|---|---|---|
+| `claude_code × vm` | 22.8s | 8 | `output/answer.txt` ✓ |
+| `ale_claw × local` | 19.6s | 20 | `output/answer.txt` ✓ |
+| `ale_claw × docker` | 57.0s (cold) | 24 | `output/answer.txt` ✓ |
 
-- **In-VM** (default `True`). Agent CLI runs inside the guest; install
-  stages binaries on the VM via `session`; mirror pulls VM dirs via cua
-  direct or the GCS bridge. Example: `ClaudeCodeDeployer`.
-- **Native** (`False`). Agent process runs on the ALE host (local
-  subprocess, docker container, ...). `install` may use `session` only
-  to read VM info (os_type, endpoint) needed by the local process; mirror
-  does a `shutil.copytree` from local disk.
+Unit: `tests/smoke_runtime_validation.py` (6 cases) covers
+`supported_runtimes` validation and default-pick policy.
 
-Both produce uniform `EpisodeResult` carrying an ALE-v1.0 `Trajectory`.
-Downstream consumers don't branch on flavor.
+---
 
-Deployer is Agent-side, **not** env-side. One implementation per CLI,
-shared by all Providers (no more simprun/cuahouse double-tracked code).
+## What's NOT here yet
+
+- `CuaHouseProvider` (multi-tenant cua-house bridge) — TODO
+- `LocalVMwareProvider` — TODO
+- Docker base image registry push — local builds only for v1
+- Cross-runtime agent (vm + docker support) — no driver yet
+- Subagent trajectory extraction into `Trajectory.subagent_trajectories` — schema field exists; parsing deferred
+- Trajectory chunking for very long episodes (`continued_trajectory_ref` field exists; splitting logic TBD)
