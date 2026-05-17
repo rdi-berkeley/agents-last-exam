@@ -35,6 +35,7 @@ from ale.core.types import Submit
 from ale.io import RunWriter, slug_task
 from ale.runtime import EXECUTORS, AgentRuntime
 from ale.runtime.local import LocalRuntime
+from ale.runtime.vm import VmRuntime
 
 from .factory import resolve_agent
 from .spec import ArtifactsSpec, RunUnit, UnitResult
@@ -98,8 +99,18 @@ def make_runtime(
             config=config,
         )
     if kind == "vm":
-        raise NotImplementedError(
-            "vm runtime: Phase 3 — VmExecutor + VmRuntime not yet wired."
+        # work_dir on VM under /home/user/.ale/<agent>/<run_id>/
+        # (host_origin_dir is the gather destination — VmExecutor pulls into it)
+        vm_work_dir = Path(
+            f"/home/user/.ale/{agent_name}/{run_id}"
+        )
+        # Ensure host gather dest exists before executor runs gather_to_host
+        host_origin_dir.mkdir(parents=True, exist_ok=True)
+        return VmRuntime(
+            work_dir=vm_work_dir,
+            vm_endpoint=vm_endpoint,
+            vm_os=vm_os,
+            config=config,
         )
     if kind == "docker":
         raise NotImplementedError(

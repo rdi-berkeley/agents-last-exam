@@ -36,14 +36,18 @@ from .base import AgentRuntime
 from .executor import EXECUTORS, Executor, RuntimeKind
 from .local import LocalRuntime
 from .local_executor import LocalExecutor
+from .vm import VmRuntime
+from .vm_executor import VmExecutor
 
-# Phase 3+4 stubs will register their own runtimes/executors as they land.
+# DockerRuntime + DockerExecutor land in Phase 4.
 
 __all__ = [
     "AgentRuntime",
     "LocalRuntime",
+    "VmRuntime",
     "Executor",
     "LocalExecutor",
+    "VmExecutor",
     "EXECUTORS",
     "RuntimeKind",
 ]
