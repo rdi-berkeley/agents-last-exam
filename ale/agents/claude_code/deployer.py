@@ -86,27 +86,19 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
             )
 
         # 1b. Heal /home/user/.claude.json — the agenthle-ubuntu-0505 image
-        # baked a corrupted (empty / partial) ~/.claude.json which causes
-        # claude CLI 2.1.85 to fail at startup with "Unexpected end of JSON
-        # input". simprun has the same workaround (deployers/claude_code.py).
-        # We're stricter: validate-as-JSON, rewrite as `{}` if invalid.
+        # baked a 0-byte ~/.claude.json which causes claude CLI 2.1.85 to
+        # fail at startup with "Unexpected end of JSON input". simprun has
+        # the same workaround (deployers/claude_code.py). We rewrite
+        # unconditionally — these are throwaway benchmark VMs with no
+        # persistent user state worth keeping, and validate-then-skip has
+        # subtle edge cases (0-byte file passes a `or "{}"` truthy check).
         cj = P("/home/user/.claude.json")
         try:
-            if cj.exists():
-                json.loads(cj.read_text() or "{}")
-        except (json.JSONDecodeError, OSError):
-            try:
-                cj.write_text("{}")
-                cj.chmod(0o600)
-                logger.info("claude_code: healed corrupted %s", cj)
-            except OSError as exc:
-                logger.warning("claude_code: could not heal %s: %s", cj, exc)
-        if not cj.exists():
-            try:
-                cj.write_text("{}")
-                cj.chmod(0o600)
-            except OSError:
-                pass
+            cj.write_text("{}")
+            cj.chmod(0o600)
+            logger.info("claude_code: rewrote %s as `{}` (heal)", cj)
+        except OSError as exc:
+            logger.warning("claude_code: could not heal %s: %s", cj, exc)
         version_out = subprocess.run(
             [claude_cmd, "--version"],
             capture_output=True, text=True, timeout=10,
