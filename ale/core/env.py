@@ -57,10 +57,17 @@ class AgenthleEnv(Environment[Action, AgenthleObservation, AgenthleState]):
 
     SUPPORTS_CONCURRENT_SESSIONS = True
 
-    def __init__(self, *, provider: Provider, task_path: str):
+    def __init__(
+        self,
+        *,
+        provider: Provider,
+        task_path: str,
+        eval_timeout_s: float = 3600.0,
+    ):
         super().__init__()                 # no rubric, no transform
         self._provider = provider
         self._task_path = task_path
+        self._eval_timeout_s = float(eval_timeout_s)
         self._lt: Optional[LoadedTask] = None
         self._session: Optional["cb.DesktopSession"] = None
         self._vm: Optional[VMHandle] = None
@@ -142,10 +149,25 @@ class AgenthleEnv(Environment[Action, AgenthleObservation, AgenthleState]):
             reward: float | None
             eval_status: str
             eval_error: dict[str, Any] | None = None
+            # Per-evaluate wall budget — independent of the agent's timeout_s
+            # (which gates the agent's solve loop). Eval can be heavy on its
+            # own (large reference compares, remote DB lookups) so we give it
+            # its own knob; default 1h, override via ExperimentSpec.eval_timeout_s.
             try:
-                scores = await self._lt.evaluate_fn(self._lt.cb_task, self._session)
+                scores = await asyncio.wait_for(
+                    self._lt.evaluate_fn(self._lt.cb_task, self._session),
+                    timeout=self._eval_timeout_s,
+                )
                 reward = _coerce_reward(scores)
                 eval_status = "success"
+            except asyncio.TimeoutError:
+                reward = None
+                eval_status = "failed"
+                eval_error = {
+                    "type": "TimeoutError",
+                    "message": f"evaluate exceeded eval_timeout_s={self._eval_timeout_s}",
+                    "traceback": None,
+                }
             except Exception as exc:
                 reward = None
                 eval_status = "failed"

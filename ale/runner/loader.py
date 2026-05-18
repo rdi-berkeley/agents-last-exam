@@ -72,6 +72,9 @@ def _build_experiment(raw: dict[str, Any]) -> ExperimentSpec:
     concurrency = int(raw.get("concurrency", 1))
     if concurrency < 1:
         raise ValueError(f"concurrency must be >= 1, got {concurrency}")
+    eval_timeout_s = float(raw.get("eval_timeout_s", 3600.0))
+    if eval_timeout_s <= 0:
+        raise ValueError(f"eval_timeout_s must be > 0, got {eval_timeout_s}")
     if not agents:
         raise ValueError("experiment must declare at least one agent")
     if not tasks:
@@ -84,6 +87,7 @@ def _build_experiment(raw: dict[str, Any]) -> ExperimentSpec:
         tasks=tasks,
         artifacts=artifacts,
         concurrency=concurrency,
+        eval_timeout_s=eval_timeout_s,
     )
 
 

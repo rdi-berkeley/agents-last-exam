@@ -82,6 +82,7 @@ class Runner:
                     provider=self._provider,
                     output_root=self._output_root,
                     artifacts=self._spec.artifacts,
+                    eval_timeout_s=self._spec.eval_timeout_s,
                 )
                 logger.info("[%s] done: status=%s score=%s duration=%.1fs",
                             u.slug, result.status, result.score, result.duration_s or 0)

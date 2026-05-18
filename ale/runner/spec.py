@@ -85,6 +85,12 @@ class ExperimentSpec:
     (one shared VM) keep this at 1 to avoid work_dir collisions; with real
     ephemeral providers, set higher to parallelize across VMs."""
 
+    eval_timeout_s: float = 3600.0
+    """Per-task wall budget for ``task.evaluate`` (the scoring step that
+    runs on the VM after the agent finishes). Independent from the agent's
+    own ``timeout_s`` so a heavy evaluator can't be silently capped by it.
+    Default 1h; raise for tasks with multi-stage / network-heavy scoring."""
+
 
 # =============================================================================
 # Derived run units (one per agent × task × variant combination)

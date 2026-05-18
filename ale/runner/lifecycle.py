@@ -260,6 +260,7 @@ async def run_one_unit(
     provider: Provider,
     output_root: Path,
     artifacts: ArtifactsSpec,
+    eval_timeout_s: float = 3600.0,
 ) -> UnitResult:
     """Run one unit end-to-end via runtime-dispatched executors.
 
@@ -278,8 +279,12 @@ async def run_one_unit(
             f"(registered: {sorted(EXECUTORS)})"
         )
 
-    # 2. Build env
-    env = ale.make(unit.task_path, provider=provider)
+    # 2. Build env (per-task eval_timeout_s injected from ExperimentSpec)
+    env = ale.make(
+        unit.task_path,
+        provider=provider,
+        eval_timeout_s=eval_timeout_s,
+    )
 
     # 3. Open RunWriter
     rw = RunWriter.create(
