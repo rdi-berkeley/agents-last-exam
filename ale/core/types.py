@@ -6,9 +6,32 @@ declare variants by returning a ``list[cb.Task]`` from their decorated
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from openenv.core.env_server.types import Action, Observation, State
+
+
+# =============================================================================
+# Phase taxonomy (used for run.json.termination.phase + event_log tagging)
+# =============================================================================
+
+Phase = Literal[
+    "env_start",        # provider.acquire (gcloud) + cua ready + ensure_data_disk
+    "stage_inputs",     # GCS rsync input/ + software/ + ensure output/ (agent-visible)
+    "task_setup",       # task's @cb.setup_task user code runs
+    "agent_run",        # executor.run_deployer + post-launch fanout origin/output gather
+    "stage_reference",  # GCS rsync reference/ (hidden during solve; staged just before eval)
+    "evaluation",       # task's @cb.evaluate_task user code runs
+    "cleanup",          # env.close_async (+ optional upload_output)
+    "unknown",          # fallback (uncaught path or pre-phase init)
+]
+"""Lifecycle phase tag. Surfaces in :class:`ALE run.json`'s
+``termination.phase`` so a 700-task batch's failures can be triaged by
+phase without reading every traceback.
+
+Visibility note: ``stage_reference`` deliberately happens AFTER ``agent_run``
+so reference data is materialized on the VM only when ``env.step(Submit())``
+fires — never during solve."""
 
 
 # =============================================================================

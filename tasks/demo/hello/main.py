@@ -41,6 +41,9 @@ class TaskConfig(LinuxTaskConfig):
     DOMAIN_NAME: str = "demo"
     TASK_NAME: str = "hello"
     VARIANT_NAME: str = "simple"
+    # In-VM-only demo: the task writes its own files in setup() (no GCS
+    # rsync needed). Opts out of framework data staging.
+    REQUIRES_TASK_DATA: bool = False
     # variant-specific payload, injected via load() below
     expected_payload: dict | None = None
 

@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from .provider import OS, EnvSpec
+from .task_data import TaskDataSpec, extract_task_data
 
 
 # Repo root: parent of the directory containing this file, two levels up
@@ -75,6 +76,7 @@ class LoadedTask:
     start_fn: StartFn             # async (cb_task, session) -> None
     evaluate_fn: EvaluateFn       # async (cb_task, session) -> [float]
     task_card: dict[str, Any]     # parsed task_card.json, or {}
+    task_data: TaskDataSpec       # GCS-data layout (requires_task_data=False for in-VM-only tasks)
 
     @property
     def description(self) -> str:
@@ -199,6 +201,13 @@ def load_task(task_path: str, variant_index: int = 0) -> LoadedTask:
     if task_card_path.is_file():
         task_card = json.loads(task_card_path.read_text())
 
+    # Build TaskDataSpec from cb_task.metadata + the task's top-level config
+    # object (if exposed). Most LinuxTaskConfig-based tasks populate the
+    # right metadata keys via to_metadata().
+    metadata = getattr(cb_task, "metadata", None) or {}
+    cb_task_config = getattr(module, "config", None)
+    task_data = extract_task_data(metadata=metadata, cb_task_config=cb_task_config)
+
     return LoadedTask(
         task_path=task_path,
         variant_index=variant_index,
@@ -206,4 +215,5 @@ def load_task(task_path: str, variant_index: int = 0) -> LoadedTask:
         start_fn=start_fn,           # type: ignore[arg-type]
         evaluate_fn=evaluate_fn,     # type: ignore[arg-type]
         task_card=task_card,
+        task_data=task_data,
     )

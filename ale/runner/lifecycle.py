@@ -37,7 +37,7 @@ import ale
 from ale.agents.base import EpisodeResult
 from ale.agents.trajectory import TrajectoryBuilder
 from ale.core.provider import Provider
-from ale.core.types import Submit
+from ale.core.types import Phase, Submit
 from ale.io import RunWriter, slug_task
 from ale.io.artifact_mirror import ArtifactMirror, ArtifactMirrorConfig
 from ale.runtime import EXECUTORS, AgentRuntime
@@ -251,6 +251,23 @@ def _vm_os(env) -> str:
 
 
 # =============================================================================
+# Phase resolver
+# =============================================================================
+
+def _resolve_phase(env, lifecycle_phase: Phase) -> Phase:
+    """Prefer env's sub-phase (more granular: env_start / stage_inputs /
+    task_setup / stage_reference / evaluation / cleanup) when the env was
+    active. Falls back to the lifecycle's own coarse tracker (which
+    covers agent_run + custodial work outside env.reset/step) when env's
+    is ``unknown``.
+    """
+    env_phase = getattr(env, "current_phase", "unknown")
+    if env_phase and env_phase != "unknown":
+        return env_phase     # type: ignore[return-value]
+    return lifecycle_phase
+
+
+# =============================================================================
 # Per-unit run
 # =============================================================================
 
@@ -336,26 +353,40 @@ async def run_one_unit(
     eval_error: dict[str, Any] | None = None
     runtime: AgentRuntime | None = None
     run_result = None
+    # Phase tracker — surfaces in run.json.termination.phase so a failure
+    # in a 700-task batch can be triaged by which stage broke. The granular
+    # phases inside env.reset_async (env_start → stage_inputs → task_setup)
+    # all get tagged "env_start" from the lifecycle's POV because they're a
+    # single awaitable; finer split would require splitting reset_async,
+    # which we intentionally don't (clean OpenEnv contract).
+    current_phase: Phase = "unknown"
 
     try:
         try:
-            # === phase 1: PROVISION (bounded by provision_sem) ===
-            # Hold provision_sem ONLY during env.reset_async (which calls
-            # provider.acquire). Release before entering run_sem so we
-            # don't pin a run-slot while another unit is provisioning.
+            # === provision_sem block === all VM-acquire-side work.
+            # env.reset_async does: provider.acquire + cua ready +
+            # ensure_data_disk + ensure_gcs_auth + stage_input + stage_eval +
+            # task.setup_fn. We hold provision_sem across all of it because
+            # the slow parts (gcloud + gsutil) are GCP-quota-bound, same
+            # bucket as VM acquire. Released BEFORE run_sem to keep the
+            # API pipeline saturated.
+            current_phase = "env_start"
             rw.emit_event("provision_wait")
             async with provision_sem:
                 rw.emit_event("provision_started")
                 obs = await env.reset_async(variant_index=unit.variant_index)
                 rw.emit_event("provision_done", vm_id=env.vm.id if env.vm else None)
+            # Bind run_id so close_async's upload_output knows the GCS path.
+            env.set_run_id(rw.run_id)
             instruction = obs.instruction or ""
             builder.trajectory.instruction = instruction
             builder.add_step(source="user", message=instruction)
 
-            # === phase 2: RUN (bounded by run_sem) ===
+            # === run_sem block === agent run + post-launch fanout.
             # The VM stays acquired across the wait — that's the trade-off:
             # slightly idle VMs vs starved API pipeline. With a fat-enough
             # provision pipeline this keeps the run pipeline saturated.
+            current_phase = "agent_run"
             rw.emit_event("run_wait")
             async with run_sem:
                 rw.emit_event("run_started")
@@ -464,16 +495,25 @@ async def run_one_unit(
         except (KeyboardInterrupt, asyncio.CancelledError) as exc:
             status = "cancelled"
             error = f"{type(exc).__name__}: external signal / cancel"
-            rw.emit_event("run_cancelled", reason=str(exc) or type(exc).__name__)
-            logger.warning("[%s] cancelled by signal", unit.slug)
+            # Reads env's sub-phase if exception was inside reset/step;
+            # else falls back to lifecycle's own coarse tracker.
+            current_phase = _resolve_phase(env, current_phase)
+            rw.emit_event(
+                "run_cancelled",
+                reason=str(exc) or type(exc).__name__,
+                phase=current_phase,
+            )
+            logger.warning("[%s] cancelled by signal in phase=%s", unit.slug, current_phase)
         except Exception as exc:                                # noqa: BLE001
             status = "failed"
             error = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
+            current_phase = _resolve_phase(env, current_phase)
             rw.emit_event(
                 "run_failed",
                 error_type=type(exc).__name__, message=str(exc),
+                phase=current_phase,
             )
-            logger.exception("[%s] run threw", unit.slug)
+            logger.exception("[%s] run threw in phase=%s", unit.slug, current_phase)
     finally:
         # Bounded close: a dead VM (network partition, cua-server crashed)
         # can hang close indefinitely, which would pin the asyncio.gather
@@ -521,6 +561,7 @@ async def run_one_unit(
             error=error,
             total_s=total_s,
             trajectory=trajectory,
+            phase=_resolve_phase(env, current_phase) if status != "completed" else None,
         ))
     except Exception as exc:                                    # noqa: BLE001
         logger.warning("[%s] write_run_json failed: %s", unit.slug, exc)
@@ -557,6 +598,7 @@ def _build_run_json(
     error: str | None,
     total_s: float,
     trajectory: Any,
+    phase: Phase | None = None,
 ) -> dict[str, Any]:
     return {
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -578,6 +620,11 @@ def _build_run_json(
         "score": score,
         "termination": {
             "reason": status if status != "completed" else "completed",
+            # Which lifecycle phase the failure happened in. None on success.
+            # Maps to ale.core.types.Phase: env_start | stage_inputs |
+            # task_setup | agent_run | stage_reference | evaluation | cleanup
+            # | unknown. Use this first for triage in big batches.
+            "phase": phase,
             "error": (
                 {"type": "Exception", "message": str(error), "traceback": error}
                 if error else None
