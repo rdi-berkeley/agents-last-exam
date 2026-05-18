@@ -6,10 +6,12 @@ image, polls ``cua-computer-server:5000/status`` until ready, and returns
 a :class:`VMHandle`. ``open_session`` wraps the VM in cua-bench's
 :class:`RemoteDesktopSession`.
 
-Scope cuts vs ``simprun/vm.py`` (560 LOC → ~280 LOC):
+Scope cuts vs ``simprun/vm.py`` (560 LOC → ~320 LOC):
 - **Single zone / single image**. No capacity-profile failover, no zone
-  fallback list. If acquiring fails, surface the gcloud error.
-- **Linear retry on transient gcloud errors only**. No exponential backoff.
+  fallback list. Quota / stockout errors raise immediately (operator's
+  cue to switch zones).
+- **Transient gcloud errors retry with exponential backoff** (15s, 30s,
+  60s; max 3 attempts). Patterns ported from simprun.vm._is_transient_error.
 - **No force-timeout file plumbing**. ``cancel_external`` is left as a stub
   for the Runner layer (next slice) to implement on top of this Provider.
 
@@ -39,6 +41,51 @@ logger = logging.getLogger(__name__)
 
 # cua-computer-server listens here on the baked image.
 CUA_SERVER_PORT = 5000
+
+
+# =============================================================================
+# gcloud transient-error retry policy (ported from simprun/vm.py)
+# =============================================================================
+
+# Substrings (lowercased) in `gcloud` stderr that justify a retry. These are
+# brief network / API flutters where the next attempt typically succeeds.
+_GCP_RETRYABLE_TRANSIENT = (
+    "ratelimitexceeded",
+    "503",
+    "service unavailable",
+    "connection reset",
+    "connection refused",
+    "timed out",
+    "deadline exceeded",
+)
+
+# Substrings indicating the *zone* is out of capacity (or quota is hit). These
+# are NOT transient — retrying the same zone is futile. simprun handles them
+# by switching capacity profile / zone; we surface the error so the operator
+# can move to a different zone.
+_GCP_ZONE_CAPACITY = (
+    "quota",
+    "resource_exhausted",
+    "stockout",
+    "insufficient",
+    "does not have enough resources",
+    "not enough resources",
+    "zone does not have enough",
+    "cpus_per_vm_family",
+)
+
+_GCP_MAX_RETRIES = 3
+_GCP_RETRY_BASE_DELAY_S = 15.0  # 15s, 30s, 60s
+
+
+def _classify_gcloud_error(stderr: str) -> str:
+    """Return ``"transient"`` / ``"capacity"`` / ``"fatal"``."""
+    lower = stderr.lower()
+    if any(pat in lower for pat in _GCP_ZONE_CAPACITY):
+        return "capacity"
+    if any(pat in lower for pat in _GCP_RETRYABLE_TRANSIENT):
+        return "transient"
+    return "fatal"
 
 
 # =============================================================================
@@ -153,6 +200,11 @@ class GCSDirectProvider(Provider):
     async def _gcloud_create(
         self, name: str, spec: EnvSpec, image: str,
     ) -> dict[str, Any]:
+        """Create one VM, retrying transient gcloud errors with exp backoff.
+
+        Capacity / quota errors are NOT retried — surface them so the
+        operator switches zone or profile.
+        """
         data_disk = f"{name}-data"
         args = [
             "gcloud", "compute", "instances", "create", name,
@@ -176,14 +228,45 @@ class GCSDirectProvider(Provider):
         if self._cfg.scopes:
             args.append("--scopes=" + ",".join(self._cfg.scopes))
 
-        logger.info("gcloud create: %s", name)
-        stdout, _ = await self._run_gcloud(args)
-        try:
-            parsed = json.loads(stdout)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(f"gcloud create returned non-JSON: {stdout[:500]}") from exc
-        # `--format=json` returns a list with one element.
-        return parsed[0] if isinstance(parsed, list) and parsed else {}
+        last_err = ""
+        for attempt in range(1, _GCP_MAX_RETRIES + 1):
+            logger.info(
+                "gcloud create: %s (attempt %d/%d)",
+                name, attempt, _GCP_MAX_RETRIES,
+            )
+            try:
+                stdout, _ = await self._run_gcloud(args)
+            except RuntimeError as exc:
+                stderr_text = str(exc)
+                last_err = stderr_text
+                kind = _classify_gcloud_error(stderr_text)
+                if kind == "capacity":
+                    # No point retrying same zone — operator must move zones.
+                    raise
+                if kind == "transient" and attempt < _GCP_MAX_RETRIES:
+                    delay = _GCP_RETRY_BASE_DELAY_S * (2 ** (attempt - 1))
+                    logger.warning(
+                        "gcloud create transient error (attempt %d/%d): %s "
+                        "— retrying in %.0fs",
+                        attempt, _GCP_MAX_RETRIES,
+                        stderr_text[:200].strip(), delay,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                # fatal, or last attempt
+                raise
+
+            try:
+                parsed = json.loads(stdout)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(
+                    f"gcloud create returned non-JSON: {stdout[:500]}"
+                ) from exc
+            # `--format=json` returns a list with one element.
+            return parsed[0] if isinstance(parsed, list) and parsed else {}
+        raise RuntimeError(
+            f"gcloud create exhausted {_GCP_MAX_RETRIES} attempts: {last_err}"
+        )
 
     @staticmethod
     def _extract_external_ip(meta: dict[str, Any]) -> str | None:
