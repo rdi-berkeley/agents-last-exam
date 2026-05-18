@@ -163,22 +163,37 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
         prompt_file.write_text(prompt)
 
         # ---- env setup ----
-        # API keys are inherited from the python_exec parent process — the
-        # framework's VmExecutor propagated them from host shell via
-        # ale.runtime._env. We only do the OpenRouter → Anthropic remap
-        # here: if ANTHROPIC_API_KEY is unset but OPENROUTER_API_KEY is set,
-        # the CLI needs ANTHROPIC_AUTH_TOKEN + ANTHROPIC_BASE_URL instead.
-        # An explicit cfg.base_url wins over everything.
-        base_url_default = cfg.base_url or "https://openrouter.ai/api"
-        env_lines: list[str] = [
-            'if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -n "${OPENROUTER_API_KEY:-}" ]; then',
-            '  export ANTHROPIC_AUTH_TOKEN="$OPENROUTER_API_KEY"',
-            f'  : "${{ANTHROPIC_BASE_URL:={shlex.quote(base_url_default)}}}"',
-            '  export ANTHROPIC_BASE_URL',
-            'fi',
-        ]
-        if cfg.base_url:
-            env_lines.append(f"export ANTHROPIC_BASE_URL={shlex.quote(cfg.base_url)}")
+        # Read keys from VM-side os.environ (populated by VmExecutor's
+        # host_env passthrough → _vm_entry.os.environ.update) and INLINE
+        # the values into the bash script. Matches simprun's proven
+        # pattern (deployers/claude_code.py:L375-L382): explicit values
+        # > env inheritance, plus an explicit ANTHROPIC_API_KEY='' reset
+        # for the OpenRouter remap path — claude 2.1.85 prefers API_KEY
+        # over AUTH_TOKEN whenever API_KEY is "set" (incl. empty), so an
+        # ambient ANTHROPIC_API_KEY=... from host shell would still take
+        # precedence and break the remap. Clearing it is the only
+        # reliable fix.
+        import os as _os
+        or_key = _os.environ.get("OPENROUTER_API_KEY", "")
+        ant_key = _os.environ.get("ANTHROPIC_API_KEY", "")
+        if or_key:
+            base_url = cfg.base_url or "https://openrouter.ai/api"
+            env_lines = [
+                f"export ANTHROPIC_BASE_URL={shlex.quote(base_url)}",
+                f"export ANTHROPIC_AUTH_TOKEN={shlex.quote(or_key)}",
+                "export ANTHROPIC_API_KEY=''",
+            ]
+        elif ant_key:
+            env_lines = [f"export ANTHROPIC_API_KEY={shlex.quote(ant_key)}"]
+            if cfg.base_url:
+                env_lines.append(f"export ANTHROPIC_BASE_URL={shlex.quote(cfg.base_url)}")
+        else:
+            raise RuntimeError(
+                "claude_code: neither OPENROUTER_API_KEY nor ANTHROPIC_API_KEY "
+                "is set in the VM-side os.environ. Either the host shell didn't "
+                "export them (check `source .env`) or VmExecutor's host_env "
+                "propagation broke."
+            )
 
         # ---- CLI args ----
         argv = [shlex.quote(claude_cmd), "-p", "-",
