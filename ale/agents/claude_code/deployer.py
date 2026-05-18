@@ -51,6 +51,11 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
 
     supported_runtimes: ClassVar[frozenset[str]] = frozenset({"vm"})
 
+    # Files the framework keeps incrementally-pulled to the host during
+    # agent run, so Ctrl-C / VM revert / network blip don't lose
+    # diagnostic data. Pulled every 15s with JSONL-boundary safety.
+    hot_artifacts: ClassVar[tuple[str, ...]] = ("transcript.jsonl", "stderr.log")
+
     @property
     def version(self) -> str | None:
         cfg: ClaudeCodeConfig = self.config  # type: ignore[assignment]

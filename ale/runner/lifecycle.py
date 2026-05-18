@@ -40,6 +40,12 @@ from ale.core.provider import Provider
 from ale.core.types import Phase, Submit
 from ale.io import RunWriter, slug_task
 from ale.io.artifact_mirror import ArtifactMirror, ArtifactMirrorConfig
+from ale.io.incremental_pull import (
+    DEFAULT_INTERVAL_S,
+    IncrementalPuller,
+    PullTarget,
+    incremental_pull_loop,
+)
 from ale.runtime import EXECUTORS, AgentRuntime
 from ale.runtime.docker import DockerRuntime
 from ale.runtime.local import LocalRuntime
@@ -251,6 +257,56 @@ def _vm_os(env) -> str:
 
 
 # =============================================================================
+# Best-effort full gather (cancel/fail path)
+# =============================================================================
+
+async def _best_effort_full_gather(
+    runtime,
+    runtime_kind: str,
+    env,
+    cfg,
+    rw,
+    artifacts: ArtifactsSpec,
+    slug: str,
+    *,
+    timeout_s: float = 60.0,
+) -> None:
+    """Tries one full ``mirror.pull_dir`` of the deployer's work_dir.
+
+    Complements the incremental pull (which only got hot files like
+    transcript / stderr) by grabbing whatever else the agent dropped in
+    work_dir — intermediate scratch files, screenshots, partial outputs.
+    Bounded so a dead VM can't pin us; failure is logged only.
+
+    No-op for local/docker — those work_dirs are already host-visible.
+    """
+    if runtime is None or runtime_kind != "vm":
+        return
+    try:
+        mirror = ArtifactMirror(ArtifactMirrorConfig(
+            local_root=rw.run_dir,
+            run_id=rw.run_id,
+            gcs_bucket=artifacts.gcs_bucket,
+            gcs_local_key_file=artifacts.gcs_local_key_file,
+            gcs_vm_key_file=artifacts.gcs_vm_key_file,
+            fallback_to_cua=artifacts.fallback_to_cua,
+        ))
+        session = await runtime.make_vm_session()
+        rw.emit_event("best_effort_gather_started")
+        await asyncio.wait_for(
+            mirror.pull_dir(session, str(runtime.work_dir), f"origin_log/{cfg.name}"),
+            timeout=timeout_s,
+        )
+        rw.emit_event("best_effort_gather_done")
+    except asyncio.TimeoutError:
+        rw.emit_event("best_effort_gather_timeout", timeout_s=timeout_s)
+        logger.warning("[%s] best-effort gather timed out (%.0fs)", slug, timeout_s)
+    except Exception as exc:                            # noqa: BLE001
+        rw.emit_event("best_effort_gather_failed", error=str(exc))
+        logger.warning("[%s] best-effort gather failed: %s", slug, exc)
+
+
+# =============================================================================
 # Phase resolver
 # =============================================================================
 
@@ -408,17 +464,71 @@ async def run_one_unit(
                 except Exception:                                   # noqa: BLE001
                     pass
 
-                # c. install + launch via executor
+                # c. install + launch via executor.
+                #
+                # For runtime=vm only, start an incremental pull task that
+                # tails the deployer's `hot_artifacts` (transcript / stderr)
+                # to host disk every 15s. This makes Ctrl-C / VM revert /
+                # network blip survivable — at worst we lose the last ~15s
+                # of agent output. local/docker work_dirs are already
+                # host-visible, so no pull task.
+                puller: IncrementalPuller | None = None
+                pull_task: asyncio.Task | None = None
+                if runtime_kind == "vm" and deployer_cls.hot_artifacts:
+                    targets = [
+                        PullTarget(
+                            remote_path=str(runtime.work_dir) + "/" + name,
+                            local_path=origin_dest / name,
+                            boundary="newline" if name.endswith(".jsonl") else "none",
+                        )
+                        for name in deployer_cls.hot_artifacts
+                    ]
+                    origin_dest.mkdir(parents=True, exist_ok=True)
+                    puller = IncrementalPuller(
+                        session_factory=runtime.make_vm_session,
+                        targets=targets,
+                        os_type=env.session.os_type or "linux",
+                    )
+                    pull_task = asyncio.create_task(
+                        incremental_pull_loop(puller, interval_s=DEFAULT_INTERVAL_S),
+                    )
+                    rw.emit_event(
+                        "incremental_pull_started",
+                        targets=[t.remote_path for t in targets],
+                        interval_s=DEFAULT_INTERVAL_S,
+                    )
+
                 rw.emit_event(
                     "agent_run_started",
                     runtime=runtime_kind, work_dir=str(runtime.work_dir),
                 )
-                run_result = await executor.run_deployer(
-                    deployer_cls=deployer_cls,
-                    runtime=runtime,
-                    prompt=instruction,
-                    timeout_s=cfg.timeout_s,
-                )
+                try:
+                    run_result = await executor.run_deployer(
+                        deployer_cls=deployer_cls,
+                        runtime=runtime,
+                        prompt=instruction,
+                        timeout_s=cfg.timeout_s,
+                    )
+                finally:
+                    # Cancel the pull loop; then do ONE final reconcile so
+                    # we catch the last bytes the agent flushed between
+                    # the previous tick and now. Bounded so a bad VM
+                    # can't pin us here.
+                    if pull_task is not None:
+                        pull_task.cancel()
+                        try:
+                            await pull_task
+                        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                            pass
+                    if puller is not None:
+                        try:
+                            await asyncio.wait_for(
+                                puller.reconcile_final(), timeout=60.0,
+                            )
+                        except Exception as exc:                # noqa: BLE001
+                            rw.emit_event(
+                                "incremental_pull_final_failed", error=str(exc),
+                            )
                 rw.emit_event(
                     "agent_finished",
                     status=run_result.status, error=run_result.error,
@@ -495,8 +605,6 @@ async def run_one_unit(
         except (KeyboardInterrupt, asyncio.CancelledError) as exc:
             status = "cancelled"
             error = f"{type(exc).__name__}: external signal / cancel"
-            # Reads env's sub-phase if exception was inside reset/step;
-            # else falls back to lifecycle's own coarse tracker.
             current_phase = _resolve_phase(env, current_phase)
             rw.emit_event(
                 "run_cancelled",
@@ -504,6 +612,9 @@ async def run_one_unit(
                 phase=current_phase,
             )
             logger.warning("[%s] cancelled by signal in phase=%s", unit.slug, current_phase)
+            await _best_effort_full_gather(
+                runtime, runtime_kind, env, cfg, rw, artifacts, unit.slug,
+            )
         except Exception as exc:                                # noqa: BLE001
             status = "failed"
             error = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
@@ -514,6 +625,9 @@ async def run_one_unit(
                 phase=current_phase,
             )
             logger.exception("[%s] run threw in phase=%s", unit.slug, current_phase)
+            await _best_effort_full_gather(
+                runtime, runtime_kind, env, cfg, rw, artifacts, unit.slug,
+            )
     finally:
         # Bounded close: a dead VM (network partition, cua-server crashed)
         # can hang close indefinitely, which would pin the asyncio.gather

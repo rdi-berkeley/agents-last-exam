@@ -135,6 +135,13 @@ class BaseAgentDeployer(abc.ABC):
     """Subclass overrides — strings match yaml ``runtime: <kind>`` values.
     Empty set is a programmer error caught at :func:`resolve_agent` time."""
 
+    hot_artifacts: ClassVar[tuple[str, ...]] = ()
+    """Relative paths under work_dir that the framework should incrementally
+    pull from the VM during agent execution (e.g. ``("transcript.jsonl",
+    "stderr.log")``). Only relevant for ``runtime: vm`` deployers — local /
+    docker work_dirs are already host-visible. Empty default → no pull.
+    Newline-delimited / JSONL files only; binary streams aren't supported."""
+
     def __init__(self, runtime: "AgentRuntime"):
         self.runtime = runtime
         self.config = runtime.config        # convenience alias
