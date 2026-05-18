@@ -447,8 +447,18 @@ async def run_one_unit(
             )
             logger.exception("[%s] run threw", unit.slug)
     finally:
+        # Bounded close: a dead VM (network partition, cua-server crashed)
+        # can hang close indefinitely, which would pin the asyncio.gather
+        # in Runner._bounded and block batch progress. 60s is plenty for
+        # gcloud delete; if it slips, we log + move on (provider-side
+        # reconciliation / dangling-VM sweep is a separate concern).
         try:
-            await env.close_async()
+            await asyncio.wait_for(env.close_async(), timeout=60.0)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[%s] env.close_async exceeded 60s; VM may be dangling — "
+                "check provider inventory", unit.slug,
+            )
         except Exception as exc:                                # noqa: BLE001
             logger.warning("[%s] env.close_async failed: %s", unit.slug, exc)
 
