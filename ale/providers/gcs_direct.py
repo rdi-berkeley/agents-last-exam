@@ -222,7 +222,7 @@ class GCSDirectProvider(Provider):
             "--quiet",
         ]
         if self._cfg.subnet:
-            args.append(f"--subnetwork={self._cfg.subnet}")
+            args.append(f"--subnet={self._cfg.subnet}")
         if self._cfg.service_account:
             args.append(f"--service-account={self._cfg.service_account}")
         if self._cfg.scopes:
