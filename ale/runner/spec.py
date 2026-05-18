@@ -80,10 +80,19 @@ class ExperimentSpec:
     agents: list[AgentSpec]
     tasks: list[TaskSpec]
     artifacts: ArtifactsSpec = field(default_factory=ArtifactsSpec)
-    concurrency: int = 1
-    """Max simultaneous run units. ``1`` = sequential. With ``StaticProvider``
-    (one shared VM) keep this at 1 to avoid work_dir collisions; with real
-    ephemeral providers, set higher to parallelize across VMs."""
+
+    run_concurrency: int = 1
+    """Max agents simultaneously in the run phase (launch + fanout + eval).
+    Sized to the API rate-limit / token budget. ``1`` = sequential. With
+    ``StaticProvider`` (one shared VM) keep this at 1 to avoid work_dir
+    collisions; with ephemeral providers, raise to parallelize."""
+
+    provision_concurrency: int | None = None
+    """Max VMs simultaneously being acquired (``provider.acquire``). Sized
+    to the GCP quota / gcloud client throughput. Separate from run_concurrency
+    so a slow provision pipeline doesn't starve the run pipeline (and vice
+    versa). ``None`` (the default) → equal to ``run_concurrency`` for the
+    simple case where the operator only wants one knob."""
 
     eval_timeout_s: float = 3600.0
     """Per-task wall budget for ``task.evaluate`` (the scoring step that

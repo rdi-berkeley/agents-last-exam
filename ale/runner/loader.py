@@ -69,9 +69,39 @@ def _build_experiment(raw: dict[str, Any]) -> ExperimentSpec:
     agents = [_build_agent(a) for a in raw["agents"]]
     tasks = [_build_task(t) for t in raw["tasks"]]
     artifacts = _build_artifacts(raw.get("artifacts") or {})
-    concurrency = int(raw.get("concurrency", 1))
-    if concurrency < 1:
-        raise ValueError(f"concurrency must be >= 1, got {concurrency}")
+    # Concurrency knobs. Old single `concurrency:` field was renamed to
+    # `run_concurrency:` so the dual-knob semantics are explicit. We accept
+    # the old key with a deprecation warning rather than silent rename, so
+    # operators see the change.
+    if "concurrency" in raw and "run_concurrency" in raw:
+        raise ValueError(
+            "experiment yaml has both `concurrency:` (legacy) and "
+            "`run_concurrency:` — pick one (run_concurrency wins long-term)."
+        )
+    if "concurrency" in raw:
+        import warnings
+        warnings.warn(
+            "experiment yaml `concurrency:` is deprecated — rename to "
+            "`run_concurrency:` (semantics unchanged for the single-knob "
+            "case). Set `provision_concurrency:` to override the matching "
+            "VM-acquire cap.",
+            DeprecationWarning, stacklevel=2,
+        )
+        run_concurrency = int(raw["concurrency"])
+    else:
+        run_concurrency = int(raw.get("run_concurrency", 1))
+    if run_concurrency < 1:
+        raise ValueError(f"run_concurrency must be >= 1, got {run_concurrency}")
+    provision_raw = raw.get("provision_concurrency")
+    provision_concurrency: int | None
+    if provision_raw is None:
+        provision_concurrency = None
+    else:
+        provision_concurrency = int(provision_raw)
+        if provision_concurrency < 1:
+            raise ValueError(
+                f"provision_concurrency must be >= 1, got {provision_concurrency}"
+            )
     eval_timeout_s = float(raw.get("eval_timeout_s", 3600.0))
     if eval_timeout_s <= 0:
         raise ValueError(f"eval_timeout_s must be > 0, got {eval_timeout_s}")
@@ -86,7 +116,8 @@ def _build_experiment(raw: dict[str, Any]) -> ExperimentSpec:
         agents=agents,
         tasks=tasks,
         artifacts=artifacts,
-        concurrency=concurrency,
+        run_concurrency=run_concurrency,
+        provision_concurrency=provision_concurrency,
         eval_timeout_s=eval_timeout_s,
     )
 

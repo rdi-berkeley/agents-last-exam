@@ -183,11 +183,38 @@ artifacts:
 
 
 # ---------------------------------------------------------------------------
-# concurrency: max simultaneous run units. The Runner uses asyncio.Semaphore.
+# Concurrency knobs — TWO independent semaphores. Each unit holds
+# `provision_sem` ONLY during VM acquire, releases it before entering
+# `run_sem` for launch + fanout + eval. Decoupling these two phases keeps
+# the API pipeline saturated even when GCP provision is slow (typical
+# 60-300s cold boot vs ~minutes-of-agent-run).
 #
-#   1   → strictly sequential. ALWAYS use 1 with `static` provider — one VM
-#         is shared across all units, and the deployer's work_dir collides.
-#   N   → parallel. Safe with `gcs_direct` (each acquire() = new VM).
-#         Cap by GCP quota + your API rate limits.
+#   run_concurrency:        max simultaneously RUNNING agents. Size to
+#                           your API rate-limit / token budget.
+#   provision_concurrency:  max simultaneously CREATING VMs. Size to
+#                           your GCP project's CPU/VM quota + gcloud
+#                           client throughput. Setting it higher than
+#                           run_concurrency lets VMs queue up "warm and
+#                           idle" for the next free run-slot (more wall-
+#                           clock VM cost but better API throughput).
+#                           Omit / null → equals run_concurrency (simple
+#                           single-knob default; both phases bounded the
+#                           same way).
+#
+# Rules of thumb:
+#   - StaticProvider (shared VM)  → both = 1 (work_dir collisions otherwise)
+#   - GCSDirect, small batch      → both = 1 .. 4
+#   - GCSDirect, large batch      → run_concurrency ~ 20 (API-cap),
+#                                   provision_concurrency ~ 1.5x run
 # ---------------------------------------------------------------------------
-concurrency: 1
+run_concurrency: 1
+# provision_concurrency: 30        # default null → equals run_concurrency
+
+
+# ---------------------------------------------------------------------------
+# eval_timeout_s: per-task wall budget for task.evaluate(), independent
+# from each agent's own timeout_s. Heavy evaluators (large reference diffs,
+# remote DB checks) can otherwise silently get capped by the agent budget.
+# Default 1h; raise for known-slow scoring (compute-bound metrics).
+# ---------------------------------------------------------------------------
+eval_timeout_s: 3600

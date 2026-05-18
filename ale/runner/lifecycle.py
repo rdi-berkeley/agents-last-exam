@@ -261,12 +261,25 @@ async def run_one_unit(
     output_root: Path,
     artifacts: ArtifactsSpec,
     eval_timeout_s: float = 3600.0,
+    provision_sem: asyncio.Semaphore | None = None,
+    run_sem: asyncio.Semaphore | None = None,
 ) -> UnitResult:
     """Run one unit end-to-end via runtime-dispatched executors.
 
     Always returns a UnitResult — never raises. SIGTERM mid-flight still
     finalizes the run dir.
+
+    Concurrency: when ``provision_sem`` / ``run_sem`` are passed, the unit
+    holds ``provision_sem`` during ``env.reset_async`` (VM acquire) and
+    releases it BEFORE entering ``run_sem`` for launch / fanout / eval.
+    When omitted (single-unit smoke), both sems default to no-op (size=1
+    so re-entry is fine for a single caller).
     """
+    # No-op sems for direct callers (smoke tests, one-off invocations).
+    if provision_sem is None:
+        provision_sem = asyncio.Semaphore(1)
+    if run_sem is None:
+        run_sem = asyncio.Semaphore(1)
     # 1. Resolve agent: deployer cls + config + runtime kind (validated)
     resolved = resolve_agent(unit.agent_spec)
     deployer_cls = resolved.deployer_cls
@@ -326,112 +339,127 @@ async def run_one_unit(
 
     try:
         try:
-            # a. env reset (task.setup runs on VM)
-            obs = await env.reset_async(variant_index=unit.variant_index)
+            # === phase 1: PROVISION (bounded by provision_sem) ===
+            # Hold provision_sem ONLY during env.reset_async (which calls
+            # provider.acquire). Release before entering run_sem so we
+            # don't pin a run-slot while another unit is provisioning.
+            rw.emit_event("provision_wait")
+            async with provision_sem:
+                rw.emit_event("provision_started")
+                obs = await env.reset_async(variant_index=unit.variant_index)
+                rw.emit_event("provision_done", vm_id=env.vm.id if env.vm else None)
             instruction = obs.instruction or ""
             builder.trajectory.instruction = instruction
             builder.add_step(source="user", message=instruction)
 
-            # b. Build runtime + record agent.version
-            origin_dest = rw.run_dir / "origin_log" / cfg.name
-            runtime = make_runtime(
-                kind=runtime_kind,
-                config=cfg,
-                env=env,
-                agent_name=cfg.name,
-                run_id=rw.run_id,
-                host_origin_dir=origin_dest,
-            )
-            # Construct a transient deployer just to read .version (cheap).
-            try:
-                transient_deployer = deployer_cls(runtime)
-                builder.trajectory.agent.version = transient_deployer.version
-            except Exception:                                   # noqa: BLE001
-                pass
+            # === phase 2: RUN (bounded by run_sem) ===
+            # The VM stays acquired across the wait — that's the trade-off:
+            # slightly idle VMs vs starved API pipeline. With a fat-enough
+            # provision pipeline this keeps the run pipeline saturated.
+            rw.emit_event("run_wait")
+            async with run_sem:
+                rw.emit_event("run_started")
 
-            # c. install + launch via executor
-            rw.emit_event(
-                "agent_run_started",
-                runtime=runtime_kind, work_dir=str(runtime.work_dir),
-            )
-            run_result = await executor.run_deployer(
-                deployer_cls=deployer_cls,
-                runtime=runtime,
-                prompt=instruction,
-                timeout_s=cfg.timeout_s,
-            )
-            rw.emit_event(
-                "agent_finished",
-                status=run_result.status, error=run_result.error,
-            )
-            status = run_result.status
-            error = run_result.error
+                # b. Build runtime + record agent.version
+                origin_dest = rw.run_dir / "origin_log" / cfg.name
+                runtime = make_runtime(
+                    kind=runtime_kind,
+                    config=cfg,
+                    env=env,
+                    agent_name=cfg.name,
+                    run_id=rw.run_id,
+                    host_origin_dir=origin_dest,
+                )
+                # Construct a transient deployer just to read .version (cheap).
+                try:
+                    transient_deployer = deployer_cls(runtime)
+                    builder.trajectory.agent.version = transient_deployer.version
+                except Exception:                                   # noqa: BLE001
+                    pass
 
-            # d-f. POST-LAUNCH FAN-OUT — three things run concurrently:
-            #   (1) origin_log: gather deployer work_dir from substrate +
-            #       parse_artifacts → builder. Sequential within (1) (parse
-            #       needs gather), but runs in parallel with (2) and (3).
-            #   (2) output:     pull task.remote_output_dir from VM → run_dir/output/
-            #   (3) evaluate:   env.step(Submit()) — task.evaluate runs on VM
-            #
-            # All three need the VM still alive (env.close_async runs in
-            # `finally`). To avoid concurrent-RPC race on a single session
-            # (cua.DesktopSession is not task-safe), each pipeline that
-            # needs a session creates a fresh one. Evaluate uses env.session
-            # (framework's existing).
-            mirror = ArtifactMirror(ArtifactMirrorConfig(
-                local_root=rw.run_dir,
-                run_id=rw.run_id,
-                gcs_bucket=artifacts.gcs_bucket,
-                gcs_local_key_file=artifacts.gcs_local_key_file,
-                gcs_vm_key_file=artifacts.gcs_vm_key_file,
-                fallback_to_cua=artifacts.fallback_to_cua,
-            ))
-            rw.emit_event(
-                "post_launch_fanout_started",
-                gcs_bucket=mirror._cfg.gcs_bucket or "(cua direct)",   # noqa: SLF001
-            )
+                # c. install + launch via executor
+                rw.emit_event(
+                    "agent_run_started",
+                    runtime=runtime_kind, work_dir=str(runtime.work_dir),
+                )
+                run_result = await executor.run_deployer(
+                    deployer_cls=deployer_cls,
+                    runtime=runtime,
+                    prompt=instruction,
+                    timeout_s=cfg.timeout_s,
+                )
+                rw.emit_event(
+                    "agent_finished",
+                    status=run_result.status, error=run_result.error,
+                )
+                status = run_result.status
+                error = run_result.error
 
-            origin_co = _origin_log_pipeline(
-                runtime=runtime, mirror=mirror, deployer_cls=deployer_cls,
-                cfg=cfg, run_result=run_result, builder=builder,
-                origin_dest=origin_dest, rw=rw, slug=unit.slug,
-            )
-            output_co = _output_pipeline(
-                env=env, runtime=runtime, mirror=mirror, rw=rw, slug=unit.slug,
-            )
-            eval_co = env.step_async(Submit())
+                # d-f. POST-LAUNCH FAN-OUT — three things run concurrently:
+                #   (1) origin_log: gather deployer work_dir from substrate +
+                #       parse_artifacts → builder. Sequential within (1) (parse
+                #       needs gather), but runs in parallel with (2) and (3).
+                #   (2) output:     pull task.remote_output_dir from VM → run_dir/output/
+                #   (3) evaluate:   env.step(Submit()) — task.evaluate runs on VM
+                #
+                # All three need the VM still alive (env.close_async runs in
+                # `finally`). To avoid concurrent-RPC race on a single session
+                # (cua.DesktopSession is not task-safe), each pipeline that
+                # needs a session creates a fresh one. Evaluate uses env.session
+                # (framework's existing).
+                mirror = ArtifactMirror(ArtifactMirrorConfig(
+                    local_root=rw.run_dir,
+                    run_id=rw.run_id,
+                    gcs_bucket=artifacts.gcs_bucket,
+                    gcs_local_key_file=artifacts.gcs_local_key_file,
+                    gcs_vm_key_file=artifacts.gcs_vm_key_file,
+                    fallback_to_cua=artifacts.fallback_to_cua,
+                ))
+                rw.emit_event(
+                    "post_launch_fanout_started",
+                    gcs_bucket=mirror._cfg.gcs_bucket or "(cua direct)",   # noqa: SLF001
+                )
 
-            origin_outcome, output_outcome, eval_outcome = await asyncio.gather(
-                origin_co, output_co, eval_co, return_exceptions=True,
-            )
+                origin_co = _origin_log_pipeline(
+                    runtime=runtime, mirror=mirror, deployer_cls=deployer_cls,
+                    cfg=cfg, run_result=run_result, builder=builder,
+                    origin_dest=origin_dest, rw=rw, slug=unit.slug,
+                )
+                output_co = _output_pipeline(
+                    env=env, runtime=runtime, mirror=mirror, rw=rw, slug=unit.slug,
+                )
+                eval_co = env.step_async(Submit())
 
-            # ---- handle eval outcome ----
-            if isinstance(eval_outcome, BaseException):
-                if isinstance(eval_outcome, (KeyboardInterrupt, asyncio.CancelledError)):
-                    raise eval_outcome
-                logger.exception("[%s] evaluate threw", unit.slug,
-                                 exc_info=eval_outcome)
-                error = error or f"{type(eval_outcome).__name__}: {eval_outcome}"
-                eval_status = "failed"
-            else:
-                final_obs = eval_outcome
-                score = final_obs.reward
-                eval_status = final_obs.eval_status or "not_executed"
-                eval_duration_s = final_obs.eval_duration_s
-                eval_error = final_obs.eval_error
+                origin_outcome, output_outcome, eval_outcome = await asyncio.gather(
+                    origin_co, output_co, eval_co, return_exceptions=True,
+                )
 
-            # ---- log origin/output outcomes (already added system steps if failed) ----
-            if isinstance(origin_outcome, BaseException) and not isinstance(
-                origin_outcome, (KeyboardInterrupt, asyncio.CancelledError)
-            ):
-                logger.warning("[%s] origin_log pipeline failed: %s",
-                               unit.slug, origin_outcome)
-            if isinstance(output_outcome, BaseException) and not isinstance(
-                output_outcome, (KeyboardInterrupt, asyncio.CancelledError)
-            ):
-                logger.warning("[%s] output pipeline failed: %s",
-                               unit.slug, output_outcome)
+                # ---- handle eval outcome ----
+                if isinstance(eval_outcome, BaseException):
+                    if isinstance(eval_outcome, (KeyboardInterrupt, asyncio.CancelledError)):
+                        raise eval_outcome
+                    logger.exception("[%s] evaluate threw", unit.slug,
+                                     exc_info=eval_outcome)
+                    error = error or f"{type(eval_outcome).__name__}: {eval_outcome}"
+                    eval_status = "failed"
+                else:
+                    final_obs = eval_outcome
+                    score = final_obs.reward
+                    eval_status = final_obs.eval_status or "not_executed"
+                    eval_duration_s = final_obs.eval_duration_s
+                    eval_error = final_obs.eval_error
+
+                # ---- log origin/output outcomes (already added system steps if failed) ----
+                if isinstance(origin_outcome, BaseException) and not isinstance(
+                    origin_outcome, (KeyboardInterrupt, asyncio.CancelledError)
+                ):
+                    logger.warning("[%s] origin_log pipeline failed: %s",
+                                   unit.slug, origin_outcome)
+                if isinstance(output_outcome, BaseException) and not isinstance(
+                    output_outcome, (KeyboardInterrupt, asyncio.CancelledError)
+                ):
+                    logger.warning("[%s] output pipeline failed: %s",
+                                   unit.slug, output_outcome)
 
         except (KeyboardInterrupt, asyncio.CancelledError) as exc:
             status = "cancelled"
