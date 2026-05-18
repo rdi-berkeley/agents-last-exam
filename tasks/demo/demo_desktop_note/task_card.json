@@ -1,0 +1,38 @@
+{
+  "taskId": "demo/demo_desktop_note",
+  "title": "Desktop Note Creation With Task Data",
+  "summary": "Open Notepad with staged software available, read a staged input file, and save the requested note into the staged output directory.",
+  "category": "demo",
+  "software": [
+    "Notepad"
+  ],
+  "taskPrompt": "Goal: Use the Windows desktop UI to create a note in Notepad from staged task data.\n\nSteps:\n1. Open Notepad. A task-local Notepad shortcut is available at:\n   E:\\agenthle\\demo\\demo_desktop_note\\base\\software\\Notepad.lnk\n2. Read the visible task input file:\n   E:\\agenthle\\demo\\demo_desktop_note\\base\\input\\note_request.txt\n3. Type exactly these two lines into Notepad:\n   AgentHLE Desktop Plugin Demo\n   This note was created through the desktop UI.\n4. Save the file to:\n   E:\\agenthle\\demo\\demo_desktop_note\\base\\output\\agenthle_desktop_plugin_demo.txt\n\nVerification:\n- The file must exist exactly at E:\\agenthle\\demo\\demo_desktop_note\\base\\output\\agenthle_desktop_plugin_demo.txt.\n- The file content must match the two required lines exactly, ignoring Windows vs Unix newlines.\n- Use the staged input, software, and output directories during solving.",
+  "agentMustDo": [
+    "Open Notepad with E:\\agenthle\\demo\\demo_desktop_note\\base\\software\\Notepad.lnk available as staged software",
+    "Read E:\\agenthle\\demo\\demo_desktop_note\\base\\input\\note_request.txt",
+    "Type the two required lines exactly",
+    "Save to E:\\agenthle\\demo\\demo_desktop_note\\base\\output\\agenthle_desktop_plugin_demo.txt"
+  ],
+  "inputFiles": [
+    {
+      "name": "Visible note request",
+      "format": "txt",
+      "path": "E:\\agenthle\\demo\\demo_desktop_note\\base\\input\\note_request.txt",
+      "description": "Agent-visible instructions for the exact note content."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Expected output note",
+      "format": "txt",
+      "path": "E:\\agenthle\\demo\\demo_desktop_note\\base\\reference\\expected_note.txt",
+      "description": "Evaluator-only reference content unlocked during eval staging."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- Runtime setup cannot see input/note_request.txt or software/Notepad.lnk\n- Runtime setup can read reference/expected_note.txt before eval staging\n- Eval stage cannot read reference/expected_note.txt\n- Output file missing or unreadable at the required output path\n\n**Scoring method:**\n- Exact content match against reference/expected_note.txt (ignoring newline style): score 1.0\n- Partial match (some expected lines present): score = matched_lines / total_lines * 0.5\n- No match or file missing: score 0.0\n\n- **Where does the main scoring logic run?** local Python evaluation via cua-bench session.read_file() after cua-house eval staging unlocks reference/.",
+  "vm": {
+    "snapshot": "cpu-free",
+    "machineType": "c4-standard-4",
+    "timeout": 7200
+  }
+}
