@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 
 from ale.runtime._vm_entry import run_deployer_in_vm
 
+from ._env import collect_host_env
 from .executor import EXECUTORS, Executor
 
 if TYPE_CHECKING:
@@ -98,6 +99,9 @@ class VmExecutor(Executor):
         await session.run_command(f"mkdir -p {wd}")
 
         # 3. Build spec for the bootstrap (JSON-friendly)
+        # host_env propagates the operator's API keys / routing config from
+        # host shell → VM's Python os.environ. The bash subprocess that
+        # spawns the agent CLI inherits from there.
         spec = {
             "ale_src_root": VM_ALE_SRC_ROOT,
             "deployer_module": deployer_cls.__module__,
@@ -109,6 +113,7 @@ class VmExecutor(Executor):
             "vm_endpoint": vm_runtime.vm_endpoint,
             "vm_os": vm_runtime.vm_os,
             "vm_runtime_kwargs": _vm_runtime_path_kwargs(vm_runtime),
+            "host_env": collect_host_env(),
             "prompt": prompt,
         }
 

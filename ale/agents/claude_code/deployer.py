@@ -142,13 +142,23 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
 
         prompt_file.write_text(prompt)
 
-        # ---- env setup (api keys go in here, not in shell script) ----
-        env_lines: list[str] = []
-        if cfg.is_openrouter:
-            env_lines.append(f"export ANTHROPIC_AUTH_TOKEN={shlex.quote(cfg.openrouter_api_key)}")
-            env_lines.append(f"export ANTHROPIC_BASE_URL={shlex.quote(cfg.resolved_base_url or 'https://openrouter.ai/api')}")
-        elif cfg.anthropic_api_key:
-            env_lines.append(f"export ANTHROPIC_API_KEY={shlex.quote(cfg.anthropic_api_key)}")
+        # ---- env setup ----
+        # API keys are inherited from the python_exec parent process — the
+        # framework's VmExecutor propagated them from host shell via
+        # ale.runtime._env. We only do the OpenRouter → Anthropic remap
+        # here: if ANTHROPIC_API_KEY is unset but OPENROUTER_API_KEY is set,
+        # the CLI needs ANTHROPIC_AUTH_TOKEN + ANTHROPIC_BASE_URL instead.
+        # An explicit cfg.base_url wins over everything.
+        base_url_default = cfg.base_url or "https://openrouter.ai/api"
+        env_lines: list[str] = [
+            'if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -n "${OPENROUTER_API_KEY:-}" ]; then',
+            '  export ANTHROPIC_AUTH_TOKEN="$OPENROUTER_API_KEY"',
+            f'  : "${{ANTHROPIC_BASE_URL:={shlex.quote(base_url_default)}}}"',
+            '  export ANTHROPIC_BASE_URL',
+            'fi',
+        ]
+        if cfg.base_url:
+            env_lines.append(f"export ANTHROPIC_BASE_URL={shlex.quote(cfg.base_url)}")
 
         # ---- CLI args ----
         argv = [shlex.quote(claude_cmd), "-p", "-",

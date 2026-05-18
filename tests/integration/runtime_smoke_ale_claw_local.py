@@ -46,8 +46,8 @@ VM_OS = "linux"
 
 async def main() -> int:
     install_signal_handlers()
-    key = os.environ.get("OPENROUTER_API_KEY")
-    if not key:
+    # API key from shell env — litellm reads it from os.environ in-process.
+    if not os.environ.get("OPENROUTER_API_KEY"):
         raise SystemExit("OPENROUTER_API_KEY required for this smoke")
     model = os.environ.get("OPENROUTER_MODEL", "openrouter/anthropic/claude-sonnet-4.6")
 
@@ -59,7 +59,6 @@ async def main() -> int:
         # runtime omitted → default "local" (per validation policy)
         config={
             "model": model,
-            "openrouter_api_key": key,
             "max_turns": 20,
             "timeout_s": 900,
             "disabled_tools": ["web_search"],

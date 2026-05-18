@@ -18,7 +18,6 @@ copied from ``cua_bench/agents/openclaw/`` upstream).
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import os
 import sys
@@ -91,14 +90,21 @@ class AleClawDeployer(BaseAgentDeployer):
     # =========================================================================
 
     async def install(self) -> None:
-        """Sanity-check: harness imports + at least one API key set."""
+        """Sanity-check: harness imports + at least one API key in env."""
         # Touch the harness to validate the in-process import chain.
         from .harness.agent_loop import OpenClawComputerAgent  # noqa: F401
         cfg: AleClawConfig = self.config  # type: ignore[assignment]
-        if not any([cfg.openrouter_api_key, cfg.anthropic_api_key, cfg.openai_api_key]):
+        # API keys come from the operator's shell env (set via source/.env);
+        # litellm reads them directly. We only sanity-check that at least one
+        # is present so the run fails fast rather than burning a VM acquire.
+        if not any(
+            os.environ.get(k)
+            for k in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")
+        ):
             raise RuntimeError(
-                "AleClawConfig has no API key set "
-                "(openrouter_api_key / anthropic_api_key / openai_api_key)"
+                "ale-claw: no LLM API key in env — export one of "
+                "OPENROUTER_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY "
+                "(via `source ~/.envrc` or equivalent)."
             )
         logger.info(
             "ale-claw: install ok (model=%s, work_dir=%s, runtime=%s)",
@@ -257,8 +263,9 @@ class AleClawDeployer(BaseAgentDeployer):
             if replay_messages else prompt
         )
 
-        # ---- 10. Drive loop with timeout + env-patched API keys ----
-        env_patches = self._prepare_env()
+        # ---- 10. Drive loop with timeout ----
+        # litellm reads OPENROUTER_API_KEY / ANTHROPIC_API_KEY etc straight
+        # from os.environ — operator populates the shell, no patching needed.
         max_steps = cfg.max_turns or 100
         total_usage = {
             "input_tokens": 0, "output_tokens": 0,
@@ -269,44 +276,43 @@ class AleClawDeployer(BaseAgentDeployer):
         task_completed = False
         transcript_path = work_dir / "openclaw_sessions" / task_id / "transcript.jsonl"
 
-        with self._patched_environ(env_patches):
-            try:
-                async def _drive() -> None:
-                    nonlocal step, task_completed
-                    async for result in agent.run(run_input):
-                        sys.stdout.flush()
-                        step += 1
-                        for k in total_usage:
-                            total_usage[k] += result["usage"].get(k, 0)
-                        session_mgr.update_step_count(step)
-                        session_mgr.update_tokens(
-                            result["usage"].get("input_tokens", 0),
-                            result["usage"].get("output_tokens", 0),
-                        )
-                        if step >= max_steps:
-                            logger.info("ale-claw: max_steps %d reached", max_steps)
-                            break
-                        if has_done_signal(result.get("output", [])):
-                            logger.info("ale-claw: done signal at step %d", step)
-                            task_completed = True
-                            break
-                await asyncio.wait_for(_drive(), timeout=cfg.timeout_s)
-            except asyncio.TimeoutError:
-                logger.warning("ale-claw: wall budget %.0fs exceeded", cfg.timeout_s)
-                return AgentRunResult(
-                    status="timeout",
-                    duration_s=time.monotonic() - t0,
-                    error=f"wall budget {cfg.timeout_s}s exceeded",
-                    transcript_path=str(transcript_path) if transcript_path.exists() else None,
-                )
-            except Exception as exc:                             # noqa: BLE001
-                logger.exception("ale-claw: agent.run threw")
-                return AgentRunResult(
-                    status="failed",
-                    duration_s=time.monotonic() - t0,
-                    error=f"{type(exc).__name__}: {exc}",
-                    transcript_path=str(transcript_path) if transcript_path.exists() else None,
-                )
+        try:
+            async def _drive() -> None:
+                nonlocal step, task_completed
+                async for result in agent.run(run_input):
+                    sys.stdout.flush()
+                    step += 1
+                    for k in total_usage:
+                        total_usage[k] += result["usage"].get(k, 0)
+                    session_mgr.update_step_count(step)
+                    session_mgr.update_tokens(
+                        result["usage"].get("input_tokens", 0),
+                        result["usage"].get("output_tokens", 0),
+                    )
+                    if step >= max_steps:
+                        logger.info("ale-claw: max_steps %d reached", max_steps)
+                        break
+                    if has_done_signal(result.get("output", [])):
+                        logger.info("ale-claw: done signal at step %d", step)
+                        task_completed = True
+                        break
+            await asyncio.wait_for(_drive(), timeout=cfg.timeout_s)
+        except asyncio.TimeoutError:
+            logger.warning("ale-claw: wall budget %.0fs exceeded", cfg.timeout_s)
+            return AgentRunResult(
+                status="timeout",
+                duration_s=time.monotonic() - t0,
+                error=f"wall budget {cfg.timeout_s}s exceeded",
+                transcript_path=str(transcript_path) if transcript_path.exists() else None,
+            )
+        except Exception as exc:                             # noqa: BLE001
+            logger.exception("ale-claw: agent.run threw")
+            return AgentRunResult(
+                status="failed",
+                duration_s=time.monotonic() - t0,
+                error=f"{type(exc).__name__}: {exc}",
+                transcript_path=str(transcript_path) if transcript_path.exists() else None,
+            )
 
         # Outcome mapping
         if task_completed:
@@ -382,31 +388,3 @@ class AleClawDeployer(BaseAgentDeployer):
             vision_level=vision, gui_level=gui,
         )
 
-    def _prepare_env(self) -> dict[str, str]:
-        c: AleClawConfig = self.config  # type: ignore[assignment]
-        env: dict[str, str] = {}
-        if c.openrouter_api_key:
-            env["OPENROUTER_API_KEY"] = c.openrouter_api_key
-        if c.anthropic_api_key:
-            env["ANTHROPIC_API_KEY"] = c.anthropic_api_key
-        if c.openai_api_key:
-            env["OPENAI_API_KEY"] = c.openai_api_key
-        if c.brave_api_key:
-            env["BRAVE_API_KEY"] = c.brave_api_key
-        return env
-
-    @contextlib.contextmanager
-    def _patched_environ(self, env: dict[str, str]):
-        """Temporarily inject API keys into ``os.environ`` (for litellm /
-        anthropic SDK), restoring on exit. ALE convention: never read keys
-        from env in config — config carries them, deployer injects."""
-        old: dict[str, str | None] = {k: os.environ.get(k) for k in env}
-        os.environ.update(env)
-        try:
-            yield
-        finally:
-            for k, v in old.items():
-                if v is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = v

@@ -14,8 +14,27 @@
 #     uv run python -m ale run experiments/your_copy.yaml \
 #       --agent cc_sonnet --task demo/hello
 #
-# All ${env:VARNAME} placeholders are substituted at load time; missing
-# env vars raise loudly (you will not accidentally run with empty creds).
+# All ${env:VARNAME} placeholders (used for non-secret routing config like
+# GCS key file paths) are substituted at load time; missing env vars raise
+# loudly.
+#
+# API KEYS — NEVER PUT THESE IN YAML. The framework reads
+# `OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` /
+# `BRAVE_API_KEY` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` straight
+# from your shell env. For docker / vm runtimes the framework propagates
+# them transparently (see ale/runtime/_env.py for the full list).
+#
+# Set them in your shell:
+#
+#     source ~/.envrc                    # or .env / direnv / etc
+#     export OPENROUTER_API_KEY=sk-or-...
+#     export ANTHROPIC_API_KEY=sk-ant-...
+#
+# claude_code routing: if ANTHROPIC_API_KEY is unset and OPENROUTER_API_KEY
+# is set, the in-VM bash script auto-remaps to ANTHROPIC_AUTH_TOKEN +
+# ANTHROPIC_BASE_URL=https://openrouter.ai/api. Override BASE_URL by
+# setting `agents[].config.base_url` here, or by exporting
+# `ANTHROPIC_BASE_URL` in your shell.
 # =============================================================================
 
 
@@ -97,21 +116,18 @@ agents:
     class: claude_code
     config:
       model: anthropic/claude-sonnet-4-6        # OpenRouter slug
-      openrouter_api_key: ${env:OPENROUTER_API_KEY}
-      # anthropic_api_key: ""                  # alternative to openrouter
       max_turns: 20
       timeout_s: 900
       dangerously_skip_permissions: true        # default for benchmark eval
       # max_budget_usd: 5.0                     # optional spending cap
       # disabled_tools: ["WebSearch"]           # claude CLI disallowedTools flag
-      # base_url: null                          # custom openai-compatible base
+      # base_url: null                          # explicit ANTHROPIC_BASE_URL override
 
   # Same class, different model — no separate yaml file needed.
   - id: cc_opus
     class: claude_code
     config:
       model: anthropic/claude-opus-4-7
-      openrouter_api_key: ${env:OPENROUTER_API_KEY}
       max_turns: 30
       max_budget_usd: 10.0
       timeout_s: 1800
@@ -123,10 +139,9 @@ agents:
     # runtime: local                     # implicit — local is the default for ale_claw
     config:
       model: openrouter/anthropic/claude-sonnet-4.6
-      openrouter_api_key: ${env:OPENROUTER_API_KEY}
       max_turns: 100                            # mapped to OpenClaw max_steps
       timeout_s: 3600                           # wall budget
-      # disabled_tools: ["web_search"]          # default; set [] + brave_api_key to enable
+      # disabled_tools: ["web_search"]          # default; set [] + export BRAVE_API_KEY to enable
       # summary_model: openrouter/anthropic/claude-haiku-4-5
       # lightweight_model: openrouter/anthropic/claude-haiku-4-5
       # thinking_level: medium                  # off | low | medium | high
@@ -141,7 +156,6 @@ agents:
     runtime: docker
     config:
       model: openrouter/anthropic/claude-sonnet-4.6
-      openrouter_api_key: ${env:OPENROUTER_API_KEY}
       max_turns: 100
       timeout_s: 3600
 
@@ -151,7 +165,6 @@ agents:
   #   class: ale.agents.claude_code.deployer.ClaudeCodeDeployer
   #   config:
   #     model: claude-opus-4-7
-  #     openrouter_api_key: ${env:OPENROUTER_API_KEY}
 
 
 # ---------------------------------------------------------------------------

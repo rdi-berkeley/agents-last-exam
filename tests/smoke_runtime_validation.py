@@ -21,7 +21,6 @@ from ale.runner.spec import AgentSpec
 
 
 def _spec(class_: str, *, runtime: str | None = None, **cfg) -> AgentSpec:
-    cfg.setdefault("openrouter_api_key", "sk-stub-for-validation")
     return AgentSpec(id="t", class_=class_, config=cfg, runtime=runtime)
 
 

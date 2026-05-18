@@ -30,6 +30,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from ._env import collect_host_env
 from .executor import EXECUTORS, Executor
 
 if TYPE_CHECKING:
@@ -94,7 +95,9 @@ class DockerExecutor(Executor):
         (host_work_dir / "_spec.json").write_text(json.dumps(spec, indent=2))
 
         # ---- env file (API keys; --env-file keeps them off cmdline) ----
-        env_lines = _collect_env_vars(runtime.config)
+        # Pulled from host os.environ — operator sources .env / .envrc in
+        # shell, ALE never sees these values in yaml or config.
+        env_lines = collect_host_env()
         env_file = host_work_dir / "_env"
         env_file.write_text("\n".join(f"{k}={v}" for k, v in env_lines.items()) + "\n")
 
@@ -189,25 +192,6 @@ def _config_to_kwargs(cfg) -> dict:
         if isinstance(val, (str, int, float, bool, type(None), list, dict, tuple)):
             out[f.name] = val
     return out
-
-
-def _collect_env_vars(cfg) -> dict[str, str]:
-    """Pull API keys out of config into env-file lines.
-
-    Conventions match the in-process deployer's _patched_environ pattern:
-    keys named ``<provider>_api_key`` → ``<PROVIDER>_API_KEY`` env var.
-    """
-    env: dict[str, str] = {}
-    for attr, env_name in [
-        ("openrouter_api_key", "OPENROUTER_API_KEY"),
-        ("anthropic_api_key", "ANTHROPIC_API_KEY"),
-        ("openai_api_key", "OPENAI_API_KEY"),
-        ("brave_api_key", "BRAVE_API_KEY"),
-    ]:
-        val = getattr(cfg, attr, None)
-        if val:
-            env[env_name] = val
-    return env
 
 
 def _image_present(tag: str) -> bool:

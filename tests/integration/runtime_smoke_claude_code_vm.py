@@ -44,9 +44,12 @@ VM_OS = "linux"
 
 async def main() -> int:
     install_signal_handlers()
-    key = os.environ.get("OPENROUTER_API_KEY")
-    if not key:
-        raise SystemExit("OPENROUTER_API_KEY required for this smoke")
+    # API key comes from shell env (propagated to VM by ale.runtime._env);
+    # we only assert presence so the smoke fails fast on a misconfig.
+    if not os.environ.get("OPENROUTER_API_KEY") and not os.environ.get("ANTHROPIC_API_KEY"):
+        raise SystemExit(
+            "OPENROUTER_API_KEY or ANTHROPIC_API_KEY required for this smoke"
+        )
     model = os.environ.get("OPENROUTER_MODEL", "anthropic/claude-sonnet-4-6")
 
     provider = StaticProvider(StaticProviderConfig(endpoint=VM_ENDPOINT, os=VM_OS))
@@ -57,7 +60,6 @@ async def main() -> int:
         # runtime omitted → resolves to "vm" (sole supported)
         config={
             "model": model,
-            "openrouter_api_key": key,
             "max_turns": 20,
             "timeout_s": 900,
             "dangerously_skip_permissions": True,

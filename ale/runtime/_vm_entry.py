@@ -49,11 +49,17 @@ def run_deployer_in_vm(spec: dict) -> dict:  # noqa: D401 — JSON in / JSON out
     import traceback
 
     Path = importlib.import_module("pathlib").Path
+    os = importlib.import_module("os")
 
     # 1. Make freshly-scp'd ale source importable
     src = spec["ale_src_root"]
     if src not in sys.path:
         sys.path.insert(0, src)
+
+    # 1b. Propagate host env vars (API keys, routing) into VM's os.environ.
+    # The bash subprocess that the deployer spawns inherits from here.
+    for k, v in (spec.get("host_env") or {}).items():
+        os.environ[k] = v
 
     try:
         # 2. Import deployer + config + VmRuntime (NOW that sys.path is set)
