@@ -42,20 +42,58 @@ Task files are untouched.
 
 ```bash
 cd agent-last-exam
-uv sync --extra dev
+uv sync --extra dev --all-packages
 uv run python -c "from ale.core.env import AgenthleEnv; print('ok')"
-uv run python tests/smoke_hello.py     # end-to-end with stub session
+uv run python tests/smoke_hello.py        # in-process stub env
 ```
 
-## v0.1.0 state
+## First-time setup: environment config
+
+Several env vars (LLM API keys, GCS service-account path, optional bucket
+overrides) are required at run time. They never live in yaml.
+
+```bash
+cp .env.example .env       # gitignored
+$EDITOR .env               # fill in OPENROUTER_API_KEY, ALE_GCS_SA_KEY_PATH, etc
+source .env                # load into current shell
+```
+
+See `.env.example` for the full list grouped by purpose (LLM keys, GCS
+data staging, artifact mirror). The framework reads from `os.environ`;
+for docker / vm runtimes it propagates a fixed set of vars
+(`ale/runtime/_env.py`) into the substrate.
+
+## Running an experiment
+
+```bash
+source .env
+uv run python -m ale run experiments/foo.yaml          # full run
+uv run python -m ale run experiments/foo.yaml --dry-run     # show matrix only
+uv run python -m ale run experiments/foo.yaml --force-rerun # bypass resume
+uv run python -m ale run experiments/foo.yaml --agent cc_sonnet --task demo/hello
+```
+
+Re-running the same `name:` resumes by default (skips units with prior
+`status in {completed, timeout}` under `<output.root>/<name>/`).
+`--force-rerun` re-attempts everything.
+
+## v0.2.0 state
 
 | Component | Status |
 |-----------|--------|
 | `AgenthleEnv` (one Env, OpenEnv-style) | ✅ |
 | `Provider` ABC + `EnvSpec` + `VMHandle` | ✅ |
-| File-based loader (`tasks/<path>/main.py`) | ✅ |
-| Demo task + StubProvider/StubDesktopSession | ✅ |
-| `GCSDirectProvider` (replaces simprun) | ⏳ next |
-| `CuaHouseProvider` (replaces orchestration/external) | ⏳ next |
-| Agent + Deployer (12 in-VM CLIs) | ⏳ next |
-| Runner (replaces engine.py / cli.py) | ⏳ next |
+| `GCSDirectProvider` + transient retry + exp backoff | ✅ |
+| `StaticProvider` (point at existing VM) | ✅ |
+| File-based loader + auto-discover | ✅ |
+| **Framework data staging** (stage_input/eval/reference/upload_output) | ✅ |
+| Runtime abstraction (vm / local / docker) + 3 Executors | ✅ |
+| Agent deployers: `claude_code` (vm), `ale_claw` (local/docker) | ✅ |
+| Runner + dual-sem concurrency (provision + run) | ✅ |
+| Incremental log pull (vm runtime, JSONL-boundary safe) | ✅ |
+| Cancel-safe gather + best-effort full pull on cancel/fail | ✅ |
+| Resume / skip-completed by experiment `name` | ✅ |
+| Phase + error category in run.json.termination | ✅ |
+| `CuaHouseProvider` (replaces orchestration/external) | ⏳ |
+| Rate-limit detector + circuit breaker | ⏳ |
+| Atomic-write run.json / trajectory.json | ⏳ |
