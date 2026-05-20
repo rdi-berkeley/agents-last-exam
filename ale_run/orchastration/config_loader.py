@@ -1,0 +1,441 @@
+"""YAML loader for ExperimentSpec.
+
+The public-facing yaml is minimal — name / agent / provider / tasks — with
+long-tail knobs pulled in via ``profile:`` paths under ``configs/``. This
+loader normalizes that shape into the internal ``ExperimentSpec`` dataclass,
+which the Runner consumes.
+
+Three shape conveniences relative to the dataclass:
+
+* ``agent: {...}`` single-dict form (most experiments). Lowered into the
+  internal ``agents: [...]`` matrix as a single entry. Legacy
+  ``agents: [...]`` lists still work for matrix runs.
+* ``tasks: <path>`` string form. ``.txt`` → one task path per line
+  (variant 0); ``.yaml`` → list of ``{path, variants}`` entries. The
+  legacy inline list form still works.
+* ``profile: <relative-path>`` on agent / provider, plus top-level
+  ``run_profile: <relative-path>``. Profiles are partial dicts; the main
+  yaml's keys win on conflict (deep-merged one level for ``config:``).
+
+Other behavior:
+
+* ``${env:VAR}`` substitution at parse time (KeyError if VAR unset).
+* All relative paths resolve against the main yaml's directory.
+* Unknown / missing keys raise loudly.
+"""
+from __future__ import annotations
+
+import logging
+import os
+import re
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from .factory import AGENT_REGISTRY
+from .spec import (
+    AgentSpec,
+    ArtifactsSpec,
+    ExperimentSpec,
+    OutputSpec,
+    ProviderSpec,
+    TaskSpec,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ${env:VARNAME} → os.environ[VARNAME]
+_ENV_RE = re.compile(r"\$\{env:([A-Z_][A-Z0-9_]*)\}")
+
+# Top-level keys consumed by the loader (anything else → TypeError).
+_TOP_LEVEL_KEYS = frozenset({
+    "name", "env_file", "agent", "agents", "provider", "tasks",
+    "run_profile",
+    # run-level fields (also accepted inline at the top, override run_profile):
+    "output", "artifacts",
+    "concurrency",
+    "cleanup_mode",
+})
+
+
+# =============================================================================
+# Public API
+# =============================================================================
+
+def load_experiment(path: str | Path) -> ExperimentSpec:
+    """Read a yaml file, substitute env vars, build :class:`ExperimentSpec`.
+
+    Two-pass parse: first pass extracts ``env_file:`` (if present) without
+    ``${env:VAR}`` substitution; that file is loaded into ``os.environ``
+    (shell env wins on conflict); second pass parses for real, with
+    substitution. If ``env_file:`` is unset, falls back to auto-loading
+    ``<main yaml's directory>/secret/.env`` (then ``.../.env``) when they
+    exist. Profile yamls referenced from the main file inherit the same
+    ``os.environ``, so their ``${env:...}`` refs resolve the same way.
+    """
+    main_path = Path(path).resolve()
+    base_dir = main_path.parent
+
+    text = main_path.read_text()
+    # First pass: parse raw text (no substitution) just to find env_file.
+    try:
+        pre = yaml.safe_load(text) or {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f"experiment yaml {main_path} is not valid yaml: {exc}") from exc
+    if not isinstance(pre, dict):
+        raise TypeError(f"experiment yaml root must be a mapping, got {type(pre).__name__}")
+    env_file = pre.get("env_file")
+    if env_file is not None:
+        _load_dotenv(_resolve_path(env_file, base_dir))
+    else:
+        # Convenience auto-detect. `secret/.env` is the canonical location
+        # (alongside the checked-in `secret/.env.example` template); legacy
+        # `.env` at the yaml's directory is still honored as a fallback.
+        _load_dotenv(base_dir / "secret" / ".env")
+        _load_dotenv(base_dir / ".env")
+
+    # Second pass: substitute + parse for real.
+    raw = yaml.safe_load(_substitute_env(text)) or {}
+    if not isinstance(raw, dict):
+        raise TypeError(f"experiment yaml root must be a mapping, got {type(raw).__name__}")
+    return _build_experiment(raw, base_dir=base_dir)
+
+
+# =============================================================================
+# Env + yaml helpers
+# =============================================================================
+
+def _load_dotenv(path: Path) -> None:
+    """Hand-rolled dotenv parser. Format: ``KEY=value`` per line; ``#``
+    starts a line comment; surrounding single/double quotes are stripped;
+    blank lines and unparseable lines are skipped (logged at DEBUG).
+    Shell env wins — never overwrites an already-set os.environ key.
+
+    Missing file is silently ignored — most setups have one, some don't.
+    """
+    if not path.is_file():
+        return
+    for line_no, raw in enumerate(path.read_text().splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        key, sep, value = line.partition("=")
+        if not sep:
+            logger.debug("dotenv %s:%d skipped (no '='): %r", path, line_no, raw)
+            continue
+        key = key.strip()
+        value = value.strip()
+        # Strip an inline comment after an unquoted value: `FOO=bar # note`.
+        if value and value[0] not in ("'", '"'):
+            value = value.split(" #", 1)[0].rstrip()
+        # Strip matching quotes around the value.
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        if not key.isidentifier():
+            logger.debug("dotenv %s:%d skipped (bad key): %r", path, line_no, raw)
+            continue
+        os.environ.setdefault(key, value)
+
+
+def _read_yaml(path: Path) -> Any:
+    text = path.read_text()
+    text = _substitute_env(text)
+    return yaml.safe_load(text) or {}
+
+
+def _substitute_env(text: str) -> str:
+    def repl(m: re.Match[str]) -> str:
+        var = m.group(1)
+        val = os.environ.get(var)
+        if val is None:
+            raise KeyError(
+                f"yaml references ${{env:{var}}} but {var} is not set"
+            )
+        return val
+    return _ENV_RE.sub(repl, text)
+
+
+def _resolve_path(p: str | Path, base_dir: Path) -> Path:
+    """Relative paths resolve under ``base_dir``; absolute / ``~`` honored."""
+    pp = Path(p).expanduser()
+    if pp.is_absolute():
+        return pp
+    return (base_dir / pp).resolve()
+
+
+def _merge_dict(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Shallow merge: overlay wins. ``config`` sub-key is deep-merged one
+    level so an agent profile's ``config.timeout_s`` survives even if the
+    main yaml overrides ``config.model``."""
+    out: dict[str, Any] = dict(base)
+    for k, v in overlay.items():
+        if k == "config" and isinstance(v, dict) and isinstance(out.get("config"), dict):
+            out["config"] = {**out["config"], **v}
+        else:
+            out[k] = v
+    return out
+
+
+# =============================================================================
+# Top-level builder
+# =============================================================================
+
+def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
+    unknown = set(raw) - _TOP_LEVEL_KEYS
+    if unknown:
+        raise TypeError(f"unknown top-level keys: {sorted(unknown)}")
+    _require(raw, "name")
+
+    # Apply optional run_profile under the top-level dict, with main yaml
+    # winning. Result is the effective top-level for output / artifacts /
+    # concurrency.
+    if (rp := raw.get("run_profile")) is not None:
+        prof = _read_yaml(_resolve_path(rp, base_dir))
+        if not isinstance(prof, dict):
+            raise TypeError(f"run_profile {rp!r} must be a mapping")
+        effective = _merge_dict(prof, {k: v for k, v in raw.items() if k != "run_profile"})
+    else:
+        effective = dict(raw)
+
+    output = _build_output(effective.get("output") or {})
+    artifacts = _build_artifacts(effective.get("artifacts") or {})
+    concurrency = _build_concurrency(effective)
+    cleanup_mode = _build_cleanup_mode(effective)
+
+    if "agent" in raw and "agents" in raw:
+        raise ValueError("set either `agent:` (single) or `agents:` (list), not both")
+    if "agent" in raw:
+        agents = [_build_agent_single(raw["agent"], base_dir=base_dir)]
+    elif "agents" in raw:
+        agents = [_build_agent_single(a, base_dir=base_dir) for a in raw["agents"]]
+    else:
+        raise KeyError("missing required field: `agent` (or `agents`)")
+
+    provider = _build_provider(raw.get("provider") or {}, base_dir=base_dir)
+
+    if "tasks" not in raw:
+        raise KeyError("missing required field: `tasks`")
+    tasks = _build_tasks(raw["tasks"], base_dir=base_dir)
+
+    if not agents:
+        raise ValueError("experiment must declare at least one agent")
+    if not tasks:
+        raise ValueError("experiment must declare at least one task")
+
+    return ExperimentSpec(
+        name=str(raw["name"]),
+        output=output,
+        provider=provider,
+        agents=agents,
+        tasks=tasks,
+        artifacts=artifacts,
+        concurrency=concurrency,
+        cleanup_mode=cleanup_mode,
+    )
+
+
+# =============================================================================
+# Section builders
+# =============================================================================
+
+def _build_output(raw: dict[str, Any]) -> OutputSpec:
+    return OutputSpec(root=str(raw.get("root", ".logs/ale")))
+
+
+def _build_concurrency(eff: dict[str, Any]) -> int:
+    n = int(eff.get("concurrency", 1))
+    if n < 1:
+        raise ValueError(f"concurrency must be >= 1, got {n}")
+    return n
+
+
+_VALID_CLEANUP_MODES = frozenset({"delete", "stop", "keep"})
+
+
+def _build_cleanup_mode(eff: dict[str, Any]) -> str:
+    raw = str(eff.get("cleanup_mode") or "delete")
+    if raw not in _VALID_CLEANUP_MODES:
+        raise ValueError(
+            f"cleanup_mode must be one of {sorted(_VALID_CLEANUP_MODES)}, got {raw!r}"
+        )
+    return raw
+
+
+def _build_artifacts(raw: dict[str, Any]) -> ArtifactsSpec:
+    return ArtifactsSpec(
+        gcs_bucket=raw.get("gcs_bucket") or None,
+        gcs_local_key_file=raw.get("gcs_local_key_file") or None,
+        gcs_vm_key_file=raw.get("gcs_vm_key_file") or None,
+        fallback_to_cua=bool(raw.get("fallback_to_cua", True)),
+    )
+
+
+# ---- agent ---------------------------------------------------------------
+
+# Shape of an agent block (after profile merge):
+#   harness | class : str          — registry shortcut OR fqdn
+#   model            : str          — sugar → config.model
+#   id               : str | None   — defaults to harness/class short name
+#   runtime          : str | None   — vm | local | docker (auto-pick if None)
+#   profile          : str | None   — consumed by the merger; not in AgentSpec
+#   config           : dict         — passed verbatim to the deployer Config
+_AGENT_TOP_KEYS = frozenset({"harness", "class", "model", "id", "runtime", "profile", "config"})
+
+
+def _build_agent_single(raw: dict[str, Any], *, base_dir: Path) -> AgentSpec:
+    if not isinstance(raw, dict):
+        raise TypeError(f"agent must be a mapping, got {type(raw).__name__}")
+
+    merged: dict[str, Any] = dict(raw)
+    if (prof_path := merged.pop("profile", None)) is not None:
+        prof = _read_yaml(_resolve_path(prof_path, base_dir))
+        if not isinstance(prof, dict):
+            raise TypeError(f"agent profile {prof_path!r} must be a mapping")
+        prof_unknown = set(prof) - _AGENT_TOP_KEYS
+        if prof_unknown:
+            raise TypeError(
+                f"agent profile {prof_path!r} has unknown keys: {sorted(prof_unknown)}"
+            )
+        merged = _merge_dict(prof, merged)
+
+    unknown = set(merged) - _AGENT_TOP_KEYS
+    if unknown:
+        raise TypeError(f"agent has unknown keys: {sorted(unknown)}")
+
+    if "harness" in merged and "class" in merged:
+        raise ValueError("set either `harness:` (shortcut) or `class:` (fqdn), not both")
+    cls = merged.get("harness") or merged.get("class")
+    if not cls:
+        raise KeyError("agent missing required field: `harness` (or `class`)")
+    cls = str(cls)
+
+    config: dict[str, Any] = dict(merged.get("config") or {})
+    # `model:` at the agent level is sugar for `config.model:`. Main-yaml
+    # value wins (this lambda is only ever called after _merge_dict has
+    # already settled the per-level priority).
+    if (m := merged.get("model")) is not None:
+        config["model"] = m
+
+    agent_id = merged.get("id")
+    if agent_id is None:
+        # Default to the registry shortcut, or the unqualified tail of a fqdn.
+        agent_id = cls if cls in AGENT_REGISTRY else cls.rsplit(".", 1)[-1]
+
+    runtime = merged.get("runtime")
+    if runtime is not None and not isinstance(runtime, str):
+        raise TypeError(f"agent.runtime must be a string, got {type(runtime).__name__}")
+
+    return AgentSpec(id=str(agent_id), class_=cls, config=config, runtime=runtime)
+
+
+# ---- provider ------------------------------------------------------------
+
+# Provider block accepts any flat key besides `kind` / `profile` — those
+# extras become ProviderSpec.config kwargs (passed straight to the
+# kind-specific Config dataclass).
+_PROVIDER_RESERVED = frozenset({"kind", "profile"})
+
+
+def _build_provider(raw: dict[str, Any], *, base_dir: Path) -> ProviderSpec:
+    if not isinstance(raw, dict):
+        raise TypeError(f"provider must be a mapping, got {type(raw).__name__}")
+
+    merged: dict[str, Any] = dict(raw)
+    if (prof_path := merged.pop("profile", None)) is not None:
+        prof = _read_yaml(_resolve_path(prof_path, base_dir))
+        if not isinstance(prof, dict):
+            raise TypeError(f"provider profile {prof_path!r} must be a mapping")
+        if "kind" in prof:
+            raise ValueError(
+                f"provider profile {prof_path!r} must not set `kind:` — "
+                f"`kind` lives in the main yaml so swapping profiles can't "
+                f"silently change the backend."
+            )
+        merged = _merge_dict(prof, merged)
+
+    if "kind" not in merged:
+        raise KeyError("provider missing required field: `kind`")
+    kind = str(merged["kind"])
+    cfg = {k: v for k, v in merged.items() if k not in _PROVIDER_RESERVED}
+
+    # `service_account_key` is a user-friendly path field — expand `~`
+    # before handing to the Config dataclass.
+    if (sa := cfg.get("service_account_key")) is not None:
+        cfg["service_account_key"] = str(Path(str(sa)).expanduser())
+
+    _validate_provider_required(kind, cfg)
+    return ProviderSpec(kind=kind, config=cfg)
+
+
+def _validate_provider_required(kind: str, cfg: dict[str, Any]) -> None:
+    """Surface friendly errors for the most common missing-field mistakes
+    BEFORE the deployer Config dataclass raises a less-readable TypeError."""
+    if kind == "gcloud":
+        for k in ("project", "service_account_key"):
+            if not cfg.get(k):
+                raise KeyError(
+                    f"provider.kind=gcloud missing required field `{k}` "
+                    f"(set it in the main yaml; profile shouldn't carry it)"
+                )
+    elif kind == "static":
+        if not cfg.get("endpoint"):
+            raise KeyError("provider.kind=static missing required field `endpoint`")
+
+
+# ---- tasks ---------------------------------------------------------------
+
+def _build_tasks(raw: Any, *, base_dir: Path) -> list[TaskSpec]:
+    """Three accepted shapes:
+
+    * ``str`` ending in ``.txt``  → one `<path>` per line, variant 0.
+    * ``str`` ending in ``.yaml`` → list of ``{path, variants}`` entries.
+    * ``list``                    → legacy inline form, each entry a
+                                    ``{path, variants}`` dict.
+    """
+    if isinstance(raw, str):
+        return _load_tasks_file(_resolve_path(raw, base_dir))
+    if isinstance(raw, list):
+        return [_build_task_entry(t) for t in raw]
+    raise TypeError(f"tasks must be a string path or a list, got {type(raw).__name__}")
+
+
+def _load_tasks_file(path: Path) -> list[TaskSpec]:
+    if not path.exists():
+        raise FileNotFoundError(f"tasks file not found: {path}")
+    suffix = path.suffix.lower()
+    if suffix == ".txt":
+        out: list[TaskSpec] = []
+        for raw_line in path.read_text().splitlines():
+            line = raw_line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            out.append(TaskSpec(path=line, variants=[0]))
+        return out
+    if suffix in (".yaml", ".yml"):
+        data = _read_yaml(path)
+        if not isinstance(data, list):
+            raise TypeError(f"{path}: top-level must be a list of task entries")
+        return [_build_task_entry(t) for t in data]
+    raise ValueError(f"unsupported tasks-file suffix: {path.suffix!r} (use .txt or .yaml)")
+
+
+def _build_task_entry(raw: dict[str, Any]) -> TaskSpec:
+    if not isinstance(raw, dict):
+        raise TypeError(f"task entry must be a mapping, got {type(raw).__name__}")
+    _require(raw, "path")
+    variants = raw.get("variants", [0])
+    if not isinstance(variants, list) or not all(isinstance(v, int) for v in variants):
+        raise TypeError(f"task.variants must be a list of ints, got {variants!r}")
+    return TaskSpec(path=str(raw["path"]), variants=list(variants))
+
+
+# ---- shared --------------------------------------------------------------
+
+def _require(raw: dict[str, Any], *keys: str) -> None:
+    missing = [k for k in keys if k not in raw]
+    if missing:
+        raise KeyError(f"missing required field(s): {missing}")

@@ -1,0 +1,13 @@
+{
+  "taskId": "demo/hello_win",
+  "title": "Rich demo hello (Windows: input + reference + software + 3 variants)",
+  "summary": "Windows counterpart of demo/hello. Same input/reference/software/output surface and 3 variants; uses E:\\agenthle paths and a .cmd helper. Targets the cpu-free Windows snapshot.",
+  "category": "demo",
+  "vm": {
+    "snapshot": "cpu-free",
+    "vcpus": 4,
+    "memory_gb": 16,
+    "disk_gb": 200,
+    "timeout_s": 1800
+  }
+}

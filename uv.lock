@@ -39,9 +39,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = ">=4" },
-    { name = "cua-bench", editable = "../agenthle/submodules/cua/libs/cua-bench" },
+    { name = "cua-bench", specifier = "==0.2.7" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "openenv-core", editable = "../OpenEnv" },
+    { name = "openenv-core", specifier = "==0.3.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
@@ -146,7 +146,7 @@ wheels = [
 [[package]]
 name = "ale-ale-claw"
 version = "0.1.0"
-source = { editable = "ale/agents/ale_claw" }
+source = { editable = "ale_run/agents/ale_claw" }
 dependencies = [
     { name = "cua-agent" },
     { name = "cua-computer" },
@@ -157,9 +157,9 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cua-agent", editable = "../agenthle/submodules/cua/libs/python/agent" },
-    { name = "cua-computer", editable = "../agenthle/submodules/cua/libs/python/computer" },
-    { name = "cua-core", editable = "../agenthle/submodules/cua/libs/python/core" },
+    { name = "cua-agent", specifier = "==0.7.38" },
+    { name = "cua-computer", specifier = "==0.5.17" },
+    { name = "cua-core", specifier = "==0.1.18" },
     { name = "litellm", specifier = ">=1.80" },
     { name = "pillow", specifier = ">=10.0" },
 ]
@@ -167,7 +167,7 @@ requires-dist = [
 [[package]]
 name = "ale-claude-code"
 version = "0.1.0"
-source = { editable = "ale/agents/claude_code" }
+source = { editable = "ale_run/agents/claude_code" }
 
 [[package]]
 name = "annotated-doc"
@@ -557,7 +557,7 @@ wheels = [
 [[package]]
 name = "cua-agent"
 version = "0.7.38"
-source = { editable = "../agenthle/submodules/cua/libs/python/agent" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "anyio" },
@@ -572,77 +572,15 @@ dependencies = [
     { name = "rich" },
     { name = "typing-extensions" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "accelerate", marker = "extra == 'all'" },
-    { name = "accelerate", marker = "extra == 'glm45v-hf'" },
-    { name = "accelerate", marker = "extra == 'internvl-hf'" },
-    { name = "accelerate", marker = "extra == 'moondream3'" },
-    { name = "accelerate", marker = "extra == 'opencua-hf'" },
-    { name = "accelerate", marker = "extra == 'uitars-hf'" },
-    { name = "aiohttp", specifier = ">=3.9.3" },
-    { name = "anyio", specifier = ">=4.4.1" },
-    { name = "asyncio" },
-    { name = "blobfile", marker = "extra == 'all'", specifier = ">=3.0.0" },
-    { name = "blobfile", marker = "extra == 'opencua-hf'", specifier = ">=3.0.0" },
-    { name = "certifi", specifier = ">=2024.2.2" },
-    { name = "cua-computer", editable = "../agenthle/submodules/cua/libs/python/computer" },
-    { name = "cua-core", editable = "../agenthle/submodules/cua/libs/python/core" },
-    { name = "cua-som", marker = "extra == 'omni'", editable = "../agenthle/submodules/cua/libs/python/som" },
-    { name = "einops", marker = "extra == 'all'" },
-    { name = "einops", marker = "extra == 'internvl-hf'" },
-    { name = "google-genai", marker = "extra == 'all'", specifier = ">=1.41.0" },
-    { name = "google-genai", marker = "extra == 'cloud'", specifier = ">=1.41.0" },
-    { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.41.0" },
-    { name = "gradio", marker = "extra == 'all'", specifier = ">=6.0.0" },
-    { name = "gradio", marker = "extra == 'ui'", specifier = ">=6.0.0" },
-    { name = "httpx", specifier = ">=0.27.0" },
-    { name = "hud-python", marker = "extra == 'hud'", specifier = "==0.4.52" },
-    { name = "litellm", specifier = ">=1.80.0,<2" },
-    { name = "mlx-vlm", marker = "sys_platform == 'darwin' and extra == 'all'", specifier = ">=0.1.27" },
-    { name = "mlx-vlm", marker = "sys_platform == 'darwin' and extra == 'uitars-mlx'", specifier = ">=0.1.27" },
-    { name = "pillow", marker = "extra == 'all'", specifier = ">=10.0.0" },
-    { name = "pillow", marker = "extra == 'cloud'", specifier = ">=10.0.0" },
-    { name = "pillow", marker = "extra == 'qwen'", specifier = ">=10.0.0" },
-    { name = "pydantic", specifier = ">=2.6.4" },
-    { name = "python-dotenv", specifier = ">=1.0.1" },
-    { name = "python-dotenv", marker = "extra == 'all'", specifier = ">=1.0.1" },
-    { name = "python-dotenv", marker = "extra == 'ui'", specifier = ">=1.0.1" },
-    { name = "qwen-agent", marker = "extra == 'all'" },
-    { name = "qwen-agent", marker = "extra == 'cloud'" },
-    { name = "qwen-agent", marker = "extra == 'qwen'" },
-    { name = "qwen-vl-utils", marker = "extra == 'all'" },
-    { name = "qwen-vl-utils", marker = "extra == 'cloud'" },
-    { name = "qwen-vl-utils", marker = "extra == 'qwen'" },
-    { name = "rich", specifier = ">=13.7.1" },
-    { name = "tiktoken", marker = "extra == 'all'", specifier = ">=0.11.0" },
-    { name = "tiktoken", marker = "extra == 'opencua-hf'", specifier = ">=0.11.0" },
-    { name = "timm", marker = "extra == 'all'" },
-    { name = "timm", marker = "extra == 'internvl-hf'" },
-    { name = "torch", marker = "extra == 'all'" },
-    { name = "torch", marker = "extra == 'glm45v-hf'" },
-    { name = "torch", marker = "extra == 'internvl-hf'" },
-    { name = "torch", marker = "extra == 'moondream3'" },
-    { name = "torch", marker = "extra == 'opencua-hf'" },
-    { name = "torch", marker = "extra == 'uitars-hf'" },
-    { name = "transformers", marker = "extra == 'all'", specifier = ">=4.55.0" },
-    { name = "transformers", marker = "extra == 'internvl-hf'", specifier = ">=4.55.0" },
-    { name = "transformers", marker = "extra == 'moondream3'", specifier = ">=4.55.0" },
-    { name = "transformers", marker = "extra == 'opencua-hf'", specifier = ">=4.53.0" },
-    { name = "transformers", marker = "extra == 'uitars-hf'", specifier = ">=4.54.0" },
-    { name = "transformers-v4-55-0-glm-4-5v-preview", marker = "extra == 'glm45v-hf'" },
-    { name = "typing-extensions", specifier = ">=4.12.2" },
-    { name = "yaspin", marker = "extra == 'all'", specifier = ">=3.1.0" },
-    { name = "yaspin", marker = "extra == 'cli'", specifier = ">=3.1.0" },
-    { name = "yaspin", marker = "extra == 'cloud'", specifier = ">=3.1.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/0c/32/efafe0638f50e6d15e0fe6339f7730babc7b7c8e78b76f116d1d28cb3cc5/cua_agent-0.7.38.tar.gz", hash = "sha256:34d53491789cc6a97a479484f81c64644a0fb6ed2ae3fe4b1e8500c48e29b1be", size = 189409, upload-time = "2026-03-24T23:25:45.334Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/62/5011e57a3b4f8416c6e69b2c77dfcc47ad4c3a860657331e50253042c6aa/cua_agent-0.7.38-py3-none-any.whl", hash = "sha256:1ace6f82ad68e6902b76b891094731cb5e97fa3c059e96eab6a570419cfe0092", size = 230646, upload-time = "2026-03-24T23:25:43.859Z" },
 ]
-provides-extras = ["openai", "anthropic", "qwen", "omni", "uitars", "uitars-mlx", "uitars-hf", "glm45v-hf", "opencua-hf", "internvl-hf", "moondream3", "ui", "cli", "hud", "gemini", "cloud", "all"]
 
 [[package]]
 name = "cua-bench"
 version = "0.2.7"
-source = { editable = "../agenthle/submodules/cua/libs/cua-bench" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
     { name = "aiohttp" },
@@ -663,60 +601,15 @@ dependencies = [
     { name = "tqdm" },
     { name = "websockets" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiofiles", specifier = ">=23.0.0" },
-    { name = "aiohttp", specifier = ">=3.9.0" },
-    { name = "aiosqlite", marker = "extra == 'server'", specifier = ">=0.19.0" },
-    { name = "anthropic", marker = "extra == 'agents'", specifier = ">=0.26.0" },
-    { name = "beautifulsoup4", specifier = ">=4.14.2" },
-    { name = "cua-agent", marker = "extra == 'agents'", specifier = ">=0.6.2" },
-    { name = "cua-bench", extras = ["browser", "agents", "cloud", "otel"], marker = "extra == 'all'" },
-    { name = "cua-bench", extras = ["otel"], marker = "extra == 'cloud'" },
-    { name = "cua-computer", specifier = ">=0.4.19" },
-    { name = "cua-core", specifier = ">=0.1.18" },
-    { name = "datasets", specifier = ">=3.0.0" },
-    { name = "docker", specifier = ">=7.0.0" },
-    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.100.0" },
-    { name = "gcloud-aio-storage", marker = "extra == 'cloud'", specifier = ">=9.0.0" },
-    { name = "google-cloud-batch", marker = "extra == 'cloud'", specifier = ">=0.17.0" },
-    { name = "google-cloud-logging", marker = "extra == 'cloud'", specifier = ">=3.5.0" },
-    { name = "google-cloud-storage", marker = "extra == 'cloud'", specifier = ">=2.10.0" },
-    { name = "grpcio", marker = "extra == 'cloud'", specifier = ">=1.60.0" },
-    { name = "html5lib", specifier = ">=1.1" },
-    { name = "icoextract", marker = "extra == 'windows'", specifier = ">=0.2.0" },
-    { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "matplotlib", specifier = ">=3.8.0" },
-    { name = "numpy", specifier = ">=2.0.0" },
-    { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.20.0" },
-    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'", specifier = ">=1.20.0" },
-    { name = "opentelemetry-sdk", marker = "extra == 'otel'", specifier = ">=1.20.0" },
-    { name = "pillow", specifier = ">=11.0.0" },
-    { name = "playwright", marker = "extra == 'browser'", specifier = ">=1.40.0" },
-    { name = "psutil", specifier = ">=5.9.0" },
-    { name = "pypiwin32", marker = "extra == 'windows'", specifier = ">=223" },
-    { name = "pyquery", specifier = ">=2.0.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
-    { name = "python-dotenv", specifier = ">=1.0.0" },
-    { name = "python-multipart", marker = "extra == 'server'", specifier = ">=0.0.6" },
-    { name = "rich", specifier = ">=14.2.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
-    { name = "torch", marker = "extra == 'rl'", specifier = ">=2.0.0" },
-    { name = "torchvision", marker = "extra == 'rl'", specifier = ">=0.15.0" },
-    { name = "tqdm", specifier = ">=4.66.0" },
-    { name = "transformers", marker = "extra == 'rl'", specifier = ">=4.57.0,<5.0" },
-    { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.30.0" },
-    { name = "verl", marker = "extra == 'rl'" },
-    { name = "websockets", specifier = ">=12.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/22/1a/40e057215973db4d316a6d998b76fe113ea6b765f8f65534176dae325e69/cua_bench-0.2.7.tar.gz", hash = "sha256:f2faf40aa21fffc9ccf6e232bd3c457f5d33b11c35c30178aa091e79713cf148", size = 13258346, upload-time = "2026-03-23T18:14:32.053Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/06/4c/3c3bde2103dc46064898eecef5a3e680e819f963ce41cdb0708d31c782af/cua_bench-0.2.7-py3-none-any.whl", hash = "sha256:68f21fe8e1d0659ecb09a03bacbe418c8d37303694ac356ce919e216460dd287", size = 13395031, upload-time = "2026-03-23T18:14:29.941Z" },
 ]
-provides-extras = ["all", "browser", "agents", "otel", "cloud", "server", "windows", "dev", "rl"]
 
 [[package]]
 name = "cua-computer"
 version = "0.5.17"
-source = { editable = "../agenthle/submodules/cua/libs/python/computer" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "cua-core" },
@@ -726,47 +619,22 @@ dependencies = [
     { name = "websocket-client" },
     { name = "websockets" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiohttp", specifier = ">=3.9.0" },
-    { name = "cua-core", editable = "../agenthle/submodules/cua/libs/python/core" },
-    { name = "datasets", marker = "extra == 'all'", specifier = ">=3.6.0" },
-    { name = "datasets", marker = "extra == 'ui'", specifier = ">=3.6.0" },
-    { name = "gradio", marker = "extra == 'all'", specifier = ">=5.23.3" },
-    { name = "gradio", marker = "extra == 'ui'", specifier = ">=5.23.3" },
-    { name = "mslex", specifier = ">=1.3.0" },
-    { name = "pillow", specifier = ">=10.0.0" },
-    { name = "pydantic", specifier = ">=2.11.1" },
-    { name = "python-dotenv", marker = "extra == 'all'", specifier = ">=1.0.1" },
-    { name = "python-dotenv", marker = "extra == 'ui'", specifier = ">=1.0.1" },
-    { name = "websocket-client", specifier = ">=1.8.0" },
-    { name = "websockets", specifier = ">=12.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/f9/42/932b8008cd15e40651b3bef4df700feeca7f962f9220fca69c27b800b907/cua_computer-0.5.17.tar.gz", hash = "sha256:8a8881adbbdbf5e65ae7b1cf93e3f1d9c2781fbadd90acd5de757771b5e312f7", size = 101747, upload-time = "2026-03-04T15:47:38.565Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b4/ba/cd691109cba3251302c1b5bdbddfc69a85bb04ccb37984737c4389a12f55/cua_computer-0.5.17-py3-none-any.whl", hash = "sha256:1c4fb866ea8a0ec2c05b853306437fc38bdd7e2acd4772e4811303a80f08697b", size = 117364, upload-time = "2026-03-04T15:47:37.544Z" },
 ]
-provides-extras = ["lume", "lumier", "ui", "all"]
 
 [[package]]
 name = "cua-core"
 version = "0.1.18"
-source = { editable = "../agenthle/submodules/cua/libs/python/core" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "posthog" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.20.0" },
-    { name = "opentelemetry-api", marker = "extra == 'telemetry'", specifier = ">=1.20.0" },
-    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'", specifier = ">=1.20.0" },
-    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'telemetry'", specifier = ">=1.20.0" },
-    { name = "opentelemetry-sdk", marker = "extra == 'otel'", specifier = ">=1.20.0" },
-    { name = "opentelemetry-sdk", marker = "extra == 'telemetry'", specifier = ">=1.20.0" },
-    { name = "posthog", specifier = ">=3.20.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/62/07/92955e3643fc41f090b41cd7dc699c7dd4a50c873557e060bb2fa19ccc1b/cua_core-0.1.18.tar.gz", hash = "sha256:8c05c96b3942214769d1ef79d09265b416de4a7c7d647d21541878c744221858", size = 10499, upload-time = "2026-02-25T20:43:02.752Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/83/719c32bed7741af5759812ea214c3ea5bb7b7878cac86cb390468b2856fc/cua_core-0.1.18-py3-none-any.whl", hash = "sha256:c66ea5b2b8f0a0d1902efe2cf05e068fa34f4fc4acde1e8f9b6be37a314a6237", size = 9825, upload-time = "2026-02-25T20:43:02.013Z" },
 ]
-provides-extras = ["otel", "telemetry"]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.3.5" }]
 
 [[package]]
 name = "cycler"
@@ -1540,7 +1408,7 @@ wheels = [
 
 [[package]]
 name = "litellm"
-version = "1.84.0"
+version = "1.80.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -1556,9 +1424,9 @@ dependencies = [
     { name = "tiktoken" },
     { name = "tokenizers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/dd/e9/8941b7e72a187000561d932c0f2f2ed2b0fd080dfc33ba6e05961d45ca7d/litellm-1.84.0.tar.gz", hash = "sha256:b8ad0cbea11a5941b18d5af973017a340abd3d3ab41cb86e5401b970626d71a6", size = 15103206, upload-time = "2026-05-14T05:45:53.017Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bd/8c/48d533affdbc6d485b7ad4221cd3b40b8c12f9f5568edfe0be0b11e7b945/litellm-1.80.0.tar.gz", hash = "sha256:eeac733eb6b226f9e5fb020f72fe13a32b3354b001dc62bcf1bc4d9b526d6231", size = 11591976, upload-time = "2025-11-16T00:03:51.812Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/01/a6/77fa1bbf5e42eb596b06318b3f7e6af5d0f44028046d1d598c6a595d028f/litellm-1.84.0-py3-none-any.whl", hash = "sha256:2a58d6041e6aa27d1a28dc8d8828ab500fef1a00ef74ca65e60899035010c2f2", size = 16735062, upload-time = "2026-05-14T05:45:49.927Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/53/aa31e4d057b3746b3c323ca993003d6cf15ef987e7fe7ceb53681695ae87/litellm-1.80.0-py3-none-any.whl", hash = "sha256:fd0009758f4772257048d74bf79bb64318859adb4ea49a8b66fdbc718cd80b6e", size = 10492975, upload-time = "2025-11-16T00:03:49.182Z" },
 ]
 
 [[package]]
@@ -1903,7 +1771,7 @@ wheels = [
 [[package]]
 name = "openenv-core"
 version = "0.3.0"
-source = { editable = "../OpenEnv" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
     { name = "fastmcp" },
@@ -1921,63 +1789,9 @@ dependencies = [
     { name = "uvicorn" },
     { name = "websockets" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "daytona", marker = "extra == 'daytona'", specifier = ">=0.136.0" },
-    { name = "docutils", marker = "extra == 'docs'", specifier = ">=0.18.1,<0.23" },
-    { name = "fastapi", specifier = ">=0.104.0" },
-    { name = "fastapi", marker = "extra == 'core'", specifier = ">=0.104.0" },
-    { name = "fastmcp", specifier = ">=3.0.0" },
-    { name = "gradio", specifier = ">=4.0.0" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "huggingface-hub", specifier = ">=0.20.0" },
-    { name = "huggingface-hub", marker = "extra == 'cli'", specifier = ">=0.20.0" },
-    { name = "inspect-ai", marker = "extra == 'inspect'", specifier = ">=0.3.0" },
-    { name = "matplotlib", marker = "extra == 'docs'" },
-    { name = "myst-parser", marker = "extra == 'docs'" },
-    { name = "nest-asyncio", marker = "extra == 'docs'" },
-    { name = "openai", specifier = ">=2.7.2" },
-    { name = "openai", marker = "extra == 'cli'", specifier = ">=2.7.2" },
-    { name = "openenv-core", extras = ["cli"], marker = "extra == 'all'" },
-    { name = "openenv-core", extras = ["core"], marker = "extra == 'all'" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pydantic", marker = "extra == 'core'", specifier = ">=2.0.0" },
-    { name = "pytorch-sphinx-theme2", marker = "extra == 'docs'" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "pyyaml", marker = "extra == 'cli'", specifier = ">=6.0" },
-    { name = "pyyaml", marker = "extra == 'daytona'", specifier = ">=6.0" },
-    { name = "requests", specifier = ">=2.25.0" },
-    { name = "requests", marker = "extra == 'core'", specifier = ">=2.25.0" },
-    { name = "rich", specifier = ">=13.0.0" },
-    { name = "rich", marker = "extra == 'cli'", specifier = ">=13.0.0" },
-    { name = "smolagents", marker = "extra == 'docs'" },
-    { name = "sphinx", marker = "extra == 'docs'", specifier = "==7.2.6" },
-    { name = "sphinx-design", marker = "extra == 'docs'", specifier = "==0.6.1" },
-    { name = "sphinx-gallery", marker = "extra == 'docs'", specifier = ">=0.14.0" },
-    { name = "sphinx-sitemap", marker = "extra == 'docs'", specifier = "==2.9.0" },
-    { name = "sphinxcontrib-katex", marker = "extra == 'docs'", specifier = "==0.9.11" },
-    { name = "sphinxcontrib-mermaid", marker = "extra == 'docs'", specifier = "==2.0.1" },
-    { name = "sphinxext-opengraph", marker = "extra == 'docs'" },
-    { name = "tomli", specifier = ">=2.3.0" },
-    { name = "tomli", marker = "extra == 'cli'", specifier = ">=2.3.0" },
-    { name = "tomli-w", specifier = ">=1.2.0" },
-    { name = "tomli-w", marker = "extra == 'cli'", specifier = ">=1.2.0" },
-    { name = "typer", specifier = ">=0.9.0" },
-    { name = "typer", marker = "extra == 'cli'", specifier = ">=0.9.0" },
-    { name = "uvicorn", specifier = ">=0.24.0" },
-    { name = "uvicorn", marker = "extra == 'core'", specifier = ">=0.24.0" },
-    { name = "websockets", specifier = ">=15.0.1" },
-    { name = "websockets", marker = "extra == 'core'", specifier = ">=15.0.1" },
-]
-provides-extras = ["core", "cli", "docs", "all", "daytona", "inspect"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=7.0" },
-    { name = "pytest-asyncio", specifier = ">=0.21" },
-    { name = "ruff", specifier = ">=0.14.0" },
-    { name = "usort", specifier = ">=1.1.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/ce/d6/3bebe8afb55fcc3ea9251c4c2dfbab2879e31089bc91a8fe9696e5ce019b/openenv_core-0.3.0.tar.gz", hash = "sha256:c7fee2035badab5be497eb6f4afb2cb417de000f82cc19afd72fb5ec332c431d", size = 164720, upload-time = "2026-05-11T11:37:57.274Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/f5/aafa43138589bfd5d369a8d02ea365aae9d6fe55ac0b3894368d6d69bd03/openenv_core-0.3.0-py3-none-any.whl", hash = "sha256:859e875c9d5211b157c30fb9abc681606fcf0bf1b6ffcdf404678992823a1df0", size = 194313, upload-time = "2026-05-11T11:37:55.537Z" },
 ]
 
 [[package]]

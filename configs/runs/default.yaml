@@ -1,0 +1,24 @@
+# Profile: run-level knobs (output dir, concurrency, artifact mirroring).
+# Referenced from a main experiment yaml as:
+#     run_profile: configs/runs/default.yaml
+#
+# Any of these can also be inlined at the top level of the main yaml; inline
+# values override the profile.
+
+output:
+  root: .logs                           # created if missing; .logs/ is gitignored
+
+# Max units running simultaneously. Each unit holds a slot for its full
+# lifetime (VM acquire + agent run + eval), so this caps both VM count
+# AND concurrent LLM API calls. Size to min(GCP quota, LLM RPM budget).
+# 1 = sequential (safe debug default).
+concurrency: 1
+
+# Artifact mirroring: VM `gsutil` pushes to a GCS bucket, local `gsutil`
+# pulls down. Fallback (`fallback_to_cua: true`): if GCS is unreachable,
+# mirror via the cua-computer-server file API. Slow but always available.
+artifacts:
+  gcs_bucket: null                      # null → always CUA direct
+  gcs_local_key_file: null              # path to SA JSON on this machine
+  gcs_vm_key_file: null                 # path to SA JSON inside the VM
+  fallback_to_cua: true
