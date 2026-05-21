@@ -7,8 +7,8 @@ Phase mapping (preserved from simprun, surface renamed to LOG_SPEC events):
 
   - Phase 0  provision      env.reset_async() → VM + open session
   - Phase 1  start          data_staging + TaskEnv(session).setup()
-  - Phase 2  agent          VmExecutor: deployer.install() + deployer.launch()
-  - Phase 2b fanout         pull origin_log/, emit output_gather_skipped
+  - Phase 2  agent          runtime.install_deployer() + .launch_deployer()
+  - Phase 2b fanout         pull origin_log/ (vm-only), emit output_gather_skipped
   - Phase 3  evaluate       TaskEnv.evaluate(), then deployer.parse_artifacts
   - Phase 4  cleanup        TaskEnv.close + env.close_async(mode=delete)
 """
@@ -32,10 +32,9 @@ from . import gather
 from .factory import build_config, resolve_agent
 from .monitor import RateLimitDetector
 from .run_writer import RunWriter
-from .runtime import VmRuntime
+from .runtime import BaseRuntime, DockerRuntime, LocalRuntime, VmRuntime
 from .spec import ArtifactsSpec, RunUnit, UnitResult
 from .termination import classify_error, err_dict, redact_config
-from .vm_executor import VmExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +157,7 @@ async def run_one_unit(
     builder: TrajectoryBuilder | None = None
     trajectory: Trajectory | None = None
     run_result: AgentRunResult | None = None
-    runtime: VmRuntime | None = None
+    runtime: BaseRuntime | None = None
 
     status = "completed"
     score: float | None = None
@@ -178,7 +177,7 @@ async def run_one_unit(
         try:
             task_path = Path("tasks") / unit.task_path
             task_meta = TaskLoader(str(task_path)).load(unit.variant_index)
-            env_spec = _build_env_spec(task_meta)
+            env_spec = _build_env_spec(task_meta, unit=unit)
             timeout_s = int(task_meta.get("timeout_s") or _DEFAULT_TIMEOUT_S)
 
             # ============================================================
@@ -270,23 +269,23 @@ async def run_one_unit(
             # Phase 2 — agent
             # ============================================================
             env.set_phase("agent_run")
-            work_dir_vm = _work_dir_vm(env.vm.os, getattr(config, "name", "agent"), writer.run_id)
-            work_dir_host = writer.run_dir / "origin_log" / getattr(config, "name", "agent")
-            work_dir_host.mkdir(parents=True, exist_ok=True)
-            runtime = VmRuntime(
-                kind="vm",
-                vm_endpoint=env.vm.endpoint,
-                vm_os=env.vm.os,
-                work_dir_vm=work_dir_vm,
-                work_dir_host=work_dir_host,
+            agent_name = getattr(config, "name", "agent")
+            host_artifacts_dir = writer.run_dir / "origin_log" / agent_name
+            host_artifacts_dir.mkdir(parents=True, exist_ok=True)
+            runtime = _build_runtime(
+                runtime_kind=runtime_kind,
+                env=env,
                 config=config,
-                env=_collect_env_passthrough(),
+                agent_name=agent_name,
+                run_id=writer.run_id,
+                host_artifacts_dir=host_artifacts_dir,
             )
             writer.emit_event(
-                "agent_run_started", runtime="vm", work_dir=work_dir_vm
+                "agent_run_started",
+                runtime=runtime_kind,
+                work_dir=runtime.work_dir,
             )
-            executor = VmExecutor(env.session)
-            await executor.install(deployer_cls, runtime)
+            deployer = await runtime.install_deployer(deployer_cls)
 
             # ─── Incremental sync (simprun parity) ─────────────────────
             # Tail each ``hot_artifacts`` file on the VM into its host
@@ -312,14 +311,14 @@ async def run_one_unit(
 
             # ─── Rate-limit monitor (simprun parity) ────────────────────
             # Tails the locally-mirrored stderr.log (which IncrementalPuller
-            # is writing every ~15s) every 30s; on hit-rate threshold,
+            # is writing at its own tick cadence) every 30s; on hit-rate threshold,
             # cancels the agent and flags the run for cleanup_mode=keep so
             # we don't waste the VM boot on the retry. Matches simprun
             # runner.py:_monitor_rate_limits + the paused-state cleanup.
             rate_detector = RateLimitDetector()
-            stderr_host = work_dir_host / "stderr.log"
+            stderr_host = host_artifacts_dir / "stderr.log"
             launch_task = asyncio.create_task(
-                executor.launch(deployer_cls, runtime, task_meta["description"]),
+                runtime.launch_deployer(deployer, task_meta["description"]),
                 name="agent_launch",
             )
             monitor_task = asyncio.create_task(
@@ -402,23 +401,33 @@ async def run_one_unit(
 
             # ============================================================
             # Phase 2b — post-launch fanout (origin_log gather + output stub)
+            #
+            # Gather is only meaningful for VmRuntime, where work_dir lives
+            # in the VM. Local / docker runtimes write directly into
+            # host_artifacts_dir, so the gather step is a no-op.
             # ============================================================
             writer.emit_event("post_launch_fanout_started", gcs_bucket="(cua direct)")
-            try:
-                report = await gather.pull_dir(
-                    env.session,
-                    src=work_dir_vm,
-                    dst=work_dir_host,
-                    os_type=env.vm.os,
-                )
-                if report.get("error"):
-                    writer.emit_event("origin_log_gather_failed", report=report)
-                else:
-                    writer.emit_event("origin_log_gather_done", report=report)
-            except Exception as e:
+            if isinstance(runtime, VmRuntime):
+                try:
+                    report = await gather.pull_dir(
+                        env.session,
+                        src=runtime.work_dir,
+                        dst=runtime.host_artifacts_dir,
+                        os_type=env.vm.os,
+                    )
+                    if report.get("error"):
+                        writer.emit_event("origin_log_gather_failed", report=report)
+                    else:
+                        writer.emit_event("origin_log_gather_done", report=report)
+                except Exception as e:
+                    writer.emit_event(
+                        "origin_log_gather_failed",
+                        report={"transport": "cua", "files": 0, "error": str(e)},
+                    )
+            else:
                 writer.emit_event(
-                    "origin_log_gather_failed",
-                    report={"transport": "cua", "files": 0, "error": str(e)},
+                    "origin_log_gather_skipped",
+                    reason=f"runtime={runtime.kind} writes to host directly",
                 )
             writer.emit_event(
                 "output_gather_skipped",
@@ -480,7 +489,7 @@ async def run_one_unit(
             if builder is not None and run_result is not None:
                 try:
                     deployer_cls.parse_artifacts(
-                        work_dir=work_dir_host,
+                        work_dir=runtime.host_artifacts_dir,
                         config=config,
                         run_result=run_result,
                         builder=builder,
@@ -641,13 +650,20 @@ def _extract_score(eval_output: Any) -> float | None:
     return None
 
 
-def _build_env_spec(task_meta: dict[str, Any]) -> EnvSpec:
+def _build_env_spec(task_meta: dict[str, Any], *, unit: RunUnit | None = None) -> EnvSpec:
     snapshot = task_meta.get("image_category") or task_meta.get("snapshot_name")
     if not snapshot:
         raise RuntimeError(
             "task_card.json is missing vm.snapshot (required for env spec)"
         )
     os_type = task_meta.get("os_type") or "linux"
+    task_id = unit.task_path if unit is not None else ""
+    harness = unit.agent_spec.class_ if unit is not None else ""
+    model_tag = (
+        str(unit.agent_spec.config.get("model") or "")
+        if unit is not None
+        else ""
+    )
     return EnvSpec(
         snapshot=snapshot,
         os=os_type,
@@ -655,13 +671,67 @@ def _build_env_spec(task_meta: dict[str, Any]) -> EnvSpec:
         memory_gb=int(task_meta.get("memory_gb") or 16),
         disk_gb=int(task_meta.get("disk_gb") or 200),
         gpu=task_meta.get("gpu"),
+        task_id=task_id,
+        harness=harness,
+        model_tag=model_tag,
     )
 
 
 def _work_dir_vm(os_type: str, agent_name: str, run_id: str) -> str:
+    """VM-side scratch dir for VmRuntime deployers."""
     if os_type == "linux":
         return f"/home/user/.ale/{agent_name}/{run_id}"
     return rf"C:\Users\User\.ale\{agent_name}\{run_id}"
+
+
+def _build_runtime(
+    *,
+    runtime_kind: str,
+    env: ALEEnv,
+    config: Any,
+    agent_name: str,
+    run_id: str,
+    host_artifacts_dir: Path,
+) -> BaseRuntime:
+    """Dispatch yaml ``runtime: <kind>`` to the concrete substrate adapter.
+
+    ``host_artifacts_dir`` is always a host path the lifecycle owns; for
+    Local/Docker it's also the deployer's work_dir (no gather step). For
+    Vm the deployer's work_dir is a VM-side path and gather copies into
+    ``host_artifacts_dir`` after launch.
+    """
+    env_passthrough = _collect_env_passthrough()
+    if runtime_kind == "vm":
+        work_dir_vm = _work_dir_vm(env.vm.os, agent_name, run_id)
+        return VmRuntime(
+            config=config,
+            work_dir=work_dir_vm,
+            host_artifacts_dir=host_artifacts_dir,
+            vm_endpoint=env.vm.endpoint,
+            vm_os=env.vm.os,
+            env=env_passthrough,
+        )
+    if runtime_kind == "local":
+        return LocalRuntime(
+            config=config,
+            work_dir=str(host_artifacts_dir),
+            host_artifacts_dir=host_artifacts_dir,
+            vm_endpoint=env.vm.endpoint,
+            vm_os=env.vm.os,
+            env=env_passthrough,
+        )
+    if runtime_kind == "docker":
+        # The container's image is left empty here — the first concrete
+        # docker deployer will plumb that through yaml.
+        return DockerRuntime(
+            config=config,
+            work_dir="/work",
+            host_artifacts_dir=host_artifacts_dir,
+            vm_endpoint=env.vm.endpoint,
+            vm_os=env.vm.os,
+            env=env_passthrough,
+        )
+    raise NotImplementedError(f"runtime kind {runtime_kind!r} not wired in lifecycle")
 
 
 def _collect_env_passthrough() -> dict[str, str]:
@@ -690,11 +760,11 @@ async def _monitor_rate_limits(
 ) -> None:
     """Tail the host-mirrored stderr.log; return when ``detector.is_triggered``.
 
-    Verbatim port of simprun runner.py:_monitor_rate_limits, swapping
-    the VM-side path for the host-mirrored copy (IncrementalPuller writes
-    that file every ~15s). The CALLER's `asyncio.wait` sees this task
-    complete only on detection — on a clean agent finish the caller
-    cancels this task so it returns mid-sleep.
+    Verbatim port of simprun runner.py:_monitor_rate_limits, swapping the
+    VM-side path for the host-mirrored copy (IncrementalPuller writes that
+    file at its own tick cadence — see ``_TICK_INTERVAL_S``). The CALLER's
+    `asyncio.wait` sees this task complete only on detection — on a clean
+    agent finish the caller cancels this task so it returns mid-sleep.
     """
     while True:
         await asyncio.sleep(interval)
@@ -801,20 +871,22 @@ async def _stage_reference_best_effort(
 def _build_incremental_puller(
     *,
     deployer_cls: type,
-    runtime: VmRuntime,
+    runtime: BaseRuntime,
     run_id: str,
     task_id: str,
 ):
     """Return ``(puller, targets)`` for the deployer's hot artifacts.
 
     Returns ``(None, [])`` when the deployer declares no ``hot_artifacts``
-    (default for ale_claw and any local/docker deployer — the work_dir is
-    already host-visible there). When non-empty, builds a puller targeting
-    ``<work_dir_vm>/<file>`` → ``<work_dir_host>/<file>`` for each entry.
+    OR the runtime isn't VM-backed (Local/Docker write straight to host).
+    When non-empty, builds a puller targeting ``<work_dir>/<file>`` →
+    ``<host_artifacts_dir>/<file>`` for each entry.
     """
     from ..environments.remote import RemoteVMConfig
     from .incremental_puller import IncrementalPuller, PullTarget
 
+    if not isinstance(runtime, VmRuntime):
+        return None, []
     hot = tuple(getattr(deployer_cls, "hot_artifacts", ()) or ())
     if not hot:
         return None, []
@@ -822,8 +894,8 @@ def _build_incremental_puller(
     sep = "/" if runtime.vm_os == "linux" else "\\"
     targets = [
         PullTarget(
-            vm_path=f"{runtime.work_dir_vm.rstrip(sep)}{sep}{name}",
-            host_path=runtime.work_dir_host / name,
+            vm_path=f"{runtime.work_dir.rstrip(sep)}{sep}{name}",
+            host_path=runtime.host_artifacts_dir / name,
         )
         for name in hot
     ]

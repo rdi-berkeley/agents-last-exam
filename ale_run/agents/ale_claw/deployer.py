@@ -3,10 +3,10 @@
 Lives on the host (``runtime: local``) or in a docker container
 (``runtime: docker``) — same code, framework picks where to run.
 
-The deployer's surface (per :class:`BaseAgentDeployer`):
+The deployer's surface (per :class:`InProcessHostDeployer`):
 
-  __init__(runtime): stores the AgentRuntime context
-  install():         sanity-check imports + at least one API key
+  __init__(runtime): stores the runtime context
+  install():         sanity-check imports + at least one API key (from base)
   launch(prompt):    runs the OpenClaw harness end-to-end, writes
                      transcripts to runtime.work_dir, returns
                      AgentRunResult
@@ -24,14 +24,12 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
-from cua_bench.agents.base import FailureMode
-
+from ale_run.agents._bases import InProcessHostDeployer
 from ale_run.agents.base import (
     AgentRunResult,
     BaseAgentConfig,
-    BaseAgentDeployer,
 )
 from ale_run.agents.trajectory import TrajectoryBuilder
 
@@ -70,46 +68,33 @@ logger = logging.getLogger(__name__)
 _HARNESS_AGENTS_MD = Path(__file__).resolve().parent / "harness" / "AGENTS.md"
 
 
-class AleClawDeployer(BaseAgentDeployer):
+class AleClawDeployer(InProcessHostDeployer):
     """OpenClaw harness deployer. Runs on host or in docker container.
 
     Both ``local`` and ``docker`` runtimes are supported — same code path.
     The docker runtime adds process / fs / env isolation; the local
     runtime is faster for dev. yaml picks one explicitly when both apply
     (with default ``local`` if omitted).
+
+    ``install`` from :class:`InProcessHostDeployer` checks the declared
+    imports + API-key env, plus :meth:`_extra_install` here logs the
+    resolved config.
     """
 
     supported_runtimes: ClassVar[frozenset[str]] = frozenset({"local", "docker"})
+
+    required_modules: ClassVar[tuple[str, ...]] = (".harness.agent_loop",)
+    api_key_alternatives: ClassVar[tuple[str, ...]] = (
+        "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+    )
 
     @property
     def version(self) -> str | None:
         return self.config.upstream_version
 
     # =========================================================================
-    # install / launch / parse_artifacts
+    # launch / parse_artifacts
     # =========================================================================
-
-    async def install(self) -> None:
-        """Sanity-check: harness imports + at least one API key in env."""
-        # Touch the harness to validate the in-process import chain.
-        from .harness.agent_loop import OpenClawComputerAgent  # noqa: F401
-        cfg: AleClawConfig = self.config  # type: ignore[assignment]
-        # API keys come from the operator's shell env (set via source/.env);
-        # litellm reads them directly. We only sanity-check that at least one
-        # is present so the run fails fast rather than burning a VM acquire.
-        if not any(
-            os.environ.get(k)
-            for k in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")
-        ):
-            raise RuntimeError(
-                "ale-claw: no LLM API key in env — export one of "
-                "OPENROUTER_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY "
-                "(via `source ~/.envrc` or equivalent)."
-            )
-        logger.info(
-            "ale-claw: install ok (model=%s, work_dir=%s, runtime=%s)",
-            cfg.model, self.runtime.work_dir, self.runtime.kind,
-        )
 
     async def launch(self, prompt: str) -> AgentRunResult:
         """Drive the OpenClaw agent end-to-end against the eval VM.
@@ -120,7 +105,9 @@ class AleClawDeployer(BaseAgentDeployer):
         :meth:`parse_artifacts` to read later.
         """
         cfg: AleClawConfig = self.config  # type: ignore[assignment]
-        work_dir = self.runtime.work_dir
+        # work_dir from BaseRuntime is a substrate-native str; local /
+        # docker runtimes are host-visible so wrapping in Path is safe.
+        work_dir = Path(self.runtime.work_dir)
         work_dir.mkdir(parents=True, exist_ok=True)
 
         # Harness-internal id for memory + session keying (just a folder name).

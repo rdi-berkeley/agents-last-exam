@@ -16,7 +16,6 @@ import importlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..agents.base import BaseAgentConfig, BaseAgentDeployer
     from ..environments.providers.provider import Provider
     from .spec import AgentSpec, ProviderSpec
 
@@ -101,18 +100,27 @@ def resolve_agent(spec: "AgentSpec") -> tuple[type, type]:
         mod_name, attr = cls_key.rsplit(".", 1)
         deployer_cls = getattr(importlib.import_module(mod_name), attr)
 
-    # Validate runtime against the deployer's supported set.
+    # Validate runtime against the deployer's supported set + the
+    # framework's runtime registry (every Runtime subclass that lifecycle
+    # can build).
+    from .runtime import RUNTIME_REGISTRY
+
     supported = getattr(deployer_cls, "supported_runtimes", frozenset())
     if spec.runtime is not None and spec.runtime not in supported:
         raise ValueError(
             f"agent {cls_key!r}: runtime {spec.runtime!r} not in "
             f"supported set {sorted(supported)}"
         )
-    if "vm" not in supported and (spec.runtime is None or spec.runtime == "vm"):
-        # The orchastration in this pass only ships a vm executor.
+    chosen = spec.runtime or next(iter(supported), None)
+    if chosen is None:
+        raise ValueError(
+            f"agent {cls_key!r} declares no supported_runtimes — set the "
+            "ClassVar on the deployer subclass."
+        )
+    if chosen not in RUNTIME_REGISTRY:
         raise NotImplementedError(
-            f"agent {cls_key!r} declares supported_runtimes={sorted(supported)}; "
-            f"only 'vm' runtime is wired in this iteration"
+            f"agent {cls_key!r}: chosen runtime {chosen!r} not in "
+            f"RUNTIME_REGISTRY ({sorted(RUNTIME_REGISTRY)})"
         )
 
     return deployer_cls, _config_class_for(deployer_cls)
