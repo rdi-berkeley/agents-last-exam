@@ -1,7 +1,7 @@
 """ClaudeCodeDeployer — drives @anthropic-ai/claude-code CLI on a remote VM.
 
 The deployer runs on the **framework host**; all VM I/O is dispatched
-through :class:`ale_run.orchastration.runtime.VmRuntime`'s HTTP-based
+through :class:`ale_run.environments.runtime.VmRuntime`'s HTTP-based
 methods (``run_command`` / ``write_file`` / ``read_file`` / ``exists`` /
 ``mkdir`` / ``rm``). Spawn + poll + kill come from
 :class:`PrebakedRemoteCliDeployer`.

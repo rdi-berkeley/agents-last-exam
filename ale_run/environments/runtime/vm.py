@@ -22,7 +22,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import ClassVar, Iterable
 
-from ...environments.remote import (
+from ..remote import (
     RemoteVMConfig,
     download_file,
     run_remote,
@@ -122,7 +122,7 @@ class VmRuntime(BaseRuntime):
     async def exists(self, path: str) -> bool:
         import requests
 
-        from ...environments.remote import _read_first_sse_event, _cua_url
+        from ..remote import _read_first_sse_event, _cua_url
 
         def _check() -> bool:
             try:

@@ -103,7 +103,7 @@ def resolve_agent(spec: "AgentSpec") -> tuple[type, type]:
     # Validate runtime against the deployer's supported set + the
     # framework's runtime registry (every Runtime subclass that lifecycle
     # can build).
-    from .runtime import RUNTIME_REGISTRY
+    from ..environments.runtime import RUNTIME_REGISTRY
 
     supported = getattr(deployer_cls, "supported_runtimes", frozenset())
     if spec.runtime is not None and spec.runtime not in supported:

@@ -32,7 +32,7 @@ from . import gather
 from .factory import build_config, resolve_agent
 from .monitor import RateLimitDetector
 from .run_writer import RunWriter
-from .runtime import BaseRuntime, DockerRuntime, LocalRuntime, VmRuntime
+from ..environments.runtime import BaseRuntime, DockerRuntime, LocalRuntime, VmRuntime
 from .spec import ArtifactsSpec, RunUnit, UnitResult
 from .termination import classify_error, err_dict, redact_config
 
