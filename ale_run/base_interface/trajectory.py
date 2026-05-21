@@ -1,25 +1,25 @@
 """Trajectory schema: ATIF-inspired Pydantic models, ALE-v1.0.
 
-Sized to be a strict subset of harbor's `ATIF <https://github.com/openai/...>`_
-(omitting fields we don't need yet) plus a small ``extra`` dict on Step and
-Trajectory for agent-specific metadata that doesn't fit the standard shape.
+Strict subset of harbor's ATIF (omitting fields we don't need) plus a
+small ``extra`` dict on Step and Trajectory for agent-specific metadata
+that doesn't fit the standard shape.
 
-Deployers populate this from their agent's structured logs (stream-json for
-claude-code, event jsonl for openclaw, ...). The framework seeds a leading
-``user``-source Step (the instruction); :meth:`BaseAgentDeployer.collect`
-appends the rest. Sub-agents (claude-code's ``Task`` tool, native agents
-that spawn sub-loops) attach under :attr:`Trajectory.subagent_trajectories`.
+Deployers populate this from their agent's structured logs (stream-json
+for claude-code, event jsonl for openclaw, ...). The framework seeds a
+leading ``user``-source Step (the instruction); ``BaseAgentDeployer.
+parse_artifacts`` appends the rest. Sub-agents attach under
+:attr:`Trajectory.subagent_trajectories`.
 
-Storage is the Runner's job: ``trajectory.model_dump_json(indent=2)`` to a
-file. Screenshots are referenced **by path** (see :class:`ImageSource`) and
-written separately — never inline base64 in the JSON.
+Storage is the orchestrator's job: ``trajectory.model_dump_json(indent=2)``
+to a file. Screenshots are referenced **by path** (see :class:`ImageSource`)
+and written separately — never inline base64 in the JSON.
 """
 from __future__ import annotations
 
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -39,8 +39,8 @@ class ImageSource(BaseModel):
     """Reference to an image. Prefer ``path`` (relative to the run dir).
 
     ``data`` (inline base64) is supported but discouraged for long episodes —
-    Runner is responsible for moving base64 captures to disk and rewriting
-    references to ``path`` form before persistence.
+    the framework is responsible for moving base64 captures to disk and
+    rewriting references to ``path`` form before persistence.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -145,7 +145,7 @@ Source = Literal["system", "user", "agent", "environment"]
 class Step(BaseModel):
     """One step in the trajectory.
 
-    The semantic shape varies by ``source``:
+    Semantic shape varies by ``source``:
 
     - ``user``        — instruction or human turn. ``message`` set.
     - ``agent``       — model output. Some combination of ``message``,
@@ -175,7 +175,7 @@ class AgentInfo(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str                          # "claude-code", "native-cua", ...
+    name: str                          # "claude-code", "ale-claw", ...
     version: str | None = None         # CLI version or commit
     model: str | None = None           # the LLM id this agent used
     extra: dict[str, Any] = Field(default_factory=dict)
@@ -184,15 +184,12 @@ class AgentInfo(BaseModel):
 class Trajectory(BaseModel):
     """A complete episode. Built incrementally; finalized once at the end.
 
-    Long-running episodes (agenthle's multi-hour tasks can produce 1000+
-    steps + megabytes of JSON) split across multiple files using
+    Long-running episodes split across multiple files using
     ``continued_trajectory_ref``. Concatenation: walk the chain back via
     ``continued_trajectory_ref`` until ``None``; concat steps in order.
 
     Sub-agent traces (e.g. claude-code ``Task`` tool, native agents that
-    spawn sub-loops) attach under :attr:`subagent_trajectories`. Each
-    sub-trajectory is a full Trajectory model recursively, so it can have
-    its own metrics, subagents, etc.
+    spawn sub-loops) attach under :attr:`subagent_trajectories`.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -210,19 +207,12 @@ class Trajectory(BaseModel):
 
     # ---- nested / spanning fields ----
     subagent_trajectories: list["Trajectory"] = Field(default_factory=list)
-    """Sub-trajectories from spawned subagents. claude-code's ``Task`` tool
-    can't currently extract these (stream-json doesn't recurse), but
-    framework-controlled native agents will populate this naturally. For
-    third-party CLIs we record the parent ``tool_use(name=Task)`` only and
-    leave this empty until those CLIs expose subagent transcripts."""
+    """Sub-trajectories from spawned subagents."""
 
     continued_trajectory_ref: str | None = None
     """When the episode is too long to fit one file, the writer flushes
-    every N steps (TBD threshold) and starts a new Trajectory chunk with
-    this field pointing at the previous chunk's relative path
-    (e.g. ``"trajectory_001.json"``). The current chunk is read as the
-    head; consumers walk backwards via this ref to recover the full
-    timeline. Default ``None`` for single-file trajectories."""
+    every N steps and starts a new Trajectory chunk with this field
+    pointing at the previous chunk's relative path."""
 
     extra: dict[str, Any] = Field(default_factory=dict)
 
@@ -232,7 +222,7 @@ Observation.model_rebuild()
 
 
 # =============================================================================
-# Builder helper
+# Builder helper — canonical constructor for the schema above.
 # =============================================================================
 
 class TrajectoryBuilder:
@@ -300,7 +290,6 @@ class TrajectoryBuilder:
             status=status,
             total_duration_ms=int((time.monotonic() - self._t0) * 1000),
         )
-        # Roll up per-step metrics into totals (skip None gracefully).
         for s in self._traj.steps:
             if s.metrics is None:
                 continue

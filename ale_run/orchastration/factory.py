@@ -16,7 +16,7 @@ import importlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..environments.providers.provider import Provider
+    from ..base_interface import Provider
     from .spec import AgentSpec, ProviderSpec
 
 

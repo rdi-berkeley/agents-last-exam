@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .images import gcs_task_prefix, vm_subdir
 from .remote import RemoteVMConfig, run_remote, upload_file
-from ..tasks.loader import TaskDataSpec
+from ..base_interface import TaskDataSpec
 
 logger = logging.getLogger(__name__)
 

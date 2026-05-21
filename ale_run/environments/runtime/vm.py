@@ -29,7 +29,7 @@ from ..remote import (
     upload_binary_file,
     upload_file,
 )
-from .base import BaseRuntime
+from ...base_interface import BaseRuntime
 
 logger = logging.getLogger(__name__)
 

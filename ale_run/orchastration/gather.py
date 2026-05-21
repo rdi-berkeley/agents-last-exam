@@ -17,7 +17,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from ..environments.remote import RemoteVMConfig, download_file, list_remote_dir
+from ..base_interface import RemoteVMConfig
+from ..environments.remote import download_file, list_remote_dir
 
 logger = logging.getLogger(__name__)
 

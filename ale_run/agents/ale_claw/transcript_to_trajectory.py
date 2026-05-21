@@ -38,7 +38,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from ale_run.agents.trajectory import (
+from ale_run.base_interface import (
     ContentPart,
     Observation,
     StepMetrics,

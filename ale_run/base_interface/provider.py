@@ -3,6 +3,11 @@
 A Provider is the single object that knows where VMs come from. The
 in-VM RPC surface is cua-bench's :class:`DesktopSession` Protocol — ale
 doesn't re-invent it.
+
+Concrete providers (``GcloudProvider``, ``StaticProvider``) live in
+:mod:`ale_run.environments.providers`. This module defines only the
+contract: the ABC + the dataclasses describing what gets passed in and
+out.
 """
 from __future__ import annotations
 
@@ -11,14 +16,19 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 
-
 OS = Literal["linux", "windows"]
 ReleaseMode = Literal["delete", "stop", "keep"]
 
 
 @dataclass(frozen=True)
 class EnvSpec:
-    """Declarative description of the VM the task wants. Built from ``task_card.json``."""
+    """Declarative description of the VM the task wants. Built from ``task_card.json``.
+
+    Identity fields (``task_id`` / ``harness`` / ``model_tag``) are
+    optional and only flow into the VM's GCP name + hash seed so a
+    leftover VM is greppable. Empty strings preserve the snapshot-only
+    fallback when the caller doesn't know.
+    """
 
     snapshot: str
     os: OS = "linux"
@@ -26,6 +36,9 @@ class EnvSpec:
     memory_gb: int = 16
     disk_gb: int = 200
     gpu: str | None = None
+    task_id: str = ""
+    harness: str = ""
+    model_tag: str = ""
 
 
 @dataclass
@@ -52,10 +65,8 @@ class Provider(abc.ABC):
 
         ``exclude_profiles`` lets the lifecycle ask the provider to skip
         capacity profiles it knows are bad — used by the mount-fallback
-        retry (simprun parity) where a c4-/hyperdisk profile boots fine
-        but the data disk fails to mount, and we need to fall back to a
-        different machine-family/disk-type profile without retrying the
-        same one that just failed.
+        retry where a particular capacity profile boots fine but the
+        data disk fails to mount.
         """
 
     @abc.abstractmethod
@@ -63,7 +74,7 @@ class Provider(abc.ABC):
         """Release the VM. ``mode``: ``delete`` (default), ``stop``, or ``keep``."""
 
     @abc.abstractmethod
-    def open_session(self, vm: VMHandle) -> "cb.DesktopSession":
+    def open_session(self, vm: VMHandle) -> Any:
         """Return a cua-bench DesktopSession talking to ``vm``.
 
         For real providers, this constructs cua-bench's ``RemoteDesktopSession``
@@ -74,15 +85,9 @@ class Provider(abc.ABC):
     # ------------------------------------------------------------------ optional
 
     async def heartbeat(self, vm: VMHandle) -> None:
-        """Send a keep-alive. Default: no-op. CuaHouse overrides to send lease pings."""
+        """Send a keep-alive. Default: no-op."""
         return None
 
     async def cancel_external(self, vm: VMHandle) -> None:
-        """Tell the provider's backend to stop the task on ``vm``.
-
-        Examples:
-            - CuaHouse: ``POST /v1/batches/{id}/cancel``.
-            - GCSDirect: write ``simprun_force_timeout.json`` in the VM.
-            - Stub:     no-op.
-        """
+        """Tell the provider's backend to stop the task on ``vm``."""
         return None

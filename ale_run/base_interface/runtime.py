@@ -1,15 +1,15 @@
 """BaseRuntime — substrate adapter that exposes a uniform I/O surface.
 
-Three concrete subclasses: :class:`VmRuntime` (deployer code runs on host,
-drives a remote cua-server VM), :class:`LocalRuntime` (deployer runs
-in this Python process), :class:`DockerRuntime` (deployer runs in a host
-docker container — shell only at this point).
+Three concrete subclasses (in :mod:`ale_run.environments.runtime`):
+:class:`VmRuntime` (deployer code runs on host, drives a remote
+cua-server VM), :class:`LocalRuntime` (deployer runs in this Python
+process), :class:`DockerRuntime` (deployer runs in a host docker
+container — shell only at this point).
 
-The runtime is BOTH the "where" (data: endpoint, work_dir, vm_os, env vars,
-config) AND the dispatcher (behaviour: ``install_deployer`` /
-``launch_deployer``). The earlier ``VmExecutor`` indirection collapsed
-into the runtime now that the deployer is always host-side and there's
-no per-substrate code-placement work left for an executor to do.
+The runtime is BOTH the per-unit context the deployer reads (work_dir,
+endpoint, vm_os, env, config) AND the dispatcher driving the deployer
+(``install_deployer`` / ``launch_deployer``). The earlier ``VmExecutor``
+collapsed in — substrate-specific code lives on the runtime subclass.
 
 Deployers reach into the substrate ONLY through this API surface:
 
@@ -31,7 +31,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Iterable
 
 if TYPE_CHECKING:
-    from ...agents.base import AgentRunResult, BaseAgentConfig, BaseAgentDeployer
+    # Mutual reference: see deployer.py for the symmetric TYPE_CHECKING block.
+    from .deployer import AgentRunResult, BaseAgentConfig, BaseAgentDeployer
 
 
 @dataclass
@@ -51,14 +52,13 @@ class BaseRuntime(abc.ABC):
     """Substrate-native scratch dir the deployer owns for this run.
     VM-side path for VmRuntime (may be Windows), host path for Local /
     Docker. Always a string — wrap in :class:`Path` on the host side
-    when needed (``Path(self.runtime.work_dir)``)."""
+    when needed."""
 
     host_artifacts_dir: Path
     """Host-side path where artifacts end up after the lifecycle's gather
     step (or directly, on host-visible substrates). What ``parse_artifacts``
-    reads from. For Local/Docker this is the same as ``work_dir`` (host
-    bind-mount in the docker case); for Vm it's a separate directory the
-    lifecycle gathers into."""
+    reads from. For Local/Docker this is the same as ``work_dir``; for Vm
+    it's a separate directory the lifecycle gathers into."""
 
     vm_endpoint: str
     """cua-server URL of the eval VM, e.g. ``http://...:5000``. Always
@@ -67,8 +67,7 @@ class BaseRuntime(abc.ABC):
     methods on this runtime."""
 
     vm_os: str
-    """``"linux"`` or ``"windows"`` — the eval VM's OS. Branched on by
-    OS-aware deployer helpers (script generation, kill semantics, ...)."""
+    """``"linux"`` or ``"windows"`` — the eval VM's OS."""
 
     env: dict[str, str] = field(default_factory=dict)
     """Env vars the framework wants injected into the agent process
@@ -78,7 +77,7 @@ class BaseRuntime(abc.ABC):
     """Subclass-supplied. Matches yaml ``runtime: <kind>`` values."""
 
     # ======================================================================
-    # Dispatcher — was ``VmExecutor`` before
+    # Dispatcher
     # ======================================================================
 
     async def install_deployer(
@@ -99,10 +98,6 @@ class BaseRuntime(abc.ABC):
 
     # ======================================================================
     # I/O primitives — every deployer goes through these.
-    #
-    # Semantics: operate on the deployer-local substrate. For VmRuntime
-    # that's the eval VM (via cua HTTP). For LocalRuntime that's the host
-    # machine. For DockerRuntime that's the running container.
     # ======================================================================
 
     @abc.abstractmethod
@@ -139,13 +134,12 @@ class BaseRuntime(abc.ABC):
         return (await self.read_file(path)).decode("utf-8", errors="replace")
 
     # ======================================================================
-    # Optional — used by ``FetchingRemoteCliDeployer``
+    # Optional — used by FetchingRemoteCliDeployer
     # ======================================================================
 
     async def fetch_url_to(self, url: str, dst: str) -> None:
         """Fetch ``url`` onto the substrate at ``dst``. Default: shell out
-        to curl (linux) / Invoke-WebRequest (windows). Subclasses override
-        if the substrate has a more direct path."""
+        to curl (linux) / Invoke-WebRequest (windows)."""
         if self._is_linux():
             cmd = f"curl -fsSL '{url}' -o '{dst}'"
         else:
@@ -162,19 +156,12 @@ class BaseRuntime(abc.ABC):
             )
 
     # ======================================================================
-    # Eval VM session (cua DesktopSession) — used by host-side harness
-    # deployers (AleClaw) that drive the eval VM via cua's high-level API
-    # rather than raw HTTP.
+    # Eval VM session — used by host-side harness deployers (AleClaw)
+    # that drive the eval VM via cua's high-level API rather than raw HTTP.
     # ======================================================================
 
     async def make_vm_session(self) -> Any:
-        """Open a fresh cua DesktopSession against :attr:`vm_endpoint`.
-
-        VM-side and host-side deployers BOTH have an eval VM at the same
-        endpoint — this method just wraps it in a cua session. Multiple
-        concurrent sessions are safe (the cua-server is stateless for
-        our usage).
-        """
+        """Open a fresh cua DesktopSession against :attr:`vm_endpoint`."""
         from cua_bench.computers.remote import RemoteDesktopSession
 
         session = RemoteDesktopSession(
@@ -191,8 +178,6 @@ class BaseRuntime(abc.ABC):
     # ======================================================================
 
     def cli_path(self, name: str) -> str:
-        """Absolute path of a baked-in CLI in this substrate (by tool
-        name). Subclasses encode image conventions."""
         raise NotImplementedError(
             f"{type(self).__name__} does not define cli_path"
         )

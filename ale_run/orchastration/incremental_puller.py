@@ -26,7 +26,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..environments.remote import RemoteVMConfig, download_file_range
+from ..base_interface import RemoteVMConfig
+from ..environments.remote import download_file_range
 from .sync_helpers import RangeStates, apply_range_step
 
 logger = logging.getLogger(__name__)

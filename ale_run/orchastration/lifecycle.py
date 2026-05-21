@@ -22,17 +22,22 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ..agents.base import AgentRunResult
-from ..agents.trajectory import Trajectory, TrajectoryBuilder
+from ..base_interface import (
+    AgentRunResult,
+    BaseRuntime,
+    EnvSpec,
+    Provider,
+    Trajectory,
+    TrajectoryBuilder,
+)
 from ..environments.env import ALEEnv
-from ..environments.providers.provider import EnvSpec, Provider
+from ..environments.runtime import DockerRuntime, LocalRuntime, VmRuntime
 from ..tasks.loader import TaskLoader
 from ..tasks.task_env import TaskEnv
 from . import gather
 from .factory import build_config, resolve_agent
 from .monitor import RateLimitDetector
 from .run_writer import RunWriter
-from ..environments.runtime import BaseRuntime, DockerRuntime, LocalRuntime, VmRuntime
 from .spec import ArtifactsSpec, RunUnit, UnitResult
 from .termination import classify_error, err_dict, redact_config
 
@@ -799,7 +804,7 @@ async def _upload_output_best_effort(
     if task_data is None or not task_data.requires_task_data:
         return
     from ..environments import data_staging
-    from ..environments.remote import RemoteVMConfig
+    from ..base_interface import RemoteVMConfig
 
     vm_cfg = RemoteVMConfig(
         server_url=env.vm.endpoint, os_type=env.vm.os,
@@ -842,7 +847,7 @@ async def _stage_reference_best_effort(
     if task_data is None or not task_data.requires_task_data:
         return
     from ..environments import data_staging
-    from ..environments.remote import RemoteVMConfig
+    from ..base_interface import RemoteVMConfig
 
     vm_cfg = RemoteVMConfig(
         server_url=env.vm.endpoint, os_type=env.vm.os,
@@ -882,7 +887,7 @@ def _build_incremental_puller(
     When non-empty, builds a puller targeting ``<work_dir>/<file>`` →
     ``<host_artifacts_dir>/<file>`` for each entry.
     """
-    from ..environments.remote import RemoteVMConfig
+    from ..base_interface import RemoteVMConfig
     from .incremental_puller import IncrementalPuller, PullTarget
 
     if not isinstance(runtime, VmRuntime):
@@ -928,7 +933,7 @@ async def _stage_data(
         GcloudProvider,
         gcloud_sa_key_path,
     )
-    from ..environments.remote import RemoteVMConfig
+    from ..base_interface import RemoteVMConfig
 
     vm_cfg = RemoteVMConfig(
         server_url=env.vm.endpoint,

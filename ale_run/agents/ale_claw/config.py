@@ -29,7 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import ClassVar
 
-from ale_run.agents.base import BaseAgentConfig
+from ale_run.base_interface import BaseAgentConfig
 
 
 @dataclass

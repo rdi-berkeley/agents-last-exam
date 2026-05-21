@@ -40,7 +40,7 @@ import requests
 from ..images import CapacityProfile, ImageConfig, PoolEntry, capacity_profiles_for
 from ..machine_types import is_accelerator_machine_type
 from ..remote import _read_first_sse_event
-from .provider import EnvSpec, Provider, ReleaseMode, VMHandle
+from ...base_interface import EnvSpec, Provider, ReleaseMode, VMHandle
 
 logger = logging.getLogger(__name__)
 

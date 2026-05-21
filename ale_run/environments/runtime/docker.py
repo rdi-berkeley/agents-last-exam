@@ -21,7 +21,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import ClassVar, Iterable
 
-from .base import BaseRuntime
+from ...base_interface import BaseRuntime
 
 logger = logging.getLogger(__name__)
 

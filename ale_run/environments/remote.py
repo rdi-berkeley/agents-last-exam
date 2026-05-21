@@ -13,28 +13,36 @@ import base64
 import json
 import logging
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import requests
 
+from ..base_interface import RangeResult, RemoteVMConfig
+
+__all__ = [
+    # Re-exported from base_interface so existing
+    # ``from ale_run.environments.remote import RemoteVMConfig`` keeps
+    # working — but new code should import these from base_interface
+    # directly.
+    "RangeResult",
+    "RemoteVMConfig",
+    # The actual HTTP helpers defined in this file:
+    "VMUnreachableError",
+    "download_file",
+    "download_file_range",
+    "list_remote_dir",
+    "require_vm_reachable",
+    "run_remote",
+    "strip_bom",
+    "upload_binary_file",
+    "upload_file",
+]
+
 logger = logging.getLogger(__name__)
 
 # Linux conventions used by force_timeout and a few other helpers.
 LINUX_USER_HOME = "/home/user"
-
-
-@dataclass
-class RemoteVMConfig:
-    server_url: str
-    os_type: str = "windows"
-    run_id: str | None = None
-    task_id: str | None = None
-
-    @property
-    def is_linux(self) -> bool:
-        return self.os_type == "linux"
 
 
 # ======================================================================
@@ -326,15 +334,8 @@ def download_file(vm_config: RemoteVMConfig, remote_path: str, local_path: str, 
 
 # ======================================================================
 # Range (incremental) download — kept for future incremental puller use.
+# (RangeResult dataclass is in ale_run.base_interface; re-exported above.)
 # ======================================================================
-
-
-@dataclass
-class RangeResult:
-    success: bool
-    remote_size: int = 0
-    delta: bytes = b""
-    error: str | None = None
 
 
 def _build_range_cmd_linux(remote_path: str, start: int, max_chunk_bytes: int) -> str:

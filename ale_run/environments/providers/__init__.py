@@ -1,14 +1,14 @@
 """Provider implementations for VM lifecycle.
 
-``Provider`` ABC + ``EnvSpec`` + ``VMHandle`` + ``ReleaseMode`` are in
-:mod:`provider`. Backends:
+``Provider`` ABC + ``EnvSpec`` + ``VMHandle`` + ``ReleaseMode`` live in
+:mod:`ale_run.base_interface`; this package only holds the backends:
 
   - :class:`GcloudProvider` (``gcloud.py``): ephemeral GCE VMs.
   - :class:`StaticProvider` (``static.py``): a pre-existing VM endpoint.
 """
 
+from ...base_interface import EnvSpec, Provider, ReleaseMode, VMHandle
 from .gcloud import GcloudProvider, GcloudProviderConfig
-from .provider import EnvSpec, Provider, ReleaseMode, VMHandle
 from .static import StaticProvider, StaticProviderConfig
 
 __all__ = [

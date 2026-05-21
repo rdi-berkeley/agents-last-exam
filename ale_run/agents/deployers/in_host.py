@@ -12,7 +12,7 @@ import logging
 import os
 from typing import ClassVar
 
-from ..base import BaseAgentDeployer
+from ...base_interface import BaseAgentDeployer
 
 logger = logging.getLogger(__name__)
 

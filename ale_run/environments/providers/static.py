@@ -18,7 +18,7 @@ import dataclasses
 import logging
 from typing import Any
 
-from .provider import EnvSpec, Provider, ReleaseMode, VMHandle
+from ...base_interface import EnvSpec, Provider, ReleaseMode, VMHandle
 
 logger = logging.getLogger(__name__)
 

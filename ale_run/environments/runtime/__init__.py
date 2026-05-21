@@ -12,7 +12,7 @@ helpers (e.g. ``VmRuntime.upload_local_file``).
 """
 from __future__ import annotations
 
-from .base import BaseRuntime
+from ...base_interface import BaseRuntime
 from .docker import DockerRuntime
 from .local import LocalRuntime
 from .vm import VmRuntime

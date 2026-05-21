@@ -24,7 +24,7 @@ from typing import Any
 from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import Action, Observation, State
 
-from .providers.provider import EnvSpec, Provider, ReleaseMode, VMHandle
+from ..base_interface import EnvSpec, Provider, ReleaseMode, VMHandle
 
 logger = logging.getLogger(__name__)
 

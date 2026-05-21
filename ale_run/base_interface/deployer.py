@@ -1,5 +1,13 @@
 """BaseAgentDeployer — the minimal contract every ALE agent implements.
 
+A deployer is just code: a few Python methods that the framework places
+into a runtime substrate (vm / local / docker). The framework calls
+``install`` → ``launch`` → ``parse_artifacts`` for each unit.
+
+Lives in ``base_interface/`` rather than ``agents/`` so concrete agent
+subclasses can import without dragging in the rest of the agents
+package, and so this contract is the single point of definition every
+other layer of the framework agrees on.
 """
 from __future__ import annotations
 
@@ -8,15 +16,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from ale_run.agents.trajectory import Trajectory, TrajectoryBuilder
+from .trajectory import Trajectory, TrajectoryBuilder
 
 if TYPE_CHECKING:
-    # Avoid an import cycle: BaseRuntime's TYPE_CHECKING block already
-    # imports BaseAgentConfig + BaseAgentDeployer + AgentRunResult from
-    # this module. Keeping this side conditional too means neither side
-    # pays a runtime import; both type-check correctly.
-    from ale_run.environments.runtime import BaseRuntime
-
+    # BaseRuntime and BaseAgentDeployer reference each other in their
+    # public signatures. Same-package TYPE_CHECKING keeps the cycle from
+    # surfacing at runtime; type-checkers see both directions.
+    from .runtime import BaseRuntime
 
 
 # =============================================================================
@@ -60,10 +66,9 @@ class BaseAgentConfig:
 @dataclass
 class AgentRunResult:
     """Outcome of :meth:`BaseAgentDeployer.launch` — handed to
-    :meth:`parse_artifacts` along with the gathered work_dir.
+    :meth:`BaseAgentDeployer.parse_artifacts` along with the gathered work_dir.
 
-    Pure data; serializable across runtime boundaries (docker exec, VM
-    python_exec return value).
+    Pure data; serializable across runtime boundaries.
     """
 
     status: str                          # "completed" | "timeout" | "failed"
@@ -77,9 +82,7 @@ class AgentRunResult:
 
 @dataclass
 class EpisodeResult:
-    """The framework lifecycle's final assembly. Returned by
-    :func:`ale.runner.lifecycle.run_one_unit` (indirectly).
-    """
+    """The framework lifecycle's final assembly."""
 
     reward: float | None
     status: str = "completed"
@@ -109,31 +112,27 @@ class BaseAgentDeployer(abc.ABC):
 
     supported_runtimes: ClassVar[frozenset[str]] = frozenset()
     """Subclass overrides — strings match yaml ``runtime: <kind>`` values.
-    Empty set is a programmer error caught at :func:`resolve_agent` time."""
+    Empty set is a programmer error caught at ``resolve_agent`` time."""
 
     hot_artifacts: ClassVar[tuple[str, ...]] = ()
     """Files (relative to :attr:`BaseRuntime.work_dir`) the framework
-    should tail while the agent runs. Read by
-    :class:`ale_run.orchastration.incremental_puller.IncrementalPuller`
-    on vm-runtime: each path is fetched in deltas via the CUA range API
-    every ~15 s so a SIGTERM mid-agent doesn't lose the transcript.
-    Empty tuple (the default) disables incremental sync — the final
-    one-shot ``gather.pull_dir`` at end of phase 2 still runs."""
+    should tail while the agent runs. Read by the IncrementalPuller on
+    vm-runtime: each path is fetched in deltas every ~15 s so a SIGTERM
+    mid-agent doesn't lose the transcript. Empty tuple (the default)
+    disables incremental sync — the final one-shot gather still runs."""
 
     def __init__(self, runtime: BaseRuntime):
         self.runtime = runtime
         self.config = runtime.config        # convenience alias
 
-
     # ---- abstract methods ----
 
     @abc.abstractmethod
     async def install(self) -> None:
-        """Stage prereqs for this run. Use ``self.runtime.work_dir``,
-        ``self.runtime.vm_endpoint``, ``self.runtime.vm_os``, and stdlib
-        primitives (``subprocess``, ``pathlib``, ``json``). The substrate
-        in which this runs (VM, container, host process) is the
-        framework's concern — the agent code is identical anywhere."""
+        """Stage prereqs for this run. Use ``self.runtime`` for all
+        substrate I/O; the substrate itself (VM, container, host
+        process) is the framework's concern — the agent code is
+        identical anywhere."""
 
     @abc.abstractmethod
     async def launch(self, prompt: str) -> AgentRunResult:
@@ -153,8 +152,8 @@ class BaseAgentDeployer(abc.ABC):
         run_result: AgentRunResult,
         builder: TrajectoryBuilder,
     ) -> None:
-        """Read on-disk artifacts in ``work_dir``, populate ``builder`` with
-        :class:`Step` entries (call ``builder.add_step(source=..., ...)``).
+        """Read on-disk artifacts in ``work_dir``, populate ``builder``
+        with :class:`Step` entries.
 
         Pure function — always runs on the framework host after the
         framework has gathered the runtime's work_dir locally. Doesn't

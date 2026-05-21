@@ -27,11 +27,11 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from ale_run.agents.deployers import InHostDeployer
-from ale_run.agents.base import (
+from ale_run.base_interface import (
     AgentRunResult,
     BaseAgentConfig,
 )
-from ale_run.agents.trajectory import TrajectoryBuilder
+from ale_run.base_interface import TrajectoryBuilder
 
 from .config import AleClawConfig
 from .transcript_to_trajectory import parse_transcripts_into

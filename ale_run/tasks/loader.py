@@ -1,7 +1,14 @@
-"""Task definition loader and task data spec.
+"""Task definition loader.
 
-Ported from simprun/task_loader.py. No dependency on environments/ or
-agents/ — the loader just reads files (``main.py``, ``task_card.json``).
+Ported from simprun/task_loader.py. Reads ``main.py`` + ``task_card.json``
+under each task dir and produces normalised task metadata. ``TaskDataSpec``
+itself lives in :mod:`ale_run.base_interface`.
+
+Known coupling: this module imports ``parse_gce_machine_type`` from
+``environments/machine_types`` to convert the GCE machine type string
+from ``task_card.json`` into vCPU/memory ints. That's a helper crossing
+the tasks→environments boundary; a future refactor should let the
+orchestrator parse that string instead, but for now the leak stays.
 """
 
 from __future__ import annotations
@@ -13,11 +20,13 @@ import logging
 import os
 import sys
 import threading
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict
 
+from ..base_interface import TaskDataSpec
 from ..environments.machine_types import parse_gce_machine_type
+
+__all__ = ["TaskDataSpec", "TaskLoader"]
 
 logger = logging.getLogger(__name__)
 
@@ -28,27 +37,6 @@ _TASK_LOCAL_MODULE_NAMES = (
 )
 
 _TASK_IMPORT_LOCK = threading.Lock()
-
-
-# ======================================================================
-# TaskDataSpec
-# ======================================================================
-
-
-@dataclass(slots=True)
-class TaskDataSpec:
-    requires_task_data: bool = False
-    domain_name: str | None = None
-    task_name: str | None = None
-    variant_name: str | None = None
-    source_relpath: str | None = None
-    input_dir: str | None = None
-    software_dir: str | None = None
-    reference_dir: str | None = None
-    reference_gcs_prefix: str | None = None
-    remote_output_dir: str | None = None
-    eval_gcs_prefix: str | None = None
-    eval_dir: str | None = None
 
 
 # ======================================================================
