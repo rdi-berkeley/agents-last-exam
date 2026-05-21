@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .factory import build_provider
-from .spec import ExperimentSpec, RunUnit, UnitResult
+from .experiment_spec import ExperimentSpec, RunUnit, UnitResult
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ LOG_SPEC-shaped per-run files via :class:`run_writer.RunWriter`.
 """
 
 from .runner import Runner
-from .spec import (
+from .experiment_spec import (
     AgentSpec,
     ArtifactsSpec,
     ExperimentSpec,

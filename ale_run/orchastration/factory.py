@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..base_interface import Provider
-    from .spec import AgentSpec, ProviderSpec
+    from .experiment_spec import AgentSpec, ProviderSpec
 
 
 # ----------------------------------------------------------------------

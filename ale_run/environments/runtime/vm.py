@@ -10,7 +10,7 @@ WebSocket transport can wedge mid-run (long agent loops, idle timeouts,
 firewall NAT churn) and recovering a dropped WS is more work than
 re-establishing per-request HTTP/SSE. Host-side harness deployers
 (AleClaw style) that DO want a session can still call
-:meth:`make_vm_session` on this runtime.
+:meth:`make_session` on this runtime.
 """
 from __future__ import annotations
 
@@ -35,10 +35,10 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class VmRuntime(BaseRuntime):
-    """Substrate adapter for a remote cua-server VM.
+    """Substrate adapter for a remote cua-server env.
 
-    The ``work_dir`` field holds the VM-side absolute path (Linux POSIX
-    or Windows-style depending on :attr:`vm_os`). ``host_artifacts_dir``
+    The ``work_dir`` field holds the remote-side absolute path (Linux POSIX
+    or Windows-style depending on :attr:`env_os`). ``host_artifacts_dir``
     is the host-side mirror the lifecycle gathers into for parsing.
     """
 
@@ -179,7 +179,7 @@ class VmRuntime(BaseRuntime):
     # ======================================================================
 
     def cli_path(self, name: str) -> str:
-        if self.vm_os == "linux":
+        if self.env_os == "linux":
             return f"/usr/local/bin/{name}"
         # Per-tool overrides for the unified Windows image (each CLI
         # under its tool-specific dir rather than a shared C:\Tools tree).
@@ -190,12 +190,12 @@ class VmRuntime(BaseRuntime):
 
     @property
     def node_exe(self) -> str:
-        if self.vm_os == "linux":
+        if self.env_os == "linux":
             return "/usr/local/bin/node"
         return r"C:\Users\User\node-v24.12.0-win-x64\node.exe"
 
     @property
     def mcp_server_dir(self) -> str:
-        if self.vm_os == "linux":
+        if self.env_os == "linux":
             return "/home/user/cua_mcp_server"
         return r"C:\Users\User\cua_mcp_server"

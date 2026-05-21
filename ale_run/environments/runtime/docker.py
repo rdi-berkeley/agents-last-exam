@@ -8,8 +8,8 @@ explicit gather step.
 The container provides process / fs / env isolation for in-process
 harness deployers (AleClaw-style) that don't want to share state with
 the framework host. The container shares the host's network
-(``--network host``) so it can reach the eval VM's cua-server on its
-public IP via :meth:`make_vm_session`.
+(``--network host``) so it can reach the eval env's cua-server on its
+public IP via :meth:`make_session`.
 
 **This is a shell.** Concrete container lifecycle (``docker run`` /
 ``exec`` / ``rm``) is left for the first agent that actually needs it.

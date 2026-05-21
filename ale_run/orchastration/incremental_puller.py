@@ -1,12 +1,12 @@
-"""Background tail of agent log files on the VM (vm-runtime only).
+"""Background tail of agent log files on the remote env (vm-runtime only).
 
 Mirrors simprun's per-deployer ``_sync_incremental`` loop, but at the
-framework layer (since agenthle-public's deployers run inside the VM via
+framework layer (since agenthle-public's deployers run inside the env via
 ``cua.python_exec`` and don't have host-side polling of their own).
 
 Per LOG_SPEC §7:
 
-  - ticks every 15 s
+  - ticks every 5 min (300 s)
   - for each ``hot_artifacts`` file, calls a single
     ``stat | tail | head | base64`` round-trip via ``download_file_range``
   - applies the boundary-safe slice (``apply_jsonl_boundary``) and appends
@@ -33,7 +33,7 @@ from .sync_helpers import RangeStates, apply_range_step
 logger = logging.getLogger(__name__)
 
 
-_TICK_INTERVAL_S = 15.0
+_TICK_INTERVAL_S = 300.0
 _RECONCILE_TIMEOUT_S = 60.0
 _RECONCILE_SETTLE_RETRIES = 3
 _RECONCILE_SETTLE_DELAY_S = 1.0
@@ -41,14 +41,14 @@ _RECONCILE_SETTLE_DELAY_S = 1.0
 
 @dataclass(frozen=True)
 class PullTarget:
-    """One (vm_path, host_path) pair the puller mirrors."""
+    """One (remote path, host path) pair the puller mirrors."""
 
-    vm_path: str
+    remote_path: str
     host_path: Path
 
 
 class IncrementalPuller:
-    """Background poller: tail VM logs into host files, byte-offset state.
+    """Background poller: tail remote logs into host files, byte-offset state.
 
     Construction binds a fixed list of targets; ``start()`` schedules the
     loop on the current event loop, ``stop()`` cancels + reconciles.
@@ -57,11 +57,11 @@ class IncrementalPuller:
     def __init__(
         self,
         *,
-        vm_config: EnvHandle,
+        env_handle: EnvHandle,
         targets: list[PullTarget],
         interval_s: float = _TICK_INTERVAL_S,
     ):
-        self._vm_config = vm_config
+        self._env_handle = env_handle
         self._targets = list(targets)
         self._interval_s = interval_s
         self._states = RangeStates()
@@ -125,21 +125,21 @@ class IncrementalPuller:
             try:
                 await self._tick_one(tgt)
             except Exception as e:
-                logger.debug("IncrementalPuller tick failed for %s: %s", tgt.vm_path, e)
+                logger.debug("IncrementalPuller tick failed for %s: %s", tgt.remote_path, e)
 
     async def _tick_one(self, tgt: PullTarget) -> None:
-        state = self._states.get(tgt.vm_path)
+        state = self._states.get(tgt.remote_path)
         range_result = await asyncio.to_thread(
             download_file_range,
-            self._vm_config,
-            tgt.vm_path,
+            self._env_handle,
+            tgt.remote_path,
             start=state.offset,
         )
         outcome = apply_range_step(state, tgt.host_path, range_result)
         if outcome.advanced:
             logger.debug(
                 "IncrementalPuller: +%d bytes for %s (offset=%d)",
-                outcome.advanced, tgt.vm_path, state.offset,
+                outcome.advanced, tgt.remote_path, state.offset,
             )
 
     # ------------------------------------------------------------------ reconcile
@@ -154,7 +154,7 @@ class IncrementalPuller:
         deadline = time.monotonic() + _RECONCILE_TIMEOUT_S
         last_err: str | None = None
         for tgt in self._targets:
-            state = self._states.get(tgt.vm_path)
+            state = self._states.get(tgt.remote_path)
             prev_size = -1
             for _ in range(_RECONCILE_SETTLE_RETRIES + 1):
                 if time.monotonic() > deadline:
@@ -164,8 +164,8 @@ class IncrementalPuller:
                     range_result = await asyncio.wait_for(
                         asyncio.to_thread(
                             download_file_range,
-                            self._vm_config,
-                            tgt.vm_path,
+                            self._env_handle,
+                            tgt.remote_path,
                             start=state.offset,
                         ),
                         timeout=max(1.0, deadline - time.monotonic()),

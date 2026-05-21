@@ -1,18 +1,18 @@
 """ALEEnv — OpenEnv-shaped wrapper around a Provider + EnvHandle + DesktopSession.
 
-The benchmark drives the tested agent natively inside the VM, not via
+The benchmark drives the tested agent natively inside the environment, not via
 (action, observation) pairs from the orchestrator. ``step()`` / ``step_async()``
 intentionally raise ``NotImplementedError``: the wrapper exists so the
 configured env can be handed to OpenEnv-compatible consumers in a standard
-shape; orchastration accesses ``.session`` / ``.vm`` / ``.current_phase``
+shape; orchastration accesses ``.session`` / ``.handle`` / ``.current_phase``
 directly.
 
 Lifecycle::
 
     env = ALEEnv(provider=p, spec=env_spec)
-    obs = await env.reset_async()           # acquires VM + opens session
-    # ... orchestrator uses env.session, env.vm, env.current_phase ...
-    await env.close_async(mode="delete")    # releases VM
+    obs = await env.reset_async()           # acquires env + opens session
+    # ... orchestrator uses env.session, env.handle, env.current_phase ...
+    await env.close_async(mode="delete")    # releases env
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ PHASE_CLEANUP = "cleanup"
 
 
 class ALEEnv(Environment[Action, Observation, State]):
-    """One env per (task × variant × agent). VM is owned for the env's lifetime."""
+    """One env per (task × variant × agent). EnvHandle is owned for the env's lifetime."""
 
     SUPPORTS_CONCURRENT_SESSIONS = True
 
@@ -49,7 +49,7 @@ class ALEEnv(Environment[Action, Observation, State]):
         super().__init__()
         self._provider = provider
         self._spec = spec
-        self._vm: EnvHandle | None = None
+        self._handle: EnvHandle | None = None
         self._session: Any | None = None
         self._current_phase: str | None = None
 
@@ -60,10 +60,10 @@ class ALEEnv(Environment[Action, Observation, State]):
         return self._spec
 
     @property
-    def vm(self) -> EnvHandle:
-        if self._vm is None:
-            raise RuntimeError("env.vm accessed before reset_async()")
-        return self._vm
+    def handle(self) -> EnvHandle:
+        if self._handle is None:
+            raise RuntimeError("env.handle accessed before reset_async()")
+        return self._handle
 
     @property
     def session(self) -> Any:
@@ -86,27 +86,27 @@ class ALEEnv(Environment[Action, Observation, State]):
         exclude_profiles: set[str] | None = None,
     ) -> Observation:
         self._current_phase = PHASE_ENV_START
-        self._vm = await self._provider.acquire(
+        self._handle = await self._provider.acquire(
             self._spec, exclude_profiles=exclude_profiles,
         )
-        self._session = self._provider.open_session(self._vm)
+        self._session = self._provider.open_session(self._handle)
         return Observation()
 
     async def reset_session(self) -> Any:
-        """Force-close the current session + reopen against the same VM.
+        """Force-close the current session + reopen against the same env.
 
-        Used by :class:`TaskEnv` to recover from transient CUA-transport
+        Used by :class:`TaskDriver` to recover from transient CUA-transport
         failures during ``setup()`` / ``evaluate()`` (simprun parity:
-        ``TaskEnv.close(force=True)`` + ``TaskEnv.connect()``). The VM
+        ``TaskEnv.close(force=True)`` + ``TaskEnv.connect()``). The env
         handle is unchanged — only the session/computer wrapper is
         rebuilt; ``env.session`` is updated in place so deployer/runtime
         references picked up after this call see the new session.
         """
-        if self._vm is None:
+        if self._handle is None:
             raise RuntimeError("reset_session() before reset_async()")
         if self._session is not None:
             await _force_close_session(self._session)
-        self._session = self._provider.open_session(self._vm)
+        self._session = self._provider.open_session(self._handle)
         return self._session
 
     async def close_async(self, mode: ReleaseMode = "delete") -> None:
@@ -114,17 +114,17 @@ class ALEEnv(Environment[Action, Observation, State]):
         if self._session is not None:
             await _force_close_session(self._session)
         self._session = None
-        if self._vm is not None:
+        if self._handle is not None:
             try:
-                await self._provider.release(self._vm, mode=mode)
+                await self._provider.release(self._handle, mode=mode)
             except Exception as e:
-                logger.warning("provider.release failed for %s: %s", self._vm.id, e)
-        self._vm = None
+                logger.warning("provider.release failed for %s: %s", self._handle.id, e)
+        self._handle = None
 
     async def step_async(self, *args: Any, **kwargs: Any) -> Observation:
         raise NotImplementedError(
             "ALEEnv.step_async() is intentionally absent: this benchmark "
-            "drives the tested agent natively inside the VM, not via "
+            "drives the tested agent natively inside the environment, not via "
             "(action, observation) pairs from the orchestrator."
         )
 
@@ -140,7 +140,7 @@ class ALEEnv(Environment[Action, Observation, State]):
     def state(self) -> State:
         raise NotImplementedError(
             "ALEEnv.state() is intentionally absent: this benchmark does not "
-            "expose an OpenEnv-style mid-run State snapshot. Use env.vm / "
+            "expose an OpenEnv-style mid-run State snapshot. Use env.handle / "
             "env.session / env.current_phase from the orchastration layer."
         )
 
@@ -153,7 +153,7 @@ async def _force_close_session(session: Any) -> None:
 
     Mirrors simprun TaskEnv.close(force=True): call interface.force_close()
     to break any in-flight WebSocket / HTTP, then session.close() with a
-    bounded timeout so the runner doesn't wedge on a dead VM.
+    bounded timeout so the runner doesn't wedge on a dead env.
     """
     iface = None
     try:

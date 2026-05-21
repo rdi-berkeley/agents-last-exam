@@ -68,7 +68,7 @@ class EnvHandle:
     Returned by ``Provider.acquire`` and carried through the rest of the
     lifecycle — into BaseRuntime (as ``runtime.env_handle``), into HTTP
     helpers in environments/remote.py (as ``env``), into the cua session
-    constructor in BaseRuntime.make_vm_session.
+    constructor in BaseRuntime.make_session.
 
     ``endpoint`` is the cua-server URL. ``os`` is the env's OS (linux /
     windows) — used both to pick HTTP request shapes (PowerShell vs bash)

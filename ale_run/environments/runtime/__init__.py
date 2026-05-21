@@ -1,7 +1,7 @@
 """Runtime substrate adapters — VmRuntime / LocalRuntime / DockerRuntime.
 
 Each runtime is BOTH the per-unit context the deployer reads (work_dir,
-vm_endpoint, vm_os, env, config) AND the dispatcher that drives the
+endpoint, env_os, env, config) AND the dispatcher that drives the
 deployer through ``install_deployer`` / ``launch_deployer``. The earlier
 ``VmExecutor`` indirection is gone — substrate-specific code lives on
 the runtime subclass that owns it.

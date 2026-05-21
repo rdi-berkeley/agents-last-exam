@@ -53,7 +53,7 @@ class RemoteCliDeployer(BaseAgentDeployer):
 
     def _join(self, *parts: str) -> str:
         """Substrate-native path join. Linux ``/`` vs Windows ``\\``."""
-        sep = "/" if self.runtime.vm_os == "linux" else "\\"
+        sep = "/" if self.runtime.env_os == "linux" else "\\"
         head = parts[0].rstrip("/\\")
         tail = sep.join(p.strip("/\\") for p in parts[1:])
         return f"{head}{sep}{tail}" if tail else head
@@ -67,7 +67,7 @@ class RemoteCliDeployer(BaseAgentDeployer):
         binary isn't present or exits non-zero. Return the trimmed stdout
         (useful for the install-ok log line).
         """
-        if self.runtime.vm_os == "linux":
+        if self.runtime.env_os == "linux":
             args = " ".join(shlex.quote(a) for a in version_args)
             cmd = f"test -x {shlex.quote(cli_path)} && {shlex.quote(cli_path)} {args}"
         else:
@@ -111,7 +111,7 @@ class RemoteCliDeployer(BaseAgentDeployer):
             await self.runtime.rm(reset_files)
         await self.runtime.write_file(runner_script_path, runner_body)
 
-        if self.runtime.vm_os == "linux":
+        if self.runtime.env_os == "linux":
             await self.runtime.run_command(
                 f"chmod +x {shlex.quote(runner_script_path)}", timeout=15,
             )
@@ -163,7 +163,7 @@ class RemoteCliDeployer(BaseAgentDeployer):
         return None
 
     async def _kill_pid(self, pid: int) -> None:
-        if self.runtime.vm_os == "linux":
+        if self.runtime.env_os == "linux":
             await self.runtime.run_command(f"kill -TERM {pid}", timeout=15)
             await asyncio.sleep(2)
             await self.runtime.run_command(f"kill -KILL {pid}", timeout=15)
@@ -307,7 +307,7 @@ class FetchingRemoteCliDeployer(RemoteCliDeployer):
         elif scheme == "url":
             target = self.runtime.cli_path(self.cli_name)
             await self.runtime.fetch_url_to(payload, target)
-            if self.runtime.vm_os == "linux":
+            if self.runtime.env_os == "linux":
                 await self.runtime.run_command(
                     f"chmod +x {shlex.quote(target)}", timeout=30,
                 )

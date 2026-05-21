@@ -224,12 +224,30 @@ def _build_provider_config(raw: dict[str, Any]) -> GcloudProviderConfig:
 # ======================================================================
 
 
-def generate_vm_name(prefix: str, snapshot: str) -> str:
-    """Generate a GCP-safe VM name: <prefix>-<snapshot>-<hash8>."""
-    snap_part = re.sub(r"[^a-z0-9]", "-", snapshot.lower()).strip("-")[:30]
-    seed = f"{prefix}:{snapshot}:{time.time()}:{random.random()}"
+def generate_vm_name(
+    prefix: str,
+    *,
+    snapshot: str,
+    task_id: str = "",
+    harness: str = "",
+    model_tag: str = "",
+) -> str:
+    """Generate a GCP-safe VM name: ``<prefix>-<task-or-snapshot>-<hash8>``.
+
+    Matches simprun's naming so leftover VMs are greppable by task. When
+    ``task_id`` is set we use the task slug (40 chars max) — same as
+    simprun. When it's empty (legacy callers, smoke tests) we fall back
+    to the snapshot tag so the name still encodes something meaningful.
+    ``harness`` / ``model_tag`` are only mixed into the hash seed for
+    collision avoidance in batch runs; they don't appear in the name.
+    """
+    if task_id:
+        body = re.sub(r"[^a-z0-9]", "-", task_id.lower()).strip("-")[:40]
+    else:
+        body = re.sub(r"[^a-z0-9]", "-", snapshot.lower()).strip("-")[:30]
+    seed = f"{prefix}:{task_id}:{harness}:{model_tag}:{snapshot}:{time.time()}:{random.random()}"
     h = hashlib.sha256(seed.encode()).hexdigest()[:8]
-    name = f"{prefix}-{snap_part}-{h}"
+    name = f"{prefix}-{body}-{h}"
     return name[:63]
 
 
@@ -591,7 +609,13 @@ class GcloudProvider(Provider):
                 f"(after excluding {sorted(exclude_profiles or ())})"
             )
 
-        name = generate_vm_name(self._cfg.instance_prefix, spec.snapshot)
+        name = generate_vm_name(
+            self._cfg.instance_prefix,
+            snapshot=spec.snapshot,
+            task_id=spec.task_id,
+            harness=spec.harness,
+            model_tag=spec.model_tag,
+        )
         label_str = ",".join(
             f"{k}={sanitize_label_value(v)}"
             for k, v in {"purpose": "ale-run", "snapshot": spec.snapshot}.items()

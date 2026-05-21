@@ -174,21 +174,21 @@ def capacity_profiles_for(
 # ======================================================================
 
 
-def vm_data_root(os_type: str) -> str:
+def env_data_root(os_type: str) -> str:
     if os_type == "linux":
         return "/media/user/data/agenthle"
     return "E:\\agenthle"
 
 
-def vm_task_dir(os_type: str, domain: str, task: str, variant: str) -> str:
-    root = vm_data_root(os_type)
+def env_task_dir(os_type: str, domain: str, task: str, variant: str) -> str:
+    root = env_data_root(os_type)
     if os_type == "linux":
         return f"{root}/{domain}/{task}/{variant}"
     return f"{root}\\{domain}\\{task}\\{variant}"
 
 
-def vm_subdir(os_type: str, domain: str, task: str, variant: str, subdir: str) -> str:
-    base = vm_task_dir(os_type, domain, task, variant)
+def env_subdir(os_type: str, domain: str, task: str, variant: str, subdir: str) -> str:
+    base = env_task_dir(os_type, domain, task, variant)
     if os_type == "linux":
         return f"{base}/{subdir}"
     return f"{base}\\{subdir}"

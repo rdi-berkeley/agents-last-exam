@@ -31,7 +31,7 @@
 
 project: ${env:GCP_PROJECT}
 service_account_key: ${env:GCP_SA_KEY}
-instance_prefix: ale                  # VM names look like `ale-<snapshot>-<hash8>`
+instance_prefix: ale                  # VM names: `ale-<task-slug>-<hash8>`
 
 defaults:
   machine_type: e2-highmem-8          # used when capacity_pools is empty for a snapshot

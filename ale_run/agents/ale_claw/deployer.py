@@ -121,7 +121,7 @@ class AleClawDeployer(InHostDeployer):
         # ---- 1. Drive-VM session (constructed inside the runtime substrate) ----
         # In local runtime this is host → VM RPC. In docker runtime it's
         # container → VM RPC (container has --network host so endpoint reaches).
-        session = await self.runtime.make_vm_session()
+        session = await self.runtime.make_session()
 
         # ---- 2. Memory + session + subagent registry ----
         memory_store = MemoryStore(task_id=task_id, base_dir=str(memory_base))

@@ -1,9 +1,9 @@
 """Task-side data shapes.
 
 Currently just :class:`TaskDataSpec` — the contract describing what
-input/reference/eval data a task needs staged into the VM. Read by
+input/reference data a task needs staged into the VM. Read by
 :mod:`ale_run.environments.data_staging` to drive ``stage_input`` /
-``stage_reference`` / ``stage_eval``.
+``stage_reference``.
 """
 from __future__ import annotations
 
@@ -30,5 +30,3 @@ class TaskDataSpec:
     reference_dir: str | None = None
     reference_gcs_prefix: str | None = None
     remote_output_dir: str | None = None
-    eval_gcs_prefix: str | None = None
-    eval_dir: str | None = None

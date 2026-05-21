@@ -3,12 +3,15 @@
 Reads YAML-built ``RunUnit`` + a Provider; produces a ``UnitResult`` and the
 LOG_SPEC-shaped on-disk artifacts under ``output_root/<slugs>/v<i>/<ts>/``.
 
-Phase mapping (preserved from simprun, surface renamed to LOG_SPEC events):
+Phase mapping (refined from simprun, surface renamed to LOG_SPEC events):
 
-  - Phase 0  provision      env.reset_async() → VM + open session
-  - Phase 1  start          data_staging + TaskDriver(session).setup()
+  - Phase 0  provision      env.reset_async() + _ensure_env_ready (data disk
+                            online). Mount-fallback retry lives here.
+  - Phase 1  start          _stage_task_data + TaskDriver(session).setup().
+                            Single-shot — failures here are task-level, not
+                            env-level, so re-provisioning wouldn't help.
   - Phase 2  agent          runtime.install_deployer() + .launch_deployer()
-  - Phase 2b fanout         pull origin_log/ (vm-only), emit output_gather_skipped
+  - Phase 2b fanout         pull origin_log/ (remote-only), emit output_gather_skipped
   - Phase 3  evaluate       TaskDriver.evaluate(), then deployer.parse_artifacts
   - Phase 4  cleanup        TaskDriver.close + env.close_async(mode=delete)
 """
@@ -30,6 +33,7 @@ from ..base_interface import (
     Trajectory,
     TrajectoryBuilder,
 )
+from ..environments.data_staging import MountFailureError
 from ..environments.env import ALEEnv
 from ..environments.runtime import DockerRuntime, LocalRuntime, VmRuntime
 from ..tasks.loader import TaskLoader
@@ -38,7 +42,7 @@ from . import gather
 from .factory import build_config, resolve_agent
 from .monitor import RateLimitDetector
 from .run_writer import RunWriter
-from .spec import ArtifactsSpec, RunUnit, UnitResult
+from .experiment_spec import ArtifactsSpec, RunUnit, UnitResult
 from .termination import classify_error, err_dict, redact_config
 
 logger = logging.getLogger(__name__)
@@ -47,19 +51,8 @@ logger = logging.getLogger(__name__)
 _DEFAULT_TIMEOUT_S = 7200
 
 # Mount-fallback: how many provision attempts before we give up. Matches
-# simprun's single retry — the original VM + one alternate profile.
+# simprun's single retry — the original env + one alternate profile.
 _MOUNT_FALLBACK_MAX_ATTEMPTS = 2
-
-
-def _is_mount_failure(exc: Exception) -> bool:
-    """Detect ``ensure_data_disk`` mount failures so we can swap profiles.
-
-    Exact match against simprun/runner.py:217:
-    ``if "Failed to mount" in str(mount_err) and self._vm:``
-    The only call site that raises this string is ``_ensure_linux_data_disk``
-    in ``environments/data_staging.py``.
-    """
-    return "Failed to mount" in str(exc)
 
 
 # ======================================================================
@@ -175,7 +168,7 @@ async def run_one_unit(
 
     try:
         # Single-knob concurrency: holding sem for the whole unit caps both
-        # VM count and concurrent agent runs in one number.
+        # env count and concurrent agent runs in one number.
         if sem is not None:
             writer.emit_event("provision_wait")
             await sem.acquire()
@@ -186,70 +179,32 @@ async def run_one_unit(
             timeout_s = int(task_meta.get("timeout_s") or _DEFAULT_TIMEOUT_S)
 
             # ============================================================
-            # Phase 0 + Phase 1 — provision + data staging.
-            # Mount-fallback retry (simprun parity): if the data disk fails
-            # to mount on the chosen capacity profile, delete the VM,
-            # exclude that profile, and retry once with the next one.
+            # Phase 0 — provision env + bring its data disk online.
+            # Mount-fallback retry: if the data disk on the chosen capacity
+            # profile won't surface, delete the env, exclude that profile,
+            # and retry once with the next one. Scope is intentionally
+            # narrow — only env-infrastructure failures retry here.
             # ============================================================
             excluded_profiles: set[str] = set()
             for attempt in range(_MOUNT_FALLBACK_MAX_ATTEMPTS):
                 writer.emit_event("provision_started")
                 env = ALEEnv(provider=provider, spec=env_spec)
-                await env.reset_async(exclude_profiles=excluded_profiles or None)
-                writer.emit_event(
-                    "provision_done",
-                    vm_id=env.vm.id,
-                    capacity_profile=env.vm.metadata.get("capacity_profile"),
-                )
-
-                # Build the trajectory the first time around (instruction is stable).
-                if builder is None:
-                    builder = TrajectoryBuilder(
-                        agent_name=getattr(config, "name", unit.agent_spec.class_),
-                        agent_version=None,
-                        model=config.model,
-                        task_path=unit.task_path,
-                        variant_index=unit.variant_index,
-                        instruction=task_meta["description"],
-                    )
-                    builder.add_step(source="user", message=task_meta["description"])
-
                 try:
-                    # ── Matches simprun's _phase1_start: data staging + task setup
-                    # are wrapped together, so a transient mount failure during
-                    # ensure_data_disk triggers the profile swap, but any error
-                    # raised by task_driver.setup() that happens to contain the
-                    # "Failed to mount" substring would also be retried (matching
-                    # simprun's behaviour even though that doesn't occur today).
-                    env.set_phase("stage_inputs")
-                    await _stage_data(
-                        env=env,
-                        provider=provider,
-                        task_meta=task_meta,
-                        run_id=writer.run_id,
-                        task_id=unit.task_path,
+                    await env.reset_async(exclude_profiles=excluded_profiles or None)
+                    writer.emit_event(
+                        "provision_done",
+                        env_id=env.handle.id,
+                        capacity_profile=env.handle.metadata.get("capacity_profile"),
                     )
-                    env.set_phase("task_setup")
-                    task_driver = TaskDriver(
-                        task_path=str(task_path),
-                        session=env.session,
-                        variant=unit.variant_index,
-                        os_type=env.vm.os,
-                        # Closure capture is OK — `env` is the loop's
-                        # current iteration; on the next mount-fallback
-                        # retry we build a new TaskDriver with a new closure.
-                        session_rebuilder=env.reset_session,
-                    )
-                    await task_driver.setup()
-                    break  # phase 1 succeeded
-                except RuntimeError as e:
-                    if not _is_mount_failure(e):
-                        raise
-                    failed_profile = env.vm.metadata.get("capacity_profile")
+                    env.set_phase("ensure_env_ready")
+                    await _ensure_env_ready(env)
+                    break  # phase 0 succeeded
+                except MountFailureError as mount_err:
+                    failed_profile = env.handle.metadata.get("capacity_profile")
                     logger.warning(
-                        "Disk mount failed on profile %s for %s — deleting VM and "
-                        "retrying with a different profile",
-                        failed_profile, unit.slug,
+                        "Disk mount failed on profile %s for %s — deleting env and "
+                        "retrying with a different profile (%s)",
+                        failed_profile, unit.slug, mount_err,
                     )
                     writer.emit_event(
                         "mount_fallback",
@@ -263,12 +218,37 @@ async def run_one_unit(
                     except Exception as cleanup_e:
                         logger.debug("close after mount fail: %s", cleanup_e)
                     env = None
-                    task_driver = None
                     if attempt == _MOUNT_FALLBACK_MAX_ATTEMPTS - 1:
                         raise
 
-            assert env is not None  # loop exits with env+task_driver set, or raises
-            assert task_driver is not None
+            assert env is not None  # loop exits with env set, or raises
+
+            builder = TrajectoryBuilder(
+                agent_name=getattr(config, "name", unit.agent_spec.class_),
+                agent_version=None,
+                model=config.model,
+                task_path=unit.task_path,
+                variant_index=unit.variant_index,
+                instruction=task_meta["description"],
+            )
+            builder.add_step(source="user", message=task_meta["description"])
+
+            # ============================================================
+            # Phase 1 — task-specific setup (single-shot, no retry).
+            # Failures here are about the task / its data, not the env —
+            # re-provisioning wouldn't help, so we let them propagate.
+            # ============================================================
+            env.set_phase("stage_inputs")
+            await _stage_task_data(env=env, provider=provider, task_meta=task_meta)
+            env.set_phase("task_setup")
+            task_driver = TaskDriver(
+                task_path=str(task_path),
+                session=env.session,
+                variant=unit.variant_index,
+                os_type=env.handle.os,
+                session_rebuilder=env.reset_session,
+            )
+            await task_driver.setup()
 
             # ============================================================
             # Phase 2 — agent
@@ -293,7 +273,7 @@ async def run_one_unit(
             deployer = await runtime.install_deployer(deployer_cls)
 
             # ─── Incremental sync (simprun parity) ─────────────────────
-            # Tail each ``hot_artifacts`` file on the VM into its host
+            # Tail each ``hot_artifacts`` file on the remote env into its host
             # mirror via download_file_range. Boundary-safe slicing at
             # the last `\n` (jsonl) is in sync_helpers.apply_range_step.
             # State (per-path byte offset) is held by the puller; on a
@@ -309,7 +289,7 @@ async def run_one_unit(
             if puller is not None:
                 writer.emit_event(
                     "incremental_pull_started",
-                    targets=[t.vm_path for t in puller_targets],
+                    targets=[t.remote_path for t in puller_targets],
                     interval_s=puller.interval_s,
                 )
                 puller.start()
@@ -318,7 +298,7 @@ async def run_one_unit(
             # Tails the locally-mirrored stderr.log (which IncrementalPuller
             # is writing at its own tick cadence) every 30s; on hit-rate threshold,
             # cancels the agent and flags the run for cleanup_mode=keep so
-            # we don't waste the VM boot on the retry. Matches simprun
+            # we don't waste the env boot on the retry. Matches simprun
             # runner.py:_monitor_rate_limits + the paused-state cleanup.
             rate_detector = RateLimitDetector()
             stderr_host = host_artifacts_dir / "stderr.log"
@@ -394,7 +374,7 @@ async def run_one_unit(
                         )
 
             if rate_limited:
-                # Force the VM to stay alive — operator retries the run
+                # Force the env to stay alive — operator retries the run
                 # after the rate-limit window without paying for a re-boot.
                 effective_cleanup_mode = "keep"
                 writer.emit_event("rate_limit_paused", cleanup_mode="keep")
@@ -408,7 +388,7 @@ async def run_one_unit(
             # Phase 2b — post-launch fanout (origin_log gather + output stub)
             #
             # Gather is only meaningful for VmRuntime, where work_dir lives
-            # in the VM. Local / docker runtimes write directly into
+            # on the remote env. Local / docker runtimes write directly into
             # host_artifacts_dir, so the gather step is a no-op.
             # ============================================================
             writer.emit_event("post_launch_fanout_started", gcs_bucket="(cua direct)")
@@ -418,7 +398,7 @@ async def run_one_unit(
                         env.session,
                         src=runtime.work_dir,
                         dst=runtime.host_artifacts_dir,
-                        os_type=env.vm.os,
+                        os_type=env.handle.os,
                     )
                     if report.get("error"):
                         writer.emit_event("origin_log_gather_failed", report=report)
@@ -441,19 +421,19 @@ async def run_one_unit(
             )
 
             # ============================================================
-            # Phase 3 — upload VM output → GCS, stage reference, evaluate
+            # Phase 3 — upload env output → GCS, stage reference, evaluate
             # ============================================================
             # 3a. UPLOADING_OUTPUT (simprun runner.py:_phase3_evaluate first half)
-            #     Push the VM's output dir to GCS so it's preserved across
-            #     VM teardown. Best-effort: failure logs a warning but
-            #     doesn't fail the run (eval still runs on the live VM).
+            #     Push the env's output dir to GCS so it's preserved across
+            #     env teardown. Best-effort: failure logs a warning but
+            #     doesn't fail the run (eval still runs on the live env).
             await _upload_output_best_effort(
                 env=env, provider=provider, task_meta=task_meta,
                 run_id=writer.run_id, task_id=unit.task_path, writer=writer,
             )
 
             # 3b. STAGING_EVAL (simprun runner.py:_phase3_evaluate second half)
-            #     Pull reference data from GCS to the VM if the task needs
+            #     Pull reference data from GCS to the env if the task needs
             #     it for scoring. Best-effort: many tasks don't have a
             #     reference/ prefix and we just log + continue.
             env.set_phase("stage_reference")
@@ -572,11 +552,11 @@ async def run_one_unit(
 
     finally:
         # Phase 4 — cleanup. Both branches are best-effort; never raise here.
-        if task_env_obj is not None:
+        if task_driver is not None:
             try:
-                await task_env_obj.close()
+                await task_driver.close()
             except Exception as e:
-                logger.debug("TaskEnv.close failed: %s", e)
+                logger.debug("TaskDriver.close failed: %s", e)
         if env is not None:
             try:
                 await env.close_async(mode=effective_cleanup_mode)
@@ -659,7 +639,7 @@ def _build_env_spec(task_meta: dict[str, Any], *, unit: RunUnit | None = None) -
     snapshot = task_meta.get("image_category") or task_meta.get("snapshot_name")
     if not snapshot:
         raise RuntimeError(
-            "task_card.json is missing vm.snapshot (required for env spec)"
+            "task_card.json is missing snapshot (required for env spec)"
         )
     os_type = task_meta.get("os_type") or "linux"
     task_id = unit.task_path if unit is not None else ""
@@ -682,8 +662,8 @@ def _build_env_spec(task_meta: dict[str, Any], *, unit: RunUnit | None = None) -
     )
 
 
-def _work_dir_vm(os_type: str, agent_name: str, run_id: str) -> str:
-    """VM-side scratch dir for VmRuntime deployers."""
+def _work_dir_remote(os_type: str, agent_name: str, run_id: str) -> str:
+    """Remote-side scratch dir for VmRuntime deployers."""
     if os_type == "linux":
         return f"/home/user/.ale/{agent_name}/{run_id}"
     return rf"C:\Users\User\.ale\{agent_name}\{run_id}"
@@ -702,17 +682,17 @@ def _build_runtime(
 
     ``host_artifacts_dir`` is always a host path the lifecycle owns; for
     Local/Docker it's also the deployer's work_dir (no gather step). For
-    Vm the deployer's work_dir is a VM-side path and gather copies into
+    Vm the deployer's work_dir is a remote-side path and gather copies into
     ``host_artifacts_dir`` after launch.
     """
     env_passthrough = _collect_env_passthrough()
     if runtime_kind == "vm":
-        work_dir_vm = _work_dir_vm(env.vm.os, agent_name, run_id)
+        remote_work_dir = _work_dir_remote(env.handle.os, agent_name, run_id)
         return VmRuntime(
             config=config,
-            work_dir=work_dir_vm,
+            work_dir=remote_work_dir,
             host_artifacts_dir=host_artifacts_dir,
-            env_handle=env.vm,
+            env_handle=env.handle,
             env=env_passthrough,
         )
     if runtime_kind == "local":
@@ -720,7 +700,7 @@ def _build_runtime(
             config=config,
             work_dir=str(host_artifacts_dir),
             host_artifacts_dir=host_artifacts_dir,
-            env_handle=env.vm,
+            env_handle=env.handle,
             env=env_passthrough,
         )
     if runtime_kind == "docker":
@@ -730,14 +710,14 @@ def _build_runtime(
             config=config,
             work_dir="/work",
             host_artifacts_dir=host_artifacts_dir,
-            env_handle=env.vm,
+            env_handle=env.handle,
             env=env_passthrough,
         )
     raise NotImplementedError(f"runtime kind {runtime_kind!r} not wired in lifecycle")
 
 
 def _collect_env_passthrough() -> dict[str, str]:
-    """Env vars to propagate into the VM Python process so deployers see API keys.
+    """Env vars to propagate into the substrate so deployers see API keys.
 
     Keep this list small — only well-known LLM keys we know deployers need.
     """
@@ -763,7 +743,7 @@ async def _monitor_rate_limits(
     """Tail the host-mirrored stderr.log; return when ``detector.is_triggered``.
 
     Verbatim port of simprun runner.py:_monitor_rate_limits, swapping the
-    VM-side path for the host-mirrored copy (IncrementalPuller writes that
+    remote-side path for the host-mirrored copy (IncrementalPuller writes that
     file at its own tick cadence — see ``_TICK_INTERVAL_S``). The CALLER's
     `asyncio.wait` sees this task complete only on detection — on a clean
     agent finish the caller cancels this task so it returns mid-sleep.
@@ -791,11 +771,11 @@ async def _upload_output_best_effort(
     task_id: str,
     writer,
 ) -> None:
-    """Push the VM's task output dir to GCS (simprun parity).
+    """Push the env's task output dir to GCS (simprun parity).
 
     Mirrors simprun runner.py:_phase3_evaluate phase ``output_upload``.
     Best-effort: failure logs + emits an event but does NOT abort the
-    run — the live VM still has the output for the eval that follows.
+    run — the live env still has the output for the eval that follows.
     """
     task_data = task_meta.get("task_data")
     if task_data is None or not task_data.requires_task_data:
@@ -806,19 +786,19 @@ async def _upload_output_best_effort(
     try:
         report = await asyncio.to_thread(
             data_staging.upload_output,
-            env.vm, task_data, env.vm.os, run_id,
+            env.handle, task_data, env.handle.os, run_id,
             gcs_results_bucket=bucket,
         )
         if report.get("uploaded"):
-            writer.emit_event("vm_output_uploaded", gcs_path=report.get("gcs_path"))
+            writer.emit_event("output_uploaded", gcs_path=report.get("gcs_path"))
         else:
             writer.emit_event(
-                "vm_output_upload_skipped",
+                "output_upload_skipped",
                 reason=report.get("error", "no_task_data") or "no_task_data",
             )
     except Exception as e:
         logger.warning("upload_output failed (best-effort): %s", e)
-        writer.emit_event("vm_output_upload_failed", error=str(e))
+        writer.emit_event("output_upload_failed", error=str(e))
 
 
 async def _stage_reference_best_effort(
@@ -830,7 +810,7 @@ async def _stage_reference_best_effort(
     task_id: str,
     writer,
 ) -> None:
-    """Pull reference data from GCS onto the VM for eval (simprun parity).
+    """Pull reference data from GCS onto the env for eval (simprun parity).
 
     Mirrors simprun runner.py:_phase3_evaluate phase ``eval_stage``.
     Best-effort: many tasks don't ship a reference/ prefix.
@@ -844,7 +824,7 @@ async def _stage_reference_best_effort(
     try:
         report = await asyncio.to_thread(
             data_staging.stage_reference,
-            env.vm, task_data, env.vm.os,
+            env.handle, task_data, env.handle.os,
             gcs_bucket=bucket,
         )
         if report.get("skipped"):
@@ -870,7 +850,7 @@ def _build_incremental_puller(
     """Return ``(puller, targets)`` for the deployer's hot artifacts.
 
     Returns ``(None, [])`` when the deployer declares no ``hot_artifacts``
-    OR the runtime isn't VM-backed (Local/Docker write straight to host).
+    OR the runtime isn't remote-backed (Local/Docker write straight to host).
     When non-empty, builds a puller targeting ``<work_dir>/<file>`` →
     ``<host_artifacts_dir>/<file>`` for each entry.
     """
@@ -882,50 +862,56 @@ def _build_incremental_puller(
     if not hot:
         return None, []
 
-    sep = "/" if runtime.vm_os == "linux" else "\\"
+    sep = "/" if runtime.env_os == "linux" else "\\"
     targets = [
         PullTarget(
-            vm_path=f"{runtime.work_dir.rstrip(sep)}{sep}{name}",
+            remote_path=f"{runtime.work_dir.rstrip(sep)}{sep}{name}",
             host_path=runtime.host_artifacts_dir / name,
         )
         for name in hot
     ]
-    puller = IncrementalPuller(vm_config=runtime.env_handle, targets=targets)
+    puller = IncrementalPuller(env_handle=runtime.env_handle, targets=targets)
     return puller, targets
 
 
-async def _stage_data(
+async def _ensure_env_ready(env: ALEEnv) -> None:
+    """Bring the env's infrastructure online (Phase 0 tail).
+
+    - Linux: format + mount the attached data disk.
+    - Windows: bring E: online (and force the framebuffer resolution).
+
+    Raises ``data_staging.MountFailureError`` if the disk on this env's
+    capacity profile won't surface — caller catches it for mount-fallback.
+    Failure here is an *env* failure (the task hasn't been touched yet),
+    so it's safe to delete the env and retry with a different profile.
+    """
+    from ..environments import data_staging
+
+    await asyncio.to_thread(data_staging.ensure_data_disk, env.handle, env.handle.os)
+
+    if env.handle.os == "windows":
+        has_gpu = env.spec.gpu is not None
+        await asyncio.to_thread(data_staging.set_windows_resolution, env.handle, has_gpu)
+
+
+async def _stage_task_data(
     *,
     env: ALEEnv,
     provider: Provider,
     task_meta: dict[str, Any],
-    run_id: str,
-    task_id: str,
 ) -> None:
-    """Data-staging block formerly inlined in phase 1.
+    """Push task-specific input data onto the env (Phase 1).
 
-    Raises ``RuntimeError("Failed to mount...")`` when the VM's data disk
-    can't be brought online — caller catches this for mount-fallback.
-    Returns silently when the task has no data-staging requirements.
+    Returns silently when the task declares no data-staging requirements.
+    Any failure here is a task-data problem (network, missing GCS prefix,
+    auth) — re-provisioning the env wouldn't help, so this is not wrapped
+    by the mount-fallback retry.
     """
     from ..environments import data_staging
     from ..environments.providers.gcloud import (
         GcloudProvider,
         gcloud_sa_key_path,
     )
-
-    # ensure_data_disk runs for every Linux VM (formats + mounts the data
-    # volume) and for every Windows VM (brings E: online); this is what
-    # raises "Failed to mount" on certain c4-/hyperdisk capacity profiles
-    # where the disk doesn't surface in time.
-    await asyncio.to_thread(data_staging.ensure_data_disk, env.vm, env.vm.os)
-
-    # Windows-only: force the framebuffer to the expected size before any
-    # task-specific GUI setup. has_gpu is inferred from the env spec's gpu
-    # field (None → CPU profile → 1024x768; non-None → GPU → 1920x1080).
-    if env.vm.os == "windows":
-        has_gpu = env.spec.gpu is not None
-        await asyncio.to_thread(data_staging.set_windows_resolution, env.vm, has_gpu)
 
     task_data = task_meta.get("task_data")
     if task_data is None or not task_data.requires_task_data:
@@ -939,12 +925,9 @@ async def _stage_data(
     bucket = _stage_bucket_for(provider)
     await asyncio.to_thread(
         data_staging.stage_input,
-        env.vm, task_data, env.vm.os,
+        env.handle, task_data, env.handle.os,
         gcs_bucket=bucket,
         gcs_local_key_path=sa_key,
-    )
-    await asyncio.to_thread(
-        data_staging.stage_eval, env.vm, task_data, env.vm.os,
     )
 
 
@@ -958,7 +941,7 @@ def _stage_bucket_for(provider: Provider) -> str:
 
 
 def _results_bucket_for(provider: Provider) -> str:
-    """GCS bucket for VM output upload (simprun's ``GCS_RESULTS_BUCKET``)."""
+    """GCS bucket for env output upload (simprun's ``GCS_RESULTS_BUCKET``)."""
     return "gs://agenthle-run-results"
 
 

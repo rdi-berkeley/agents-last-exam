@@ -1,10 +1,10 @@
-"""Task environment for setup/evaluate lifecycle against an open session.
+"""TaskDriver — drives a task's setup/evaluate hooks on an open session.
 
 Ported from simprun/task_env.py. Decoupled from VM provisioning: the
 constructor takes an already-open ``cua_bench.computers.remote.RemoteDesktopSession``
 from the environment layer plus an optional ``session_rebuilder`` async
 callback. The provider is responsible for ``wait_cua_ready`` and
-initializing the underlying ``Computer`` object; TaskEnv owns the task
+initializing the underlying ``Computer`` object; TaskDriver owns the task
 setup + evaluate retry loop and — when the session goes transient-bad —
 calls ``session_rebuilder()`` to get a fresh one, exactly as
 simprun's ``TaskEnv.close(force=True) + connect()`` does.
@@ -114,11 +114,11 @@ def install_resilient_cua_commands(interface: Any) -> None:
     interface._ale_resilient_commands = True
 
 
-class TaskEnv:
+class TaskDriver:
     """Task setup + evaluate against a pre-opened DesktopSession.
 
     The session is owned by the environment layer (the Provider produced it).
-    TaskEnv does NOT close the session — its ``close()`` method only resets
+    TaskDriver does NOT close the session — its ``close()`` method only resets
     its own reference; the env releases the VM (and hence the session) in
     its own ``close_async``.
     """
@@ -187,7 +187,7 @@ class TaskEnv:
     @property
     def session(self) -> RemoteDesktopSession:
         if self._session is None:
-            raise RuntimeError("TaskEnv session was already closed.")
+            raise RuntimeError("TaskDriver session was already closed.")
         return self._session
 
     async def setup(self) -> None:

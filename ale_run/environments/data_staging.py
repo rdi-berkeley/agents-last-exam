@@ -1,4 +1,4 @@
-"""GCS-staged task data: VM disk prep, input/eval/reference staging, output upload.
+"""GCS-staged task data: env disk prep, input/reference staging, output upload.
 
 Ported from simprun/data.py. Drops the ``_ensure_gcs_auth`` helper that loaded
 a local SA key from a hardcoded REPO_ROOT — agenthle-public expects gcloud
@@ -13,7 +13,7 @@ import logging
 import shlex
 from pathlib import Path
 
-from .images import gcs_task_prefix, vm_subdir
+from .images import gcs_task_prefix, env_subdir
 from .remote import run_remote, upload_file
 from ..base_interface import EnvHandle, TaskDataSpec
 
@@ -27,6 +27,16 @@ _LINUX_DATA_DISK_CANDIDATES = (
     "/dev/nvme0n2",
     "/dev/vdb",
 )
+
+
+class MountFailureError(RuntimeError):
+    """Data disk on this env's capacity profile failed to surface / mount.
+
+    Raised by ``ensure_data_disk`` (Linux and Windows paths) when the
+    attached data volume can't be brought online. The lifecycle catches
+    this specifically to swap capacity profiles and re-provision —
+    *not* RuntimeError, so unrelated runtime failures aren't retried.
+    """
 
 
 def _gcs_cp_cmd(src: str, dst: str, os_type: str) -> str:
@@ -103,17 +113,17 @@ def _is_unrecoverable(error_text: str) -> bool:
     return any(p in error_text for p in _NO_RETRY_PATTERNS)
 
 
-def _run_on_vm(vm_config: EnvHandle, command: str, timeout: float = 300):
+def _run_on_env(env_handle: EnvHandle, command: str, timeout: float = 300):
     import time
 
     last_err = None
     for attempt in range(1, _MAX_RETRIES + 1):
-        result = run_remote(vm_config, command, timeout=timeout)
+        result = run_remote(env_handle, command, timeout=timeout)
         if result.returncode == 0:
             return result
         last_err = result.stderr or result.stdout
         logger.warning(
-            "VM command failed (attempt %d/%d, rc=%d): %s",
+            "Remote command failed (attempt %d/%d, rc=%d): %s",
             attempt,
             _MAX_RETRIES,
             result.returncode,
@@ -123,17 +133,17 @@ def _run_on_vm(vm_config: EnvHandle, command: str, timeout: float = 300):
             break
         if attempt < _MAX_RETRIES:
             time.sleep(_RETRY_DELAY_S)
-    raise RuntimeError(f"VM command failed after {_MAX_RETRIES} attempts: {last_err}")
+    raise RuntimeError(f"Remote command failed after {_MAX_RETRIES} attempts: {last_err}")
 
 
-def ensure_gcs_auth(vm_config: EnvHandle, os_type: str, local_key_path: Path | None) -> None:
-    """Activate gcloud's service account on the VM using ``local_key_path``.
+def ensure_gcs_auth(env_handle: EnvHandle, os_type: str, local_key_path: Path | None) -> None:
+    """Activate gcloud's service account on the env using ``local_key_path``.
 
-    No-op when ``local_key_path`` is None or missing — the VM is assumed to
+    No-op when ``local_key_path`` is None or missing — the env is assumed to
     have ambient credentials (default service account) in that case.
     """
     if local_key_path is None or not local_key_path.exists():
-        logger.debug("No GCS key path configured; skipping VM-side gcloud auth.")
+        logger.debug("No GCS key path configured; skipping env-side gcloud auth.")
         return
 
     if os_type == "linux":
@@ -142,27 +152,27 @@ def ensure_gcs_auth(vm_config: EnvHandle, os_type: str, local_key_path: Path | N
         remote_key = r"C:\tmp\.gcp_key.json"
 
     key_content = local_key_path.read_text(encoding="utf-8")
-    upload_file(vm_config, remote_key, key_content)
+    upload_file(env_handle, remote_key, key_content)
 
     if os_type == "linux":
         activate_cmd = f"gcloud auth activate-service-account --key-file='{remote_key}' && echo ok"
     else:
         activate_cmd = f'gcloud auth activate-service-account --key-file="{remote_key}" && echo ok'
 
-    result = run_remote(vm_config, activate_cmd, timeout=30)
+    result = run_remote(env_handle, activate_cmd, timeout=30)
     if "ok" in (result.stdout or ""):
         logger.info("GCS auth activated via service account key")
     else:
         logger.warning("GCS auth activation returned: %s", result.stdout or result.stderr)
 
 
-def _gcs_prefix_exists(vm_config: EnvHandle, src: str, os_type: str) -> bool:
-    result = run_remote(vm_config, _gcs_ls_cmd(src, os_type), timeout=60)
+def _gcs_prefix_exists(env_handle: EnvHandle, src: str, os_type: str) -> bool:
+    result = run_remote(env_handle, _gcs_ls_cmd(src, os_type), timeout=60)
     return result.returncode == 0
 
 
 def _rsync_staged_dir(
-    vm_config: EnvHandle,
+    env_handle: EnvHandle,
     *,
     src: str,
     dst: str,
@@ -171,12 +181,12 @@ def _rsync_staged_dir(
     timeout: float = 1800,
 ) -> None:
     logger.info("Staging %s with rsync: %s -> %s", label, src, dst)
-    _run_on_vm(vm_config, _gcs_rsync_cmd(src, dst, os_type), timeout=timeout)
-    _run_on_vm(vm_config, _verify_nonempty_dir_cmd(dst, label, os_type), timeout=60)
+    _run_on_env(env_handle, _gcs_rsync_cmd(src, dst, os_type), timeout=timeout)
+    _run_on_env(env_handle, _verify_nonempty_dir_cmd(dst, label, os_type), timeout=60)
 
 
 def stage_input(
-    vm_config: EnvHandle,
+    env_handle: EnvHandle,
     task_data: TaskDataSpec,
     os_type: str,
     *,
@@ -192,19 +202,19 @@ def stage_input(
     gcs_prefix = gcs_task_prefix(gcs_bucket, domain, task, variant)
     staged = []
 
-    ensure_gcs_auth(vm_config, os_type, gcs_local_key_path)
+    ensure_gcs_auth(env_handle, os_type, gcs_local_key_path)
 
     if os_type == "linux":
-        _run_on_vm(vm_config, _repair_linux_data_root_cmd(), timeout=60)
+        _run_on_env(env_handle, _repair_linux_data_root_cmd(), timeout=60)
 
-    base_dir = vm_subdir(os_type, domain, task, variant, "")
-    _run_on_vm(vm_config, _mkdir_cmd(base_dir.rstrip("/\\"), os_type))
+    base_dir = env_subdir(os_type, domain, task, variant, "")
+    _run_on_env(env_handle, _mkdir_cmd(base_dir.rstrip("/\\"), os_type))
 
     input_src = f"{gcs_prefix}/input"
-    input_dst = task_data.input_dir or vm_subdir(os_type, domain, task, variant, "input")
-    if _gcs_prefix_exists(vm_config, input_src, os_type):
+    input_dst = task_data.input_dir or env_subdir(os_type, domain, task, variant, "input")
+    if _gcs_prefix_exists(env_handle, input_src, os_type):
         _rsync_staged_dir(
-            vm_config,
+            env_handle,
             src=input_src,
             dst=input_dst,
             label="input",
@@ -214,25 +224,25 @@ def stage_input(
     else:
         logger.info("No input/ to stage at %s — creating empty target dir", input_src)
         try:
-            _run_on_vm(vm_config, _mkdir_cmd(input_dst, os_type))
+            _run_on_env(env_handle, _mkdir_cmd(input_dst, os_type))
         except RuntimeError:
             pass
 
     software_src = f"{gcs_prefix}/software"
-    if _gcs_prefix_exists(vm_config, software_src, os_type):
-        software_dst = task_data.software_dir or vm_subdir(
+    if _gcs_prefix_exists(env_handle, software_src, os_type):
+        software_dst = task_data.software_dir or env_subdir(
             os_type, domain, task, variant, "software"
         )
         _rsync_staged_dir(
-            vm_config,
+            env_handle,
             src=software_src,
             dst=software_dst,
             label="software",
             os_type=os_type,
         )
         if os_type == "linux":
-            _run_on_vm(
-                vm_config,
+            _run_on_env(
+                env_handle,
                 f"find '{software_dst}' -type f -exec chmod +x {{}} +",
                 timeout=60,
             )
@@ -240,9 +250,9 @@ def stage_input(
     else:
         logger.info("No software/ to stage at %s", software_src)
 
-    output_dir = vm_subdir(os_type, domain, task, variant, "output")
+    output_dir = env_subdir(os_type, domain, task, variant, "output")
     try:
-        _run_on_vm(vm_config, _mkdir_cmd(output_dir, os_type))
+        _run_on_env(env_handle, _mkdir_cmd(output_dir, os_type))
     except RuntimeError:
         pass
 
@@ -250,7 +260,7 @@ def stage_input(
 
 
 def stage_reference(
-    vm_config: EnvHandle,
+    env_handle: EnvHandle,
     task_data: TaskDataSpec,
     os_type: str,
     *,
@@ -264,12 +274,12 @@ def stage_reference(
     variant = task_data.variant_name
     gcs_prefix = gcs_task_prefix(gcs_bucket, domain, task, variant)
 
-    base_dir = vm_subdir(os_type, domain, task, variant, "")
+    base_dir = env_subdir(os_type, domain, task, variant, "")
     ref_src = task_data.reference_gcs_prefix or f"{gcs_prefix}/reference"
-    ref_dst = task_data.reference_dir or vm_subdir(os_type, domain, task, variant, "reference")
-    _run_on_vm(vm_config, _mkdir_cmd(base_dir.rstrip("/\\"), os_type))
+    ref_dst = task_data.reference_dir or env_subdir(os_type, domain, task, variant, "reference")
+    _run_on_env(env_handle, _mkdir_cmd(base_dir.rstrip("/\\"), os_type))
     _rsync_staged_dir(
-        vm_config,
+        env_handle,
         src=ref_src,
         dst=ref_dst,
         label="reference",
@@ -278,33 +288,8 @@ def stage_reference(
     return {"staged_dirs": ["reference"], "skipped": False}
 
 
-def stage_eval(
-    vm_config: EnvHandle,
-    task_data: TaskDataSpec,
-    os_type: str,
-) -> dict:
-    if not task_data.eval_gcs_prefix or not task_data.eval_dir:
-        return {"staged_dirs": [], "skipped": True}
-
-    _run_on_vm(vm_config, _mkdir_cmd(task_data.eval_dir, os_type))
-    _rsync_staged_dir(
-        vm_config,
-        src=task_data.eval_gcs_prefix,
-        dst=task_data.eval_dir,
-        label="eval",
-        os_type=os_type,
-    )
-    if os_type == "linux":
-        _run_on_vm(
-            vm_config,
-            f"find '{task_data.eval_dir}' -type f -exec chmod +x {{}} +",
-            timeout=60,
-        )
-    return {"staged_dirs": ["eval"], "skipped": False}
-
-
 def upload_output(
-    vm_config: EnvHandle,
+    env_handle: EnvHandle,
     task_data: TaskDataSpec,
     os_type: str,
     run_id: str,
@@ -318,37 +303,37 @@ def upload_output(
     task = task_data.task_name
     variant = task_data.variant_name
 
-    output_src = vm_subdir(os_type, domain, task, variant, "output")
+    output_src = env_subdir(os_type, domain, task, variant, "output")
     gcs_dst = f"{gcs_results_bucket.rstrip('/')}/{run_id}/output/"
 
     cmd = _gcs_cp_cmd(output_src, gcs_dst, os_type)
     logger.info("Uploading output: %s → %s", output_src, gcs_dst)
     try:
-        _run_on_vm(vm_config, cmd, timeout=600)
+        _run_on_env(env_handle, cmd, timeout=600)
         return {"uploaded": True, "gcs_path": gcs_dst}
     except RuntimeError as e:
         logger.warning("Output upload failed (best-effort): %s", e)
         return {"uploaded": False, "error": str(e)}
 
 
-def ensure_data_disk(vm_config: EnvHandle, os_type: str) -> None:
+def ensure_data_disk(env_handle: EnvHandle, os_type: str) -> None:
     if os_type == "windows":
-        _ensure_windows_data_disk(vm_config)
+        _ensure_windows_data_disk(env_handle)
     else:
-        _ensure_linux_data_disk(vm_config)
+        _ensure_linux_data_disk(env_handle)
 
 
 # ======================================================================
 # Windows display resolution (verbatim from simprun/runner.py:30-76)
 # ======================================================================
 #
-# Tasks that drive the GUI assume a known framebuffer size — GPU VMs get
-# 1920×1080, CPU VMs 1024×768. Linux VMs are skipped (X server picks its
+# Tasks that drive the GUI assume a known framebuffer size — GPU envs get
+# 1920×1080, CPU envs 1024×768. Linux envs are skipped (X server picks its
 # own size). Called from lifecycle Phase 1 once the CUA server is ready.
 
 _EXPECTED_RESOLUTION = {
-    True: (1920, 1080),   # GPU VMs
-    False: (1024, 768),   # CPU VMs
+    True: (1920, 1080),   # GPU envs
+    False: (1024, 768),   # CPU envs
 }
 
 _SET_RES_PY = """\
@@ -377,19 +362,19 @@ print("set_ok" if r == 0 else f"failed:{r}")
 """
 
 
-def set_windows_resolution(vm_config: EnvHandle, has_gpu: bool) -> None:
-    """Force the Windows VM's framebuffer to (1920,1080)/(1024,768).
+def set_windows_resolution(env_handle: EnvHandle, has_gpu: bool) -> None:
+    """Force the Windows env's framebuffer to (1920,1080)/(1024,768).
 
-    No-op on Linux VMs (the caller guards on os_type). Best-effort: a
+    No-op on Linux envs (the caller guards on os_type). Best-effort: a
     failure here is logged but doesn't fail the run — the tested agent
     may still solve the task at the default resolution.
     """
     target_w, target_h = _EXPECTED_RESOLUTION[has_gpu]
     remote_path = r"C:\Users\User\_set_resolution.py"
     try:
-        upload_file(vm_config, remote_path, _SET_RES_PY)
+        upload_file(env_handle, remote_path, _SET_RES_PY)
         result = run_remote(
-            vm_config,
+            env_handle,
             f'python "{remote_path}" {target_w} {target_h}',
             timeout=20,
         )
@@ -496,12 +481,12 @@ echo prepped
     return f"bash -lc {shlex.quote(script)}"
 
 
-def _ensure_linux_data_disk(vm_config: EnvHandle) -> None:
+def _ensure_linux_data_disk(env_handle: EnvHandle) -> None:
     """Format the attached empty data disk and mount it at /media/user/data."""
     import time as _time
 
     run_remote(
-        vm_config,
+        env_handle,
         "sudo udevadm settle --timeout=15 2>/dev/null || true",
         timeout=30,
     )
@@ -510,7 +495,7 @@ def _ensure_linux_data_disk(vm_config: EnvHandle) -> None:
 
     disk_device = None
     for attempt in range(5):
-        result = run_remote(vm_config, find_script, timeout=15)
+        result = run_remote(env_handle, find_script, timeout=15)
         disk_device = (result.stdout or "").strip()
         if disk_device:
             break
@@ -522,17 +507,17 @@ def _ensure_linux_data_disk(vm_config: EnvHandle) -> None:
 
     if not disk_device:
         diag = run_remote(
-            vm_config,
+            env_handle,
             "lsblk -o NAME,TYPE,SIZE,MOUNTPOINT,FSTYPE,PKNAME 2>/dev/null || true",
             timeout=15,
         )
         raise RuntimeError(
-            "No data disk device found on Linux VM after retries — "
+            "No data disk device found on Linux env after retries — "
             "expected an attached non-root block disk. "
             f"lsblk: {(diag.stdout or diag.stderr or '').strip()[:1000]}"
         )
 
-    prep = run_remote(vm_config, _linux_data_disk_prep_cmd(disk_device), timeout=60)
+    prep = run_remote(env_handle, _linux_data_disk_prep_cmd(disk_device), timeout=60)
     if "prepped" not in (prep.stdout or ""):
         raise RuntimeError(
             f"Failed to prepare {disk_device} for formatting: {prep.stderr or prep.stdout}"
@@ -541,7 +526,7 @@ def _ensure_linux_data_disk(vm_config: EnvHandle) -> None:
     last_err = ""
     for attempt in range(3):
         fmt = run_remote(
-            vm_config,
+            env_handle,
             f"sudo mkfs.ext4 -F -q {disk_device} && echo formatted",
             timeout=120,
         )
@@ -564,12 +549,12 @@ def _ensure_linux_data_disk(vm_config: EnvHandle) -> None:
         f"sudo chown user:user /media/user/data && "
         f"echo mounted"
     )
-    mnt = run_remote(vm_config, mount_cmd, timeout=30)
+    mnt = run_remote(env_handle, mount_cmd, timeout=30)
     if "mounted" not in (mnt.stdout or ""):
-        raise RuntimeError(f"Failed to mount {disk_device}: {mnt.stderr}")
+        raise MountFailureError(f"Failed to mount {disk_device}: {mnt.stderr}")
 
     run_remote(
-        vm_config,
+        env_handle,
         "mkdir -p /media/user/data/agenthle",
         timeout=15,
     )
@@ -580,10 +565,10 @@ def _ensure_linux_data_disk(vm_config: EnvHandle) -> None:
     )
 
 
-def _dismiss_format_dialog(vm_config: EnvHandle) -> None:
+def _dismiss_format_dialog(env_handle: EnvHandle) -> None:
     try:
         run_remote(
-            vm_config,
+            env_handle,
             'powershell -Command "Get-Process -Name explorer -ErrorAction SilentlyContinue | ForEach-Object {'
             "  $wshell = New-Object -ComObject WScript.Shell;"
             "  $null = $wshell.AppActivate('Format');"
@@ -596,11 +581,11 @@ def _dismiss_format_dialog(vm_config: EnvHandle) -> None:
         pass
 
 
-def _ensure_windows_data_disk(vm_config: EnvHandle) -> None:
-    _dismiss_format_dialog(vm_config)
+def _ensure_windows_data_disk(env_handle: EnvHandle) -> None:
+    _dismiss_format_dialog(env_handle)
 
     check = run_remote(
-        vm_config,
+        env_handle,
         "powershell -Command \"if (Test-Path 'E:\\') { echo ok } else { echo missing }\"",
         timeout=30,
     )
@@ -616,12 +601,12 @@ def _ensure_windows_data_disk(vm_config: EnvHandle) -> None:
         "else { echo no_offline_disk }"
         '"'
     )
-    result = run_remote(vm_config, online_script, timeout=60)
+    result = run_remote(env_handle, online_script, timeout=60)
     if result.returncode != 0:
-        raise RuntimeError(f"Failed to bring data disk online: {result.stderr}")
+        raise MountFailureError(f"Failed to bring data disk online: {result.stderr}")
 
     check2 = run_remote(
-        vm_config,
+        env_handle,
         "powershell -Command \"if (Test-Path 'E:\\') { echo ok } else { echo missing }\"",
         timeout=30,
     )
@@ -641,16 +626,16 @@ def _ensure_windows_data_disk(vm_config: EnvHandle) -> None:
         "} else { echo no_raw_disk }"
         '"'
     )
-    result = run_remote(vm_config, init_script, timeout=120)
+    result = run_remote(env_handle, init_script, timeout=120)
     if result.returncode != 0:
-        raise RuntimeError(f"Failed to initialize data disk: {result.stderr}")
+        raise MountFailureError(f"Failed to initialize data disk: {result.stderr}")
 
     check3 = run_remote(
-        vm_config,
+        env_handle,
         "powershell -Command \"if (Test-Path 'E:\\') { echo ok } else { echo missing }\"",
         timeout=30,
     )
     if "ok" not in (check3.stdout or ""):
-        raise RuntimeError("E: drive still not available after initialization")
+        raise MountFailureError("E: drive still not available after initialization")
     logger.info("E: drive initialized and available")
-    _dismiss_format_dialog(vm_config)
+    _dismiss_format_dialog(env_handle)

@@ -367,8 +367,6 @@ class TaskLoader:
             reference_dir=metadata.get("reference_dir"),
             reference_gcs_prefix=metadata.get("reference_gcs_prefix"),
             remote_output_dir=metadata.get("remote_output_dir"),
-            eval_gcs_prefix=metadata.get("eval_gcs_prefix"),
-            eval_dir=metadata.get("eval_dir"),
         )
 
     def get_setup_fn(self):

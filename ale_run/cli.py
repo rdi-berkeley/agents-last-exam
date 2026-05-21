@@ -10,7 +10,7 @@ from pathlib import Path
 import ale_run as ale
 from .orchastration import Runner
 from .orchastration.config_loader import load_experiment
-from .orchastration.spec import RunUnit
+from .orchastration.experiment_spec import RunUnit
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -4,9 +4,9 @@ The deployer code is in-process Python (think AleClaw's OpenClaw harness):
 ``run_command`` shells out via :mod:`asyncio.subprocess`; ``write_file`` /
 ``read_file`` are direct filesystem ops. ``work_dir`` is a host path.
 
-The eval VM is a SEPARATE remote machine from ``self.vm_endpoint`` — the
-deployer drives it via :meth:`make_vm_session` (host-side cua session).
-``run_command`` etc. do NOT touch the eval VM; they target the framework
+The eval env is a SEPARATE remote machine from ``self.endpoint`` — the
+deployer drives it via :meth:`make_session` (host-side cua session).
+``run_command`` etc. do NOT touch the eval env; they target the framework
 host.
 """
 from __future__ import annotations

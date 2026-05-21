@@ -7,7 +7,7 @@ process), :class:`DockerRuntime` (deployer runs in a host docker
 container — shell only at this point).
 
 The runtime is BOTH the per-unit context the deployer reads (work_dir,
-endpoint, vm_os, env, config) AND the dispatcher driving the deployer
+endpoint, env_os, env, config) AND the dispatcher driving the deployer
 (``install_deployer`` / ``launch_deployer``). The earlier ``VmExecutor``
 collapsed in — substrate-specific code lives on the runtime subclass.
 
@@ -16,8 +16,8 @@ Deployers reach into the substrate ONLY through this API surface:
   - :meth:`run_command` / :meth:`write_file` / :meth:`read_file` /
     :meth:`exists` / :meth:`mkdir` / :meth:`rm`
   - :meth:`fetch_url_to` (default uses curl on the substrate)
-  - :meth:`make_vm_session` (open a cua DesktopSession against the
-    eval VM — used by host-side harness deployers like AleClaw)
+  - :meth:`make_session` (open a cua DesktopSession against the
+    eval env — used by host-side harness deployers like AleClaw)
 
 Substrate-specific path conventions (cli_path, node_exe, ...) live on
 the concrete subclass.
@@ -52,7 +52,7 @@ class BaseRuntime(abc.ABC):
 
     work_dir: str
     """Substrate-native scratch dir the deployer owns for this run.
-    VM-side path for VmRuntime (may be Windows), host path for Local /
+    Remote-side path for VmRuntime (may be Windows), host path for Local /
     Docker. Always a string — wrap in :class:`Path` on the host side
     when needed."""
 
@@ -65,7 +65,7 @@ class BaseRuntime(abc.ABC):
     env_handle: EnvHandle
     """Provider's post-provision reference to the compute env this unit
     runs against. Always set — every benchmark target is a live env.
-    Local/Docker deployers reach it via :meth:`make_vm_session`; Vm
+    Local/Docker deployers reach it via :meth:`make_session`; Vm
     deployers reach it via the I/O methods on this runtime."""
 
     env: dict[str, str] = field(default_factory=dict)
@@ -80,12 +80,12 @@ class BaseRuntime(abc.ABC):
     # ======================================================================
 
     @property
-    def vm_endpoint(self) -> str:
+    def endpoint(self) -> str:
         """cua-server URL — alias of ``self.env_handle.endpoint``."""
         return self.env_handle.endpoint
 
     @property
-    def vm_os(self) -> str:
+    def env_os(self) -> str:
         """OS of the compute env — alias of ``self.env_handle.os``."""
         return self.env_handle.os
 
@@ -169,18 +169,18 @@ class BaseRuntime(abc.ABC):
             )
 
     # ======================================================================
-    # Eval VM session — used by host-side harness deployers (AleClaw)
-    # that drive the eval VM via cua's high-level API rather than raw HTTP.
+    # Eval session — used by host-side harness deployers (AleClaw)
+    # that drive the eval env via cua's high-level API rather than raw HTTP.
     # ======================================================================
 
-    async def make_vm_session(self) -> Any:
-        """Open a fresh cua DesktopSession against :attr:`vm_endpoint`."""
+    async def make_session(self) -> Any:
+        """Open a fresh cua DesktopSession against :attr:`endpoint`."""
         from cua_bench.computers.remote import RemoteDesktopSession
 
         session = RemoteDesktopSession(
-            api_url=self.vm_endpoint,
-            os_type=self.vm_os,
-            ephemeral=False,        # VM lifecycle is owned by ALEEnv
+            api_url=self.endpoint,
+            os_type=self.env_os,
+            ephemeral=False,        # env lifecycle is owned by ALEEnv
             headless=True,
         )
         await session.check_status()
@@ -209,6 +209,6 @@ class BaseRuntime(abc.ABC):
 
     def _is_linux(self) -> bool:
         """True when the substrate-local shell is Linux. Default: based on
-        vm_os. LocalRuntime / DockerRuntime override since they're host-OS
-        bound, not eval-VM-bound."""
-        return self.vm_os == "linux"
+        env_os. LocalRuntime / DockerRuntime override since they're host-OS
+        bound, not eval-env-bound."""
+        return self.env_os == "linux"

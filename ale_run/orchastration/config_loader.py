@@ -34,7 +34,7 @@ from typing import Any
 import yaml
 
 from .factory import AGENT_REGISTRY
-from .spec import (
+from .experiment_spec import (
     AgentSpec,
     ArtifactsSpec,
     ExperimentSpec,

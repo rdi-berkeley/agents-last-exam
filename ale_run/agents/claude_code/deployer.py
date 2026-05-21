@@ -94,7 +94,7 @@ class ClaudeCodeDeployer(PrebakedRemoteCliDeployer):
         # the exit code to done_marker at the end.
         await runtime.write_file(prompt_file, prompt)
 
-        if runtime.vm_os == "linux":
+        if runtime.env_os == "linux":
             runner_body = self._linux_runner(
                 cfg=cfg, wd=wd, claude_cmd=claude_cmd, prompt_file=prompt_file,
                 transcript_file=transcript_file, stderr_log=stderr_log,

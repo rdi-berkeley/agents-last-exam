@@ -1,6 +1,6 @@
-"""Recursive VM → host directory mirror.
+"""Recursive remote → host directory mirror.
 
-Used after the agent exits to pull ``work_dir_vm`` (deployer artifacts) into
+Used after the agent exits to pull ``remote_work_dir`` (deployer artifacts) into
 ``<run_dir>/origin_log/<agent_name>/``. Single transport: CUA HTTP via the
 ``environments.remote`` primitives. No GCS bridge, no incremental puller —
 those land in a later iteration.
@@ -27,7 +27,7 @@ _RETRY_BACKOFFS_S = (1.0, 3.0, 9.0)
 
 
 async def pull_dir(session: Any, *, src: str, dst: Path, os_type: str) -> dict:
-    """Pull ``src`` (on the VM) into ``dst`` (on the host).
+    """Pull ``src`` (on the remote env) into ``dst`` (on the host).
 
     Walks ``src`` via ``list_remote_dir`` then downloads each file via
     ``download_file`` with bounded retries. The session's underlying
@@ -39,7 +39,7 @@ async def pull_dir(session: Any, *, src: str, dst: Path, os_type: str) -> dict:
     if not api_host or not api_port:
         return {"transport": "cua", "files": 0, "error": "session has no api_host/api_port"}
 
-    vm_cfg = EnvHandle(
+    env_cfg = EnvHandle(
         id="",
         endpoint=f"http://{api_host}:{api_port}",
         os=os_type,
@@ -48,7 +48,7 @@ async def pull_dir(session: Any, *, src: str, dst: Path, os_type: str) -> dict:
     dst.mkdir(parents=True, exist_ok=True)
 
     try:
-        entries = await asyncio.to_thread(list_remote_dir, vm_cfg, src)
+        entries = await asyncio.to_thread(list_remote_dir, env_cfg, src)
     except Exception as e:
         logger.warning("list_remote_dir failed for %s: %s", src, e)
         return {"transport": "cua", "files": 0, "error": str(e)}
@@ -70,7 +70,7 @@ async def pull_dir(session: Any, *, src: str, dst: Path, os_type: str) -> dict:
 
         local.parent.mkdir(parents=True, exist_ok=True)
         remote_path = f"{src.rstrip(sep)}{sep}{rel.replace('/', sep)}"
-        ok = await _download_with_retry(vm_cfg, remote_path, local)
+        ok = await _download_with_retry(env_cfg, remote_path, local)
         if ok:
             file_count += 1
         else:
@@ -80,10 +80,10 @@ async def pull_dir(session: Any, *, src: str, dst: Path, os_type: str) -> dict:
     return {"transport": "cua", "files": file_count, "error": last_error}
 
 
-async def _download_with_retry(vm_cfg: EnvHandle, remote_path: str, local: Path) -> bool:
+async def _download_with_retry(env_cfg: EnvHandle, remote_path: str, local: Path) -> bool:
     for attempt in range(_PER_FILE_RETRIES):
         try:
-            ok = await asyncio.to_thread(download_file, vm_cfg, remote_path, str(local), 120)
+            ok = await asyncio.to_thread(download_file, env_cfg, remote_path, str(local), 120)
         except Exception as e:
             logger.debug("download_file raised for %s (attempt %d): %s", remote_path, attempt + 1, e)
             ok = False
