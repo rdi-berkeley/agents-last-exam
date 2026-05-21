@@ -139,7 +139,7 @@ class BaseRuntime(abc.ABC):
         return (await self.read_file(path)).decode("utf-8", errors="replace")
 
     # ======================================================================
-    # Optional — used by ``DownloadedRemoteCliDeployer``
+    # Optional — used by ``FetchingRemoteCliDeployer``
     # ======================================================================
 
     async def fetch_url_to(self, url: str, dst: str) -> None:

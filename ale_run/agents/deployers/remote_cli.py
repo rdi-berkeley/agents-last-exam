@@ -12,10 +12,9 @@ Three classes:
 * :class:`PrebakedRemoteCliDeployer` — install() verifies a baked-in
   binary at ``runtime.cli_path(<name>)``. Used by ClaudeCode.
 
-* :class:`DownloadedRemoteCliDeployer` — install() fetches the CLI into
+* :class:`FetchingRemoteCliDeployer` — install() fetches the CLI into
   the substrate from a small DSL (``"npm:<pkg>@<ver>"`` /
-  ``"pip:<pkg>"`` / ``"url:<url>"``). **Shell** — concrete dispatch is
-  left for the first caller.
+  ``"pip:<pkg>"`` / ``"url:<url>"``), then probes it.
 """
 from __future__ import annotations
 
@@ -239,7 +238,7 @@ class PrebakedRemoteCliDeployer(RemoteCliDeployer):
         return None
 
 
-class DownloadedRemoteCliDeployer(RemoteCliDeployer):
+class FetchingRemoteCliDeployer(RemoteCliDeployer):
     """Specialization for CLIs fetched into the substrate at install time
     (no pre-baking in the image).
 
@@ -259,7 +258,7 @@ class DownloadedRemoteCliDeployer(RemoteCliDeployer):
 
     Example::
 
-        class CodexDeployer(DownloadedRemoteCliDeployer):
+        class CodexDeployer(FetchingRemoteCliDeployer):
             install_spec = "npm:@openai/codex@1.2.3"
             cli_name = "codex"
 

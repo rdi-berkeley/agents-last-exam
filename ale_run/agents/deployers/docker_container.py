@@ -18,14 +18,14 @@ The axis here is "what is the agent's unit of distribution":
 
   - in-process Python module  → :class:`InProcessHostDeployer`
   - VM-baked CLI               → :class:`PrebakedRemoteCliDeployer`
-  - Fetched-into-VM CLI        → :class:`DownloadedRemoteCliDeployer`
+  - Fetched-into-VM CLI        → :class:`FetchingRemoteCliDeployer`
   - Pre-built docker image     → :class:`DockerContainerDeployer`  ← this
 
 The image is provisioned **outside** the deployer (CI build / registry
 pull on the operator's machine). ``install()`` confirms the image is
 present locally; it does NOT do ``docker pull`` — that would conflate
 fetching the agent with installing it (use
-:class:`DownloadedRemoteCliDeployer` if your agent is genuinely fetched
+:class:`FetchingRemoteCliDeployer` if your agent is genuinely fetched
 at install time; a self-shipped docker image is the operator's
 infrastructure concern).
 

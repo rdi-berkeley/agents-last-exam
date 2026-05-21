@@ -5,7 +5,7 @@ substrate**:
 
 * :class:`PrebakedRemoteCliDeployer` — agent CLI is already baked into
   the VM image. ``install`` just probes it. (ClaudeCode.)
-* :class:`DownloadedRemoteCliDeployer` — agent CLI is fetched into the
+* :class:`FetchingRemoteCliDeployer` — agent CLI is fetched into the
   substrate at install time via a small DSL (``npm:`` / ``pip:`` /
   ``url:``). ``install`` dispatches, then probes.
 * :class:`InProcessHostDeployer` — agent is a Python module imported by
@@ -24,14 +24,14 @@ from __future__ import annotations
 from .docker_container import DockerContainerDeployer
 from .in_process import InProcessHostDeployer
 from .remote_cli import (
-    DownloadedRemoteCliDeployer,
+    FetchingRemoteCliDeployer,
     PrebakedRemoteCliDeployer,
     RemoteCliDeployer,
 )
 
 __all__ = [
     "DockerContainerDeployer",
-    "DownloadedRemoteCliDeployer",
+    "FetchingRemoteCliDeployer",
     "InProcessHostDeployer",
     "PrebakedRemoteCliDeployer",
     "RemoteCliDeployer",

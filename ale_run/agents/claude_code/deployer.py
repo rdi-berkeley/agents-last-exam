@@ -13,7 +13,7 @@ Image assumptions:
 
 If the binary is missing, ``install()`` raises — rebuild the image or
 override :meth:`VmRuntime.cli_path` for the image, don't install at
-runtime here (use :class:`DownloadedRemoteCliDeployer` for that pattern).
+runtime here (use :class:`FetchingRemoteCliDeployer` for that pattern).
 """
 from __future__ import annotations
 

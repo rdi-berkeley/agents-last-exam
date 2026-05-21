@@ -173,7 +173,7 @@ class VmRuntime(BaseRuntime):
 
     async def upload_local_file(self, local_path: str, remote_path: str) -> None:
         """Convenience: upload a HOST-side file into the VM. Used by
-        ``DownloadedRemoteCliDeployer`` and any agent that stages binaries
+        ``FetchingRemoteCliDeployer`` and any agent that stages binaries
         from the framework host."""
         await asyncio.to_thread(
             upload_binary_file, self._vm_config(), local_path, remote_path,
