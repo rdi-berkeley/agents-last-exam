@@ -1,43 +1,21 @@
 """BaseAgentDeployer — the minimal contract every ALE agent implements.
 
-A deployer is **just code**: a few Python methods that get *placed* and
-*run* by the framework's runtime layer. Where they run (vm / local /
-docker) is a framework concern, expressed in yaml as ``runtime: <kind>``
-and validated against the deployer's ``supported_runtimes`` ClassVar.
-
-The deployer never receives an env, a session, or a substrate object.
-It receives ONE thing at construction: an :class:`AgentRuntime` (passive
-context — work_dir, vm_endpoint, vm_os, config). Methods are plain
-async functions that use ``self.runtime`` + Python stdlib (subprocess,
-pathlib, json) to do their work. Where ``self`` happens to live (VM
-Python, container Python, host Python) is decided by the framework's
-:class:`Executor` for the chosen runtime.
-
-Contract:
-
-  class BaseAgentDeployer(abc.ABC):
-      supported_runtimes: ClassVar[frozenset[str]]      # subclass must set
-
-      def __init__(self, runtime: AgentRuntime): ...    # framework calls
-      async def install(self) -> None: ...              # subclass implements
-      async def launch(self, prompt: str) -> AgentRunResult: ...
-      @classmethod
-      def parse_artifacts(cls, *, work_dir, config, run_result, builder) -> None: ...
-
-That's it. No ``collect``, no ``work_dir`` method, no ``mirror_artifacts``,
-no ``run(env)``. The framework owns env lifecycle (task setup + evaluate),
-runtime construction (where deployer lives), artifact gathering (work_dir
-→ host), and trajectory finalize. The deployer only owns: stage prereqs,
-launch the agent, parse its on-disk logs.
 """
 from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from ale_run.agents.trajectory import Trajectory, TrajectoryBuilder
+
+if TYPE_CHECKING:
+    # Avoid an import cycle: BaseRuntime's TYPE_CHECKING block already
+    # imports BaseAgentConfig + BaseAgentDeployer + AgentRunResult from
+    # this module. Keeping this side conditional too means neither side
+    # pays a runtime import; both type-check correctly.
+    from ale_run.environments.runtime import BaseRuntime
 
 
 
@@ -134,7 +112,7 @@ class BaseAgentDeployer(abc.ABC):
     Empty set is a programmer error caught at :func:`resolve_agent` time."""
 
     hot_artifacts: ClassVar[tuple[str, ...]] = ()
-    """Files (relative to :attr:`AgentRuntime.work_dir`) the framework
+    """Files (relative to :attr:`BaseRuntime.work_dir`) the framework
     should tail while the agent runs. Read by
     :class:`ale_run.orchastration.incremental_puller.IncrementalPuller`
     on vm-runtime: each path is fetched in deltas via the CUA range API
@@ -142,7 +120,7 @@ class BaseAgentDeployer(abc.ABC):
     Empty tuple (the default) disables incremental sync — the final
     one-shot ``gather.pull_dir`` at end of phase 2 still runs."""
 
-    def __init__(self, runtime: "AgentRuntime"):
+    def __init__(self, runtime: BaseRuntime):
         self.runtime = runtime
         self.config = runtime.config        # convenience alias
 
