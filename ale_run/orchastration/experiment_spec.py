@@ -57,20 +57,31 @@ class ProviderSpec:
 
 @dataclass
 class ArtifactsSpec:
-    """GCS bucket selection for the lifecycle's task-data staging.
+    """Artifact path config — yaml ``artifacts_path:`` block.
 
-    ``task_data_bucket`` is the GCS prefix the lifecycle's task-data staging
+    ``task_data_path`` is the GCS prefix the lifecycle's task-data staging
     helpers (``stage_input`` / ``stage_reference``) read from. Defaults to
     the public ``gs://ale-data-public`` mirror — override in yaml if you
     host task data in your own bucket.
 
-    ``results_bucket`` is the GCS prefix the env-output upload pushes to
-    after a run. There is no default; leave it ``None`` to skip the
-    upload, or set it in yaml to a bucket you own.
+    ``output_path`` controls what happens to the env's output dir after the
+    agent finishes. Tri-state:
+
+    * ``None`` (yaml ``null``) — skip output gather entirely. The agent's
+      output files stay on the VM and are lost on VM teardown. Smallest
+      footprint; the only signal that survives is the eval score.
+    * ``"local"`` — pull files from the VM straight to
+      ``<run_dir>/output/`` via cua HTTP (no GCS round-trip). Right for
+      dev / smoke / small outputs.
+    * ``"gs://<bucket>[/<prefix>]"`` — push from the VM to that GCS
+      bucket via ``gsutil`` (one hop, fast on large dirs). Nothing lands
+      on the host run dir in this mode. Right for large-scale batches
+      where you'll process outputs later out-of-band. Hard fail if GCS
+      push fails — no fallback in V1.
     """
 
-    task_data_bucket: str = "gs://ale-data-public"
-    results_bucket: str | None = None
+    task_data_path: str = "gs://ale-data-public"
+    output_path: str | None = None
 
 
 @dataclass

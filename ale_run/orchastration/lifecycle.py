@@ -416,22 +416,18 @@ async def run_one_unit(
                     "origin_log_gather_skipped",
                     reason=f"runtime={runtime.kind} writes to host directly",
                 )
-            writer.emit_event(
-                "output_gather_skipped",
-                reason="not_implemented_yet",
-                checked_keys=["remote_output_dir", "output_path", "runtime_output_dir"],
-            )
-
             # ============================================================
-            # Phase 3 — upload env output → GCS, stage reference, evaluate
+            # Phase 3 — gather env output, stage reference, evaluate
             # ============================================================
-            # 3a. UPLOADING_OUTPUT (simprun runner.py:_phase3_evaluate first half)
-            #     Push the env's output dir to GCS so it's preserved across
-            #     env teardown. Best-effort: failure logs a warning but
-            #     doesn't fail the run (eval still runs on the live env).
-            await _upload_output_best_effort(
+            # 3a. OUTPUT HANDLING — dispatch on artifacts_path.output_path:
+            #     null       → skip (output stays on VM, lost on teardown)
+            #     "local"    → cua-direct pull → <run_dir>/output/
+            #     "gs://..." → vm-side gsutil push → user bucket
+            #     Best-effort: failure logs + emits event but doesn't abort.
+            await _handle_output_best_effort(
                 env=env, provider=provider, artifacts=artifacts, task_meta=task_meta,
                 run_id=writer.run_id, task_id=unit.task_path, writer=writer,
+                run_dir=writer.run_dir,
             )
 
             # 3b. STAGING_EVAL (simprun runner.py:_phase3_evaluate second half)
@@ -764,7 +760,7 @@ async def _monitor_rate_limits(
             return
 
 
-async def _upload_output_best_effort(
+async def _handle_output_best_effort(
     *,
     env: ALEEnv,
     provider: Provider,
@@ -773,21 +769,68 @@ async def _upload_output_best_effort(
     run_id: str,
     task_id: str,
     writer,
+    run_dir: Path,
 ) -> None:
-    """Push the env's task output dir to GCS (simprun parity).
+    """Phase 3a output dispatcher.
 
-    Mirrors simprun runner.py:_phase3_evaluate phase ``output_upload``.
-    Best-effort: failure logs + emits an event but does NOT abort the
-    run — the live env still has the output for the eval that follows.
+    Reads :attr:`ArtifactsSpec.output_path` and routes the env's output
+    dir to one of three destinations:
+
+      None         → emit ``output_gather_skipped`` reason=unconfigured
+      ``"local"``  → pull via cua HTTP → ``<run_dir>/output/``
+      ``"gs://X"`` → push from VM to ``X/<run_id>/output/`` via gsutil
+
+    Best-effort throughout: any failure emits an event + logs a warning
+    but never aborts the run (eval still runs on the live env regardless).
     """
     task_data = task_meta.get("task_data")
     if task_data is None or not task_data.requires_task_data:
+        writer.emit_event("output_gather_skipped", reason="task_requires_no_data")
         return
     from ..environments import data_staging
 
+    output_path = artifacts.output_path if artifacts is not None else None
+
+    if output_path is None:
+        writer.emit_event("output_gather_skipped", reason="output_path_unconfigured")
+        return
+
+    if output_path == "local":
+        dest_dir = run_dir / "output"
+        try:
+            report = await asyncio.to_thread(
+                data_staging.download_output,
+                env.handle, task_data, env.handle.os,
+                dest_dir=dest_dir,
+            )
+            if report.get("skipped"):
+                writer.emit_event(
+                    "output_gather_skipped",
+                    reason=report.get("reason", "unknown"),
+                )
+            else:
+                writer.emit_event(
+                    "output_gather_done",
+                    transport="cua",
+                    vm_path=report.get("vm_path"),
+                    files=report.get("files"),
+                    bytes=report.get("bytes"),
+                    errors=len(report.get("errors") or []),
+                )
+        except Exception as e:
+            logger.warning("download_output failed (best-effort): %s", e)
+            writer.emit_event("output_gather_failed", transport="cua", error=str(e))
+        return
+
+    # gs:// case
     bucket = _results_bucket_for(artifacts)
     if not bucket:
-        writer.emit_event("output_upload_skipped", reason="results_bucket_unconfigured")
+        # output_path was a non-gs:// string we didn't recognise — loader
+        # validates this, so reaching here would mean a fresh state.
+        writer.emit_event(
+            "output_gather_skipped",
+            reason=f"output_path_unrecognised:{output_path!r}",
+        )
         return
     try:
         report = await asyncio.to_thread(
@@ -796,15 +839,20 @@ async def _upload_output_best_effort(
             gcs_results_bucket=bucket,
         )
         if report.get("uploaded"):
-            writer.emit_event("output_uploaded", gcs_path=report.get("gcs_path"))
+            writer.emit_event(
+                "output_gather_done",
+                transport="gcs",
+                gcs_path=report.get("gcs_path"),
+            )
         else:
             writer.emit_event(
-                "output_upload_skipped",
-                reason=report.get("error", "no_task_data") or "no_task_data",
+                "output_gather_skipped",
+                reason=report.get("error", "unknown"),
+                transport="gcs",
             )
     except Exception as e:
         logger.warning("upload_output failed (best-effort): %s", e)
-        writer.emit_event("output_upload_failed", error=str(e))
+        writer.emit_event("output_gather_failed", transport="gcs", error=str(e))
 
 
 async def _stage_reference_best_effort(
@@ -942,24 +990,29 @@ async def _stage_task_data(
 def _stage_bucket_for(artifacts: ArtifactsSpec | None) -> str:
     """GCS bucket for task-data staging (input + reference).
 
-    Driven by :attr:`ArtifactsSpec.task_data_bucket`; defaults to the
+    Driven by :attr:`ArtifactsSpec.task_data_path`; defaults to the
     public ``gs://ale-data-public`` mirror when no ArtifactsSpec is
     provided (e.g. tests that build a unit ad-hoc).
     """
     if artifacts is None:
-        return ArtifactsSpec().task_data_bucket
-    return artifacts.task_data_bucket
+        return ArtifactsSpec().task_data_path
+    return artifacts.task_data_path
 
 
 def _results_bucket_for(artifacts: ArtifactsSpec | None) -> str | None:
-    """GCS bucket for env output upload (simprun's ``GCS_RESULTS_BUCKET``).
+    """GCS bucket for env output upload (``gs://...`` mode only).
 
-    Driven by :attr:`ArtifactsSpec.results_bucket`. Returns ``None`` when
-    unconfigured — the caller skips the upload in that case.
+    Returns the bucket path when :attr:`ArtifactsSpec.output_path` is a
+    ``gs://...`` literal. Returns ``None`` for the other two states
+    (``None`` = skip, ``"local"`` = pull via cua) — those paths are
+    handled separately in :func:`_handle_output_best_effort`.
     """
     if artifacts is None:
         return None
-    return artifacts.results_bucket
+    op = artifacts.output_path
+    if op and op.startswith("gs://"):
+        return op
+    return None
 
 
 def _build_run_meta(

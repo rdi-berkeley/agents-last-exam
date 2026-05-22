@@ -54,7 +54,7 @@ _TOP_LEVEL_KEYS = frozenset({
     "name", "secret_file", "agent", "agents", "environment", "tasks",
     "run_profile",
     # run-level fields (also accepted inline at the top, override run_profile):
-    "output", "artifacts",
+    "output", "artifacts_path",
     "concurrency",
     "cleanup_mode",
 })
@@ -202,7 +202,7 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
         effective = dict(raw)
 
     output = _build_output(effective.get("output") or {})
-    artifacts = _build_artifacts(effective.get("artifacts") or {})
+    artifacts = _build_artifacts(effective.get("artifacts_path") or {})
     concurrency = _build_concurrency(effective)
     cleanup_mode = _build_cleanup_mode(effective)
 
@@ -265,11 +265,23 @@ def _build_cleanup_mode(eff: dict[str, Any]) -> str:
     return raw
 
 
+_VALID_OUTPUT_PATH_LITERALS = frozenset({"local"})
+
+
 def _build_artifacts(raw: dict[str, Any]) -> ArtifactsSpec:
     defaults = ArtifactsSpec()
+    output_path = raw.get("output_path")
+    if output_path is not None:
+        op = str(output_path).strip()
+        if op and op not in _VALID_OUTPUT_PATH_LITERALS and not op.startswith("gs://"):
+            raise ValueError(
+                f"artifacts_path.output_path must be null, 'local', or a "
+                f"'gs://...' bucket path; got {output_path!r}"
+            )
+        output_path = op or None
     return ArtifactsSpec(
-        task_data_bucket=raw.get("task_data_bucket") or defaults.task_data_bucket,
-        results_bucket=raw.get("results_bucket") or None,
+        task_data_path=raw.get("task_data_path") or defaults.task_data_path,
+        output_path=output_path,
     )
 
 
