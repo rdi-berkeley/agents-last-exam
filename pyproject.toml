@@ -35,7 +35,7 @@ dev = [
 # Plain `uv sync` only installs root deps (cua-bench / pydantic / etc.)
 # and skips every agent's deps. There's no "default install all members"
 # uv setting; it's an explicit flag.
-members = ["ale_run/agents/*"]
+members = ["ale_run/agents/*", "tasks"]
 exclude = [
     "ale_run/agents/_assets",   # vendored MCP server JS, not a Python package
     "ale_run/agents/deployers", # shared deployer base classes, not an agent
