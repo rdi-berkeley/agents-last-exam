@@ -14,7 +14,7 @@ import shlex
 from pathlib import Path
 
 from .images import gcs_task_prefix, env_subdir
-from .remote import run_remote, upload_file
+from .remote import download_file, list_remote_dir, run_remote, upload_file
 from ..base_interface import EnvHandle, TaskDataSpec
 
 logger = logging.getLogger(__name__)
@@ -304,9 +304,13 @@ def upload_output(
     variant = task_data.variant_name
 
     output_src = env_subdir(os_type, domain, task, variant, "output")
-    gcs_dst = f"{gcs_results_bucket.rstrip('/')}/{run_id}/output/"
+    # cp -r preserves the trailing src dir name (``output``) under the dst
+    # prefix — so dst itself must NOT also end in ``output/`` or we'd land
+    # at ``<run_id>/output/output/<files>``.
+    gcs_run_prefix = f"{gcs_results_bucket.rstrip('/')}/{run_id}/"
+    gcs_dst = f"{gcs_run_prefix}output/"
 
-    cmd = _gcs_cp_cmd(output_src, gcs_dst, os_type)
+    cmd = _gcs_cp_cmd(output_src, gcs_run_prefix, os_type)
     logger.info("Uploading output: %s → %s", output_src, gcs_dst)
     try:
         _run_on_env(env_handle, cmd, timeout=600)
@@ -314,6 +318,77 @@ def upload_output(
     except RuntimeError as e:
         logger.warning("Output upload failed (best-effort): %s", e)
         return {"uploaded": False, "error": str(e)}
+
+
+def download_output(
+    env_handle: EnvHandle,
+    task_data: TaskDataSpec,
+    os_type: str,
+    *,
+    dest_dir: Path,
+) -> dict:
+    """Pull the env's output dir from the VM directly via cua HTTP.
+
+    No GCS round-trip — used when ``artifacts_path.output_path == "local"``.
+    Walks the VM-side output_dir recursively, downloads each regular file
+    to ``dest_dir / <relpath>``. Returns ``{"transport": "cua", "files": N,
+    "bytes": B, "errors": [...]}`` or ``{"skipped": True, ...}``.
+
+    Best-effort per file: a single file that fails to read leaves a
+    ``.unreadable`` sidecar but doesn't abort the whole gather. The
+    overall call only raises if listing the dir itself fails (i.e. no
+    output to gather at all).
+    """
+    if not task_data.requires_task_data:
+        return {"skipped": True, "reason": "task_requires_no_data"}
+
+    domain = task_data.domain_name
+    task = task_data.task_name
+    variant = task_data.variant_name
+    output_src = env_subdir(os_type, domain, task, variant, "output")
+
+    entries = list_remote_dir(env_handle, output_src, timeout=60)
+    if not entries:
+        return {"skipped": True, "reason": "empty_or_missing", "vm_path": output_src}
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    sep = "/" if os_type == "linux" else "\\"
+    files = 0
+    total_bytes = 0
+    errors: list[dict[str, str]] = []
+    for entry in entries:
+        rel = entry["relpath"]
+        if entry.get("is_dir"):
+            (dest_dir / rel.replace("\\", "/")).mkdir(parents=True, exist_ok=True)
+            continue
+        remote_path = f"{output_src.rstrip(sep)}{sep}{rel}"
+        local_path = dest_dir / rel.replace("\\", "/")
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        ok = download_file(env_handle, remote_path, str(local_path), timeout=120)
+        if ok:
+            files += 1
+            try:
+                total_bytes += local_path.stat().st_size
+            except OSError:
+                pass
+        else:
+            errors.append({"vm_path": remote_path, "error": "download_file_failed"})
+            marker = local_path.with_suffix(local_path.suffix + ".unreadable")
+            marker.write_text(
+                f"vm_path={remote_path}\nreason=download_file_failed\n"
+            )
+
+    logger.info(
+        "download_output: %s → %s (files=%d bytes=%d errors=%d)",
+        output_src, dest_dir, files, total_bytes, len(errors),
+    )
+    return {
+        "transport": "cua",
+        "vm_path": output_src,
+        "files": files,
+        "bytes": total_bytes,
+        "errors": errors,
+    }
 
 
 def ensure_data_disk(env_handle: EnvHandle, os_type: str) -> None:

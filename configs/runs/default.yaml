@@ -14,12 +14,21 @@ output:
 # 1 = sequential (safe debug default).
 concurrency: 1
 
-# GCS bucket selection for task-data staging and env-output upload.
-artifacts:
-  # Task-data staging bucket (input/, software/, reference/). Default points
-  # at the public mirror; override if you host your own task-data bucket.
-  task_data_bucket: gs://ale-data-public
-  # Per-run env output upload (legacy GCS_RESULTS_BUCKET). No default — set
-  # this to a bucket you own (e.g. gs://my-team-ale-results) or leave null
-  # to skip the upload entirely.
-  results_bucket: null
+# Artifact paths — controls how task data reaches the VM and where the
+# agent's output goes after the run.
+artifacts_path:
+  # GCS prefix the lifecycle reads task data from (input/, software/,
+  # reference/). Defaults to the public mirror; override if you host your
+  # own task-data bucket.
+  task_data_path: gs://ale-data-public
+
+  # What to do with the env's output dir after the agent finishes:
+  #   null              — skip; output stays on the VM and is lost on teardown.
+  #   "local"           — pull files to <run_dir>/output/ via cua HTTP
+  #                       (no GCS round-trip). Right for dev / smoke / small
+  #                       outputs; expect O(per-file) HTTP RPC.
+  #   "gs://<bucket>"   — VM-side gsutil push to that bucket; nothing lands
+  #                       on the host run dir. Right for large-scale batches
+  #                       where outputs get processed out-of-band. Hard fail
+  #                       on GCS error (no cua fallback in v1).
+  output_path: gs://ale-run-results
