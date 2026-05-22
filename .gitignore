@@ -26,6 +26,7 @@ experiments/
 
 # Per-session working notes / planning docs — not part of the public repo.
 docs/sessions/
+docs/dev
 
 # Secrets — checked-in template lives at secret/.env.example.
 # `.env` matches at any depth, so it also covers `secret/.env`.
