@@ -1,0 +1,108 @@
+{
+  "taskId": "life_sciences/protein_function_annotation_instance_1",
+  "title": "Protein Function Annotation With InterProScan",
+  "summary": "Annotate one staged yeast protein with InterProScan, export the required InterPro and GO TSV files, and write a short gamma-tubulin functional summary.",
+  "category": "life_sciences",
+  "software": [
+    "InterProScan",
+    "Python",
+    "bash"
+  ],
+  "taskPrompt": "You are working on a Linux VM to annotate one staged protein with InterProScan.\n\n## Visible Task Directory\n- `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base`\n\n## Visible Inputs\n- Protein FASTA: `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/input/protein_sequence.fasta`\n- Organism name: `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/input/organism_name.txt`\n- InterProScan install script: `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/software/install_software.sh`\n- InterProScan wrapper: `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/software/interproscan.sh`\n- InterPro2GO mapping file: `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/software/interpro2go`\n- GO namespace lookup: `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/software/go_namespace_lookup.tsv`\n\n## Your Task\n1. Install InterProScan by running `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/software/install_software.sh`. This downloads and sets up InterProScan 5.77-108.0 (~15 GB download, requires Java 11 which is already available). The script is idempotent and will skip if already installed.\n2. Run the staged InterProScan 5.77-108.0 wrapper on `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/input/protein_sequence.fasta`.\n3. Create `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/output/interpro_domains.tsv` with exactly these columns:\n   `sequence_id,interpro_accession,interpro_name,start,end,e_value`\n4. Retain exactly one row per non-empty InterPro accession. If multiple InterProScan rows map to the same accession, merge them into one retained row by using the minimum `start`, the maximum `end`, the shared `interpro_name` for that accession, and the smallest numeric score as `e_value`. If an accession has no numeric score in its retained rows, write `0.00`.\n5. Sort the retained domain rows by `start` ascending, then by `interpro_accession` ascending.\n6. Round every retained `e_value` to 2 decimal places.\n7. Map the retained InterPro accessions to GO terms using `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/software/interpro2go`, use `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/software/go_namespace_lookup.tsv` to fill `go_namespace`, and write `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/output/go_terms.tsv` with exactly these columns:\n   `go_id,go_name,go_namespace,source_interpro_accession`\n8. Remove exact duplicate GO rows.\n9. Write `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/output/functional_summary.txt` as a concise 1-2 sentence summary consistent with the retained domains and GO terms.\n\n## Important Requirements\n- The summary must include gamma-tubulin family identity plus microtubule nucleation and minus-end initiation or equivalent wording.\n- Write only these three files under `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/output`.\n- Do not modify files under `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/input` or `/home/user/Desktop/life_sciences/protein_function_annotation_instance_1/base/software`.\n- Do not read or modify hidden evaluator-owned directories.\n",
+  "agentMustDo": [
+    "Run the install script to install InterProScan 5.77-108.0 before scanning.",
+    "Run the staged InterProScan wrapper on the visible FASTA input.",
+    "Write `interpro_domains.tsv` with the exact required columns, one retained row per non-empty InterPro accession, merged spans for repeated accessions, and 2-decimal `e_value` formatting.",
+    "Map the retained InterPro accessions to GO terms with the staged `interpro2go` file and write `go_terms.tsv`.",
+    "Remove exact duplicate GO rows before saving the GO table.",
+    "Write a 1-2 sentence gamma-tubulin functional summary under `output/`.",
+    "Do not write extra files into `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "protein_sequence.fasta",
+      "format": "FASTA",
+      "path": "input/protein_sequence.fasta",
+      "description": "Single staged query protein sequence to annotate"
+    },
+    {
+      "name": "organism_name.txt",
+      "format": "TXT",
+      "path": "input/organism_name.txt",
+      "description": "Visible organism context for the staged protein"
+    },
+    {
+      "name": "install_software.sh",
+      "format": "shell script",
+      "path": "software/install_software.sh",
+      "description": "Idempotent installer for InterProScan 5.77-108.0 (~15 GB download, requires Java 11)"
+    },
+    {
+      "name": "interproscan.sh",
+      "format": "shell wrapper",
+      "path": "software/interproscan.sh",
+      "description": "Visible wrapper around the verified InterProScan 5.77-108.0 install"
+    },
+    {
+      "name": "interpro2go",
+      "format": "mapping text",
+      "path": "software/interpro2go",
+      "description": "Visible InterPro2GO mapping file aligned to the staged InterPro release"
+    },
+    {
+      "name": "go_namespace_lookup.tsv",
+      "format": "TSV",
+      "path": "software/go_namespace_lookup.tsv",
+      "description": "Visible GO namespace lookup for the staged GO ids"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "interpro_domains.tsv",
+      "format": "TSV",
+      "path": "output/interpro_domains.tsv",
+      "description": "Required InterPro domain table"
+    },
+    {
+      "name": "go_terms.tsv",
+      "format": "TSV",
+      "path": "output/go_terms.tsv",
+      "description": "Required GO term table"
+    },
+    {
+      "name": "functional_summary.txt",
+      "format": "TXT",
+      "path": "output/functional_summary.txt",
+      "description": "Required 1-2 sentence functional summary"
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- any required output file is missing\n- either TSV uses the wrong header columns or header order\n- `interpro_domains.tsv` is empty, unsorted, or contains an `e_value` that is not already formatted with exactly two decimal places\n- `go_terms.tsv` is empty or contains exact duplicate rows\n- `functional_summary.txt` is empty\n- `output/` contains extra files beyond the three required deliverables\n\n**Scoring method**\n1. Read the candidate outputs from the VM.\n2. Compare `interpro_domains.tsv` against the hidden reference after strict schema validation and exact normalized row comparison.\n3. Compare `go_terms.tsv` against the hidden reference after strict schema validation and exact normalized row comparison.\n4. Check `functional_summary.txt` deterministically for 1-2 sentence length plus gamma-tubulin identity, nucleation, minus-end-initiation, and localization concepts.\n5. Return binary score `1.0` only when all checks pass; otherwise return `0.0`.\n\n**What does a PERFECT output look like?**\nA three-file output directory whose TSVs match the hidden benchmark outputs after the strict contract checks and whose summary preserves the required gamma-tubulin functional concepts.\n\n**What does a WRONG/empty output look like?**\nMissing files, wrong TSV headers, unsorted or badly formatted domain rows, duplicate GO rows, extra output artifacts, or a generic summary that omits the required gamma-tubulin concepts.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.2",
+    "subdomain_code": "genomics",
+    "subdomain_name": "Genomics & Sequence Analysis",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:13.271450Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/protein_function_annotation_instance_1/task_card.json"
+      },
+      "rationale": "The task involves protein function annotation, which is a key aspect of genomics and sequence analysis."
+    }
+  }
+}

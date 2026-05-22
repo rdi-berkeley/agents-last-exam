@@ -1,0 +1,96 @@
+{
+  "taskId": "life_sciences/hg002_chr22_germline_variant_pipeline",
+  "title": "HG002 Chr22 Germline Variant Pipeline",
+  "summary": "Repair a staged chr22 germline variant-calling workflow for HG002 and produce the required filtered variants, annotation outputs, and QC artifacts.",
+  "category": "life_sciences",
+  "software": [
+    "Nextflow",
+    "nf-core/sarek",
+    "BWA-MEM2",
+    "GATK",
+    "VEP",
+    "MultiQC"
+  ],
+  "taskPrompt": "You are working on a Linux germline-variant-calling task.\n\nVisible solve-time input root:\n- `/media/user/data/agenthle/life_sciences/hg002_chr22_germline_variant_pipeline/base/input/starter_project`\n\nYour job is to repair the starter workflow and write a completed `submission/`\ntree under:\n- `/media/user/data/agenthle/life_sciences/hg002_chr22_germline_variant_pipeline/base/output/submission`\n\nInside the visible starter project you have:\n- paired-end reads under `fastq/`\n- the chr22 reference FASTA and known-sites inputs under `reference/`\n- the chr22 confident BED under `truth/`\n- VEP resources under `vep_cache/`\n- intentionally broken `samplesheet.csv`, `nextflow.config`, and `run_vep.sh`\n\nWrite these required artifacts under `/media/user/data/agenthle/life_sciences/hg002_chr22_germline_variant_pipeline/base/output/submission`:\n- `pipeline/samplesheet.csv`\n- `pipeline/nextflow.config`\n- `pipeline/known_sites_chr22/dbsnp_138.chr22.vcf.gz` and `.tbi`\n- `pipeline/known_sites_chr22/Mills_and_1000G_gold_standard.indels.chr22.vcf.gz` and `.tbi`\n- `results/variants/HG002.filtered.vcf.gz` and `.tbi`\n- `results/annotation/HG002.filtered.annotated.vcf.gz` and `.tbi`\n- `results/reports/multiqc_report.html`\n- `results/reports/multiqc_data/multiqc_general_stats.txt`\n- `results/reports/multiqc_data/multiqc_software_versions.txt`\n- `results/qc/qc_summary.json`\n- `DECISIONS.md`\n\nRequirements:\n1. Correct the samplesheet so it is valid for the HG002 chr22 run.\n2. Rename the Mills contigs to `chr22` and re-index the corrected file.\n3. Rebuild the missing `bwa-mem2` index.\n4. Tune the workflow config for the available host.\n5. Produce a hard-filtered chr22 VCF and a VEP-annotated VCF.\n6. Aggregate QC into MultiQC and report at least `alignment_rate`,\n   `dup_rate`, and `mean_coverage_chr22` in `results/qc/qc_summary.json`.\n7. Explain any filtering choices in `DECISIONS.md` with concrete numeric values.\n\nRules:\n- Treat `/media/user/data/agenthle/life_sciences/hg002_chr22_germline_variant_pipeline/base/input` plus any intended visible `software/` entry points as\n  the solve-time surface.\n- Do not modify files under `input/`, `reference/`, `output_test_pos/`, or\n  `output_test_neg/`.\n- Write solver-created files only under `/media/user/data/agenthle/life_sciences/hg002_chr22_germline_variant_pipeline/base/output`.\n- Hidden benchmarking against evaluator-side truth happens after you finish.\n",
+  "agentMustDo": [
+    "Read the staged HG002 chr22 starter workflow under `input/starter_project/`.",
+    "Repair the broken samplesheet, Nextflow config, known-sites naming, and `run_vep.sh` assumptions.",
+    "Rebuild the missing `bwa-mem2` index and run the chr22 calling workflow.",
+    "Write the required filtered VCF, annotated VCF, QC outputs, and `DECISIONS.md` into `output/submission/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "starter_project/fastq/",
+      "format": "gzipped FASTQ pair",
+      "path": "input/starter_project/fastq/",
+      "description": "Paired-end HG002 chr22 reads for the germline calling run."
+    },
+    {
+      "name": "starter_project/reference/",
+      "format": "FASTA, BED, and bgzipped VCF inputs",
+      "path": "input/starter_project/reference/",
+      "description": "Chr22 reference FASTA, calling intervals, and known-sites inputs used by the workflow."
+    },
+    {
+      "name": "starter_project/vep_cache/",
+      "format": "GTF and bgzipped VCF resources",
+      "path": "input/starter_project/vep_cache/",
+      "description": "Visible annotation resources used to produce the annotated chr22 VCF."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "HG002.filtered.vcf.gz",
+      "format": "bgzipped VCF",
+      "path": "output/submission/results/variants/HG002.filtered.vcf.gz",
+      "description": "Primary filtered chr22 variant callset."
+    },
+    {
+      "name": "HG002.filtered.annotated.vcf.gz",
+      "format": "bgzipped VCF",
+      "path": "output/submission/results/annotation/HG002.filtered.annotated.vcf.gz",
+      "description": "VEP-annotated chr22 variant callset."
+    },
+    {
+      "name": "qc_summary.json",
+      "format": "JSON",
+      "path": "output/submission/results/qc/qc_summary.json",
+      "description": "QC summary containing at least alignment rate, duplicate rate, and mean chr22 coverage."
+    },
+    {
+      "name": "DECISIONS.md",
+      "format": "Markdown",
+      "path": "output/submission/DECISIONS.md",
+      "description": "Required run notes explaining filter choices with numeric citations."
+    }
+  ],
+  "evaluation": "The evaluator downloads the submitted files and scores them locally against hidden truth. Hard gates require a valid `qc_summary.json`, a non-empty `pipeline/nextflow.config`, and at least 10,000 chr22 PASS variants. The scorer recomputes SNP F1, INDEL F1, and SNP Ti/Tv from the submitted filtered VCF, then checks coverage, duplicate rate, samplesheet correctness, known-sites normalization, annotation coverage, MultiQC completeness, and numeric citations in `DECISIONS.md`. The common positive replay result is `[1.0]`; the staged negative replay result is `[0.05]`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.2",
+    "subdomain_code": "genomics",
+    "subdomain_name": "Genomics & Sequence Analysis",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:09.387072Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/hg002_chr22_germline_variant_pipeline/task_card.json"
+      },
+      "rationale": "The task involves germline variant calling and analysis in genomics."
+    }
+  }
+}

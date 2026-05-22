@@ -1,0 +1,164 @@
+{
+  "taskId": "life_sciences/merfish_image_decoding_segmentation_1",
+  "title": "Single-FOV MERFISH Image Decoding And Cell Segmentation",
+  "summary": "Run the full MERFISH image-analysis pipeline on one field of view of U2OS cells: decode transcripts against a 130-gene MHD4 codebook, segment nuclei from the DAPI tile, assign transcripts to cells, and emit a cell-by-gene count matrix plus quality metrics.",
+  "category": "life_sciences",
+  "software": [
+    "Python",
+    "uv",
+    "starfish",
+    "Cellpose",
+    "PyTorch"
+  ],
+  "taskPrompt": "You are working on an Ubuntu VM to run the full MERFISH image-analysis pipeline\nfor one field of view of a human U2OS cell population stained against a\n130-gene panel.\n\nTask directory:\n- `/media/user/data/agenthle/life_sciences/merfish_image_decoding_segmentation_1/base`\n\nInputs (all under `/media/user/data/agenthle/life_sciences/merfish_image_decoding_segmentation_1/base/input`; treat as read-only):\n- `experiment.json` plus `primary_images.json`, `nuclei.json` and the per-FOV\n  manifests `primary_images-fov_000.json` / `nuclei-fov_000.json`. These\n  describe a starfish Experiment with one FOV, 8 hybridization rounds, and\n  2 color channels.\n- 16 primary fluorescence TIFFs\n  `primary_images-fov_000-Z0-H<h>-C<c>.tiff` (h in 0..7, c in 0..1); each is\n  2048x2048.\n- 1 DAPI nuclear stain TIFF `nuclei-fov_000-Z0-H0-C0.tiff`.\n- `codebook.json` mapping 130 target genes and 10 Blank controls to 16-bit\n  MHD4 (Hamming-distance-4 with 1-bit error correction) binary codewords.\n- `experiment.json` `extras.scale_factors` gives per-(round, channel)\n  normalization scalars.\n- `output_contract.json` lists the exact output files, columns, and dtypes\n  your pipeline must produce.\n- `runtime_env/pyproject.toml`, `runtime_env/uv.lock`, and\n  `runtime_env/python-version` pin the Python 3.11 environment that\n  starfish 0.3.4 and Cellpose 3.1.1 need. The canonical agent-facing entry\n  point `/media/user/data/agenthle/life_sciences/merfish_image_decoding_segmentation_1/base/software/merfish_runtime.sh`\n  behaves like a Python interpreter, keeps its `uv` cache and resolved\n  environment under `/media/user/data/agenthle/life_sciences/merfish_image_decoding_segmentation_1/base/output`,\n  and uses `runtime_env/pyproject.toml` (with the staged `uv.lock`) as the\n  frozen runtime manifest. You can invoke it directly\n  (`software/merfish_runtime.sh your_script.py`) or materialize the env\n  yourself with `uv sync --frozen --project input/runtime_env` and then run\n  the resulting `.venv/bin/python`.\n\nRecommended workflow:\n1. Load the starfish Experiment and sanity-check the image and codebook.\n2. Preprocess: high-pass filter or background-subtract, normalize intensity\n   using the provided `scale_factors`, and confirm the pre-registered tiles\n   are still aligned.\n3. Run starfish BlobDetector on each round/channel and extract 16-bit\n   intensity traces per spot.\n4. Decode with an MHD4-aware decoder (starfish `CheckAll`) with 1-bit error\n   correction; filter by magnitude and distance thresholds.\n5. Run Cellpose on the DAPI image with a pretrained nuclei model and a\n   diameter appropriate for U2OS (roughly 30-50 px).\n6. Assign decoded transcripts to the nearest segmented cell; mark transcripts\n   outside every cell as extracellular and exclude them from the\n   cell-by-gene matrix.\n7. Build the cell-by-gene count matrix for the 130 real genes (exclude\n   blanks) and compute the quality metrics listed in `output_contract.json`.\n\nOutputs must go into `/media/user/data/agenthle/life_sciences/merfish_image_decoding_segmentation_1/base/output`:\n- `decoded_transcripts.csv` with columns `gene, x, y, is_exact, total_magnitude`.\n- `segmentation.tiff` - 2048x2048 `uint16` labeled mask (background=0).\n- `cell_by_gene.csv` - leading `cell_id` column followed by the 130 real genes\n  in codebook order; integer counts.\n- `quality_metrics.json` - scalar keys `total_decoded_transcripts`,\n  `blank_rate`, `exact_match_fraction`, `n_cells`, `assigned_fraction`,\n  `mean_transcripts_per_cell`.\n\nAll coordinates (`x`, `y`) in `decoded_transcripts.csv` must be pixel\ncoordinates within the 2048x2048 FOV so they line up with the segmentation\nmask.",
+  "agentMustDo": [
+    "Invoke the canonical Python entry point `software/merfish_runtime.sh` (or materialize the env with `uv sync --frozen --project input/runtime_env/`).",
+    "Load the staged starfish experiment (16 primary TIFFs + 1 DAPI TIFF + manifests + codebook) and sanity-check alignment.",
+    "Preprocess images: high-pass / background subtract, apply per-(round, channel) `scale_factors`, confirm registration.",
+    "Detect fluorescent spots with starfish `BlobDetector` and decode with the MHD4-aware `CheckAll` decoder plus 1-bit error correction.",
+    "Segment nuclei from the DAPI tile using Cellpose 3.1.1 with the `nuclei` model and a diameter around 30-50 px for U2OS cells.",
+    "Assign decoded transcripts to the nearest labeled cell and mark out-of-cell transcripts as extracellular.",
+    "Emit `decoded_transcripts.csv`, `segmentation.tiff`, `cell_by_gene.csv`, and `quality_metrics.json` under `output/` in pixel coordinates."
+  ],
+  "inputFiles": [
+    {
+      "name": "Starfish experiment manifest",
+      "format": "json",
+      "path": "input/experiment.json",
+      "description": "Top-level starfish Experiment v5.0.0 manifest with per-(round, channel) `scale_factors`."
+    },
+    {
+      "name": "MHD4 codebook",
+      "format": "json",
+      "path": "input/codebook.json",
+      "description": "140 targets (130 real genes + 10 `Blank-*` controls) with 16-bit MHD4 codewords."
+    },
+    {
+      "name": "Primary images manifest",
+      "format": "json",
+      "path": "input/primary_images.json",
+      "description": "Starfish top-level primary-images manifest trimmed to `fov_000` only."
+    },
+    {
+      "name": "Nuclei images manifest",
+      "format": "json",
+      "path": "input/nuclei.json",
+      "description": "Starfish top-level nuclei manifest trimmed to `fov_000` only."
+    },
+    {
+      "name": "Primary FOV tile manifest",
+      "format": "json",
+      "path": "input/primary_images-fov_000.json",
+      "description": "Per-FOV manifest enumerating 16 primary tiles for (round 0-7, channel 0-1)."
+    },
+    {
+      "name": "Nuclei FOV tile manifest",
+      "format": "json",
+      "path": "input/nuclei-fov_000.json",
+      "description": "Per-FOV manifest for the single DAPI tile."
+    },
+    {
+      "name": "Primary fluorescence tiles",
+      "format": "tiff",
+      "path": "input/primary_images-fov_000-Z0-H<h>-C<c>.tiff",
+      "description": "16 pre-registered 2048x2048 tiles (h in 0..7, c in 0..1) to decode against the codebook."
+    },
+    {
+      "name": "DAPI nuclear stain tile",
+      "format": "tiff",
+      "path": "input/nuclei-fov_000-Z0-H0-C0.tiff",
+      "description": "Single 2048x2048 DAPI image used to segment nuclei."
+    },
+    {
+      "name": "Task brief",
+      "format": "txt",
+      "path": "input/task_description.txt",
+      "description": "Evaluator-safe solve-time brief (no thresholds, no gold reference)."
+    },
+    {
+      "name": "Output contract",
+      "format": "json",
+      "path": "input/output_contract.json",
+      "description": "Required output paths, columns, and dtypes; no per-gene expected counts."
+    },
+    {
+      "name": "Runtime dependency manifest",
+      "format": "toml",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Pinned dependencies (`starfish==0.3.4`, `cellpose==3.1.1`, `torch`, NumPy/SciPy/pandas/scikit-image) for `uv sync --frozen`."
+    },
+    {
+      "name": "Runtime dependency lockfile",
+      "format": "toml",
+      "path": "input/runtime_env/uv.lock",
+      "description": "Resolved uv lockfile (87 packages against Python 3.11) consumed by `uv sync --frozen` and the `software/merfish_runtime.sh` wrapper."
+    },
+    {
+      "name": "Python version pin",
+      "format": "text",
+      "path": "input/runtime_env/python-version",
+      "description": "Python version pin (`3.11`) consumed by `uv`."
+    },
+    {
+      "name": "Canonical Python entry point",
+      "format": "bash",
+      "path": "software/merfish_runtime.sh",
+      "description": "Wrapper that behaves like a Python interpreter; forwards args to `uv run --frozen --project input/runtime_env/pyproject.toml python \"$@\"` with the agent-scoped uv env under `output/.agent_runtime_env/`."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Decoded transcripts",
+      "format": "csv",
+      "path": "output/decoded_transcripts.csv",
+      "description": "Columns `gene, x, y, is_exact, total_magnitude`; one row per threshold-filtered decoded spot in pixel coordinates."
+    },
+    {
+      "name": "Cell segmentation mask",
+      "format": "tiff",
+      "path": "output/segmentation.tiff",
+      "description": "2048x2048 `uint16` labeled mask with background=0 and contiguous positive cell labels."
+    },
+    {
+      "name": "Cell-by-gene count matrix",
+      "format": "csv",
+      "path": "output/cell_by_gene.csv",
+      "description": "Leading `cell_id` column followed by the 130 real genes in codebook order; integer counts."
+    },
+    {
+      "name": "Quality metrics",
+      "format": "json",
+      "path": "output/quality_metrics.json",
+      "description": "Scalar keys `total_decoded_transcripts`, `blank_rate`, `exact_match_fraction`, `n_cells`, `assigned_fraction`, `mean_transcripts_per_cell`."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- Missing any of the four required output files.\n- `decoded_transcripts.csv` unreadable, missing any of `gene, x, y, is_exact, total_magnitude`, or having zero rows.\n- `segmentation.tiff` not an integer-dtype `(2048, 2048)` array.\n- `cell_by_gene.csv` columns not `['cell_id', *130 real genes in codebook order]`.\n- `quality_metrics.json` missing any of the six required scalar keys.\n\n**Decoding credit gate**: if per-gene count Pearson `r < 0.50`, all decoding-derived credit (Pearson + total-count + blank-rate + spatial, combined weight `0.65`) is zeroed to prevent random-label submissions from earning partial credit on total count alone.\n\n**Weighted scoring** (sum clipped to `[0.0, 1.0]`):\n- Pearson per-gene correlation: `0.30` (full at `r >= 0.90`, half at `r in [0.70, 0.90)`, `0.06` at `r in [0.50, 0.70)`).\n- Total-count plausibility: `0.10` full credit when `|total - 42,212| / 42,212 <= 0.20`.\n- Blank-rate gate: `0.10` full credit at `blank_rate <= 0.05`, half credit at `blank_rate in (0.05, 0.07]`.\n- Spatial concordance: `0.15` full credit when at least `80%` of decoded transcripts match a reference transcript of the same gene within 3 px, half at `[60%, 80%)`.\n- Segmented cell count: `0.10` full credit when `50 <= n_cells <= 500`.\n- Assigned fraction: `0.10` full credit when cell count is in range and `assigned_fraction >= 0.50`.\n- Mean transcripts per cell: `0.05` full credit when cell count is in range and `50 <= mean_transcripts_per_cell <= 1000`.\n- Matrix consistency: `0.10` full credit when `cell_by_gene.csv` has exactly `n_cells` rows and column sums tie out to the assigned-transcript counts.\n\n**Current fixture expectations**\n- Positive fixture: `1.0`\n- Negative fixture: `0.0` (random gene labels fail the decoding credit gate; empty segmentation fails structural gates)\n",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.3",
+    "subdomain_code": "cell_imaging",
+    "subdomain_name": "Cell & Imaging Biology",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:11.259711Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/merfish_image_decoding_segmentation_1/task_card.json"
+      },
+      "rationale": "The task involves image analysis and decoding in a biological context, specifically related to cell imaging."
+    }
+  }
+}

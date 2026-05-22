@@ -1,0 +1,65 @@
+{
+  "id": "engineering/mpc_control_building_v1",
+  "taskId": "engineering/mpc_control_building_v1",
+  "title": "MPC Control In Building",
+  "summary": "Develop and evaluate baseline, energy-saving MPC, and demand-response MPC cooling control for a single-family EnergyPlus house model.",
+  "category": "engineering",
+  "domain": "engineering",
+  "task_name": "mpc_control_building_v1",
+  "variant": "base",
+  "os": "linux",
+  "software": [
+    "EnergyPlus 22.1.0",
+    "Python",
+    "uv",
+    "pandas",
+    "numpy",
+    "scipy",
+    "cvxpy"
+  ],
+  "inputs": [
+    "SFH.idf",
+    "Denver_current_TMY.epw",
+    "task_spec.json",
+    "runtime_env/pyproject.toml"
+  ],
+  "outputs": [
+    "baseline_data.csv",
+    "mpc_energy_saving_data.csv",
+    "mpc_demand_response_data.csv",
+    "mpc_actions_energy_saving.csv",
+    "mpc_actions_demand_response.csv",
+    "rc_log_energy_saving.json",
+    "rc_log_demand_response.json",
+    "metrics_comparison.csv",
+    "results_summary.json"
+  ],
+  "evaluation": "Recomputes July 28 metrics from submitted time-series data, checks baseline against the deterministic reference, verifies reported metrics for consistency, and scores MPC cost reduction, on-peak load reduction, comfort, and RC-model calibration quality.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.6",
+    "subdomain_code": "energy_power",
+    "subdomain_name": "Energy, Power & Nuclear Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:35:24.832236Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/mpc_control_building_v1/task_card.json"
+      },
+      "rationale": "The task involves energy-saving control strategies for building cooling systems."
+    }
+  }
+}

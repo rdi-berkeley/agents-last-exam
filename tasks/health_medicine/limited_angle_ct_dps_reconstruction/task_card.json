@@ -1,0 +1,89 @@
+{
+  "taskId": "health_medicine/limited_angle_ct_dps_reconstruction",
+  "title": "Limited-Angle CT Reconstruction With DPS",
+  "summary": "Reconstruct a 512x512 fan-beam CT attenuation image from a 90-degree limited-angle sinogram using Diffusion Posterior Sampling or a compatible diffusion-prior reconstruction method.",
+  "category": "health_medicine",
+  "software": [
+    "Python",
+    "NumPy",
+    "PyTorch",
+    "leaptorch",
+    "diffusers"
+  ],
+  "taskPrompt": "You are working on a Linux VM.\n\n## Task Directory\n`/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base`\n\n## Visible Inputs\n- Limited-angle sinogram: `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/input/sinogram.npy`\n- Geometry spec: `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/input/geometry.json`\n- Diffusion model card: `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/input/model_card.md`\n- Pretrained checkpoint: `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/input/ddpm_CT.pth`\n- Detailed instructions: `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/input/task_instructions.md`\n- Optional runtime manifest: `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/input/runtime_env/pyproject.toml` and `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/input/runtime_env/uv.lock`\n\n## Helper Scripts\n- Runtime bootstrap: `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/software/bootstrap_runtime.sh`\n- Runtime Python entry point: `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/software/python_with_runtime.sh`\n\n## Your Task\nReconstruct a 512x512 attenuation image from the staged limited-angle fan-beam CT sinogram using Diffusion Posterior Sampling (DPS) or a compatible DPS-style method.\n\nThe intended workflow is:\n1. Read `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/input/task_instructions.md`, `model_card.md`, and `geometry.json`.\n2. Build the task-local runtime once with `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/software/bootstrap_runtime.sh`.\n3. Use `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/software/python_with_runtime.sh` for your Python runs after the bootstrap succeeds.\n4. Load the limited-angle sinogram and configure the LEAP fan-beam geometry from `geometry.json`.\n5. Load the DDPM checkpoint according to the architecture and scheduler in `model_card.md`.\n6. Run a DPS-style reconstruction that combines the CT forward model with the diffusion prior.\n7. Save only the final attenuation-domain reconstruction to:\n   `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/output/reconstruction.npy`\n\n## Output Contract\n- The file must be NumPy `.npy` data readable by `numpy.load`.\n- The array must have shape `(512, 512)`.\n- The array must be numeric and correspond to attenuation values in the original image domain.\n\n## Evaluation Contract\nYour reconstruction is judged by central-crop image quality.\nThe binary pass condition is:\n- `PSNR >= 32.0 dB`\n- `SSIM >= 0.90`\n- both computed with `data_range = 0.04`\n\n## Constraints\n- Do not modify files under `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/input`.\n- Write your final answer only under `/media/user/data/agenthle/health_medicine/limited_angle_ct_dps_reconstruction/base/output`.\n- Do not use the internet or any external model weights beyond the staged checkpoint.\n\n## Visibility Note\nThe benchmark harness exposes only the staged `input/`, `software/`, and the designated writable output directory during solve time. Other evaluator-controlled staged assets may exist in the canonical admin package but are not part of the solve-time surface.",
+  "agentMustDo": [
+    "Inspect the limited-angle sinogram, fan-beam geometry, task instructions, and DDPM model card.",
+    "Build and use the task-local Python runtime through the staged `software/` wrappers.",
+    "Use the staged checkpoint and CT geometry to run DPS or a compatible diffusion-prior reconstruction.",
+    "Save a single numeric `(512, 512)` attenuation-domain NumPy array to `output/reconstruction.npy`."
+  ],
+  "inputFiles": [
+    {
+      "name": "sinogram.npy",
+      "format": "npy",
+      "path": "input/sinogram.npy",
+      "description": "Limited-angle fan-beam CT sinogram with shape `(720, 1024)`."
+    },
+    {
+      "name": "geometry.json",
+      "format": "json",
+      "path": "input/geometry.json",
+      "description": "Fan-beam scanner geometry and scenario metadata; the task uses the `limited_angle` scenario."
+    },
+    {
+      "name": "model_card.md",
+      "format": "md",
+      "path": "input/model_card.md",
+      "description": "DDPM architecture, normalization, scheduler, and checkpoint-loading contract."
+    },
+    {
+      "name": "ddpm_CT.pth",
+      "format": "pth",
+      "path": "input/ddpm_CT.pth",
+      "description": "Staged PyTorch DDPM checkpoint."
+    },
+    {
+      "name": "runtime_env",
+      "format": "pyproject.toml + uv.lock",
+      "path": "input/runtime_env/",
+      "description": "Pinned task-local runtime manifest for the agent-installed Python overlay."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "reconstruction.npy",
+      "format": "npy",
+      "path": "output/reconstruction.npy",
+      "description": "Required final attenuation-domain reconstruction produced by the agent."
+    }
+  ],
+  "evaluation": "The evaluator loads `output/reconstruction.npy`, requires a numeric finite `(512, 512)` array, and computes central `480x480` crop image-quality metrics with `data_range = 0.04`. The task is binary pass/fail: PSNR must be at least `32.0 dB` and SSIM must be at least `0.90`; malformed or missing outputs score `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-16",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.1",
+    "subdomain_code": "clinical_diagnostics",
+    "subdomain_name": "Clinical Diagnostics & Imaging",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:04:09.266828Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/limited_angle_ct_dps_reconstruction/task_card.json"
+      },
+      "rationale": "The task involves reconstructing medical imaging data, specifically CT images, which falls under clinical diagnostics."
+    }
+  }
+}

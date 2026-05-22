@@ -1,0 +1,62 @@
+{
+  "taskId": "physical_sciences/ketcher_smiles_reproduction",
+  "title": "Ketcher SMILES Reproduction",
+  "summary": "Recreate the target molecule in Ketcher from a staged structure image and export the result as a SMILES file.",
+  "category": "physical_sciences",
+  "software": [
+    "Ketcher"
+  ],
+  "taskPrompt": "You are a chemistry researcher reproducing a molecular structure in Ketcher.\n\n## Your Task\nRecreate molecule **7YY** from the provided SVG image and export it as a SMILES file.\n\n## Input Files\n- Molecule structure image: `C:\\Users\\User\\Desktop\\physical_sciences\\ketcher_smiles_reproduction\\7yy\\input\\structure.svg`\n\n## Software\n- Launch Ketcher from: `C:\\Users\\User\\Desktop\\physical_sciences\\ketcher_smiles_reproduction\\7yy\\software\\Ketcher.lnk`\n- The shortcut opens the verified Ketcher web app URL:\n  `https://lifescience.opensource.epam.com/ketcher/`\n\n## What You Must Do\n1. Open Ketcher from the shortcut in `software/`\n2. Reproduce the molecular structure shown in `C:\\Users\\User\\Desktop\\physical_sciences\\ketcher_smiles_reproduction\\7yy\\input\\structure.svg`\n3. Preserve the intended bonding and ring connectivity\n4. Export the result as a SMILES file\n5. Save the exported file exactly to:\n   `C:\\Users\\User\\Desktop\\physical_sciences\\ketcher_smiles_reproduction\\7yy\\output\\submission.smi`\n\n## Output Requirements\n- Output format must be `.smi`\n- The file must contain exactly one non-comment SMILES entry\n- Do not save screenshots, extra files, or alternate molecule versions\n- The exported molecule must preserve the intended chemical identity of the SVG structure",
+  "agentMustDo": [
+    "Open the task-local Ketcher shortcut from `software/`.",
+    "Inspect the source molecule drawing in `input/structure.svg`.",
+    "Recreate the molecule in Ketcher while preserving atom identities, bond orders, and ring connectivity.",
+    "Export a single-entry SMILES file.",
+    "Save the exported file exactly to `output/submission.smi`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Molecule structure image",
+      "format": "`.svg`",
+      "path": "input/structure.svg",
+      "description": "Reference drawing for molecule 7YY"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Exported molecule",
+      "format": "`.smi`",
+      "path": "output/submission.smi",
+      "description": "Must contain exactly one non-comment SMILES entry"
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- Output file missing\n- Output path does not end with `.smi`\n- Output file contains zero or multiple non-comment SMILES entries\n- Output SMILES cannot be parsed by RDKit\n\n**Scoring method:**\nCompute RDKit Morgan fingerprints with `radius=2` and `nBits=2048` for the agent output and the hidden reference, then compute Tanimoto similarity.\n\n- `score = 1.0` if similarity `>= 0.95`\n- `score = 0.0` otherwise\n\n- **Where does the main scoring logic run?** The evaluation orchestration runs locally in `main.py`.\n- **If any scoring step runs on the VM, why is that exception necessary?** The actual RDKit-based file comparison runs on the VM because the benchmark artifacts are staged there, and the verifier is designed to read the Windows-side output/reference files directly after setup.\n\n**What does a PERFECT output look like?**\nA valid single-entry `.smi` file whose molecule reaches Tanimoto similarity at or above `0.95` against the hidden reference structure.\n\n**What does a WRONG/empty output look like?**\nMissing file, invalid `.smi`, multi-entry `.smi`, unparsable molecule, or a chemically different structure whose similarity is below `0.95`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "2",
+    "domain_code": "physical_sciences",
+    "subdomain_id": "2.2",
+    "subdomain_code": "chemistry_materials",
+    "subdomain_name": "Chemistry & Materials Computation",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:05:07.720956Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/physical_sciences/ketcher_smiles_reproduction/task_card.json"
+      },
+      "rationale": "The task involves reproducing a molecular structure, which is a core aspect of chemistry."
+    }
+  }
+}

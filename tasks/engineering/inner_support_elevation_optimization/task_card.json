@@ -1,0 +1,109 @@
+{
+  "taskId": "engineering/inner_support_elevation_optimization",
+  "title": "Inner Support Elevation Optimization",
+  "summary": "Use PLAXIS 3D to compare five inner support elevations for a staged pit-in-pit excavation and report settlement and lateral displacement outcomes with the required engineering deliverables.",
+  "category": "engineering",
+  "software": [
+    "PLAXIS 3D 2023.2"
+  ],
+  "taskPrompt": "You are a geotechnical engineer using PLAXIS 3D 2023.2 on Windows.\n\n## Your Task\nEvaluate how the inner support elevation changes settlement and lateral wall movement for the staged A-zone pit-in-pit excavation benchmark.\n\n## Input Files\n- Benchmark model specification: `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\benchmark_model_spec_en.md`\n- Engineering assumptions: `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\engineering_assumptions_en.md`\n- Structural materials reference: `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\A_zone_structural_materials_en.md`\n- Task-specific brief and formulas: `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\task_specific_brief_en.md`\n- Figure index: `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\figure_index_en.md`\n- Answer template: `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\answer_template.json`\n- Reference figures:\n  - `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\figure_2_1_project_site_plan.png`\n  - `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\figure_2_3_excavation_zone_plan.png`\n  - `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\figure_2_4_2_5_support_layout_and_section.png`\n  - `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\figure_2_6_monitoring_layout.png`\n  - `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\figure_3_1_plaxis_model_geometry.png`\n  - `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\figure_3_2_mesh_layout.png`\n\n## Software\n- Launch PLAXIS 3D Input from: `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\software\\launch_plaxis_3d_input.bat`\n- Launch PLAXIS 3D Output from: `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\software\\launch_plaxis_3d_output.bat`\n- Launch PLAXIS 3D Output Viewer from: `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\software\\launch_plaxis_3d_output_viewer.bat`\n\n## What You Must Do\n1. Review the staged benchmark specification, assumptions, figures, and answer template.\n2. Build or duplicate the PLAXIS 3D case family for the tested support elevations `0 m`, `1 m`, `2 m`, `3 m`, and `4 m`.\n3. Run the staged calculations through the final excavation state for each case.\n4. Extract maximum settlement and maximum outer-wall lateral displacement for each case.\n5. Save one or more native PLAXIS project files using the filename prefix:\n   `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\output\\model_family_support_position`\n6. Save the structured summary table exactly to:\n   `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\output\\case_summary.csv`\n7. Save the required images exactly to:\n   `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\output\\pos_0m_output_view.png`\n   `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\output\\pos_2m_output_view.png`\n   `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\output\\pos_4m_output_view.png`\n   `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\output\\settlement_vs_support_position.png`\n   `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\output\\lateral_disp_vs_support_position.png`\n8. Save the engineering memo exactly to:\n   `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\output\\support_position_engineering_memo.md`\n9. Save the final machine-readable answer exactly to:\n   `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\output\\answer.json`\n\n## Output Requirements\n- `answer.json` must use the exact schema from `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\input\\answer_template.json`\n- Report settlement and displacement as positive magnitudes in millimeters\n- Keep all work products inside `E:\\agenthle\\engineering\\inner_support_elevation_optimization\\base\\output`\n- Do not modify files under `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`\n",
+  "agentMustDo": [
+    "Review the staged benchmark specification, engineering assumptions, figures, and answer template.",
+    "Build or duplicate the five PLAXIS 3D support-elevation cases for `0 m`, `1 m`, `2 m`, `3 m`, and `4 m`.",
+    "Run the calculations through the final excavation state and extract maximum settlement plus maximum outer-wall lateral displacement for each case.",
+    "Write the required PLAXIS project files, `case_summary.csv`, screenshots/plots, engineering memo, and final `answer.json` into `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "benchmark_model_spec_en.md",
+      "format": "md",
+      "path": "input/benchmark_model_spec_en.md",
+      "description": "Full staged excavation benchmark specification for the A-zone pit-in-pit model."
+    },
+    {
+      "name": "engineering_assumptions_en.md",
+      "format": "md",
+      "path": "input/engineering_assumptions_en.md",
+      "description": "Modeling assumptions and interpretation rules for the PLAXIS study."
+    },
+    {
+      "name": "A_zone_structural_materials_en.md",
+      "format": "md",
+      "path": "input/A_zone_structural_materials_en.md",
+      "description": "Structural and material properties required to rebuild the case family."
+    },
+    {
+      "name": "task_specific_brief_en.md",
+      "format": "md",
+      "path": "input/task_specific_brief_en.md",
+      "description": "Task-specific formulas, reporting instructions, and expected engineering outputs."
+    },
+    {
+      "name": "figure_index_en.md",
+      "format": "md",
+      "path": "input/figure_index_en.md",
+      "description": "Index of the staged reference figures used to reconstruct the model and reporting views."
+    },
+    {
+      "name": "answer_template.json",
+      "format": "json",
+      "path": "input/answer_template.json",
+      "description": "Exact machine-readable output schema the agent must fill in."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "answer.json",
+      "format": "json",
+      "path": "output/answer.json",
+      "description": "Final structured engineering answer covering all five support positions plus the best-position selections."
+    },
+    {
+      "name": "case_summary.csv",
+      "format": "csv",
+      "path": "output/case_summary.csv",
+      "description": "Per-case table containing support position, maximum settlement, and maximum lateral displacement."
+    },
+    {
+      "name": "support_position_engineering_memo.md",
+      "format": "md",
+      "path": "output/support_position_engineering_memo.md",
+      "description": "Short engineering memo that explains the observed support-elevation tradeoffs."
+    },
+    {
+      "name": "model_family_support_position*",
+      "format": "project",
+      "path": "output/model_family_support_position*",
+      "description": "One or more native PLAXIS project files saved with the required filename prefix."
+    }
+  ],
+  "evaluation": "- Hard-fail conditions: missing `answer.json`, invalid answer schema, missing required named artifacts, or missing PLAXIS project files with the required prefix.\n- Base rubric: schema validity, evidence-file presence and naming, project-save presence, screenshot/plot presence, CSV parseability, and memo presence contribute the first half of the score.\n- Numeric rubric: 14 answer fields are compared against hidden engineering ground truth.\n- Tolerances: settlement/displacement fields use `max(0.30 mm, 5% relative error)`; percentage fields use `max(0.30 percentage points, 8% relative error)`; best-position fields must match exactly.\n- Expected positive fixture score: `1.0`.\n- Expected realistic negative fixture score: below `1.0`; the committed negative fixture scores `0.5` because it preserves the artifact set while failing the numeric engineering checks.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.3",
+    "subdomain_code": "civil_geo",
+    "subdomain_name": "Civil, Architectural & Geospatial Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:05:28.979768Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/inner_support_elevation_optimization/task_card.json"
+      },
+      "rationale": "The task involves geotechnical engineering and excavation analysis."
+    }
+  }
+}

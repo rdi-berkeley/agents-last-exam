@@ -1,0 +1,92 @@
+{
+  "taskId": "physical_sciences/climate_prediction",
+  "title": "CMIP6 Climate Emulation Pipeline",
+  "summary": "Build an end-to-end climate-emulation pipeline from a staged CMIP6-derived Zarr store and predict the held-out SSP245 test window for temperature and precipitation fields.",
+  "category": "physical_sciences",
+  "software": [
+    "Python",
+    "xarray",
+    "numpy",
+    "pandas",
+    "PyTorch"
+  ],
+  "taskPrompt": "You are a climate scientist building an end-to-end climate-emulation pipeline on Linux.\n\n## Your Task\n\nBuild a climate-emulation pipeline from a staged CMIP6-derived Zarr store and predict the held-out SSP245 test window.\n\n1. Bootstrap the Python runtime: `bash <software_dir>/bootstrap_runtime.sh`\n2. Open the staged Zarr store at `<input_dir>/data.zarr/` with cftime-aware decoding.\n3. Build training tensors from scenarios `ssp126`, `ssp370`, and `ssp585` across all months.\n4. Build test inputs from the last 120 months of `ssp245`.\n5. Use `member_id = 0` for target tensors.\n6. Broadcast scalar forcings (`CO2`, `CH4`) to the `(48, 72)` spatial grid.\n7. Rename `latitude`/`longitude` dimensions to `y`/`x` for spatial inputs.\n8. Fit normalization on the training split only.\n9. Train any benchmark-safe open-source model or baseline.\n10. Write the required output files under `<output_dir>/` exactly as described by `<input_dir>/output_contract.json`.\n\n## Input Files\n\n- Zarr store: `<input_dir>/data.zarr/`\n- Metadata: `<input_dir>/metadata.json`\n- Output contract: `<input_dir>/output_contract.json`\n- Starter guide: `<input_dir>/Starter.md`\n- Runtime manifest: `<input_dir>/runtime_env/`\n\n## Runtime\n\n- Bootstrap deps: `bash <software_dir>/bootstrap_runtime.sh`\n- Run Python with deps: `<software_dir>/python_with_task_deps.sh your_script.py`\n\n## Output\n\nSave all required files under `<output_dir>/`:\n- `processed/train_inputs.npy`, `processed/train_outputs.npy`, `processed/test_inputs.npy`\n- `processed/metadata.json`, `processed/test_predictions.npy`\n- `submissions/kaggle_submission.csv`\n\nThe visible `data.zarr` intentionally masks the held-out `ssp245` test-window target labels (`tas`, `pr`) as NaN. Use the training split to learn a predictor.",
+  "agentMustDo": [
+    "1. Bootstrap the staged Python runtime via `software/bootstrap_runtime.sh`",
+    "2. Open the masked CMIP6-derived `data.zarr` with cftime-aware decoding",
+    "3. Build training tensors from `ssp126`, `ssp370`, `ssp585` and test inputs from last 120 months of `ssp245`",
+    "4. Use `member_id = 0` for targets; broadcast scalar forcings; normalize dimension names",
+    "5. Fit normalization on training split only and train a climate-emulation model",
+    "6. Produce predictions for the held-out SSP245 test window",
+    "7. Serialize outputs: `.npy` arrays, `metadata.json`, and Kaggle-style CSV"
+  ],
+  "inputFiles": [
+    {
+      "name": "data.zarr",
+      "format": "zarr",
+      "path": "input/data.zarr/",
+      "description": "Benchmark-safe CMIP6-derived Zarr store with held-out SSP245 test-window targets masked to NaN"
+    },
+    {
+      "name": "metadata.json",
+      "format": "json",
+      "path": "input/metadata.json",
+      "description": "Dataset shapes, coordinates, and normalization summary"
+    },
+    {
+      "name": "output_contract.json",
+      "format": "json",
+      "path": "input/output_contract.json",
+      "description": "Specifies required output file names, shapes, and formats"
+    },
+    {
+      "name": "Starter.md",
+      "format": "markdown",
+      "path": "input/Starter.md",
+      "description": "Step-by-step starter guide for the pipeline"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "test_predictions.npy",
+      "format": "npy",
+      "path": "output/processed/test_predictions.npy",
+      "description": "Predicted temperature and precipitation fields for the held-out SSP245 window"
+    },
+    {
+      "name": "kaggle_submission.csv",
+      "format": "csv",
+      "path": "output/submissions/kaggle_submission.csv",
+      "description": "Kaggle-style flattened prediction CSV with 829,440 rows"
+    }
+  ],
+  "evaluation": "The evaluator checks six required output files for existence and structural validity, then computes per-variable RMSE against hidden reference targets and prediction skill relative to a train-mean climatology baseline.\n\n**Score breakdown (0.0 to 1.0):**\n- CSV validity: 0.05\n- `tas` monthly RMSE threshold: 0.10\n- `tas` mean-map RMSE threshold: 0.10\n- `pr` monthly RMSE threshold: 0.10\n- `pr` mean-map RMSE threshold: 0.10\n- Prediction skill (1 - pred_rmse/clim_rmse): up to 0.55\n\n**Hard-fail conditions:** missing required files, wrong array shapes.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "2",
+    "domain_code": "physical_sciences",
+    "subdomain_id": "2.4",
+    "subdomain_code": "earth_atmo",
+    "subdomain_name": "Earth & Atmospheric Sciences",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:19:21.157122Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/physical_sciences/climate_prediction/task_card.json"
+      },
+      "rationale": "The task involves building a climate-emulation pipeline related to Earth and Atmospheric Sciences."
+    }
+  }
+}

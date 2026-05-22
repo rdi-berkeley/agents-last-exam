@@ -1,0 +1,69 @@
+{
+  "taskId": "visual_media/chroma_key_from_reference",
+  "title": "chroma_key_from_reference",
+  "summary": "Composite the correct foreground subject into the target scene by removing the green screen and rebuilding the video in DaVinci Resolve.",
+  "category": "visual_media",
+  "software": [
+    "DaVinci Resolve"
+  ],
+  "taskPrompt": "Goal: Remove the green-screen background from the source clip, create a new Resolve project yourself, composite the correct foreground subject into the intended target scene indicated by the first-frame target screenshot, and export the finished composite video.\n\nRemote workspace:\n- Task folder: C:\\Users\\User\\Desktop\\visual_media\\chroma_key_from_reference\\crane_flyingsky\n\nSoftware:\n- Launch DaVinci Resolve using: C:\\Users\\User\\Desktop\\visual_media\\chroma_key_from_reference\\crane_flyingsky\\software\\DaVinci Resolve.lnk\n- No starter `.drp` project is packaged with this task. Create a new Resolve project yourself for the task run.\n\nInputs (already on remote desktop):\n- Input assets live under: C:\\Users\\User\\Desktop\\visual_media\\chroma_key_from_reference\\crane_flyingsky\\input\n- Foreground source clip with green background: C:\\Users\\User\\Desktop\\visual_media\\chroma_key_from_reference\\crane_flyingsky\\input\\input.mp4\n- First-frame target screenshot / disambiguation hint: C:\\Users\\User\\Desktop\\visual_media\\chroma_key_from_reference\\crane_flyingsky\\input\\input.png\n\nWhat to do:\n- Create a new Resolve project and import the task assets from the task folder.\n- Key out the green background from the foreground source clip.\n- Build the composite yourself in Resolve so the result matches the intended target scene shown by the first-frame screenshot.\n- Use the screenshot to determine which foreground subject to preserve and how the finished composite should look in placement, scale, and overall composition.\n- Treat the screenshot as a visual specification for the background scene, framing, and composition that your final render should match.\n- Do not export the untouched source clip and do not leave visible green-screen background in the final render.\n\nOutput:\n- Export/render to: C:\\Users\\User\\Desktop\\visual_media\\chroma_key_from_reference\\crane_flyingsky\\output\\output.mp4",
+  "agentMustDo": [
+    "Launch DaVinci Resolve from `software/DaVinci Resolve.lnk`",
+    "Create a new Resolve project for the task run",
+    "Key out the green background from `input/input.mp4`",
+    "Build the composite yourself in Resolve",
+    "Use `input/input.png` as the first-frame target screenshot that tells you which foreground subject to preserve and what the intended composite should look like Treat it as the visual spec for the background scene, framing, and composition your final render should match.",
+    "Export the final output to `output/output.mp4`"
+  ],
+  "inputFiles": [
+    {
+      "name": "Input clip",
+      "format": "`.mp4`",
+      "path": "input/input.mp4",
+      "description": "Foreground source clip"
+    },
+    {
+      "name": "Input target screenshot",
+      "format": "`.png`",
+      "path": "input/input.png",
+      "description": "First-frame target screenshot showing which foreground subject should be preserved and what the intended finished composite should look like; not a packaged project and not an output asset"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Final composite render",
+      "format": "`.mp4`",
+      "path": "output/output.mp4",
+      "description": "Evaluated output"
+    }
+  ],
+  "evaluation": "### Hard evaluation\nRuns on the remote VM.\n\nProcess:\n- sample frame times from `reference/breakpoint.json`\n- extract corresponding frames from input, reference, and output videos\n- compute:\n  - `roi_input_cv` for foreground-preservation gate\n  - `full_frame_edge_iou` for full-frame contour alignment\n  - `roi_edge_iou` for ROI contour alignment\n\nConcrete semantics:\n- default sample count is `5` if `breakpoint.json` does not override it\n- `roi_input_cv >= 0.3` must hold before the frame can receive any quality score\n- quality frame score is `0.3 * full_frame_edge_iou + 0.7 * roi_edge_iou`\n\n### Soft evaluation\nRuns locally.\n\nProcess:\n- fetch sampled input/output PNG pairs from the VM\n- use a local vision model to answer a binary checklist about whether the output frame looks like a genuine keying-related transformation of the input\n- average the checklist answers into `soft_frame_score`\n\nImportant semantics:\n- soft eval is not a quality judge\n- soft eval does not compare against the reference\n- soft eval only checks whether a real keying-related edit appears to have been done\n- the local judge is a local vision-language model scorer (`gpt-5.2` by default in the current config)\n- each sampled frame is judged with binary YES/NO checklist items for real edit done, not-raw-input-copy, and foreground preserved\n- `soft_frame_score >= 0.5` must hold before the hard quality score can count\n\n### Final score\nPer frame:\n\n```text\nif roi_input_cv < 0.3:\n    final_frame_score = 0.0\nelif soft_frame_score < 0.5:\n    final_frame_score = 0.0\nelse:\n    hard_quality_frame_score = 0.3 * full_frame_edge_iou + 0.7 * roi_edge_iou\n    final_frame_score = hard_quality_frame_score\n\nfinal_score = mean(final_frame_score)\n```\n\nIf soft evaluation is unavailable, the task scores `0.0`.\n\nFor this family, the reference-based full-frame comparison is intentional rather than optional: current variants are simple enough that `input/input.png` plus the source clip sufficiently disambiguate the intended target composite, and full-frame matching is used to prevent agents from passing with generative or only loosely plausible composites.",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:35:33.546493Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/chroma_key_from_reference/task_card.json"
+      },
+      "rationale": "The task involves video compositing and visual effects, which fits within the realm of visual media arts."
+    }
+  }
+}

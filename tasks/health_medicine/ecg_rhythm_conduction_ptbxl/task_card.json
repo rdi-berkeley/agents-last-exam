@@ -1,0 +1,80 @@
+{
+  "taskId": "health_medicine/ecg_rhythm_conduction_ptbxl",
+  "title": "ECG Rhythm Conduction Ptbxl",
+  "summary": "Variant ptbxl 2263: Single PTB XL derived rhythm/conduction benchmark slice with 2,263 anonymized ECG records.",
+  "category": "health_medicine",
+  "software": [
+    "pandas",
+    "Python"
+  ],
+  "taskPrompt": "You are a computational precision health researcher working on staged ECG waveform data.\n\n## Variant\n`ptbxl_2263`: Single PTB-XL-derived rhythm/conduction benchmark slice with 2,263 anonymized ECG records.\n\n## Your Task\nBuild a multilabel classifier for rhythm and conduction findings from the staged WFDB ECG records.\n\n## Input Files\n- WFDB records directory: `C:\\Users\\User\\Desktop\\health_medicine\\ecg_rhythm_conduction_ptbxl\\ptbxl_2263\\input\\records`\n- Required ECG ID list: `C:\\Users\\User\\Desktop\\health_medicine\\ecg_rhythm_conduction_ptbxl\\ptbxl_2263\\input\\record_ids.csv`\n- Label glossary: `C:\\Users\\User\\Desktop\\health_medicine\\ecg_rhythm_conduction_ptbxl\\ptbxl_2263\\input\\label_codebook.csv`\n- Output template: `C:\\Users\\User\\Desktop\\health_medicine\\ecg_rhythm_conduction_ptbxl\\ptbxl_2263\\input\\template_output.csv`\n\n## Software\n- Task-local command prompt helper: `C:\\Users\\User\\Desktop\\health_medicine\\ecg_rhythm_conduction_ptbxl\\ptbxl_2263\\software\\open_input_cmd.bat`\n- Baseline package installer: `C:\\Users\\User\\Desktop\\health_medicine\\ecg_rhythm_conduction_ptbxl\\ptbxl_2263\\software\\install_baseline_python_packages.bat`\n- You may use the system `python` on the VM and install additional open-source Python packages if needed\n\n## What You Must Do\n1. Read the staged ECG records from `C:\\Users\\User\\Desktop\\health_medicine\\ecg_rhythm_conduction_ptbxl\\ptbxl_2263\\input\\records`.\n2. Use `C:\\Users\\User\\Desktop\\health_medicine\\ecg_rhythm_conduction_ptbxl\\ptbxl_2263\\input\\record_ids.csv` as the exact required output row set.\n3. Train or fit any CPU-feasible multilabel workflow you judge appropriate.\n4. Write one CSV exactly to:\n   `C:\\Users\\User\\Desktop\\health_medicine\\ecg_rhythm_conduction_ptbxl\\ptbxl_2263\\output\\predictions.csv`\n\n## Output Requirements\n- The file must be named exactly `predictions.csv`\n- The columns must be exactly:\n  `ecg_id, SR, STACH, SBRAD, SARRH, AFIB, AFLT, PACE, CLBBB, CRBBB, LAFB, 1AVB, IRBBB, NORM`\n- Include exactly the ECG IDs from `C:\\Users\\User\\Desktop\\health_medicine\\ecg_rhythm_conduction_ptbxl\\ptbxl_2263\\input\\record_ids.csv`\n- Every label value must be binary: `0` or `1`\n- Do not save extra files into `C:\\Users\\User\\Desktop\\health_medicine\\ecg_rhythm_conduction_ptbxl\\ptbxl_2263\\output`\n\n## Important Constraints\n- Treat this as a multilabel problem; labels are not guaranteed to be mutually exclusive\n- Use the staged task files as the source of truth for row set and schema\n- Do not modify evaluator-owned directories such as `reference/`, `output_test_pos/`, or `output_test_neg/`",
+  "agentMustDo": [
+    "Open the staged task directory on the Windows VM and inspect the ECG bundle under `input/`.",
+    "Load all 2,263 WFDB records from `input/records/` and build a multi-label classifier for the 13 labels `SR`, `STACH`, `SBRAD`, `SARRH`, `AFIB`, `AFLT`, `PACE`, `CLBBB`, `CRBBB`, `LAFB`, `1AVB`, `IRBBB`, and `NORM`.",
+    "Write `output/predictions.csv` with exactly the IDs from `input/record_ids.csv` and binary predictions for all 13 labels in the required order.",
+    "Make the modeling decisions needed to get there under CPU-only constraints, including waveform preprocessing, feature/model family, multilabel thresholding, and any class-imbalance handling; the benchmark contract does not prescribe a single fixed recipe."
+  ],
+  "inputFiles": [
+    {
+      "name": "ECG waveform records",
+      "format": "WFDB `.hea` + `.dat` pairs",
+      "path": "input/records/",
+      "description": "2,263 anonymized 12-lead, 500 Hz, 10 s ECGs"
+    },
+    {
+      "name": "Record ID list",
+      "format": "`.csv`",
+      "path": "input/record_ids.csv",
+      "description": "One-column CSV with header ecg_id; exact required output ID set"
+    },
+    {
+      "name": "Label codebook",
+      "format": "`.csv`",
+      "path": "input/label_codebook.csv",
+      "description": "Two-column CSV label,description giving the public meaning of each target label"
+    },
+    {
+      "name": "Output template",
+      "format": "`.csv`",
+      "path": "input/template_output.csv",
+      "description": "Canonical 14-column schema ecg_id plus the 13 label columns, with blank prediction cells and the required row order"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Rhythm/conduction predictions",
+      "format": "`.csv`",
+      "path": "output/predictions.csv",
+      "description": "Exact columns: ecg_id, SR, STACH, SBRAD, SARRH, AFIB, AFLT, PACE, CLBBB, CRBBB, LAFB, 1AVB, IRBBB, NORM"
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- `output/predictions.csv` is missing.\n- Row count is not exactly 2,263.\n- Column names or order differ from `ecg_id, SR, STACH, SBRAD, SARRH, AFIB, AFLT, PACE, CLBBB, CRBBB, LAFB, 1AVB, IRBBB, NORM`.\n- Any `ecg_id` is missing, duplicated, or outside the canonical ID set from `input/record_ids.csv`.\n- Any label value is non-binary or missing.\n\n**Scoring method:**\n- Compare `output/predictions.csv` against `reference/gold_standard.csv`.\n- Compute per-label F1 for all 13 labels.\n- Compute macro F1 as the arithmetic mean of the 13 per-label F1 scores.\n- Return `1.0` if macro F1 is at least `0.70`; otherwise return a normalized score below `1.0` with the pass boundary at `0.70`.\n\n- **Where does the main scoring logic run?** local evaluator code\n- **If any scoring step runs on the VM, why is that exception necessary?** No VM-side scoring should be necessary; the artifacts are plain CSV files.\n\n**What does a PERFECT output look like?**\nA valid `predictions.csv` whose IDs and schema exactly match the staged template and whose label predictions match the hidden gold labels closely enough to reach macro F1 `>= 0.70`.\n\n**What does a WRONG/empty output look like?**\nMissing or malformed `predictions.csv`, ID mismatches, non-binary labels, or a valid-looking CSV whose predictions score below the macro F1 threshold.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.1",
+    "subdomain_code": "clinical_diagnostics",
+    "subdomain_name": "Clinical Diagnostics & Imaging",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:40:59.859462Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/ecg_rhythm_conduction_ptbxl/task_card.json"
+      },
+      "rationale": "The task involves classifying ECG data, which is a clinical diagnostic process."
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "taskId": "business_finance/legal_ma_consistency_audit_01",
+  "title": "M&A Filing Consistency Audit",
+  "summary": "Review four Chinese regulatory filings about the same share-transfer transaction and write an English audit report that identifies supported inconsistencies with Chinese evidence and location markers.",
+  "category": "business_finance",
+  "software": [
+    "software/python"
+  ],
+  "taskPrompt": "You are reviewing four Chinese regulatory filings about the same share-transfer transaction.\n\n## Task\nRead the staged materials, cross-check the filings for factual inconsistencies, and write one\nEnglish audit report.\n\n## Visible Inputs\n- Task root: `/media/user/data/agenthle/business_finance/legal_ma_consistency_audit_01/base`\n- Task brief: `/media/user/data/agenthle/business_finance/legal_ma_consistency_audit_01/base/input/task_brief.md`\n- Document manifest: `/media/user/data/agenthle/business_finance/legal_ma_consistency_audit_01/base/input/document_manifest.json`\n- Original PDFs: `/media/user/data/agenthle/business_finance/legal_ma_consistency_audit_01/base/input/source_documents`\n- Page-labeled extracted text: `/media/user/data/agenthle/business_finance/legal_ma_consistency_audit_01/base/input/extracted_text`\n- Optional Python helper: `software/python` (relative to the task root above)\n\n## What To Deliver\nSave exactly one Markdown file here:\n\n- `/media/user/data/agenthle/business_finance/legal_ma_consistency_audit_01/base/output/audit_report.md`\n\n## Report Requirements\n1. Write in English.\n2. Report every material inconsistency you can support from the staged documents.\n3. For each finding, include:\n   - a short English title;\n   - a brief explanation of the conflict;\n   - original Chinese evidence text;\n   - a document name and page-number location marker.\n4. Do not invent unsupported issues.\n5. If you want to script against the staged files, use `software/python` from the task root.\n",
+  "agentMustDo": [
+    "Read the staged task brief, document manifest, source PDFs, and extracted-text mirrors.",
+    "Cross-check the four filings for material factual inconsistencies.",
+    "Write exactly one English Markdown audit report to `output/audit_report.md`.",
+    "For every finding, include the original Chinese evidence text and a document-plus-page location marker.",
+    "Avoid unsupported extra findings."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_brief.md",
+      "format": "Markdown",
+      "path": "input/task_brief.md",
+      "description": "Agent-visible task instructions and output contract."
+    },
+    {
+      "name": "document_manifest.json",
+      "format": "JSON",
+      "path": "input/document_manifest.json",
+      "description": "Maps the canonical filenames to the original Chinese filings and page counts."
+    },
+    {
+      "name": "source_documents",
+      "format": "PDF directory",
+      "path": "input/source_documents",
+      "description": "The four original staged regulatory filings in PDF form."
+    },
+    {
+      "name": "extracted_text",
+      "format": "UTF-8 text directory",
+      "path": "input/extracted_text",
+      "description": "Page-labeled text mirrors of the four filings for reproducible search and citation."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "audit_report.md",
+      "format": "Markdown",
+      "path": "output/audit_report.md",
+      "description": "Required English audit report describing the supported inconsistencies."
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- Missing or empty `output/audit_report.md`\n- Output larger than the evaluator size limit (`200000` UTF-8 bytes)\n- Missing any of the four required inconsistencies after parsing the report\n\n**Scoring method**\n1. Parse the Markdown report into finding sections.\n2. Require all four target inconsistencies to be matched against the correct document pairings: the `\u7a7a\u80a1\u80a1\u4e1c` clerical typo, Buyer 2's `146,660,323.00` vs `146,660,332.00` price mismatch, Buyer 1's `45%` vs `40%` ownership mismatch, and Buyer 1's `\u81ea\u6709\u8d44\u91d1` vs bank-loan funding contradiction.\n3. After recall passes, deduct `0.2` for each unsupported extra finding section.\n4. Deduct `0.2` for each matched target that lacks the required Chinese evidence text.\n5. Deduct `0.1` for each matched target that lacks a correct document-plus-page location pairing.\n6. Clamp the final score to the `[0.0, 1.0]` range.\n\n**What does a perfect output look like?**\nA Markdown audit report that correctly identifies all four required inconsistencies, includes supporting Chinese evidence, includes correct document/page pairings, and avoids unsupported extra findings.\n\n**What does a wrong output look like?**\nA missing report, a report that omits any required target, a report that cites only English paraphrases without Chinese evidence, a report with missing or wrong document/page pairings, or a report that invents extra inconsistencies not supported by the filings.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.4",
+    "subdomain_code": "compliance",
+    "subdomain_name": "Compliance & Regulatory",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:30:18.632987Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/legal_ma_consistency_audit_01/task_card.json"
+      },
+      "rationale": "The task involves reviewing regulatory filings for compliance and consistency."
+    }
+  }
+}

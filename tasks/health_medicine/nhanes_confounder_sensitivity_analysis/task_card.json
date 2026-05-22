@@ -1,0 +1,108 @@
+{
+  "taskId": "health_medicine/nhanes_confounder_sensitivity_analysis",
+  "title": "NHANES Confounder Sensitivity Analysis",
+  "summary": "Rebuild a clinical sensitivity-analysis cohort from staged NHANES tables and produce the required participant subset plus logistic-regression summary outputs.",
+  "category": "health_medicine",
+  "software": [
+    "Python",
+    "uv",
+    "pandas",
+    "NumPy",
+    "SciPy",
+    "statsmodels"
+  ],
+  "taskPrompt": "You are working on a Linux precision-health data-analysis task.\n\nRead the staged benchmark brief and output contract first:\n- `/media/user/data/agenthle/health_medicine/nhanes_confounder_sensitivity_analysis/base/input/task_spec.txt`\n- `/media/user/data/agenthle/health_medicine/nhanes_confounder_sensitivity_analysis/base/input/output_contract.json`\n\nVisible task inputs:\n- `/media/user/data/agenthle/health_medicine/nhanes_confounder_sensitivity_analysis/base/input/3.demographics_clean_cycle1.csv`\n- `/media/user/data/agenthle/health_medicine/nhanes_confounder_sensitivity_analysis/base/input/7.questionnaire_clean_cycle1.csv`\n- `/media/user/data/agenthle/health_medicine/nhanes_confounder_sensitivity_analysis/base/input/8.response_clean_cycle1.csv`\n- `/media/user/data/agenthle/health_medicine/nhanes_confounder_sensitivity_analysis/base/input/5.medications_clean_cycle1.csv`\n\nIf you want the pinned Python environment, use:\n- `/media/user/data/agenthle/health_medicine/nhanes_confounder_sensitivity_analysis/base/software/python_with_task_deps.sh`\n\nYour job is to rebuild the analytic cohort and export exactly these files under `/media/user/data/agenthle/health_medicine/nhanes_confounder_sensitivity_analysis/base/output`:\n- `/media/user/data/agenthle/health_medicine/nhanes_confounder_sensitivity_analysis/base/output/hpyl_nsaid_subset.csv`\n- `/media/user/data/agenthle/health_medicine/nhanes_confounder_sensitivity_analysis/base/output/sensitivity_summary.csv`\n\nRequirements:\n1. Follow the exact cohort construction, variable derivations, and model definitions in `task_spec.txt`.\n2. Use `output_contract.json` for the exact output filenames, column order, formulas, and metadata fields.\n3. Do not modify `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.\n4. Write only the required task outputs under `/media/user/data/agenthle/health_medicine/nhanes_confounder_sensitivity_analysis/base/output`.\n",
+  "agentMustDo": [
+    "Read `input/task_spec.txt` and `input/output_contract.json` before doing any analysis.",
+    "Rebuild the analytic cohort and the non-missing `LBXHP1` subset from the four staged NHANES CSVs.",
+    "Write `output/hpyl_nsaid_subset.csv` with the exact required participant-level schema.",
+    "Write `output/sensitivity_summary.csv` with the exact required three-row model summary schema."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_spec.txt",
+      "format": "text",
+      "path": "input/task_spec.txt",
+      "description": "Agent-visible benchmark brief describing the cohort construction and model requirements."
+    },
+    {
+      "name": "output_contract.json",
+      "format": "json",
+      "path": "input/output_contract.json",
+      "description": "Exact output schema, formulas, and metadata contract for the two required CSV files."
+    },
+    {
+      "name": "3.demographics_clean_cycle1.csv",
+      "format": "csv",
+      "path": "input/3.demographics_clean_cycle1.csv",
+      "description": "Demographics table keyed by `SEQN_new` and `SDDSRVYR`."
+    },
+    {
+      "name": "7.questionnaire_clean_cycle1.csv",
+      "format": "csv",
+      "path": "input/7.questionnaire_clean_cycle1.csv",
+      "description": "Questionnaire table containing ulcer and chronic-condition fields."
+    },
+    {
+      "name": "8.response_clean_cycle1.csv",
+      "format": "csv",
+      "path": "input/8.response_clean_cycle1.csv",
+      "description": "Response table containing BMI and `LBXHP1` serology values."
+    },
+    {
+      "name": "5.medications_clean_cycle1.csv",
+      "format": "csv",
+      "path": "input/5.medications_clean_cycle1.csv",
+      "description": "Medication exposure table with free-text `RXDDRUG` entries."
+    },
+    {
+      "name": "runtime_env",
+      "format": "uv Python environment",
+      "path": "input/runtime_env",
+      "description": "Pinned optional Python runtime manifest for pandas/numpy/scipy/statsmodels."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "hpyl_nsaid_subset.csv",
+      "format": "csv",
+      "path": "output/hpyl_nsaid_subset.csv",
+      "description": "Required participant-level analytic subset with exact column order."
+    },
+    {
+      "name": "sensitivity_summary.csv",
+      "format": "csv",
+      "path": "output/sensitivity_summary.csv",
+      "description": "Required three-row logistic-regression summary with exact formulas and metadata fields."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (score `0.0` if triggered):\n- Missing `hpyl_nsaid_subset.csv` or `sensitivity_summary.csv`\n- Wrong schema or column order in either CSV\n- Wrong row count in either CSV\n- Wrong `analysis` labels or `formula` strings in `sensitivity_summary.csv`\n- Any value mismatch against the hidden reference beyond numeric tolerance `1e-9`\n\n**Scoring method:**\nThe evaluator reads both candidate CSVs and the hidden reference CSVs, sorts the subset by `id` and the summary by `analysis`, enforces exact schema/order, and compares all numeric fields with `abs/rel <= 1e-9`. Non-numeric fields must match exactly. This is a binary evaluator: only a complete match returns `1.0`; anything else returns `0.0`.\n\n**What does a perfect output look like?**\nBoth required CSVs exist under `output/` and match the hidden reference files exactly within `1e-9` numeric tolerance.\n\n**What does a wrong output look like?**\nMissing files, wrong schemas, wrong subset membership, wrong model labels/formulas, or any numeric/value mismatch against the hidden reference.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.4",
+    "subdomain_code": "public_health",
+    "subdomain_name": "Public Health & Epidemiology",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:41:45.735405Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/nhanes_confounder_sensitivity_analysis/task_card.json"
+      },
+      "rationale": "The task involves sensitivity analysis related to health data from NHANES."
+    }
+  }
+}

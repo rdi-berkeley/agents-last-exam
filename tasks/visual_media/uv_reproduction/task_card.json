@@ -1,0 +1,121 @@
+{
+  "taskId": "visual_media/uv_reproduction",
+  "title": "UV Reproduction",
+  "summary": "Recreate the required UV layout and material appearance of the staged 3D asset in Blender.",
+  "category": "visual_media",
+  "software": [
+    "Blender"
+  ],
+  "taskPrompt": "You are a 3D artist using Blender.\n\nYour task is to reproduce the UV unwrap and textured material appearance of the provided model.\n\nOfficial input:\n- Mesh: `E:\\agenthle\\visual_media\\uv_reproduction\\uv_reproduction_anime_singing_girl\\input\\singing_raw.obj`\n- Optional input material sidecar: `None`\n- Agent-visible reference images: `E:\\agenthle\\visual_media\\uv_reproduction\\uv_reproduction_anime_singing_girl\\input\\reference_images`\n\nRequired submission:\n- Export the object as `singing.obj`\n- Save it to `E:\\agenthle\\visual_media\\uv_reproduction\\uv_reproduction_anime_singing_girl\\output\\submission\\singing.obj`\n- Save your material sidecar as `E:\\agenthle\\visual_media\\uv_reproduction\\uv_reproduction_anime_singing_girl\\output\\submission\\material.mtl`\n- Save any referenced textures under `E:\\agenthle\\visual_media\\uv_reproduction\\uv_reproduction_anime_singing_girl\\output\\submission\\textures\\`",
+  "agentMustDo": [
+    "inspect the input object and agent-visible reference images",
+    "create or preserve valid UVs when required",
+    "create or attach materials and textures when required",
+    "export submission files into the required output directory"
+  ],
+  "inputFiles": [
+    {
+      "name": "*.obj",
+      "format": "obj",
+      "path": "input/*.obj",
+      "description": "input/*.obj"
+    },
+    {
+      "name": "*.mtl",
+      "format": "mtl",
+      "path": "input/*.mtl",
+      "description": "optional input/*.mtl"
+    },
+    {
+      "name": "*.png",
+      "format": "png",
+      "path": "input/reference_images/*.png",
+      "description": "input/reference_images/*.png"
+    },
+    {
+      "name": "*.png",
+      "format": "png",
+      "path": "input/scene_reference_images/*.png",
+      "description": "input/scene_reference_images/*.png"
+    },
+    {
+      "name": "*.png",
+      "format": "png",
+      "path": "input/parts/<part>/detail/*.png",
+      "description": "input/parts/<part>/detail/*.png"
+    },
+    {
+      "name": "*.png",
+      "format": "png",
+      "path": "input/parts/<part>/context/*.png",
+      "description": "input/parts/<part>/context/*.png"
+    },
+    {
+      "name": "<part>__meta.json",
+      "format": "json",
+      "path": "input/parts/<part>/meta/<part>__meta.json",
+      "description": "input/parts/<part>/meta/<part>__meta.json"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "submission",
+      "format": "directory",
+      "path": "output/submission/",
+      "description": "single-part submission bundle under output/submission/"
+    },
+    {
+      "name": "<object>.obj",
+      "format": "obj",
+      "path": "output/submission/<object>.obj",
+      "description": "output/submission/<object>.obj"
+    },
+    {
+      "name": "material.mtl",
+      "format": "mtl",
+      "path": "output/submission/material.mtl",
+      "description": "output/submission/material.mtl"
+    },
+    {
+      "name": "*",
+      "format": "",
+      "path": "output/submission/textures/*",
+      "description": "output/submission/textures/*"
+    },
+    {
+      "name": "final.blend",
+      "format": "blend",
+      "path": "output/submission/final.blend",
+      "description": "output/submission/final.blend"
+    }
+  ],
+  "evaluation": "### Hard eval\nRuns remotely in Blender and Python.\n\nChecks may include:\n- OBJ existence\n- UV existence\n- MTL existence\n- basecolor texture existence\n- color-match gate\n- silhouette similarity\n- color similarity\n- chroma similarity\n- structural similarity\n\nReference outputs are intentionally hidden under `reference/`. The evaluator renders both candidate and hidden reference assets from fixed camera views, then compares those render pairs with the metric mix configured in `reference/evaluation_config.json`.\n\n### Soft eval\nRuns locally.\n\nThe remote evaluator returns sampled render pairs. The local Vision LLM answers binary `YES` / `NO` questions for:\n- texture alignment\n- material appearance and color match\n- visible UV / texture artifacts\n\nFor multi-part variants, sampled pairs include both:\n- per-part detail comparisons\n- whole-scene comparisons\n\nFor multi-part variants, the hard evaluator does not audit every part on every run.\nIt always keeps scene-level checks, and it deterministically samples `5` manifest parts for per-part comparison.\n\n### Final score\nFor single-part and multi-part material variants:\n- `0.3 * hard_score + 0.7 * soft_score`\n\n`soft_score` is the yes-ratio across the family-specific binary questions.",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:26:43.481644Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/uv_reproduction/task_card.json"
+      },
+      "rationale": "The task involves 3D modeling and texturing, which fits within the 3D, Animation & Interactive Media subdomain."
+    }
+  }
+}

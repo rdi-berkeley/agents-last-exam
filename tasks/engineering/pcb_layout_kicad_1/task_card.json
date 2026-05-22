@@ -1,0 +1,61 @@
+{
+  "taskId": "engineering/pcb_layout_kicad_1",
+  "title": "Mini Encabulator KiCad PCB Layout",
+  "summary": "Create a routed KiCad PCB layout from the staged Mini Encabulator schematic.",
+  "category": "engineering",
+  "software": [
+    "KiCad"
+  ],
+  "taskPrompt": "You are designing a KiCad PCB layout for a Mini Encabulator.\n\n## Input\n- Schematic: `E:\\agenthle\\engineering\\pcb_layout_kicad_1\\base\\input\\mini_encabulator.kicad_sch`\n- KiCad launcher: `E:\\agenthle\\engineering\\pcb_layout_kicad_1\\base\\software\\OpenKiCad.bat`\n\n## Your Task\n1. Open the schematic in KiCad and create a PCB layout from it.\n2. Import all assigned footprints from the schematic.\n3. Place all components for a compact board sized for an SN25 Polycase enclosure.\n4. Add exactly four M3 mounting holes on a 1.575 inch by 1.26 inch rectangular spacing pattern.\n5. Draw the board outline on `Edge.Cuts`.\n6. Route all electrical connections.\n7. Add GND copper zones on both `F.Cu` and `B.Cu`, fill them, and add ground stitching vias.\n8. Run KiCad DRC and resolve all errors and unconnected items.\n\n## Output\nSave the final board layout as:\n`E:\\agenthle\\engineering\\pcb_layout_kicad_1\\base\\output\\mini_encabulator.kicad_pcb`",
+  "agentMustDo": [
+    "Open the staged Mini Encabulator schematic in KiCad.",
+    "Create and complete a PCB layout from the assigned footprints.",
+    "Add the required board outline, mounting holes, routed traces, GND pours, and stitching vias.",
+    "Run DRC and save the final .kicad_pcb output."
+  ],
+  "inputFiles": [
+    {
+      "name": "mini_encabulator.kicad_sch",
+      "format": "KiCad schematic",
+      "path": "input/mini_encabulator.kicad_sch",
+      "description": "Agent-visible schematic with assigned footprints"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "mini_encabulator.kicad_pcb",
+      "format": "KiCad PCB",
+      "path": "output/mini_encabulator.kicad_pcb",
+      "description": "Expected agent-produced final PCB layout"
+    }
+  ],
+  "evaluation": "The evaluator reads the output .kicad_pcb, runs KiCad CLI DRC, and checks for an Edge.Cuts outline, GND zones on F.Cu and B.Cu, exactly four mounting holes, and the required mounting-hole span. DRC failures or unavailable DRC on normal runtime output score 0. If DRC passes and all structural checks pass, score is 1. If DRC passes but structural checks fail, score is 0.5.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.2",
+    "subdomain_code": "electronics",
+    "subdomain_name": "Electronics Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:27:55.677625Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/pcb_layout_kicad_1/task_card.json"
+      },
+      "rationale": "The task involves designing a PCB layout, which falls under Electronics Engineering."
+    }
+  }
+}

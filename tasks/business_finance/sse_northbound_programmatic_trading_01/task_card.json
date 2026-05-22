@@ -1,0 +1,92 @@
+{
+  "taskId": "business_finance/sse_northbound_programmatic_trading_01",
+  "title": "SSE Northbound Programmatic Trading Research",
+  "summary": "Answer three closed-book Shanghai Stock Exchange reporting questions from staged Chinese source documents and return a structured JSON memo with Chinese citations and evidence.",
+  "category": "business_finance",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are acting as a regulatory consultant on Shanghai Stock Exchange Northbound programmatic-trading reporting.\n\n## Closed-Book Rule\n\n- Use only the staged materials under `/media/user/data/agenthle/business_finance/sse_northbound_programmatic_trading_01/base/input`.\n- Do not use outside web search or external regulatory knowledge.\n\n## Inputs\n\n- Task brief: `/media/user/data/agenthle/business_finance/sse_northbound_programmatic_trading_01/base/input/task_brief.md`\n- Question set: `/media/user/data/agenthle/business_finance/sse_northbound_programmatic_trading_01/base/input/question_set.json`\n- Output contract: `/media/user/data/agenthle/business_finance/sse_northbound_programmatic_trading_01/base/input/output_contract.json`\n- Document manifest: `/media/user/data/agenthle/business_finance/sse_northbound_programmatic_trading_01/base/input/document_manifest.json`\n- Original source files: `/media/user/data/agenthle/business_finance/sse_northbound_programmatic_trading_01/base/input/source_documents`\n- Extracted UTF-8 text mirrors: `/media/user/data/agenthle/business_finance/sse_northbound_programmatic_trading_01/base/input/extracted_text`\n\n## Your Task\n\nAnswer the three client questions in the staged brief:\n\n1. whether leverage-related information must be reported separately through each broker for same-LEI accounts;\n2. whether the staged rules provide specific numerical amounts for `\u6d41\u91cf\u8d39` and `\u64a4\u5355\u8d39`;\n3. whether a French firm can report using only the original foreign-language software name.\n\n## Deliverable\n\nWrite exactly one JSON file here:\n\n- `/media/user/data/agenthle/business_finance/sse_northbound_programmatic_trading_01/base/output/research_answers.json`\n\nEach top-level question key must contain:\n\n- `conclusion`: exactly `Yes`, `No`, or `Unknown`\n- `citation_document`: the Simplified Chinese source document name you rely on\n- `evidence_snippet`: an exact Simplified Chinese excerpt copied from the staged source\n- `answer_text`: a short English explanation\n",
+  "agentMustDo": [
+    "Read the staged task brief, question set, output contract, document manifest, source documents, and extracted-text mirrors.",
+    "Answer all three client questions using only the staged Shanghai Stock Exchange materials.",
+    "Write exactly one JSON file to `output/research_answers.json`.",
+    "For each question, provide a `Yes`/`No`/`Unknown` conclusion, a Chinese citation, an exact Chinese evidence excerpt, and a short English explanation.",
+    "Stay closed-book and do not use outside web search or external regulatory knowledge."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_brief.md",
+      "format": "Markdown",
+      "path": "input/task_brief.md",
+      "description": "Agent-visible task instructions and the three client questions."
+    },
+    {
+      "name": "question_set.json",
+      "format": "JSON",
+      "path": "input/question_set.json",
+      "description": "Structured list of the three required research questions and allowed conclusion labels."
+    },
+    {
+      "name": "output_contract.json",
+      "format": "JSON",
+      "path": "input/output_contract.json",
+      "description": "Defines the required output filename, top-level keys, and per-question JSON fields."
+    },
+    {
+      "name": "document_manifest.json",
+      "format": "JSON",
+      "path": "input/document_manifest.json",
+      "description": "Maps the staged Chinese source files to their citation aliases."
+    },
+    {
+      "name": "source_documents",
+      "format": "DOCX/XLSX directory",
+      "path": "input/source_documents",
+      "description": "The ten original staged Shanghai Stock Exchange source files."
+    },
+    {
+      "name": "extracted_text",
+      "format": "UTF-8 text directory",
+      "path": "input/extracted_text",
+      "description": "Search-friendly text mirrors of the staged Chinese source files."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "research_answers.json",
+      "format": "JSON",
+      "path": "output/research_answers.json",
+      "description": "Required structured answer file containing all three client responses."
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- Missing output file `output/research_answers.json`\n- Invalid JSON root or missing required question keys\n- Any question object missing the required field structure after parsing\n\n**Scoring method**\n1. Parse the submitted JSON file.\n2. For each of the three required questions, check whether the conclusion matches the canonical answer.\n3. Check whether `citation_document` is one of the accepted Chinese citation aliases for that question.\n4. Check whether `evidence_snippet` is an exact excerpt from the cited visible source and includes the required anchor text.\n5. Check whether `answer_text` is present as a short English explanation.\n6. Give each question `1.0` only when all of those checks pass, otherwise `0.0`, then average the three question scores.\n\n**What does a perfect output look like?**\nA JSON file with all three required question keys, correct `Yes`/`No`/`Unknown` conclusions, accepted Chinese citations, exact Chinese evidence excerpts copied from the staged source documents, and short English explanations.\n\n**What does a wrong output look like?**\nA missing or malformed JSON file, wrong conclusions, unsupported citations, non-exact or unsupported evidence snippets, or missing English explanations.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.4",
+    "subdomain_code": "compliance",
+    "subdomain_name": "Compliance & Regulatory",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:30:40.442102Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/sse_northbound_programmatic_trading_01/task_card.json"
+      },
+      "rationale": "The task involves regulatory compliance related to trading on the Shanghai Stock Exchange."
+    }
+  }
+}

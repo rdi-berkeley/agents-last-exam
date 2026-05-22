@@ -1,0 +1,82 @@
+{
+  "taskId": "engineering/kicad_navswitch_library_integration_release_002",
+  "title": "KiCad Navswitch Library Integration",
+  "summary": "Repair a SparkFun Qwiic Navigation Switch KiCad project by restoring the local symbol and footprint integration for U4 and producing release artifacts.",
+  "category": "engineering",
+  "software": [
+    "KiCad",
+    "Python"
+  ],
+  "taskPrompt": "You are repairing a KiCad project for the SparkFun Qwiic Navigation Switch board.\n\n## Input\n- Broken KiCad project: `input/project/SparkFun_Qwiic_Navigation.kicad_pro`\n- Project files and local libraries: `input/project`\n- Datasheets: `input/datasheets`\n- KiCad launcher: `software/OpenKiCad.bat`\n\n## Your Task\n1. Open the project in the KiCad desktop UI.\n2. Inspect U4 (`PCA9554`) and the project-local symbol/footprint libraries.\n3. Restore U4's schematic Footprint field to the correct project-local footprint.\n4. Update the PCB from the schematic so U4 is restored to the board.\n5. Save the repaired KiCad project and leave it release-ready.\n6. Do not change circuit intent, non-target component values, non-target footprint assignments, unrelated nets, board outline, connectors, or mounting holes.\n7. Do not solve this by directly editing raw KiCad source text files.\n\n## Required Deliverables\nSave all deliverables under `output/`, including the repaired KiCad project files, local symbol and footprint libraries, ERC/DRC reports, netlist, fabrication outputs, `board.xml`, and `board.d356`.",
+  "agentMustDo": [
+    "Use KiCad UI to inspect and repair the project.",
+    "Restore U4's footprint assignment to the correct project-local footprint.",
+    "Update the PCB from the schematic and preserve unrelated design intent.",
+    "Export the required project, library, ERC/DRC, netlist, Gerber, drill, XML, and D356 deliverables."
+  ],
+  "inputFiles": [
+    {
+      "name": "SparkFun_Qwiic_Navigation project",
+      "format": "KiCad project",
+      "path": "input/project/",
+      "description": "Broken KiCad project and local libraries."
+    },
+    {
+      "name": "datasheets",
+      "format": "directory",
+      "path": "input/datasheets/",
+      "description": "Reference datasheets for the board components."
+    },
+    {
+      "name": "OpenKiCad.bat",
+      "format": "batch",
+      "path": "software/OpenKiCad.bat",
+      "description": "Launcher for opening KiCad on the VM."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "release artifact set",
+      "format": "KiCad and fabrication files",
+      "path": "output/",
+      "description": "Required repaired project files, local libraries, ERC/DRC reports, netlist, Gerbers, drill files, board XML, and IPC-D-356 file."
+    }
+  ],
+  "outputContracts": [
+    {
+      "name": "Required deliverables list",
+      "format": "file-layout contract",
+      "path": "task prompt",
+      "description": "The task prompt enumerates the exact files and directories that must appear under `output/`."
+    }
+  ],
+  "evaluation": "The evaluator checks the required output file set, verifies that U4 is assigned to the correct local footprint, confirms schematic/PCB consistency, and checks generated ERC/DRC and fabrication artifacts for release readiness.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.2",
+    "subdomain_code": "electronics",
+    "subdomain_name": "Electronics Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:27:47.608099Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/kicad_navswitch_library_integration_release_002/task_card.json"
+      },
+      "rationale": "The task involves repairing a KiCad project related to electronics design."
+    }
+  }
+}

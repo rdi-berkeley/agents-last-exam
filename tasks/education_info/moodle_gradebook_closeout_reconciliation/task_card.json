@@ -1,0 +1,135 @@
+{
+  "taskId": "education_info/moodle_gradebook_closeout_reconciliation",
+  "title": "Moodle Gradebook Closeout Reconciliation",
+  "summary": "Repair a broken offline Moodle-style course backup and rebuild the registrar plus OneRoster closeout exports from the repaired bundle.",
+  "category": "education_info",
+  "software": [
+    "Python",
+    "pandas",
+    "uv"
+  ],
+  "taskPrompt": "You are working on Linux on an offline Moodle gradebook closeout task.\n\n## Task Root\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base`\n\n## Visible Inputs\n- Task prompt: `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/input/TASK_PROMPT.md`\n- Bundle README: `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/input/README.md`\n- Shared helper library: `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/input/bundle_lib.py`\n- Starter project: `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/input/starter_project`\n- Starter backup: `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/input/starter_project/course_backup.mbz`\n- Roster snapshot: `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/input/starter_project/roster.csv`\n- Rebuild helper: `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/input/starter_project/tools/rebuild_exports.py`\n- Python wrapper: `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/software/python_with_task_deps.sh`\n\n## What You Should Do\n1. Read `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/input/TASK_PROMPT.md` and the starter materials under `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/input/starter_project`.\n2. Repair the broken Moodle-style backup in `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/input/starter_project/course_backup.mbz` by changing only the benchmark-designated editable backup files.\n3. Rebuild the registrar and OneRoster outputs using the staged helper tools.\n4. Write the required deliverables under `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output`.\n\n## Final Deliverables\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/corrected_course.mbz`\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/final_grade_export.csv`\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/final_grade_export.xml`\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/audit_report.csv`\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/audit_report.json`\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/exception_log.csv`\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/decisions.md`\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/oneroster_package/manifest.csv`\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/oneroster_package/users.csv`\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/oneroster_package/classes.csv`\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/oneroster_package/enrollments.csv`\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/oneroster_package/lineItems.csv`\n- `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/output/oneroster_package/results.csv`\n\nUse `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/software/python_with_task_deps.sh` if you want the pinned Python runtime for the helper scripts.\nDo not modify files under `/media/user/data/agenthle/education_info/moodle_gradebook_closeout_reconciliation/base/input`.\nDo not rely on files outside the visible task root listed above during solve time.\n",
+  "agentMustDo": [
+    "Read `input/TASK_PROMPT.md` and the starter materials under `input/starter_project/`.",
+    "Repair the offline Moodle-style backup `input/starter_project/course_backup.mbz` by editing only the benchmark-designated editable backup files.",
+    "Rebuild the registrar export and the OneRoster package with the staged helper tools.",
+    "Write all required deliverables under `output/`, including the repaired `.mbz`, registrar CSV/XML exports, audit outputs, exception log, decisions memo, and the `oneroster_package/` CSV files."
+  ],
+  "inputFiles": [
+    {
+      "name": "TASK_PROMPT.md",
+      "format": "Markdown",
+      "path": "input/TASK_PROMPT.md",
+      "description": "Agent-visible benchmark contract for the offline Moodle gradebook closeout workflow."
+    },
+    {
+      "name": "README.md",
+      "format": "Markdown",
+      "path": "input/README.md",
+      "description": "Top-level starter-bundle README from the normalized visible package."
+    },
+    {
+      "name": "bundle_lib.py",
+      "format": "Python",
+      "path": "input/bundle_lib.py",
+      "description": "Sanitized solve-time rebuild helper used by the bundled starter scripts."
+    },
+    {
+      "name": "starter_project",
+      "format": "Directory",
+      "path": "input/starter_project",
+      "description": "Starter bundle containing the broken Moodle-style backup, roster snapshot, policy docs, helper tools, and supporting artifacts."
+    },
+    {
+      "name": "runtime_env",
+      "format": "uv Python environment",
+      "path": "input/runtime_env",
+      "description": "Pinned agent-visible runtime metadata plus local wheelhouse; the wrapper installs from `input/runtime_env/wheels` and the staged manifest files remain for provenance."
+    },
+    {
+      "name": "python_with_task_deps.sh",
+      "format": "Shell wrapper",
+      "path": "software/python_with_task_deps.sh",
+      "description": "Agent-visible wrapper that runs the staged helper scripts with `/usr/bin/python` plus the local wheelhouse under `input/runtime_env/wheels`."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "corrected_course.mbz",
+      "format": "MBZ archive",
+      "path": "output/corrected_course.mbz",
+      "description": "Required repaired Moodle-style backup with only the editable contract files changed."
+    },
+    {
+      "name": "final_grade_export.csv",
+      "format": "CSV",
+      "path": "output/final_grade_export.csv",
+      "description": "Registrar export with exact final numeric and letter grades."
+    },
+    {
+      "name": "final_grade_export.xml",
+      "format": "XML",
+      "path": "output/final_grade_export.xml",
+      "description": "Registrar XML export rebuilt from the repaired backup."
+    },
+    {
+      "name": "audit_report.csv",
+      "format": "CSV",
+      "path": "output/audit_report.csv",
+      "description": "Audit report comparing course-closeout decisions at the student level."
+    },
+    {
+      "name": "audit_report.json",
+      "format": "JSON",
+      "path": "output/audit_report.json",
+      "description": "Required summary JSON for the rebuilt audit outputs."
+    },
+    {
+      "name": "exception_log.csv",
+      "format": "CSV",
+      "path": "output/exception_log.csv",
+      "description": "Expected manual-review exceptions produced from the repaired backup."
+    },
+    {
+      "name": "decisions.md",
+      "format": "Markdown",
+      "path": "output/decisions.md",
+      "description": "Required memo describing the repair decisions made during closeout."
+    },
+    {
+      "name": "oneroster_package",
+      "format": "Directory",
+      "path": "output/oneroster_package",
+      "description": "Required OneRoster CSV package containing manifest, users, classes, enrollments, line items, and results."
+    }
+  ],
+  "evaluation": "**Submissions receive `0.0` when:**\n- any required deliverable is missing\n- immutable backup files inside `corrected_course.mbz` differ from the benchmark contract\n\n**Scoring method:**\n- `category_weights_drop_empty` -> 20 points\n- `late_override_excused_cutoffs` -> 15 points\n- `final_grade_export_exactness` -> 25 points\n- `registrar_and_oneroster_exports` -> 15 points\n- `audit_honesty` -> 15 points\n- `exception_log_exactness` -> 10 points\n\nAdditional penalties apply when the repaired backup's `integration/id_map.csv` or `gradebook/final_grade_flags.csv` does not exactly match the required repaired state.\n\n**What does a perfect output look like?**\nAll 13 required outputs are present, immutable backup files are preserved, the repaired backup matches the intended policy, cutoff, final-grade-flag, and SIS-mapping fixes, and the rebuilt registrar, OneRoster, audit, and exception outputs are correct.\n\n**What does a wrong output look like?**\nA realistic wrong submission is the full export rebuild produced directly from the broken starter backup. That negative fixture remains structurally complete, but on the revised submission it now hard-fails at `0.0` because the expanded immutable contract also catches the unchanged `gradebook.xml`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "11",
+    "domain_code": "education_info",
+    "subdomain_id": "11.1",
+    "subdomain_code": "edtech",
+    "subdomain_name": "Educational Technology",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:22:39.936765Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/education_info/moodle_gradebook_closeout_reconciliation/task_card.json"
+      },
+      "rationale": "The task involves working with Moodle, an educational technology platform."
+    }
+  }
+}

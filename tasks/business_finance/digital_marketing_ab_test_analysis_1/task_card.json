@@ -1,0 +1,43 @@
+{
+  "taskId": "business_finance/digital_marketing_ab_test_analysis_1",
+  "title": "Digital Marketing A/B Test Analysis",
+  "summary": "Design and analyze a marketing A/B test with exclusion handling, stratified assignment checks, two-proportion inference, BH correction, and a final ship/hold recommendation.",
+  "category": "business_finance",
+  "software": [
+    "Python 3.12",
+    "scipy",
+    "statsmodels",
+    "pandas",
+    "GrowthBook"
+  ],
+  "taskPrompt": "Use the staged CSV, YAML, and Markdown files to complete the A/B test workflow. Install any needed agent-facing libraries from `input/runtime_env/` with UV, then write `randomization_assignment.csv`, `experiment_results.tsv`, and `experiment_report.md` under `output/`.",
+  "reservation": "The submission metadata still lists GrowthBook, but the runnable task contract is a pure Python analysis workflow.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.6",
+    "subdomain_code": "sales_marketing",
+    "subdomain_name": "Sales & Marketing",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:33:38.849853Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/digital_marketing_ab_test_analysis_1/task_card.json"
+      },
+      "rationale": "The task involves analyzing a marketing A/B test, which fits within Sales & Marketing."
+    }
+  }
+}

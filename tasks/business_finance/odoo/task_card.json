@@ -1,0 +1,87 @@
+{
+  "taskId": "business_finance/odoo",
+  "title": "Odoo Supply-Chain End-To-End Workflow",
+  "summary": "Execute a full Odoo ERP supply-chain workflow \u2014 purchases, landed cost, subcontracting, two-level manufacturing, delivery, invoicing, and a returns / credit-note flow \u2014 and leave the final business state inside the variant's PostgreSQL database while saving evidence screenshots.",
+  "category": "business_finance",
+  "software": [
+    "Odoo 19",
+    "PostgreSQL 17"
+  ],
+  "taskPrompt": "## Goal\n\nComplete the recovered end-to-end Odoo supply-chain workflow and leave the final business state inside the task database.\n\n## Variant\n\nFour variants share the same workflow but differ in active database and run-tag namespace: `odoo_compact`, `odoo_shifted`, `odoo_stress`, `odoo_hard`. Work only inside the variant's own database (e.g. `odoo_compact`) and stamp the matching run tag (e.g. `odoo_compact`) into searchable fields such as Reference / Notes / Customer Ref / Vendor Ref on documents you create.\n\n## Workflow (summary \u2014 see `input/prompt.txt` for exact codes and quantities)\n\n1. **Global config.** USD company currency; enable EUR and CNY with locked FX: `1 EUR = 1.20 USD`, `1 CNY = 0.125 USD`. Stockable inventory valuation: FIFO + Automated. Warehouse `WH` uses 2-step receipts; warehouse `My Co` uses 3-step delivery.\n2. **Master data.** Customer `CUST-EU01`; vendors `V-CN01`, `V-US01`, `V-US02`, `V-SUB01`, `V-DS01`. Products `FP-1000`, `SA-200`, `SC-300`, `RM-010`, `RM-020`, `RM-030`, `RM-040`, `ACC-900`, and service `FREIGHT-100`. Define BoMs for `FP-1000`, `SA-200`, and the `SC-300` subcontract.\n3. **Sales.** Create an EUR pricelist and a sales order for `FP-1000 x3` and `ACC-900 x3` (with the variant tag), triggering MTO \u2192 Manufacture for `FP-1000` and Dropship for `ACC-900`.\n4. **Purchases.** Issue tagged POs in CNY / USD for the raw materials, the subcontract fee, and the dropship PO.\n5. **Landed cost.** Receive the CNY PO into `WH` using 2-step receipts, create one Landed Cost (`FREIGHT-100 = 100 USD`, split *By Current Cost*), validate it, complete the input-to-stock transfer, and move `RM-010` / `RM-020` onto the `My Co` warehouse.\n6. **Subcontracting.** Resupply the subcontractor with `RM-040 x3`, then receive `SC-300 x3` with serials `CS-0001..CS-0003`.\n7. **Manufacturing with shortage recovery.** Produce `SA-200 x3`; scrap `RM-030 x1` mid-run to force a shortage, raise an extra tagged PO to replace it, then finish `SA-200 x3` and `FP-1000 x3` with serials `SSK-0001..SSK-0003`.\n8. **Delivery.** Ship `FP-1000` from `My Co` in two waves (2 + 1) using 3-step delivery; `ACC-900` is delivered via Dropship directly from vendor to customer.\n9. **Invoicing & payments.** After each delivery, post EUR invoices totalling `460 EUR` and `230 EUR` and register payments to *Paid*.\n10. **Vendor bills.** Post and reconcile vendor bills for every PO plus the freight bill \u2014 at least six paid vendor bills.\n11. **Expenses.** Record one analytic expense line so the account-analytic evidence fires for the run tag.\n12. **Return + credit note.** Return serial `SSK-0002` from the customer back into `My Co` stock and post and settle a `200 EUR` credit note.\n\n## Evidence to save in `output/`\n\n- `lc_split.png` \u2014 landed-cost allocation screen showing `RM-010 = 60.00` / `RM-020 = 40.00`\n- `invoices.png` \u2014 paid customer invoices totalling `460 EUR` and `230 EUR`\n- `return_credit.png` \u2014 `SSK-0002` return plus the `200 EUR` credit note\n- `stock_wh.png` \u2014 warehouse balances showing `WH: RM-010=0, RM-020=0` and `My Co: RM-010=4, RM-020=7`\n- `submission.txt` \u2014 short operator note confirming the variant DB / tag and any caveats\n\n## Environment pointers\n\n- Local Odoo web server: `http://localhost:8069/web`\n- Launcher: `software/launch_odoo.cmd` (opens the correct DB in the default browser)\n- Task setup resets the variant database from template `AgentService` using the staged PostgreSQL tools.",
+  "agentMustDo": [
+    "Launch Odoo through `software/launch_odoo.cmd` or the auto-opened browser session, and work exclusively inside the variant database (for example `odoo_compact`).",
+    "Follow the full workflow staged in `input/prompt.txt`: master data, tagged sales / purchases, landed cost, subcontracting, two-level manufacturing with shortage recovery, partial + backorder delivery, dropship, EUR invoicing, vendor-bill reconciliation, and the `SSK-0002` return with credit note.",
+    "Stamp the variant run tag (e.g. `odoo_compact`) into searchable document fields such as Reference / Notes / Customer Ref / Vendor Ref on sales orders, purchases, landed cost, and related records.",
+    "Leave the business state exactly as required: landed-cost split `60 / 40`, paid invoices `460 EUR` + `230 EUR`, posted `200 EUR` credit note, serials `SSK-0001..0003` and `CS-0001..0003`, `SSK-0002` returned into `My Co`, and warehouse balances `WH: RM-010=0, RM-020=0` / `My Co: RM-010=4, RM-020=7`.",
+    "Save `lc_split.png`, `invoices.png`, `return_credit.png`, `stock_wh.png`, and `submission.txt` into `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Agent-visible workflow prompt",
+      "format": "`.txt`",
+      "path": "input/prompt.txt",
+      "description": "Full recovered workflow contract for the active variant \u2014 master data codes, FX rates, warehouse routes, tagged purchases, subcontracting, shortage recovery, invoicing, expenses, and the mandatory return / credit-note flow."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Landed-cost split screenshot",
+      "format": "`.png`",
+      "path": "output/lc_split.png",
+      "description": "Landed-cost allocation screen showing `RM-010 = 60.00` and `RM-020 = 40.00`."
+    },
+    {
+      "name": "Paid-invoices screenshot",
+      "format": "`.png`",
+      "path": "output/invoices.png",
+      "description": "Paid customer invoices totalling `460 EUR` and `230 EUR`."
+    },
+    {
+      "name": "Return + credit-note screenshot",
+      "format": "`.png`",
+      "path": "output/return_credit.png",
+      "description": "Return of serial `SSK-0002` back into `My Co` plus the posted and paid `200 EUR` credit note."
+    },
+    {
+      "name": "Warehouse-balances screenshot",
+      "format": "`.png`",
+      "path": "output/stock_wh.png",
+      "description": "Warehouse inventory page showing `WH: RM-010=0, RM-020=0` and `My Co: RM-010=4, RM-020=7`."
+    },
+    {
+      "name": "Operator submission note",
+      "format": "`.txt`",
+      "path": "output/submission.txt",
+      "description": "Short operator note confirming the variant DB / tag and any operator-visible caveats for the run."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score = 0 if triggered):\n\n- The variant database cannot be reached via `psql`.\n- Required Odoo tables (stock, accounting, manufacturing, landed-cost) are missing from the variant database.\n- No business evidence tagged with the active `run_tag` is found on any sales order, manufacturing order, warehouse move, or landed-cost record.\n\n**Weighted scoring when all gates pass** (each check contributes equally; final score = `passed_checks / total_checks`):\n\n- Landed-cost split of exactly `RM-010 = 60.00` and `RM-020 = 40.00` on a validated landed-cost record with the variant tag.\n- One paid vendor bill for the tagged landed-cost freight line.\n- Sales order for `FP-1000 x3` + `ACC-900 x3` in state `sale`.\n- One completed dropship delivery for `ACC-900`.\n- Completed manufacturing orders: one for `SA-200` and one for `FP-1000`, with both routing work orders finished.\n- Paid customer invoices with totals `460 EUR` and `230 EUR`.\n- One paid customer credit note for `200 EUR`.\n- At least six paid vendor bills covering the raw-material, subcontract-fee, and freight POs.\n- Serialized inventory: `FP-1000` lots `SSK-0001..0003`, `SC-300` subcontract lots `CS-0001..0003` (three distinct serials consumed in subcontract).\n- Final warehouse balances: `My Co` holds `FP-1000 = 1`, `RM-010 = 4`, `RM-020 = 7`, and the returned `SSK-0002` is back on `My Co`.\n- One scrap move for `RM-030` paired with one extra tagged PO replacing the scrapped unit.\n- One tagged analytic-expense line on the variant run tag.\n\n**What does a PERFECT output look like?** All SQL checks pass (score = `1.0`) and the five evidence files land in `output/`.\n\n**What does a WRONG / empty output look like?** Missing screenshots, missing tagged business objects, wrong warehouse balances, unpaid invoices or vendor bills, missing serials, or any run that fails the shared SQL contract \u2014 producing a `0.0` score when it trips a hard gate or a partial score below `1.0` when only some checks pass.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.1",
+    "subdomain_code": "accounting",
+    "subdomain_name": "Accounting & Finance",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:46:20.927090Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/odoo/task_card.json"
+      },
+      "rationale": "The task involves managing financial transactions and workflows within a supply chain context."
+    }
+  }
+}

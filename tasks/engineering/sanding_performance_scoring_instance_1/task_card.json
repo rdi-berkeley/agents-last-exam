@@ -1,0 +1,78 @@
+{
+  "taskId": "engineering/sanding_performance_scoring_instance_1",
+  "title": "Sanding Performance Image Scoring",
+  "summary": "Compute pixel-level paint-removal scores from reference and sanded panel images, then write a structured CSV with quantity, uniformity, and composite metrics.",
+  "category": "engineering",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are completing a sanding-performance image scoring task on a Windows VM.\n\nInput files are staged in:\n`E:\\agenthle\\engineering\\sanding_performance_scoring_instance_1\\base\\input`\n\nRead `algorithm_spec.md` in that directory. It defines how to use the reference images `panel_painted.png` and `panel_unpainted.png` to score:\n- `panel_sanded_01.png`\n- `panel_sanded_02.png`\n- `panel_sanded_03.png`\n\nUse RGB image values and follow the formulas in `algorithm_spec.md`.\n\nWrite exactly one output file:\n`E:\\agenthle\\engineering\\sanding_performance_scoring_instance_1\\base\\output\\sanding_scores.csv`\n\nThe CSV must have this header:\n`panel_id,quantity_pct,uniformity_pct,composite_pct`\n\nIt must contain exactly one row for each sanded panel:\n- `panel_sanded_01`\n- `panel_sanded_02`\n- `panel_sanded_03`\n\nRound the three numeric metric columns to one decimal place. Do not modify the files under `input/`.\n",
+  "agentMustDo": [
+    "Read the visible algorithm specification and five panel images from the staged input directory.",
+    "Compute quantity, uniformity, and composite sanding scores for each of the three sanded panels.",
+    "Write `sanding_scores.csv` under the runtime output directory with the required schema and one row per sanded panel."
+  ],
+  "inputFiles": [
+    {
+      "name": "algorithm_spec.md",
+      "format": "Markdown",
+      "path": "input/algorithm_spec.md",
+      "description": "Visible task algorithm and output schema."
+    },
+    {
+      "name": "panel_painted.png",
+      "format": "PNG image",
+      "path": "input/panel_painted.png",
+      "description": "Painted reference panel."
+    },
+    {
+      "name": "panel_unpainted.png",
+      "format": "PNG image",
+      "path": "input/panel_unpainted.png",
+      "description": "Unpainted reference panel."
+    },
+    {
+      "name": "panel_sanded_01.png, panel_sanded_02.png, panel_sanded_03.png",
+      "format": "PNG images",
+      "path": "input/",
+      "description": "Sanded panel images to score."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "sanding_scores.csv",
+      "format": "CSV",
+      "path": "output/sanding_scores.csv",
+      "description": "Agent-produced score table."
+    }
+  ],
+  "evaluation": "The evaluator reads the candidate `output/sanding_scores.csv` and hidden `reference/sanding_scores.csv`. Missing or malformed output returns `0.0`. Otherwise it checks three numeric metrics for each required panel ID and returns the fraction of the 9 metric checks within absolute tolerance `1.0`. The positive fixture scores `1.0`; the negative fixture scores `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.11",
+    "subdomain_code": "robotics",
+    "subdomain_name": "Robotics & Autonomous Systems",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:45:01.496369Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/sanding_performance_scoring_instance_1/task_card.json"
+      },
+      "rationale": "The task involves image processing and scoring related to robotic sanding performance."
+    }
+  }
+}

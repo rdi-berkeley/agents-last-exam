@@ -1,0 +1,123 @@
+{
+  "taskId": "life_sciences/WGS_Variant_Calling",
+  "title": "WGS Variant Calling",
+  "summary": "Run a germline whole-genome variant-calling workflow from staged sequencing data and summarize benchmark metrics against the provided truth calls.",
+  "category": "life_sciences",
+  "software": [],
+  "taskPrompt": "You are given a tiny paired-end genomic sequencing dataset plus a small reference and truth set.\n\nYour task is to run an Ubuntu-native germline variant-calling workflow using `bwa`, `samtools`, and `bcftools`, then summarize benchmark metrics against the provided truth calls.\n\nTask directory:\n- `/media/user/data/agenthle/life_sciences/WGS_Variant_Calling/base`\n\nInput directory:\n- `/media/user/data/agenthle/life_sciences/WGS_Variant_Calling/base/input`\n\nAvailable environment:\n- a Linux terminal is open at `/media/user/data/agenthle/life_sciences/WGS_Variant_Calling/base`\n- conda environment `wf1-env` is preinstalled\n\nRequired outputs under `/media/user/data/agenthle/life_sciences/WGS_Variant_Calling/base/output`:\n- `region_R1_fastqc.html`\n- `region_R2_fastqc.html`\n- `multiqc_report.html`\n- `flagstat.txt`\n- `duplication_metrics.txt`\n- `variants.filtered.vcf.gz`\n- `variants.filtered.vcf.gz.tbi`\n- `rtg_summary.csv` appended under the existing header\n\nDo not ask for confirmation. Execute directly.",
+  "agentMustDo": [
+    "Run a small Ubuntu-native germline variant-calling workflow on paired-end reads and summarize truth-comparison metrics.",
+    "Write outputs only under `output/` while keeping committed fixtures untouched.",
+    "Work directly on Ubuntu; Windows + WSL is no longer the canonical runtime."
+  ],
+  "inputFiles": [
+    {
+      "name": "region_R1.fastq.gz",
+      "format": "gz",
+      "path": "input/region_R1.fastq.gz",
+      "description": ""
+    },
+    {
+      "name": "region_R2.fastq.gz",
+      "format": "gz",
+      "path": "input/region_R2.fastq.gz",
+      "description": ""
+    },
+    {
+      "name": "chr17.fa",
+      "format": "fa",
+      "path": "input/chr17.fa",
+      "description": ""
+    },
+    {
+      "name": "truth_chr17.vcf",
+      "format": "vcf",
+      "path": "input/truth_chr17.vcf",
+      "description": ""
+    },
+    {
+      "name": "eval_region_confident.bed",
+      "format": "bed",
+      "path": "input/eval_region_confident.bed",
+      "description": ""
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "region_R1_fastqc.html",
+      "format": "html",
+      "path": "output/region_R1_fastqc.html",
+      "description": "output/region_R1_fastqc.html"
+    },
+    {
+      "name": "region_R2_fastqc.html",
+      "format": "html",
+      "path": "output/region_R2_fastqc.html",
+      "description": "output/region_R2_fastqc.html"
+    },
+    {
+      "name": "multiqc_report.html",
+      "format": "html",
+      "path": "output/multiqc_report.html",
+      "description": "output/multiqc_report.html"
+    },
+    {
+      "name": "flagstat.txt",
+      "format": "txt",
+      "path": "output/flagstat.txt",
+      "description": "output/flagstat.txt"
+    },
+    {
+      "name": "duplication_metrics.txt",
+      "format": "txt",
+      "path": "output/duplication_metrics.txt",
+      "description": "output/duplication_metrics.txt"
+    },
+    {
+      "name": "variants.filtered.vcf.gz",
+      "format": "gz",
+      "path": "output/variants.filtered.vcf.gz",
+      "description": "output/variants.filtered.vcf.gz"
+    },
+    {
+      "name": "variants.filtered.vcf.gz.tbi",
+      "format": "tbi",
+      "path": "output/variants.filtered.vcf.gz.tbi",
+      "description": "output/variants.filtered.vcf.gz.tbi"
+    },
+    {
+      "name": "rtg_summary.csv",
+      "format": "csv",
+      "path": "output/rtg_summary.csv",
+      "description": "output/rtg_summary.csv"
+    }
+  ],
+  "evaluation": "- FastQC and MultiQC HTML files must be present and non-trivial\n- mapping rate must clear the synthetic threshold\n- duplication rate must stay below the synthetic maximum\n- variant VCF plus index must exist\n- summary metrics for SNPs and INDELs must meet the target precision / recall / F1 cutoffs",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.2",
+    "subdomain_code": "genomics",
+    "subdomain_name": "Genomics & Sequence Analysis",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:02:08.882867Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/WGS_Variant_Calling/task_card.json"
+      },
+      "rationale": "The task involves running a germline variant-calling workflow in genomics."
+    }
+  }
+}

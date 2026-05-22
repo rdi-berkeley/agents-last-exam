@@ -1,0 +1,90 @@
+{
+  "taskId": "health_medicine/public_health_mask_mandate_ratio",
+  "title": "Mask Mandate Moment-In-Time Ratio",
+  "summary": "Estimate the causal moment-in-time effect of a county-level mask mandate from a staged matched-pair county panel and produce the required six-value results JSON.",
+  "category": "health_medicine",
+  "software": [
+    "R",
+    "nlme",
+    "MASS",
+    "splines",
+    "dplyr",
+    "jsonlite"
+  ],
+  "taskPrompt": "You are working on a Linux VM to estimate the moment-in-time effect of a county-level mask mandate.\n\nVisible task files:\n- `/media/user/data/agenthle/health_medicine/public_health_mask_mandate_ratio/base/input/task_prompt.md`\n- `/media/user/data/agenthle/health_medicine/public_health_mask_mandate_ratio/base/input/output_schema.json`\n- `/media/user/data/agenthle/health_medicine/public_health_mask_mandate_ratio/base/input/county_panel.csv`\n- `/media/user/data/agenthle/health_medicine/public_health_mask_mandate_ratio/base/input/matched_pairs.csv`\n- `/media/user/data/agenthle/health_medicine/public_health_mask_mandate_ratio/base/software/README.txt`\n\nWhat you must do:\n1. Read the staged task prompt and output schema.\n2. Build the stacked matched-pair county-day analysis frame and engineer the required lagged features.\n3. Fit the specified quasi-Poisson mixed model with the spline-by-treatment interaction.\n4. Compute the policy-effect ratios at relative days 14, 28, and 42, plus the arithmetic mean over days 1..42.\n5. Write exactly one file to `/media/user/data/agenthle/health_medicine/public_health_mask_mandate_ratio/base/output`:\n   - `/media/user/data/agenthle/health_medicine/public_health_mask_mandate_ratio/base/output/results.json`\n\nOutput rules:\n- Write valid JSON only.\n- Use exactly the six keys listed in `output_schema.json`.\n- Output numeric values, not strings.\n- Do not modify the staged input files and do not write outside `/media/user/data/agenthle/health_medicine/public_health_mask_mandate_ratio/base/output`.\n",
+  "agentMustDo": [
+    "Read the staged task prompt and output schema before doing any analysis.",
+    "Build the stacked matched-pair county-day analysis frame and the required lagged predictors.",
+    "Fit the specified quasi-Poisson mixed model with the spline-by-treatment interaction.",
+    "Write exactly one `output/results.json` file containing the six required numeric keys."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_prompt.md",
+      "format": "Markdown",
+      "path": "input/task_prompt.md",
+      "description": "Agent-visible epidemiology task brief with the full modeling contract."
+    },
+    {
+      "name": "output_schema.json",
+      "format": "JSON",
+      "path": "input/output_schema.json",
+      "description": "Exact six-key output schema for `results.json`."
+    },
+    {
+      "name": "county_panel.csv",
+      "format": "CSV",
+      "path": "input/county_panel.csv",
+      "description": "Daily county-level panel with incidence, weather, visitation, R, and demographic covariates."
+    },
+    {
+      "name": "matched_pairs.csv",
+      "format": "CSV",
+      "path": "input/matched_pairs.csv",
+      "description": "Matched-pair intervention table with `group_id`, `mask_grp`, and `mask_time`."
+    },
+    {
+      "name": "README.txt",
+      "format": "text",
+      "path": "software/README.txt",
+      "description": "Agent-visible runtime note describing the planned Stage 4 `software/Rscript` entry point."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "results.json",
+      "format": "JSON",
+      "path": "output/results.json",
+      "description": "Required six-key result bundle with two integer checks and four ratio outputs."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (score `0.0` if triggered):\n- Missing `results.json`\n- Malformed JSON\n- Missing or unexpected keys\n- Non-numeric values\n- Wrong integer counts for `n_pairs` or `n_unique_counties`\n- Any ratio failing either the 2-decimal equality check or the 3-decimal tolerance check\n\n**Scoring method:**\nThe evaluator compares `results.json` against the hidden `reference/reference_output.json`. Integer fields require exact equality. Ratio fields must satisfy both `round(agent, 2) == round(reference, 2)` and `|round(agent, 3) - round(reference, 3)| <= 0.001`. This is a binary evaluator: all six fields must pass together for score `1.0`; otherwise the score is `0.0`.\n\n**What does a perfect output look like?**\nA six-key JSON object whose two integer counts are exact and whose four ratio values satisfy both numeric rules against the hidden reference.\n\n**What does a wrong output look like?**\nMissing keys, extra keys, strings instead of numeric values, malformed JSON, paper-rounded shortcut ratios, or any output that misses the hidden reference checks.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.4",
+    "subdomain_code": "public_health",
+    "subdomain_name": "Public Health & Epidemiology",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:42:10.932161Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/public_health_mask_mandate_ratio/task_card.json"
+      },
+      "rationale": "The task focuses on estimating the effects of a public health policy (mask mandate) on health outcomes."
+    }
+  }
+}

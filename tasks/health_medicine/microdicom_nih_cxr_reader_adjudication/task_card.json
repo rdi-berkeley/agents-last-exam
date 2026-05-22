@@ -1,0 +1,106 @@
+{
+  "taskId": "health_medicine/microdicom_nih_cxr_reader_adjudication",
+  "title": "MicroDicom NIH CXR Reader Adjudication",
+  "summary": "Adjudicate between two competing reader annotations for a 9-case chest X-ray cohort in a Windows MicroDicom workflow, then save three cohort TSV outputs (adjudicated boxes, adjudication log, final impressions).",
+  "category": "health_medicine",
+  "software": [
+    "MicroDicom DICOM Viewer"
+  ],
+  "taskPrompt": "You are a radiology adjudicator working in a Windows desktop environment.\n\nYour task is to adjudicate between two competing reader annotations for a cohort of 9 chest X-ray studies and save the final cohort outputs.\n\nFiles and tools:\n- DICOM viewer launcher: `E:\\agenthle\\health_medicine\\microdicom_nih_cxr_reader_adjudication\\base\\software\\launch_mdicom.cmd`\n- Cohort instructions: `E:\\agenthle\\health_medicine\\microdicom_nih_cxr_reader_adjudication\\base\\input\\adjudication_rules.md`\n- Case manifest: `E:\\agenthle\\health_medicine\\microdicom_nih_cxr_reader_adjudication\\base\\input\\case_manifest.tsv`\n- Reader A draft annotations: `E:\\agenthle\\health_medicine\\microdicom_nih_cxr_reader_adjudication\\base\\input\\reader_a_annotations.tsv`\n- Reader B draft annotations: `E:\\agenthle\\health_medicine\\microdicom_nih_cxr_reader_adjudication\\base\\input\\reader_b_annotations.tsv`\n- Clinical notes directory: `E:\\agenthle\\health_medicine\\microdicom_nih_cxr_reader_adjudication\\base\\input\\clinical_notes`\n- DICOM cases directory: `E:\\agenthle\\health_medicine\\microdicom_nih_cxr_reader_adjudication\\base\\input\\dicom_cases`\n- Output directory: `E:\\agenthle\\health_medicine\\microdicom_nih_cxr_reader_adjudication\\base\\output`\n\nWhat you must do:\n1. Read `adjudication_rules.md` and `case_manifest.tsv`.\n2. Use the case-specific clinical notes as context.\n3. Launch MicroDicom from the provided launcher.\n4. For each case in the manifest, open the listed DICOM file in MicroDicom.\n5. Compare the candidate reader boxes from `reader_a_annotations.tsv` and `reader_b_annotations.tsv` against the image.\n6. Choose the better-supported reader result for each case.\n7. Save exactly these UTF-8 tab-delimited files under `E:\\agenthle\\health_medicine\\microdicom_nih_cxr_reader_adjudication\\base\\output`:\n   - `E:\\agenthle\\health_medicine\\microdicom_nih_cxr_reader_adjudication\\base\\output\\adjudicated_boxes.tsv`\n   - `E:\\agenthle\\health_medicine\\microdicom_nih_cxr_reader_adjudication\\base\\output\\adjudication_log.tsv`\n   - `E:\\agenthle\\health_medicine\\microdicom_nih_cxr_reader_adjudication\\base\\output\\final_impressions.tsv`\n\nRequired schemas:\n- `adjudicated_boxes.tsv`: `case_id`, `selected_reader`, `final_x`, `final_y`, `final_width`, `final_height`\n- `adjudication_log.tsv`: `case_id`, `selected_reader`, `disagreement_type`, `resolution_basis`\n- `final_impressions.tsv`: `case_id`, `final_finding_label`, `final_impression_label`\n\nTask constraints:\n- `selected_reader` must be either `reader_a` or `reader_b`\n- `disagreement_type` must be `box_disagreement`\n- `final_finding_label` must be `Atelectasis`\n- `final_impression_label` must be `positive_for_atelectasis`\n- Do not modify `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`",
+  "agentMustDo": [
+    "Read the cohort instructions in `input/adjudication_rules.md`.",
+    "Read `input/case_manifest.tsv` to enumerate the 9 cases.",
+    "Use the case-specific clinical notes under `input/clinical_notes/` as context.",
+    "Launch MicroDicom via `software/launch_mdicom.cmd`.",
+    "For each case, open the DICOM in MicroDicom and compare the two candidate reader boxes.",
+    "Choose the better-supported reader for each case.",
+    "Save `output/adjudicated_boxes.tsv`, `output/adjudication_log.tsv`, and `output/final_impressions.tsv` with the required UTF-8 tab-delimited schemas."
+  ],
+  "inputFiles": [
+    {
+      "name": "adjudication_rules.md",
+      "format": "markdown",
+      "path": "input/adjudication_rules.md",
+      "description": "high-level cohort adjudication policy and required label vocabulary"
+    },
+    {
+      "name": "case_manifest.tsv",
+      "format": "TSV",
+      "path": "input/case_manifest.tsv",
+      "description": "9-case manifest enumerating the cohort cases"
+    },
+    {
+      "name": "reader_a_annotations.tsv",
+      "format": "TSV",
+      "path": "input/reader_a_annotations.tsv",
+      "description": "candidate bounding boxes from reader A"
+    },
+    {
+      "name": "reader_b_annotations.tsv",
+      "format": "TSV",
+      "path": "input/reader_b_annotations.tsv",
+      "description": "candidate bounding boxes from reader B"
+    },
+    {
+      "name": "clinical_notes/",
+      "format": "text directory",
+      "path": "input/clinical_notes/",
+      "description": "per-case clinical note files referenced by the manifest"
+    },
+    {
+      "name": "dicom_cases/",
+      "format": "DICOM directory",
+      "path": "input/dicom_cases/",
+      "description": "per-case chest radiograph DICOM files referenced by the manifest"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "adjudicated_boxes.tsv",
+      "format": "TSV",
+      "path": "output/adjudicated_boxes.tsv",
+      "description": "final per-case selected reader plus adjudicated bounding box"
+    },
+    {
+      "name": "adjudication_log.tsv",
+      "format": "TSV",
+      "path": "output/adjudication_log.tsv",
+      "description": "final per-case adjudication rationale labels"
+    },
+    {
+      "name": "final_impressions.tsv",
+      "format": "TSV",
+      "path": "output/final_impressions.tsv",
+      "description": "final per-case finding and impression labels"
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (a single required TSV that trips these contributes `0.0` to the three-file fraction):\n\n- required output TSV missing\n- file not valid tab-delimited UTF-8 with the required header row\n- `selected_reader` outside `{reader_a, reader_b}`\n- `disagreement_type` other than `box_disagreement`\n- `final_finding_label` differs from `Atelectasis`\n- `final_impression_label` differs from `positive_for_atelectasis`\n\n**Scoring method:**\n\n- normalize each TSV (strip whitespace, normalize line endings, sort rows by `case_id`)\n- `adjudication_log.tsv` must match the hidden reference exactly by `case_id`\n- `final_impressions.tsv` must match the hidden reference exactly by `case_id`\n- `adjudicated_boxes.tsv` must match the hidden `selected_reader` exactly by `case_id` and each final box must achieve IoU `>= 0.50` against the hidden gold box\n- total score is the fraction of the three required files that pass their contract (`0.0`, `0.333...`, `0.666...`, or `1.0`)\n\n- **Where does the main scoring logic run?** local Python in `main.py`\n- **If any scoring step runs on the VM, why is that exception necessary?** no VM-side scoring is used\n\n**What does a PERFECT output look like?**\n\n- all three TSVs present with the exact schemas\n- every case chooses the evaluator-supported reader and produces a box meeting the IoU threshold\n- adjudication log and final impression rows match the hidden reference exactly\n- total score `1.0`\n\n**What does a WRONG/empty output look like?**\n\n- missing TSVs or malformed headers -> the affected file contributes `0.0`\n- wrong reader selections, mismatched adjudication log values, or sub-threshold box IoU -> the affected file fails\n- the canonical negative fixture (systematic all-`reader_b` adjudication) scores `0.333...`",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.1",
+    "subdomain_code": "clinical_diagnostics",
+    "subdomain_name": "Clinical Diagnostics & Imaging",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:43:52.546782Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/microdicom_nih_cxr_reader_adjudication/task_card.json"
+      },
+      "rationale": "The task involves adjudicating reader annotations for chest X-ray studies, which falls under clinical diagnostics and imaging."
+    }
+  }
+}

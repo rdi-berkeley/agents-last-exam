@@ -1,0 +1,113 @@
+{
+  "taskId": "physical_sciences/hst_acs_wfc_visit_reduction",
+  "title": "HST ACS/WFC Visit Reduction",
+  "summary": "Implement a reproducible Python reduction workflow for synthetic HST ACS/WFC imaging visits, including masking, alignment, drizzling, source photometry, astrometry, and QC reporting.",
+  "category": "physical_sciences",
+  "software": [
+    "Python",
+    "NumPy",
+    "Astropy",
+    "Photutils"
+  ],
+  "taskPrompt": "You are reducing synthetic HST ACS/WFC visit data on a Linux VM. Read `input/TASK_PROMPT.md`, inspect the visible visit under `input/acs_visit_f606w_lockman/`, and implement a reusable `output/reduce_visit.py` script. The script must accept `python reduce_visit.py --input <visit_root_or_parent_input_dir> --output <output_dir>` and write one `<output_dir>/<visit_id>/` folder per visit with `drizzled_image.csv`, `source_catalog.csv`, `alignment_solution.csv`, `photometry_qc.json`, and `reduction_report.md`. Do not modify `input/`; write only under `output/`.",
+  "agentMustDo": [
+    "Read the sanitized task prompt, starter project, visible ACS/WFC visit, and runtime manifest under `input/`.",
+    "Implement `output/reduce_visit.py` as a reusable command-line reducer for any visit folder with the staged schema.",
+    "Mask cosmic-ray and hot-pixel DQ pixels, align the dithered exposures, and create a 72x72 count-rate drizzled mosaic.",
+    "Detect sources and write the required source catalog with pixel, sky, flux, magnitude, SNR, sharpness, and flag columns.",
+    "Write alignment, photometry QC, and methods report artifacts for each visit directly under the supplied output directory."
+  ],
+  "inputFiles": [
+    {
+      "name": "Task prompt",
+      "format": "`.md`",
+      "path": "input/TASK_PROMPT.md",
+      "description": "Sanitized agent-facing instructions and required output contract."
+    },
+    {
+      "name": "Starter reducer",
+      "format": "`.py`",
+      "path": "input/starter_project/reduce_visit.py",
+      "description": "Incomplete baseline implementation that parses the CLI and writes placeholder outputs."
+    },
+    {
+      "name": "Visible ACS/WFC visit",
+      "format": "FITS, CSV, JSON",
+      "path": "input/acs_visit_f606w_lockman/",
+      "description": "Visible synthetic visit with exposure images, DQ masks, association table, calibration context, and Gaia-like astrometric anchors."
+    },
+    {
+      "name": "Runtime manifest",
+      "format": "`.toml`",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Declares the Python packages available through the task runtime helper."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Reducer source",
+      "format": "`.py`",
+      "path": "output/reduce_visit.py",
+      "description": "Reusable command-line reduction implementation."
+    },
+    {
+      "name": "Drizzled mosaic",
+      "format": "`.csv`",
+      "path": "output/<visit_id>/drizzled_image.csv",
+      "description": "Required 72x72 count-rate mosaic for each evaluated visit."
+    },
+    {
+      "name": "Source catalog",
+      "format": "`.csv`",
+      "path": "output/<visit_id>/source_catalog.csv",
+      "description": "Required source table with the exact task schema."
+    },
+    {
+      "name": "Alignment solution",
+      "format": "`.csv`",
+      "path": "output/<visit_id>/alignment_solution.csv",
+      "description": "Required per-exposure shift and alignment-quality table."
+    },
+    {
+      "name": "Photometry QC",
+      "format": "`.json`",
+      "path": "output/<visit_id>/photometry_qc.json",
+      "description": "Required visit-level quality-control metrics."
+    },
+    {
+      "name": "Reduction report",
+      "format": "`.md`",
+      "path": "output/<visit_id>/reduction_report.md",
+      "description": "Required concise methods report."
+    }
+  ],
+  "evaluation": "The evaluator runs `output/reduce_visit.py` against staged visible and evaluator-only visits, then scores the generated per-visit artifacts locally. Hard gates include a missing candidate script, script failure, missing required per-visit files, unparseable files, or CSV schema mismatches. The scorer preserves the submitter's 0-100 visit rubric internally and returns a normalized score in `[0.0, 1.0]`; `0.80` is the pass threshold. Positive fixture score is `1.0` and the unmodified-starter negative fixture score is `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "2",
+    "domain_code": "physical_sciences",
+    "subdomain_id": "2.3",
+    "subdomain_code": "astronomy",
+    "subdomain_name": "Astronomy & Astrophysics",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:00:23.309824Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/physical_sciences/hst_acs_wfc_visit_reduction/task_card.json"
+      },
+      "rationale": "The task involves reducing HST ACS/WFC visit data, which is directly related to astronomy and astrophysics."
+    }
+  }
+}

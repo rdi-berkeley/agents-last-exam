@@ -1,0 +1,106 @@
+{
+  "taskId": "health_medicine/healthcare_variant_annotation_pipeline",
+  "title": "Build A Pinned Clinical Variant Annotation Table",
+  "summary": "Parse a staged 50-variant NA12878-derived VEP snapshot bundle, recover gene / consequence / frequency / ClinVar annotations, and emit the exact reportable subset.",
+  "category": "health_medicine",
+  "software": [
+    "Python",
+    "uv",
+    "pandas",
+    "Ensembl VEP snapshot"
+  ],
+  "taskPrompt": "You are working on a Linux clinical-variant annotation task.\n\nTask directory:\n- `/media/user/data/agenthle/health_medicine/healthcare_variant_annotation_pipeline/base`\n\nVisible inputs:\n- Variant list: `/media/user/data/agenthle/health_medicine/healthcare_variant_annotation_pipeline/base/input/variants_to_annotate.tsv`\n- Raw VEP snapshots: `/media/user/data/agenthle/health_medicine/healthcare_variant_annotation_pipeline/base/input/annotation_snapshots/vep_batch_responses.jsonl`\n- Rule / provenance manifest: `/media/user/data/agenthle/health_medicine/healthcare_variant_annotation_pipeline/base/input/source_manifest.json`\n- Task-local runtime manifest: `/media/user/data/agenthle/health_medicine/healthcare_variant_annotation_pipeline/base/input/runtime_env/pyproject.toml`\n- Task-local runtime lockfile: `/media/user/data/agenthle/health_medicine/healthcare_variant_annotation_pipeline/base/input/runtime_env/uv.lock`\n\nYour job:\n1. Work from a writable directory under `/media/user/data/agenthle/health_medicine/healthcare_variant_annotation_pipeline/base/output`.\n2. Read the 50 staged variants in order.\n3. Parse the raw VEP snapshot JSON lines and derive, for each variant:\n   - `gene`\n   - `consequence`\n   - `max_population_af`\n   - `clinvar_significance`\n   - `is_reportable`\n4. Filter the reportable subset exactly according to `/media/user/data/agenthle/health_medicine/healthcare_variant_annotation_pipeline/base/input/source_manifest.json`.\n5. Write these files under `/media/user/data/agenthle/health_medicine/healthcare_variant_annotation_pipeline/base/output`:\n   - `annotated_variants.tsv`\n   - `reportable_variants.tsv`\n   - `pipeline.py`\n   - `run_log.json`\n\nOutput rules:\n- `annotated_variants.tsv` and `reportable_variants.tsv` must use tab-separated columns with this exact header:\n  `variant_id chrom pos ref alt gene consequence max_population_af clinvar_significance is_reportable`\n- `reportable_variants.tsv` must contain only rows where `is_reportable=yes`\n- `pipeline.py` should be your solver-authored pipeline implementation\n- `run_log.json` must be valid UTF-8 JSON and include the emitted row counts\n- Treat `/media/user/data/agenthle/health_medicine/healthcare_variant_annotation_pipeline/base/input` as read-only source data\n- Do not use hidden evaluator-owned files\n\nRecommended setup:\n- You may work with the system `python`, or create a task-local environment from `/media/user/data/agenthle/health_medicine/healthcare_variant_annotation_pipeline/base/input/runtime_env` with:\n  `uv sync --frozen --project input/runtime_env`\n\nDo not ask for confirmation. Execute directly.\n",
+  "agentMustDo": [
+    "Read the staged 50-variant TSV in order.",
+    "Parse the raw VEP JSONL snapshot bundle and derive gene / consequence / AF / ClinVar fields.",
+    "Apply the reportable rule from `input/source_manifest.json` exactly.",
+    "Write `annotated_variants.tsv`, `reportable_variants.tsv`, `pipeline.py`, and `run_log.json` under `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Variant list",
+      "format": "tsv",
+      "path": "input/variants_to_annotate.tsv",
+      "description": "50 pinned NA12878-derived coding variants in canonical output order."
+    },
+    {
+      "name": "VEP snapshot bundle",
+      "format": "jsonl",
+      "path": "input/annotation_snapshots/vep_batch_responses.jsonl",
+      "description": "Raw VEP responses the agent must parse."
+    },
+    {
+      "name": "Rule manifest",
+      "format": "json",
+      "path": "input/source_manifest.json",
+      "description": "Visible reportable-variant rule and provenance notes."
+    },
+    {
+      "name": "Runtime manifest",
+      "format": "toml",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Optional task-local dependency manifest."
+    },
+    {
+      "name": "Runtime lockfile",
+      "format": "lock",
+      "path": "input/runtime_env/uv.lock",
+      "description": "Locked dependency set for deterministic `uv sync --frozen`."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Annotated output table",
+      "format": "tsv",
+      "path": "output/annotated_variants.tsv",
+      "description": "Required 50-row annotation artifact."
+    },
+    {
+      "name": "Reportable subset",
+      "format": "tsv",
+      "path": "output/reportable_variants.tsv",
+      "description": "Required reportable-variant subset."
+    },
+    {
+      "name": "Pipeline implementation",
+      "format": "py",
+      "path": "output/pipeline.py",
+      "description": "Solver-authored pipeline script."
+    },
+    {
+      "name": "Run log",
+      "format": "json",
+      "path": "output/run_log.json",
+      "description": "Execution log with emitted row counts."
+    }
+  ],
+  "evaluation": "**Scored files**\n- `annotated_variants.tsv`\n- `reportable_variants.tsv`\n- `pipeline.py`\n- `run_log.json`\n\n**Scoring method**\n- Pipeline artifact quality: `2` points\n- Run-log validity and count consistency: `3` points\n- Table structure / row count / canonical row order: `10` points\n- Gene matches: `25` points, with full credit at `>= 45/50`\n- Consequence matches: `25` points, with full credit at `>= 43/50`\n- Population-frequency matches: `10` points\n- ClinVar-significance matches: `5` points\n- Reportable agreement: `20` points, with exact `reportable_variants.tsv` row agreement and exact `annotated_variants.tsv:is_reportable` flags required for full credit\n- Final score: `total_points / 100`\n- Passing threshold: `>= 0.85`\n\n**Current fixture expectations**\n- Positive fixture: `1.0`\n- Negative fixture: `0.236`\n",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.3",
+    "subdomain_code": "clinical_informatics",
+    "subdomain_name": "Clinical Informatics & Care Operations",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:08.034785Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/healthcare_variant_annotation_pipeline/task_card.json"
+      },
+      "rationale": "The task involves clinical variant annotation, which falls under clinical informatics."
+    }
+  }
+}

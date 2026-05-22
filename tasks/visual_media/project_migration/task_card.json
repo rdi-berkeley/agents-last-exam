@@ -1,0 +1,80 @@
+{
+  "taskId": "visual_media/project_migration",
+  "title": "Cubase Project Migration",
+  "summary": "Repair a Cubase project that opens with missing plugins by substituting equivalent installed VSTs, then save the migrated session, export stems, and capture a verification screenshot.",
+  "category": "visual_media",
+  "software": [
+    "Cubase"
+  ],
+  "taskPrompt": "Goal: Migrate a Cubase project to this computer by replacing all missing/invalid VST plugins with equivalent ones from the available plugins, then export stems and a mixdown.\n\nSoftware:\n- Cubase: `software/Cubase.lnk`\n\nInput:\n- Cubase project: `input/project.cpr`\n- Available VST list: `input/available_vsts.txt`\n\nSteps:\n1. Open `input/project.cpr` using the Cubase shortcut at `software/Cubase.lnk`.\n2. When the \"Missing Plugins\" dialog appears, note all unavailable VST plugins.\n3. For each track with a missing VST instrument or effect:\n   a. Open the track's instrument or insert slot.\n   b. Replace the missing VST with a functionally equivalent one from the available plugins listed in `input/available_vsts.txt`.\n   c. Choose a preset or patch that best approximates the original sound character.\n4. Play back the project and verify all tracks produce audible, artifact-free audio.\n5. Export stems: for each track/channel as organized in the project, solo it and export audio mixdown (WAV, 44.1 kHz or higher) to `output/stems/<track_name>.wav`.\n6. Save the migrated project to `output/migrated_project.cpr`.\n7. Take a screenshot of the Cubase MixConsole or arrange view showing all tracks with their replaced plugins visible, and save it to `output/overview.png`.",
+  "agentMustDo": [
+    "Open `input/project.cpr` in Cubase from `software/Cubase.lnk`.",
+    "Replace each missing or invalid VST with a functionally equivalent installed plugin from `input/available_vsts.txt`.",
+    "Verify the migrated project plays back with audible, artifact-free tracks.",
+    "Export one WAV stem per project-defined track or channel to `output/stems/`.",
+    "Save `output/migrated_project.cpr` and capture `output/overview.png` from Cubase."
+  ],
+  "inputFiles": [
+    {
+      "name": "Cubase project",
+      "format": "CPR",
+      "path": "input/project.cpr",
+      "description": "The broken Cubase session that opens with missing plugins on the target VM."
+    },
+    {
+      "name": "Available VST list",
+      "format": "TXT",
+      "path": "input/available_vsts.txt",
+      "description": "Agent-visible list of installed VST plugins that can be used as replacements."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Migrated Cubase project",
+      "format": "CPR",
+      "path": "output/migrated_project.cpr",
+      "description": "Saved Cubase project with missing plugins replaced."
+    },
+    {
+      "name": "Exported stems",
+      "format": "WAV directory",
+      "path": "output/stems/",
+      "description": "One WAV export per project-defined track or channel."
+    },
+    {
+      "name": "Overview screenshot",
+      "format": "PNG",
+      "path": "output/overview.png",
+      "description": "Cubase screenshot showing the migrated project with tracks and plugin assignments visible."
+    }
+  ],
+  "evaluation": "**Hard gate conditions:** `output/migrated_project.cpr` must exist; `output/stems/` must contain at least one non-silent WAV stem; and `output/overview.png` must pass a Cubase screenshot gate.\n\n**Weighted scoring when all gates pass:** stem completeness and quality contributes `0.20` (`valid matched stems / expected reference stems`), and timbral similarity contributes `0.80` (mean MFCC-based cosine-similarity score, with `>= 0.70` receiving full credit).\n\n**What does a PERFECT output look like?** A migrated Cubase project, a full set of non-silent unclipped stems matching the reference track inventory, and a valid Cubase screenshot, for a score near `1.0`.\n\n**What does a WRONG or empty output look like?** Missing required files, silent stems, or a non-Cubase screenshot cause an immediate `0.0`; poor plugin substitutions keep the gate passing but reduce the timbral score.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.4",
+    "subdomain_code": "audio_music",
+    "subdomain_name": "Audio, Music & Post-Production Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:01:09.621833Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/project_migration/task_card.json"
+      },
+      "rationale": "The task involves audio project migration and VST plugin management, which fits within audio and music production."
+    }
+  }
+}

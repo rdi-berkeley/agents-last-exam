@@ -1,0 +1,82 @@
+{
+  "taskId": "agriculture_env/ndvi_zonal_statistics_d02",
+  "title": "Sentinel-2 NDVI Zonal Statistics",
+  "summary": "Compute a Sentinel-2 NDVI GeoTIFF and polygon-level NDVI zonal statistics for agricultural units with a CRS mismatch between vector and raster inputs.",
+  "category": "agriculture_env",
+  "software": [
+    "Python",
+    "rasterio",
+    "geopandas"
+  ],
+  "taskPrompt": "You are given a polygon shapefile of agricultural units and a 6-band Sentinel-2 GeoTIFF.\n\nTask directory:\n`E:\\agenthle\\agriculture_env\\ndvi_zonal_statistics_d02\\base`\n\nInputs:\n- `E:\\agenthle\\agriculture_env\\ndvi_zonal_statistics_d02\\base\\input\\rotation_count.shp`\n  - associated `.dbf`, `.shx`, `.prj`, and `.cpg` files are present in the same directory\n  - each feature has `id_lcp`, `rot_count`, and polygon geometry\n- `E:\\agenthle\\agriculture_env\\ndvi_zonal_statistics_d02\\base\\input\\s2_l2a_30m_clip.tif`\n\nBand numbering is 1-based:\n- band 1 = B2\n- band 2 = B3\n- band 3 = B4 (Red)\n- band 4 = B8 (NIR)\n- band 5 = B11\n- band 6 = B12\n\nThe shapefile and raster use different coordinate reference systems.\n\nOptional Python runtime:\n- Use `E:\\agenthle\\agriculture_env\\ndvi_zonal_statistics_d02\\base\\software\\python_geo.bat` if you want the benchmark-provisioned geospatial Python stack.\n- The package manifest is visible at `E:\\agenthle\\agriculture_env\\ndvi_zonal_statistics_d02\\base\\input\\runtime_env\\pyproject.toml`.\n\nRequired outputs under `E:\\agenthle\\agriculture_env\\ndvi_zonal_statistics_d02\\base\\output`:\n- `ndvi.tif`\n- `polygon_ndvi_stats.csv`\n\nRequired logic:\n1. Load the input shapefile. Use `id_lcp` as the polygon identifier and `rot_count` exactly as provided. Do not recompute or modify crop rotation counts.\n2. Load the input Sentinel-2 raster.\n3. Compute NDVI using `(B8 - B4) / (B8 + B4)`, where B4 is raster band 3 and B8 is raster band 4.\n4. Use the raster values exactly as provided. Do not apply reflectance scaling, offsets, normalization, clipping, cloud masking, or any other masking rule.\n5. A pixel is invalid only if band 3 is non-finite, band 4 is non-finite, or `(B8 + B4) == 0`.\n6. Write `ndvi.tif` as a single-band `float32` GeoTIFF with the same width, height, CRS, transform, extent, and pixel alignment as the input raster.\n7. Store invalid pixels in `ndvi.tif` as `NaN` values in the raster array.\n8. Do not reproject or resample the raster.\n9. Reproject polygon geometries to the raster CRS before computing zonal statistics. Do not dissolve, explode, simplify, buffer, repair, or otherwise modify the input polygon geometries.\n10. Use the pixel-center rule (`all_touched=False`) for polygon inclusion.\n11. For every polygon, compute `valid_px`, `mean_ndvi`, and `median_ndvi` from finite NDVI pixels.\n12. Include every polygon exactly once. If a polygon has no finite NDVI pixels, write `valid_px` as `0`, `mean_ndvi` as `NA`, and `median_ndvi` as `NA`.\n13. Write `polygon_ndvi_stats.csv` with exactly these columns, in order: `id_lcp`, `rot_count`, `valid_px`, `mean_ndvi`, `median_ndvi`.\n14. Sort the CSV by `id_lcp` in ascending lexicographic order. Treat `id_lcp` as a string identifier.\n15. Compute statistics from the final `float32` NDVI raster values, then round `mean_ndvi` and `median_ndvi` to 6 decimal places only when writing the CSV.\n\nRules:\n- Use only the provided local files.\n- Do not modify input files.\n- Do not change required output filenames.\n- Do not ask for confirmation; execute directly.\n",
+  "agentMustDo": [
+    "Use the staged shapefile `input/rotation_count.shp` and Sentinel-2 raster `input/s2_l2a_30m_clip.tif`.",
+    "Compute NDVI from raster band 4 and band 3 without extra scaling or masking.",
+    "Write `output/ndvi.tif` as single-band float32 with the same georeferencing as the input raster.",
+    "Reproject polygons to the raster CRS for zonal statistics, using pixel-center inclusion.",
+    "Write `output/polygon_ndvi_stats.csv` with the required five columns and one row per polygon."
+  ],
+  "inputFiles": [
+    {
+      "name": "rotation_count.shp",
+      "format": "ESRI Shapefile",
+      "path": "input/rotation_count.shp",
+      "description": "Agricultural unit polygons with `id_lcp` and precomputed `rot_count` fields"
+    },
+    {
+      "name": "s2_l2a_30m_clip.tif",
+      "format": "GeoTIFF",
+      "path": "input/s2_l2a_30m_clip.tif",
+      "description": "Six-band Sentinel-2 raster; band 3 is B4/Red and band 4 is B8/NIR"
+    },
+    {
+      "name": "runtime_env/pyproject.toml",
+      "format": "TOML",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Optional dependency manifest for a Python geospatial solution"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "ndvi.tif",
+      "format": "GeoTIFF",
+      "path": "output/ndvi.tif",
+      "description": "Required single-band float32 NDVI raster"
+    },
+    {
+      "name": "polygon_ndvi_stats.csv",
+      "format": "CSV",
+      "path": "output/polygon_ndvi_stats.csv",
+      "description": "Required polygon-level NDVI statistics table"
+    }
+  ],
+  "evaluation": "Outputs are checked for required files, CSV schema, polygon ID coverage, GeoTIFF shape/CRS/transform/dtype, CSV field agreement, and NDVI raster finite-mask/value agreement. The score is normalized from 0.0 to 1.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "12",
+    "domain_code": "agriculture_env",
+    "subdomain_id": "12.2",
+    "subdomain_code": "precision_ag",
+    "subdomain_name": "Precision Agriculture",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:20:07.702591Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/agriculture_env/ndvi_zonal_statistics_d02/task_card.json"
+      },
+      "rationale": "The task involves computing NDVI and zonal statistics for agricultural units."
+    }
+  }
+}

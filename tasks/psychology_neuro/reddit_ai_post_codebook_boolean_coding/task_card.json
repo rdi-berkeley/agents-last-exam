@@ -1,0 +1,81 @@
+{
+  "taskId": "psychology_neuro/reddit_ai_post_codebook_boolean_coding",
+  "title": "Reddit AI Post Codebook Boolean Coding",
+  "summary": "Read a psychology codebook PDF and complete a boolean-coded Reddit-post annotation workbook in LibreOffice Calc.",
+  "category": "psychology_neuro",
+  "software": [
+    "LibreOffice Calc",
+    "Microsoft Edge PDF Viewer"
+  ],
+  "taskPrompt": "You are completing a psychology coding workbook on a Windows VM.\n\n## Input Files\n- Dataset workbook: `E:\\agenthle\\psychology_neuro\\reddit_ai_post_codebook_boolean_coding\\base\\input\\ai_addiction_dataset_n95.xlsx`\n- Codebook PDF: `E:\\agenthle\\psychology_neuro\\reddit_ai_post_codebook_boolean_coding\\base\\input\\ai_addiction_codebook.pdf`\n\n## Software\n- Open the workbook with `E:\\agenthle\\psychology_neuro\\reddit_ai_post_codebook_boolean_coding\\base\\software\\open_dataset.bat`\n- Open the codebook with `E:\\agenthle\\psychology_neuro\\reddit_ai_post_codebook_boolean_coding\\base\\software\\open_codebook.bat`\n- Or open both with `E:\\agenthle\\psychology_neuro\\reddit_ai_post_codebook_boolean_coding\\base\\software\\open_inputs.bat`\n\n## What You Must Do\n1. Read the codebook and inspect the Reddit post workbook.\n2. For each nonempty post row (Excel rows 2 through 96), fill the annotation columns F through AR.\n3. Choose exactly one focus label in columns F through H for each post row.\n4. Save the completed workbook exactly to `E:\\agenthle\\psychology_neuro\\reddit_ai_post_codebook_boolean_coding\\base\\output\\ai_addiction_annotations_output.xlsx`.\n\n## Rules\n- Keep the existing post metadata in columns A through E intact.\n- Use boolean annotations in columns F through AR.\n- Do not modify files under `input\\`.\n",
+  "agentMustDo": [
+    "Open the staged Reddit-post workbook and the staged codebook PDF.",
+    "Read the codebook definitions and skip rules.",
+    "Fill the boolean coding columns F through AR for Excel rows 2 through 96.",
+    "Choose exactly one focus label in columns F through H for each post row.",
+    "Save the completed workbook to `output/ai_addiction_annotations_output.xlsx`."
+  ],
+  "inputFiles": [
+    {
+      "name": "ai_addiction_dataset_n95.xlsx",
+      "format": "Excel workbook",
+      "path": "input/ai_addiction_dataset_n95.xlsx",
+      "description": "Visible Reddit-post dataset workbook with post metadata plus blank coding columns"
+    },
+    {
+      "name": "ai_addiction_codebook.pdf",
+      "format": "PDF",
+      "path": "input/ai_addiction_codebook.pdf",
+      "description": "Visible two-page annotation codebook describing focus labels, symptoms, motivations, features, and post purpose categories"
+    },
+    {
+      "name": "output_contract.json",
+      "format": "JSON",
+      "path": "input/output_contract.json",
+      "description": "Visible output filename and scored-range contract"
+    },
+    {
+      "name": "task_prompt.md",
+      "format": "Markdown",
+      "path": "input/task_prompt.md",
+      "description": "Visible helper prompt kept in exact lockstep with the benchmark runtime prompt"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "ai_addiction_annotations_output.xlsx",
+      "format": "Excel workbook",
+      "path": "output/ai_addiction_annotations_output.xlsx",
+      "description": "Completed workbook with boolean annotations entered for rows 2..96, columns F..AR"
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score = `0.0` if triggered):\n\n- output workbook missing or unreadable\n- header row mismatch versus the staged workbook\n- row metadata drift in columns A:E\n- any row fails the exactly-one focus-label rule in columns F:H\n- any scored cell in F:AR cannot be normalized to boolean `0` or `1`\n\n**Scoring method:**\n\n- compare the hidden reference workbook and the candidate workbook over rows 2..96 and columns F..AR\n- normalize blank and other false-like cells to `0`\n- compute cell accuracy over 3705 scored cells\n\n- **Where does the main scoring logic run?** local Python in `scripts/score_annotation_workbook.py` via `main.py`\n- **If any scoring step runs on the VM, why is that exception necessary?** no VM-side scoring is needed\n\n**What does a PERFECT output look like?**\n\n- the workbook preserves columns A:E exactly\n- every row has exactly one focus label in F:H\n- the scored annotations match the hidden human-coded reference\n- final score `1.0`\n\n**What does a WRONG/empty output look like?**\n\n- missing or malformed workbook -> `0.0`\n- structurally valid but wrong annotations -> strictly below `1.0`; the canonical negative fixture currently scores `0.6852901484480431` because it simulates a realistic row-shift copy/paste bug",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "5",
+    "domain_code": "psychology_neuro",
+    "subdomain_id": "5.1",
+    "subdomain_code": "comp_neuro",
+    "subdomain_name": "Computational Neuroscience",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:43:37.359075Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/psychology_neuro/reddit_ai_post_codebook_boolean_coding/task_card.json"
+      },
+      "rationale": "The task involves coding and analyzing psychological data related to AI addiction."
+    }
+  }
+}

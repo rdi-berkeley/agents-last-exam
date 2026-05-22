@@ -1,0 +1,80 @@
+{
+  "taskId": "education_info/yi_manuscript_translation_1",
+  "title": "Yi Manuscript Translation 1",
+  "summary": "Inspect a classical Yi manuscript image, identify which glyph a phonetic gloss refers to, localize that glyph, and write a cited translation report from bundled source texts.",
+  "category": "education_info",
+  "software": [
+    "Windows Image Viewer",
+    "Text Editor"
+  ],
+  "taskPrompt": "You are analyzing a classical Yi manuscript image on a Windows VM.\n\n## Task Folder\n`E:\\agenthle\\education_info\\yi_manuscript_translation_1\\base`\n\n## Visible Input Files\n- Question: `E:\\agenthle\\education_info\\yi_manuscript_translation_1\\base\\input\\question.txt`\n- Manuscript image: `E:\\agenthle\\education_info\\yi_manuscript_translation_1\\base\\input\\inscription.png`\n- Bundled source texts: `E:\\agenthle\\education_info\\yi_manuscript_translation_1\\base\\input\\reference_materials\\`\n\n## Software\n- Image launcher: `E:\\agenthle\\education_info\\yi_manuscript_translation_1\\base\\software\\launch_viewer.cmd`\n- Use any plain-text editor already present on the VM for the final report and JSON output\n\n## What You Must Do\n1. Read `question.txt` to understand the task.\n2. Open the manuscript image with `software\\launch_viewer.cmd` and inspect the phonetic gloss in the upper-left margin.\n3. Determine which single glyph the gloss refers to by combining image inspection with the bundled `reference_materials`.\n4. Save a bounding box for that glyph exactly to `E:\\agenthle\\education_info\\yi_manuscript_translation_1\\base\\output\\bounding_box.json`.\n5. Write a structured plain-text report exactly to `E:\\agenthle\\education_info\\yi_manuscript_translation_1\\base\\output\\report.txt`.\n\n## Output Requirements\n- `bounding_box.json` must be UTF-8 JSON with integer keys `x1`, `y1`, `x2`, `y2`\n- Coordinates must use the original image pixels, not screenshot coordinates\n- `report.txt` must contain these seven section headers exactly:\n  `EXAMINATION`\n  `SOURCE IMAGE`\n  `TECHNIQUE`\n  `IDENTIFICATION OF TARGET CHARACTER POSITION`\n  `REFERENCE MATERIALS CONSULTED`\n  `TRANSLATION`\n  `IMPRESSION`\n- Do not use the internet or external sources; rely only on the bundled files",
+  "agentMustDo": [
+    "Read `input/question.txt` and inspect the staged `input/inscription.png` image via `software/launch_viewer.cmd`.",
+    "Determine which glyph the phonetic gloss refers to by using only the bundled `input/reference_materials/` files.",
+    "Write `output/bounding_box.json` with integer pixel coordinates for the target glyph.",
+    "Write `output/report.txt` with the seven required sections and a cited translation."
+  ],
+  "inputFiles": [
+    {
+      "name": "Task brief",
+      "format": "`.txt`",
+      "path": "input/question.txt",
+      "description": "Explains the manuscript-inspection and reporting task."
+    },
+    {
+      "name": "Manuscript image",
+      "format": "`.png`",
+      "path": "input/inscription.png",
+      "description": "Classical Yi manuscript image containing the glossed glyph."
+    },
+    {
+      "name": "Reference materials",
+      "format": "directory of `.txt` files",
+      "path": "input/reference_materials/",
+      "description": "Bundled source texts the agent may search and cite."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Bounding box output",
+      "format": "`.json`",
+      "path": "output/bounding_box.json",
+      "description": "Submitted glyph localization in original image coordinates."
+    },
+    {
+      "name": "Translation report",
+      "format": "`.txt`",
+      "path": "output/report.txt",
+      "description": "Structured report with the required sections and citations."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- `output/bounding_box.json` missing, invalid JSON, missing required integer keys, or invalid rectangle\n- `output/report.txt` missing or not valid UTF-8\n- Any required report section missing or empty\n\n**Scoring method:**\n- Localization and report quality each contribute half of the final score\n- The report must identify the correct glossed glyph and provide a cited translation supported by the bundled materials\n- Additional report checks reward citation quality, phonetic reporting, and accurate script description\n- `final` ranges from `0.0` to `1.0`\n\n**Perfect output:** correct glyph localization plus a well-supported cited report.\n\n**Wrong / empty output:** missing files, malformed JSON, wrong glyph identification, unsupported translation claims, or empty required sections score poorly or `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "11",
+    "domain_code": "education_info",
+    "subdomain_id": "11.3",
+    "subdomain_code": "translation",
+    "subdomain_name": "Translation & Localization",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:29:26.679512Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/education_info/yi_manuscript_translation_1/task_card.json"
+      },
+      "rationale": "The task involves translating and analyzing a manuscript, which fits under translation and localization."
+    }
+  }
+}

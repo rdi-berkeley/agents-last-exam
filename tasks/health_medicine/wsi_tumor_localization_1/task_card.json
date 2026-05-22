@@ -1,0 +1,78 @@
+{
+  "taskId": "health_medicine/wsi_tumor_localization_1",
+  "title": "Whole-Slide Tumor Localization",
+  "summary": "Navigate a CAMELYON16 whole-slide pathology image with provided OpenSlide helper tools and output a structured tumor localization result.",
+  "category": "health_medicine",
+  "software": [
+    "Python",
+    "OpenSlide",
+    "NumPy",
+    "Pillow",
+    "Shapely"
+  ],
+  "taskPrompt": "You are working on a Linux VM with a CAMELYON16 whole-slide pathology image. Use the staged WSI and helper module in `input/` to inspect slide metadata, thumbnails, tissue masks, and image patches. Your assigned variant will ask for one structured tumor localization output: a center coordinate, a bounding box, or tumor-positive grid-cell keys. Save exactly one JSON file named `prediction.json` under the variant's `output/` directory. Use level-0 slide coordinates. Do not modify `input/` or evaluator-owned directories.",
+  "agentMustDo": [
+    "Use the staged `tumor_001.tif` and `wsi_tools.py` helper module.",
+    "Navigate the whole-slide image systematically with metadata, thumbnails, tissue masks, and patch reads.",
+    "Visually identify tumor metastasis in H&E tissue patches.",
+    "Write exactly one variant-specific `output/prediction.json` file.",
+    "Do not modify staged input files or write outside the assigned output directory."
+  ],
+  "inputFiles": [
+    {
+      "name": "tumor_001.tif",
+      "format": "BigTIFF whole-slide image",
+      "path": "input/tumor_001.tif",
+      "description": "CAMELYON16 sentinel lymph node whole-slide image."
+    },
+    {
+      "name": "wsi_tools.py",
+      "format": "Python module",
+      "path": "input/wsi_tools.py",
+      "description": "OpenSlide-based helper class for slide metadata, thumbnails, region reads, and tissue masks."
+    },
+    {
+      "name": "pyproject.toml",
+      "format": "Python project manifest",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Optional agent-runtime dependency manifest."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "prediction.json",
+      "format": "JSON",
+      "path": "output/prediction.json",
+      "description": "Variant-specific tumor localization output."
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- `output/prediction.json` is missing or invalid JSON.\n- Required fields for the active variant are missing.\n- Numeric fields are non-finite.\n- Bounding-box geometry is invalid.\n\n**Scoring method**\n- Center-point variant: score is based on whether the point falls in the hidden tumor annotation, with distance-based partial credit outside the boundary.\n- Bounding-box variant: score is IoU against the hidden tumor bounds.\n- Grid-cell variant: score is F1 over hidden positive grid-cell labels.\n\n**Perfect output**\nA schema-valid JSON output that localizes the tumor for the active variant.\n\n**Wrong output**\nMissing output, malformed JSON, far-away coordinates/boxes, or missing tumor grid cells.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.1",
+    "subdomain_code": "clinical_diagnostics",
+    "subdomain_name": "Clinical Diagnostics & Imaging",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:09:49.357493Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/wsi_tumor_localization_1/task_card.json"
+      },
+      "rationale": "The task involves tumor localization in pathology images, which falls under clinical diagnostics."
+    }
+  }
+}

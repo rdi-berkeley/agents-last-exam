@@ -1,0 +1,76 @@
+{
+  "taskId": "computing_math/k3_abelian_extensions",
+  "title": "Finite Abelian Extension Classification",
+  "summary": "Solve a staged finite abelian group extension classification problem in GAP and produce the exact canonical JSON answer. The benchmark contains 6 variants with different abelian groups H and search ranges for m.",
+  "category": "computing_math",
+  "software": [
+    "GAP",
+    "Python"
+  ],
+  "taskPrompt": "You are working on a Linux VM.\n\n## Your Task\nSolve the staged finite abelian group extension classification problem for variant `h_4_4_4_m_1_8` ((Z/4)^3, m=1..8).\n\n## Visible Files\n- Variant config: `/media/user/data/agenthle/computing_math/k3_abelian_extensions/h_4_4_4_m_1_8/input/config.json`\n- Mathematical task specification: `/media/user/data/agenthle/computing_math/k3_abelian_extensions/h_4_4_4_m_1_8/input/task_specification.md`\n- GAP launcher: `/media/user/data/agenthle/computing_math/k3_abelian_extensions/h_4_4_4_m_1_8/software/run_gap.sh`\n\nYou may also use `/usr/bin/gap`, Python, shell scripts, or text editors available on the VM.\n\n## What You Must Do\n1. Read `/media/user/data/agenthle/computing_math/k3_abelian_extensions/h_4_4_4_m_1_8/input/config.json` and `/media/user/data/agenthle/computing_math/k3_abelian_extensions/h_4_4_4_m_1_8/input/task_specification.md` carefully.\n2. Enumerate every finite abelian group `G` in the required short exact sequences across the full `m` search range.\n3. Determine the `product_type` classification for every valid extension group.\n4. Save exactly one JSON file at `/media/user/data/agenthle/computing_math/k3_abelian_extensions/h_4_4_4_m_1_8/output/results.json`.\n\n## Required Output Schema\nWrite one JSON object with these top-level keys:\n- `total_extensions`\n- `extensions`\n- `non_product_type_count`\n- `non_product_type`\n\nEach object in `extensions` and `non_product_type` must contain:\n- `m`\n- `G_invariant_factors`\n- `G_order`\n- `product_type`\n\nUse invariant factors in ascending order with the divisibility condition satisfied. Order `extensions` by `(m, G_invariant_factors)`.\n\n## Output Rules\n- Save your final deliverable only under `/media/user/data/agenthle/computing_math/k3_abelian_extensions/h_4_4_4_m_1_8/output`.\n- Do not modify files under `/media/user/data/agenthle/computing_math/k3_abelian_extensions/h_4_4_4_m_1_8/input`.\n",
+  "agentMustDo": [
+    "Read the staged `input/config.json` and `input/task_specification.md` for the active variant.",
+    "Use GAP to enumerate every finite abelian group `G` that fits into the required short exact sequences across the full `m` search range.",
+    "Determine the `product_type` classification for every valid extension group.",
+    "Write exactly one canonical `output/results.json` with the required top-level keys and per-extension schema.",
+    "Keep `G_invariant_factors` in ascending invariant-factor form and order `extensions` by `(m, G_invariant_factors)`.",
+    "Do not modify the staged input files."
+  ],
+  "inputFiles": [
+    {
+      "name": "config.json",
+      "format": "JSON",
+      "path": "input/config.json",
+      "description": "Variant parameters defining `H_invariant_factors`, `H_order`, and the inclusive `m_search_range`."
+    },
+    {
+      "name": "task_specification.md",
+      "format": "Markdown",
+      "path": "input/task_specification.md",
+      "description": "Variant-specific mathematical contract and the required JSON schema."
+    },
+    {
+      "name": "run_gap.sh",
+      "format": "Shell script",
+      "path": "software/run_gap.sh",
+      "description": "Stable task-local launcher for GAP on the selected Ubuntu VM."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "results.json",
+      "format": "JSON",
+      "path": "output/results.json",
+      "description": "Required deliverable listing all valid extension groups and their `product_type` classifications in canonical order."
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- `output/results.json` is missing, unreadable, or not valid JSON\n- required top-level keys are missing\n- any extension entry is missing `m`, `G_invariant_factors`, `G_order`, or `product_type`\n- any invariant-factor list is not in canonical ascending divisibility form\n- duplicate extension identifiers remain after canonicalization\n\n**Scoring method**\n- The evaluator deterministically recomputes the expected result from the active variant parameters\n- The submitted JSON is canonicalized and compared exactly on:\n  - `total_extensions`\n  - every `extensions` entry after sorting by `(m, G_invariant_factors)`\n  - `non_product_type_count`\n  - the canonicalized `non_product_type` subset\n- Score is binary: exact match returns `1.0`, otherwise `0.0`\n\n**Expected fixture behavior**\n- positive fixture: `1.0`\n- negative fixture: `0.0`",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.4",
+    "subdomain_code": "math_ops_research",
+    "subdomain_name": "Mathematical & Operations Research",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:34:54.676153Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/k3_abelian_extensions/task_card.json"
+      },
+      "rationale": "The task involves classifying finite abelian group extensions, which is a mathematical operations research problem."
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "taskId": "life_sciences/pseudotime_de",
+  "title": "Pseudotime Differential Expression (Palantir + tradeSeq)",
+  "summary": "Discover genes with different expression patterns along pseudotime in a bone-marrow scRNA-seq dataset using Palantir for pseudotime estimation and tradeSeq for lineage-specific differential expression testing.",
+  "category": "life_sciences",
+  "software": [
+    "Python",
+    "R",
+    "scanpy",
+    "palantir",
+    "anndata",
+    "tradeSeq",
+    "SingleCellExperiment"
+  ],
+  "taskPrompt": "You are a computational biologist performing pseudotime differential expression analysis on a bone-marrow scRNA-seq dataset on Linux.\n\nTask directory:\n- `/media/user/data/agenthle/life_sciences/pseudotime_de/base`\n\nInput files:\n- scRNA-seq counts: `/media/user/data/agenthle/life_sciences/pseudotime_de/base/input/marrow_sample_scseq_counts.h5ad`\n- Detailed task brief: `/media/user/data/agenthle/life_sciences/pseudotime_de/base/input/task_description.txt`\n- Python dependency manifest: `/media/user/data/agenthle/life_sciences/pseudotime_de/base/input/runtime_env/pyproject.toml`\n\nRecommended setup:\n- Work in `/media/user/data/agenthle/life_sciences/pseudotime_de/base`\n- Install the Python analysis packages from the staged manifest, for example:\n  `uv sync --project \"/media/user/data/agenthle/life_sciences/pseudotime_de/base/input/runtime_env\"`\n  or `pip install anndata scanpy palantir pandas \"numpy<2\" scipy scikit-learn fa2-modified leidenalg`\n- R packages `SingleCellExperiment` and `tradeSeq` must be available via `Rscript`.\n\nAnalysis pipeline:\n1. Read `input/marrow_sample_scseq_counts.h5ad` (4142 cells x 16106 genes, raw counts).\n2. Preprocess: normalize per cell, log-transform, select 1500 highly variable genes (flavor='cell_ranger'), PCA.\n3. Run Palantir: diffusion maps (n_components=5), multiscale space, neighbors, UMAP, then `palantir.core.run_palantir` with start cell `Run5_164698952452459`, terminal states DC=`Run5_131097901611291`, Mono=`Run5_134936662236454`, Ery=`Run4_200562869397916`, num_waypoints=500.\n4. Export expression matrix, pseudotime, fate probabilities, and UMAP from Python to CSV/MTX files.\n5. In R, assemble a SingleCellExperiment from the exported files.\n6. Keep DC (column 1) and Ery (column 3) lineages; drop cells with zero weight in both; renormalize weights row-wise.\n7. Set R seed 27, run fitGAM(nknots=6), then patternTest(l2fc=log2(1.5)).\n8. Apply BH correction; filter genes with padj < 0.05.\n\nRequired output:\n- Save to: `/media/user/data/agenthle/life_sciences/pseudotime_de/base/output/de_genes.csv`\n- Format: CSV with a single column `gene` containing HGNC symbols (one per row, deduplicated, order-independent).\n- Success criterion: at least 80% symbol-set overlap with a hidden gold-standard gene list.\n\nDo not modify input files or any non-output task directories.\nDo not ask for confirmation. Execute directly.",
+  "agentMustDo": [
+    "Install Python analysis packages (scanpy, palantir, anndata, etc.) and R Bioconductor packages (SingleCellExperiment, tradeSeq).",
+    "Run Palantir pseudotime estimation with the specified start cell and terminal states.",
+    "Export Python outputs to disk and reassemble as a SingleCellExperiment in R.",
+    "Run tradeSeq fitGAM and patternTest on DC vs Ery lineages with specified parameters.",
+    "Write significant DE genes to output/de_genes.csv as a single-column CSV."
+  ],
+  "inputFiles": [
+    {
+      "name": "marrow_sample_scseq_counts.h5ad",
+      "format": "h5ad",
+      "path": "input/marrow_sample_scseq_counts.h5ad",
+      "description": "Bone-marrow scRNA-seq raw counts (4142 cells x 16106 genes)."
+    },
+    {
+      "name": "task_description.txt",
+      "format": "txt",
+      "path": "input/task_description.txt",
+      "description": "Detailed task brief with pipeline parameters and output contract."
+    },
+    {
+      "name": "runtime_env/pyproject.toml",
+      "format": "toml",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Python dependency manifest for agent installation."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "degs.csv",
+      "format": "csv",
+      "path": "reference/degs.csv",
+      "description": "Gold-standard DE gene list (1853 HGNC symbols, evaluator-only)."
+    }
+  ],
+  "evaluation": "Binary pass/fail. The evaluator reads the agent-produced output/de_genes.csv, parses the gene column, computes symbol-set overlap against the hidden reference/degs.csv (1853 genes). Score is 1.0 if overlap >= 80%, else 0.0. Positive fixture scores 1.0; negative fixture (200 gold + 1500 decoys) scores 0.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.2",
+    "subdomain_code": "genomics",
+    "subdomain_name": "Genomics & Sequence Analysis",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:17.552736Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/pseudotime_de/task_card.json"
+      },
+      "rationale": "The task involves pseudotime differential expression analysis in a scRNA-seq dataset, which falls under genomics."
+    }
+  }
+}

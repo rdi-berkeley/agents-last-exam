@@ -1,0 +1,95 @@
+{
+  "taskId": "health_medicine/crf_sdtm_mapping_1",
+  "title": "CRF To SDTM Mapping Specification",
+  "summary": "Create a field-level mapping CSV from clinical CRF and define.xml source documents to SDTM domain variables. The task has CM, VS, and DS variants with matching supplemental qualifier datasets.",
+  "category": "health_medicine",
+  "software": [
+    "Python",
+    "uv",
+    "pandas",
+    "pypdf",
+    "lxml"
+  ],
+  "taskPrompt": "You are preparing a field-level CRF-to-SDTM mapping specification on Linux. Create the requested study C4591001 domain mapping from the visible task brief, output contract, sample CRF, annotated CRF, SDTM define.xml, and supplemental define.xml files. Save exactly one CSV file in the required output directory with the specified columns, and keep all generated files inside the output directory.",
+  "agentMustDo": [
+    "Read the variant's task brief and output contract.",
+    "Inspect the sample CRF, annotated CRF, SDTM define.xml, and supplemental define.xml source documents.",
+    "Identify CRF field-level mappings for the variant's primary SDTM dataset and supplemental qualifier dataset.",
+    "Write exactly one mapping CSV with the required columns in the selected output directory."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_brief.md",
+      "format": "md",
+      "path": "input/task_brief.md",
+      "description": "Variant-specific instructions and output filename."
+    },
+    {
+      "name": "output_contract.json",
+      "format": "json",
+      "path": "input/output_contract.json",
+      "description": "Required CSV columns, allowed datasets, and format constraints."
+    },
+    {
+      "name": "source_documents",
+      "format": "pdf/xml",
+      "path": "input/source_documents/",
+      "description": "Sample CRF, annotated CRF, SDTM define.xml, and supplemental define.xml files."
+    },
+    {
+      "name": "runtime_env",
+      "format": "pyproject/uv.lock",
+      "path": "input/runtime_env/",
+      "description": "Optional Python dependency manifest for agents that want pandas, pypdf, or lxml."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "cm_mapping.csv",
+      "format": "csv",
+      "path": "output/cm_mapping.csv",
+      "description": "Required output for the CM base variant."
+    },
+    {
+      "name": "vs_mapping.csv",
+      "format": "csv",
+      "path": "output/vs_mapping.csv",
+      "description": "Required output for the VS variant."
+    },
+    {
+      "name": "ds_mapping.csv",
+      "format": "csv",
+      "path": "output/ds_mapping.csv",
+      "description": "Required output for the DS variant."
+    }
+  ],
+  "evaluation": "Binary CSV evaluation. The submitted file must have the exact required columns in order, use only the variant's allowed primary and supplemental datasets, keep `goes_to_suppqual` consistent with the dataset, and include every expected normalized mapping row with no extras. Correct fixture outputs score 1.0; incomplete or wrong-key fixture outputs score 0.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.5",
+    "subdomain_code": "clinical_trials",
+    "subdomain_name": "Clinical Research & Trial Operations",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:06:13.998209Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/crf_sdtm_mapping_1/task_card.json"
+      },
+      "rationale": "The task involves creating a mapping specification for clinical research data."
+    }
+  }
+}

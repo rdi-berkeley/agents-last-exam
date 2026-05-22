@@ -1,0 +1,75 @@
+{
+  "taskId": "computing_math/pcap_enterprise_triage_01",
+  "title": "Enterprise PCAP Triage In Wireshark",
+  "summary": "Analyze a staged enterprise packet capture in Wireshark, identify the compromised internal host, reconstruct the infection chain, and deliver a structured triage report.",
+  "category": "computing_math",
+  "software": [
+    "Wireshark"
+  ],
+  "taskPrompt": "You are a cybersecurity analyst working on a Windows VM.\n\n## Your Task\nUse Wireshark to analyze the staged enterprise packet capture and produce a structured triage report.\n\n## Input Files\n- PCAP: `E:\\agenthle\\computing_math\\pcap_enterprise_triage_01\\base\\input\\capture_enhanced.pcap`\n- Output schema: `E:\\agenthle\\computing_math\\pcap_enterprise_triage_01\\base\\input\\output_schema.json`\n- Software notes: `E:\\agenthle\\computing_math\\pcap_enterprise_triage_01\\base\\software\\README.txt`\n\n## Software\n- Launch Wireshark from: `C:\\Program Files\\Wireshark\\Wireshark.exe`\n\n## What You Must Do\n1. Identify the compromised internal host.\n2. Reconstruct the infection chain chronologically.\n3. Recover the initial vector and malicious delivery URL.\n4. Identify the C2 server information.\n5. Extract the required IOC sets.\n6. Save one JSON report that follows the visible schema.\n\n## Output Requirements\n- Save exactly one file to: `E:\\agenthle\\computing_math\\pcap_enterprise_triage_01\\base\\output\\report.json`\n- Filename must be `report.json`\n- The JSON must follow the schema in `output_schema.json`\n",
+  "agentMustDo": [
+    "Open the staged packet capture in Wireshark on the Windows VM.",
+    "Identify the compromised internal workstation from the network evidence.",
+    "Reconstruct the infection timeline in chronological order with the required timestamps and endpoints.",
+    "Recover the initial vector, malicious delivery URL, and C2 server details.",
+    "Extract the IOC sets required by the visible JSON schema.",
+    "Save exactly one schema-valid `report.json` in `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Enterprise packet capture",
+      "format": "PCAP",
+      "path": "input/capture_enhanced.pcap",
+      "description": "The staged network capture the agent must inspect in Wireshark."
+    },
+    {
+      "name": "Visible output schema",
+      "format": "JSON",
+      "path": "input/output_schema.json",
+      "description": "Defines the required top-level report fields, nested structures, enums, and date-time formats."
+    },
+    {
+      "name": "Software notes",
+      "format": "TXT",
+      "path": "software/README.txt",
+      "description": "Points the agent to the installed Wireshark GUI and TShark paths on the VM."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Structured triage report",
+      "format": "JSON",
+      "path": "output/report.json",
+      "description": "One schema-valid JSON report containing the malware family, compromised host, infection chain, C2, exfiltration verdict, and IOCs."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score = `0.0` if triggered):\n- missing `output/report.json`\n- invalid JSON\n- missing required top-level keys\n- schema-invalid JSON, including wrong types or invalid `date-time` values\n\n**Scoring method:**\nThe evaluator reads the submitted `report.json`, validates it against the visible schema, then compares it against an evaluator-only reference using deterministic weighted factual matching.\n\nWeights:\n- `malware_family`: `0.15`\n- `compromised_host`: `0.20`\n- `initial_vector`: `0.15`\n- `c2_servers`: `0.15`\n- `infection_chain` factual fields: `0.20`\n- `exfiltration`: `0.05`\n- `iocs`: `0.10`\n\nEvaluator details:\n- IOC list order is normalized before comparison.\n- `infection_chain.description` is not scored.\n- Exact factual match returns `1.0`.\n- Plausible but wrong reports can receive partial credit below `1.0`.\n\n**What does a PERFECT output look like?**\nA schema-valid report that exactly matches the hidden factual reference across the compromised host, initial vector, timeline, C2 details, exfiltration verdict, and IOC sets. It scores `1.0`.\n\n**What does a WRONG output look like?**\nA missing file, malformed JSON, schema-invalid report, or a schema-valid report with wrong host/timeline/C2/IOC facts. These score `0.0` or partial credit strictly below `1.0` depending on how many weighted fields are still correct.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.5",
+    "subdomain_code": "cybersecurity",
+    "subdomain_name": "Cybersecurity & Digital Forensics",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:13:35.161586Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/pcap_enterprise_triage_01/task_card.json"
+      },
+      "rationale": "The task involves analyzing network traffic for cybersecurity purposes."
+    }
+  }
+}

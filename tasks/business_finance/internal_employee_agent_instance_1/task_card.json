@@ -1,0 +1,92 @@
+{
+  "taskId": "business_finance/internal_employee_agent_instance_1",
+  "title": "Internal Employee Agent Conversation Replay",
+  "summary": "Read staged HR and IT support conversations, then produce one deterministic `results.json` that captures the correct per-turn responses and tool usage across all sessions.",
+  "category": "business_finance",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are working on a Linux VM.\n\n## Your Task\nAct as the company's internal HR / IT assistant across all staged conversation sessions and write the final structured artifact to `/media/user/data/agenthle/business_finance/internal_employee_agent_instance_1/base/output/results.json`.\n\n## Visible Inputs\n- agent rules: `/media/user/data/agenthle/business_finance/internal_employee_agent_instance_1/base/input/agent_rules.md`\n- HR knowledge base: `/media/user/data/agenthle/business_finance/internal_employee_agent_instance_1/base/input/hr_knowledge_base.md`\n- IT knowledge base: `/media/user/data/agenthle/business_finance/internal_employee_agent_instance_1/base/input/it_knowledge_base.md`\n- conversation sessions: `/media/user/data/agenthle/business_finance/internal_employee_agent_instance_1/base/input/queries.json`\n- email / JIRA fallback stubs: `/media/user/data/agenthle/business_finance/internal_employee_agent_instance_1/base/input/stubs.py`\n- deterministic web-search grounding for the `search_web` cases: `/media/user/data/agenthle/business_finance/internal_employee_agent_instance_1/base/input/web_search_grounding.json`\n\n## What To Produce\nWrite exactly one JSON file at `/media/user/data/agenthle/business_finance/internal_employee_agent_instance_1/base/output/results.json` with this shape:\n\n```json\n{\n  \"1.1\": [{\"response\": \"...\", \"tools_used\": []}],\n  \"5.1\": [\n    {\"response\": \"...\", \"tools_used\": [\"draft_hr_email\"]},\n    {\"response\": \"...\", \"tools_used\": [\"send_hr_email\"]}\n  ]\n}\n```\n\n## Required Behavior\n- process each test id in `queries.json` as one independent conversation session\n- keep turn order within each test id\n- keep session memory across turns inside the same test id\n- use the exact canonical tool names from `agent_rules.md` in `tools_used`\n- if you need a deterministic fallback for `search_web`, use the staged `web_search_grounding.json`\n- you may use the staged `stubs.py` for local HR email / JIRA fallback behavior\n\n## Important Constraints\n- write only to `/media/user/data/agenthle/business_finance/internal_employee_agent_instance_1/base/output/results.json` inside the visible `output/` directory\n- do not modify staged files under `input/`\n- do not read or modify hidden evaluator directories\n- keep the artifact deterministic and valid JSON\n",
+  "agentMustDo": [
+    "Read the staged rules, knowledge bases, conversation sessions, and deterministic web-search grounding.",
+    "Process each test id in `queries.json` as an independent multi-turn session while preserving turn order and within-session memory.",
+    "Write exactly one `results.json` file under `output/`.",
+    "Use the exact canonical tool names from `agent_rules.md` in every `tools_used` list.",
+    "Keep the artifact deterministic, valid JSON, and confined to the visible `output/` directory."
+  ],
+  "inputFiles": [
+    {
+      "name": "agent_rules.md",
+      "format": "Markdown",
+      "path": "input/agent_rules.md",
+      "description": "Canonical tool names and operational rules for the HR / IT assistant."
+    },
+    {
+      "name": "hr_knowledge_base.md",
+      "format": "Markdown",
+      "path": "input/hr_knowledge_base.md",
+      "description": "HR policy knowledge base used to answer the staged employee conversations."
+    },
+    {
+      "name": "it_knowledge_base.md",
+      "format": "Markdown",
+      "path": "input/it_knowledge_base.md",
+      "description": "IT support knowledge base used to answer the staged employee conversations."
+    },
+    {
+      "name": "queries.json",
+      "format": "JSON",
+      "path": "input/queries.json",
+      "description": "All staged multi-turn conversation sessions keyed by test id."
+    },
+    {
+      "name": "stubs.py",
+      "format": "Python",
+      "path": "input/stubs.py",
+      "description": "Visible fallback helpers for email and JIRA-style actions."
+    },
+    {
+      "name": "web_search_grounding.json",
+      "format": "JSON",
+      "path": "input/web_search_grounding.json",
+      "description": "Deterministic grounding data for the `search_web` cases."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "results.json",
+      "format": "JSON",
+      "path": "output/results.json",
+      "description": "Required structured conversation artifact containing per-turn responses and `tools_used`."
+    }
+  ],
+  "evaluation": "**Current reviewed evaluator**\n- `start()` verifies the staged visible inputs, verifies evaluator runtime tools `python`, `bash`, and `jq` on the Linux VM, and creates the visible `output/` directory if needed.\n- `evaluate()` expects post-submit hidden staging to provide `reference/test_suite.sh` plus the fixture directories on the VM, then runs a small verifier helper there to execute the submitter shell suite.\n- The shell suite computes a pass rate over the staged conversation turns; the benchmark returns `1.0` when the hidden pass rate is at least `90%`, otherwise `0.0`.\n\n**Reviewed fixture behavior on `agenthle-ubuntu`**\n- setup-only: success exit, with the known harness quirk that the runner still logs missing visible `results.json` and `Evaluation result: [0.0]`\n- `output_test_pos`: `1.0`\n- `output_test_neg`: `0.0`\n- static admin reruns use a temporary review root so hidden `reference/` and fixture assets appear only after the solve-phase boundary is established\n\n**Expected perfect output**\nA valid deterministic `results.json` whose responses and `tools_used` choices satisfy the hidden conversation suite at or above the `90%` threshold.\n\n**Expected wrong output**\nMissing or invalid JSON, wrong tool names, broken session memory, or underperforming HR / IT responses that stay below the hidden `90%` threshold.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.5",
+    "subdomain_code": "hr_pm",
+    "subdomain_name": "HR & Project Management",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T08:59:09.454002Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/internal_employee_agent_instance_1/task_card.json"
+      },
+      "rationale": "The task involves HR-related support and management."
+    }
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "taskId": "health_medicine/causal_ihdp_ite_estimation_6a_v1",
+  "title": "IHDP ITE Estimation",
+  "summary": "Build a reusable hidden-test inference script for the IHDP semi-synthetic benchmark that estimates individualized treatment effects and emits the required diagnostics artifacts.",
+  "category": "health_medicine",
+  "software": [
+    "Python",
+    "uv",
+    "bash",
+    "numpy",
+    "pandas",
+    "scipy",
+    "scikit-learn"
+  ],
+  "taskPrompt": "You are working on a Linux causal-inference benchmark.\n\nRead these staged solve-time inputs first:\n- `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/input/task_brief.md`\n- `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/input/task_readme.md`\n- `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/input/feature_schema.json`\n- `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/input/train.csv`\n- `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/input/dummy_test/test.csv`\n\nIf you want the pinned scientific Python stack, use:\n- `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/software/python_with_task_deps.sh`\n\nYour job is to author `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/output/predict.sh` so that the evaluator can later run:\n\n`bash output/predict.sh <hidden_test_dir> output/output.csv`\n\nfrom the task root.\n\nWhen your script runs, it must create these required files:\n- `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/output/output.csv`\n- `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/output/artifacts/model_selection.csv`\n- `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/output/artifacts/overlap_diagnostics.csv`\n- `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/output/artifacts/subgroup_ite.csv`\n- `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/output/artifacts/run_notes.txt`\n\n`output/output.csv` must have exactly these columns:\n`replication,unit_id,mu0_hat,mu1_hat,ite_hat`\n\nRules:\n- `ite_hat` must equal `mu1_hat - mu0_hat` row by row.\n- You may keep helper code under `output/` and may emit extra artifact files if you want.\n- Do not modify files under `input/`.\n- During solve time, treat `input/` plus `software/` as your visible task surface; `reference/`, `output_test_pos/`, and `output_test_neg/` are evaluator-side paths, not solve-time inputs.\n- Write solver-created files only under `/media/user/data/agenthle/health_medicine/causal_ihdp_ite_estimation_6a_v1/base/output`.\n",
+  "agentMustDo": [
+    "Read the staged IHDP training data, schema, benchmark brief, and task readme from `input/`.",
+    "Build a reusable individualized treatment-effect estimator over the 100 IHDP replications.",
+    "Author `output/predict.sh` so the evaluator can rerun hidden-test inference from the task root.",
+    "Write `output/output.csv` plus the required diagnostics artifacts under `output/artifacts/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_brief.md",
+      "format": "Markdown",
+      "path": "input/task_brief.md",
+      "description": "Canonical agent-facing task brief with the exact `predict.sh` delivery contract."
+    },
+    {
+      "name": "task_readme.md",
+      "format": "Markdown",
+      "path": "input/task_readme.md",
+      "description": "Normalized solve-time instructions derived from the original submission materials."
+    },
+    {
+      "name": "feature_schema.json",
+      "format": "JSON",
+      "path": "input/feature_schema.json",
+      "description": "Covariate schema and feature metadata."
+    },
+    {
+      "name": "train.csv",
+      "format": "CSV",
+      "path": "input/train.csv",
+      "description": "IHDP observational training data with factual outcomes across 100 replications."
+    },
+    {
+      "name": "dummy_test/test.csv",
+      "format": "CSV",
+      "path": "input/dummy_test/test.csv",
+      "description": "Schema-and-order stand-in for the hidden official test set."
+    },
+    {
+      "name": "runtime_env/",
+      "format": "Python runtime bundle",
+      "path": "input/runtime_env/",
+      "description": "Pinned offline scientific-runtime manifest and wheelhouse exposed through `software/python_with_task_deps.sh`."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "predict.sh",
+      "format": "shell script",
+      "path": "output/predict.sh",
+      "description": "Primary solver-authored deliverable that the evaluator reruns on the hidden test."
+    },
+    {
+      "name": "output.csv",
+      "format": "CSV",
+      "path": "output/output.csv",
+      "description": "Required hidden-test prediction table with columns `replication,unit_id,mu0_hat,mu1_hat,ite_hat`."
+    },
+    {
+      "name": "model_selection.csv",
+      "format": "CSV",
+      "path": "output/artifacts/model_selection.csv",
+      "description": "Required model-selection artifact with at least two candidate rows and exactly one selected row."
+    },
+    {
+      "name": "overlap_diagnostics.csv",
+      "format": "CSV",
+      "path": "output/artifacts/overlap_diagnostics.csv",
+      "description": "Required overlap-diagnostics artifact covering all 100 replications."
+    },
+    {
+      "name": "subgroup_ite.csv",
+      "format": "CSV",
+      "path": "output/artifacts/subgroup_ite.csv",
+      "description": "Required subgroup treatment-effect summary artifact."
+    },
+    {
+      "name": "run_notes.txt",
+      "format": "text",
+      "path": "output/artifacts/run_notes.txt",
+      "description": "Required narrative artifact documenting method, validation, overlap, and subgroup analysis."
+    }
+  ],
+  "evaluation": "The evaluator reruns `bash output/predict.sh <hidden_test_dir> output/output.csv` from the task root, then scores the produced outputs locally against hidden `reference/gold_output.csv`. The scorer computes raw mean `sqrt(epsilon_PEHE)` across 100 replications, with lower raw PEHE better and a pass bar at `<= 2.80` plus no invalidators. The AgentHLE final score returned by `evaluate()` is normalized to `[0, 1]` as `1 - raw_PEHE / 2.80`, clamped to the interval. Truly unscoreable runs return final score `0.0`, for example when `predict.sh` is missing, outputs are unreadable, the output schema is wrong, numeric cells are malformed, keys are missing/extra, or `ite_hat = mu1_hat - mu0_hat` is broken. Scoreable artifact failures, constant-effect-collapse failures, and threshold misses keep the raw PEHE in scorer diagnostics but return final score `0.0` when the normalized value clamps there. The common positive replay final score is near `1.0`; the staged negative replay final score is `0.0` from raw PEHE about `5.711689035633789`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.3",
+    "subdomain_code": "clinical_informatics",
+    "subdomain_name": "Clinical Informatics & Care Operations",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:40:58.223238Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/causal_ihdp_ite_estimation_6a_v1/task_card.json"
+      },
+      "rationale": "The task involves estimating individualized treatment effects, which is relevant to clinical informatics."
+    }
+  }
+}

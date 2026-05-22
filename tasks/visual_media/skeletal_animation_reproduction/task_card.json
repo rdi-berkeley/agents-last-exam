@@ -1,0 +1,92 @@
+{
+  "taskId": "visual_media/skeletal_animation_reproduction",
+  "title": "Skeletal Animation Reproduction",
+  "summary": "Rig and animate the staged character in Blender so it reproduces the target body motion from the reference video.",
+  "category": "visual_media",
+  "software": [
+    "Blender"
+  ],
+  "taskPrompt": "You are a 3D artist using Blender.\n\nYour task is to rig and animate the provided character so that it reproduces the body motion shown in the reference video.\n\nOfficial input:\n- Unrigged mesh: `E:\\agenthle\\visual_media\\skeletal_animation_reproduction\\skeletal_animation_reproduction_singing_anime_character\\input\\Singing.obj`\n- Material sidecar: `E:\\agenthle\\visual_media\\skeletal_animation_reproduction\\skeletal_animation_reproduction_singing_anime_character\\input\\Singing.mtl`\n- Reference animation video: `E:\\agenthle\\visual_media\\skeletal_animation_reproduction\\skeletal_animation_reproduction_singing_anime_character\\input\\reference.mp4`\n\nRequired submission:\n- Save a Blender scene named `final.blend` to `E:\\agenthle\\visual_media\\skeletal_animation_reproduction\\skeletal_animation_reproduction_singing_anime_character\\output\\submission\\final.blend`\n- Render and save a matching preview video named `preview.mp4` to `E:\\agenthle\\visual_media\\skeletal_animation_reproduction\\skeletal_animation_reproduction_singing_anime_character\\output\\submission\\preview.mp4`\n\nRequired bone naming:\nYour armature MUST use the following bone names exactly (case-sensitive):\n  pelvis, spine, chest, neck, head,\n  clavicle.L, upper_arm.L, lower_arm.L, hand.L,\n  clavicle.R, upper_arm.R, lower_arm.R, hand.R,\n  thigh.L, shin.L, foot.L,\n  thigh.R, shin.R, foot.R\nYou may add extra bones, but all 19 listed above must be present with these exact names.\n\nNotes:\n- Focus on body motion.\n- Evaluation will compare your `preview.mp4` against a hidden clean reference and also replay your `.blend`.\n- Your `.blend` must contain the actual rig and animation that produce the submitted preview.",
+  "agentMustDo": [
+    "Unrigged mesh: `E:\\agenthle\\visual_media\\skeletal_animation_reproduction\\skeletal_animation_reproduction_singing_anime_character\\input\\Singing.obj`",
+    "Material sidecar: `E:\\agenthle\\visual_media\\skeletal_animation_reproduction\\skeletal_animation_reproduction_singing_anime_character\\input\\Singing.mtl`",
+    "Reference animation video: `E:\\agenthle\\visual_media\\skeletal_animation_reproduction\\skeletal_animation_reproduction_singing_anime_character\\input\\reference.mp4`",
+    "Save a Blender scene named `final.blend` to `E:\\agenthle\\visual_media\\skeletal_animation_reproduction\\skeletal_animation_reproduction_singing_anime_character\\output\\submission\\final.blend`",
+    "Render and save a matching preview video named `preview.mp4` to `E:\\agenthle\\visual_media\\skeletal_animation_reproduction\\skeletal_animation_reproduction_singing_anime_character\\output\\submission\\preview.mp4`",
+    "Use all required bone names exactly as listed in the task prompt: pelvis, spine, chest, neck, head, clavicle.L, upper_arm.L, lower_arm.L, hand.L, clavicle.R, upper_arm.R, lower_arm.R, hand.R, thigh.L, shin.L, foot.L, thigh.R, shin.R, foot.R.",
+    "Focus on body motion.",
+    "Evaluation will compare your `preview.mp4` against a hidden clean reference and also replay your `.blend`.",
+    "Your `.blend` must contain the actual rig and animation that produce the submitted preview."
+  ],
+  "inputFiles": [
+    {
+      "name": "<character>.obj",
+      "format": "obj",
+      "path": "input/<character>.obj",
+      "description": "**Input:** input/<character>.obj, input/<character>.mtl, input/reference.mp4"
+    },
+    {
+      "name": "<character>.mtl",
+      "format": "mtl",
+      "path": "input/<character>.mtl",
+      "description": "**Input:** input/<character>.obj, input/<character>.mtl, input/reference.mp4"
+    },
+    {
+      "name": "reference.mp4",
+      "format": "mp4",
+      "path": "input/reference.mp4",
+      "description": "**Input:** input/<character>.obj, input/<character>.mtl, input/reference.mp4"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "final.blend",
+      "format": "blend",
+      "path": "output/submission/final.blend",
+      "description": "**Output:** output/submission/final.blend, output/submission/preview.mp4"
+    },
+    {
+      "name": "preview.mp4",
+      "format": "mp4",
+      "path": "output/submission/preview.mp4",
+      "description": "**Output:** output/submission/final.blend, output/submission/preview.mp4"
+    }
+  ],
+  "outputContracts": [
+    {
+      "name": "Required bone naming",
+      "format": "task-prompt-section",
+      "path": "taskPrompt: Required bone naming",
+      "description": "Agent-visible exact bone names required by the evaluator's skeleton coverage gate."
+    }
+  ],
+  "evaluation": "- The evaluator first validates that both submitted artifacts exist and that the Blender scene contains a usable animated rig with non-trivial motion.\n- It then renders canonical replay evidence from `final.blend`, compares the replay and preview against the hidden clean reference video, measures required-bone coverage from `reference/package.json`, and uses multiple binary `YES` / `NO` vision questions to derive `vlm_score` as a yes-ratio.\n- Final score is:\n\n```text\nif validity_gate fails:\n    final_score = 0\nelse:\n    final_score =\n      0.35 * video_match_score +\n      0.20 * replay_consistency_score +\n      0.30 * minimal_skeleton_score +\n      0.15 * vlm_score\n```",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:26:35.096241Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/skeletal_animation_reproduction/task_card.json"
+      },
+      "rationale": "The task involves rigging and animating a character in a 3D software environment."
+    }
+  }
+}

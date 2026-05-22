@@ -1,0 +1,73 @@
+{
+  "taskId": "visual_media/inkscape_cultural_poster_design",
+  "title": "Inkscape Cultural Poster Design",
+  "summary": "Create a single-page cultural exhibition poster in Inkscape on Windows using a staged design brief, a source photo, and a structured instance specification, then save the final poster as an SVG.",
+  "category": "visual_media",
+  "software": [
+    "Inkscape"
+  ],
+  "taskPrompt": "You are using Inkscape on Windows to design a cultural exhibition poster.\n\nRead:\n- `E:\\agenthle\\visual_media\\inkscape_cultural_poster_design\\base\\input\\design_brief.txt`\n- `E:\\agenthle\\visual_media\\inkscape_cultural_poster_design\\base\\input\\instance_spec.txt` (GBK/GB18030 encoded Chinese)\n- `E:\\agenthle\\visual_media\\inkscape_cultural_poster_design\\base\\input\\installation_photo_01.jpg`\n\nCreate the poster in Inkscape and save the final SVG exactly to:\n- `E:\\agenthle\\visual_media\\inkscape_cultural_poster_design\\base\\output\\poster.svg`\n\nNotes:\n- Use Inkscape rather than generic image-generation tools.\n- Preserve the source photo's aspect ratio when you place it.\n- The current evaluator only checks a stable automated subset of the full rubric.\n",
+  "agentMustDo": [
+    "Read the staged design brief, instance specification, and installation photo from `input/`.",
+    "Use Inkscape on Windows to design a single-page cultural exhibition poster.",
+    "Preserve the source photo's aspect ratio when placing it into the poster.",
+    "Save the final SVG exactly as `output/poster.svg`."
+  ],
+  "inputFiles": [
+    {
+      "name": "design_brief.txt",
+      "format": "text",
+      "path": "input/design_brief.txt",
+      "description": "Natural-language poster brief describing the exhibition theme and design direction."
+    },
+    {
+      "name": "instance_spec.txt",
+      "format": "text",
+      "path": "input/instance_spec.txt",
+      "description": "Structured instance specification defining canvas size, orientation, title, subtitle, and required phrase constraints."
+    },
+    {
+      "name": "installation_photo_01.jpg",
+      "format": "JPEG image",
+      "path": "input/installation_photo_01.jpg",
+      "description": "Source installation photo that must be incorporated into the poster design."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "poster.svg",
+      "format": "SVG",
+      "path": "output/poster.svg",
+      "description": "Final poster deliverable authored in Inkscape."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score `0.0` if triggered):\n- `output/poster.svg` is missing.\n- The file is not valid SVG.\n- The SVG omits the required source image.\n\n**Current committed evaluator:**\n- Checks a stable automated subset of the visible contract.\n- Validates SVG parseability, canvas size/orientation, required title, required subtitle, minimum phrase coverage, source image inclusion, non-`none` aspect-ratio preservation, and in-canvas image placement.\n- Positive fixture is expected to score `1.0`.\n- Negative fixture is expected to score `0.0`.\n- Score range is `0.0` to `1.0`.\n\n**Residual limits:**\n- The current evaluator does not fully score typography quality, composition quality, or broader aesthetic fidelity.\n- It is a structured-contract check, not an exact-match reference comparison.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.2",
+    "subdomain_code": "graphic_design",
+    "subdomain_name": "Graphic, Visual & Product Design",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:18:04.778455Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/inkscape_cultural_poster_design/task_card.json"
+      },
+      "rationale": "The task involves creating a cultural exhibition poster using graphic design software."
+    }
+  }
+}

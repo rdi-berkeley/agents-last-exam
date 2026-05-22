@@ -1,0 +1,81 @@
+{
+  "taskId": "health_medicine/Clinical_Variant_Annotation",
+  "title": "Clinical Variant Annotation",
+  "summary": "Analyze a staged clinical VCF, identify the pathogenic BRCA1-like candidate, and document the supporting evidence in the required output tables.",
+  "category": "health_medicine",
+  "software": [],
+  "taskPrompt": "You are given a small clinical VCF containing 200 candidate variants from a breast-cancer case.\n\nYour task is to identify the single pathogenic BRCA1-like candidate and document the evidence in the required output files.\n\nTask directory:\n- `/home/user/Desktop/health_medicine/Clinical_Variant_Annotation/base`\n\nInput:\n- `/home/user/Desktop/health_medicine/Clinical_Variant_Annotation/base/input/patient_variants.vcf`\n\nAvailable tools:\n- a Linux terminal is open at `/home/user/Desktop/health_medicine/Clinical_Variant_Annotation/base`\n- `python3`\n- `curl`\n- `jq`\n\nExternal resources:\n1. gnomAD GraphQL API\n2. Ensembl VEP REST API\n3. NCBI ClinVar / E-utilities\n\nRequired outputs under `/home/user/Desktop/health_medicine/Clinical_Variant_Annotation/base/output`:\n- `variant_count.txt` with a single integer\n- `vep_results.csv`\n- `gnomad_results.csv`\n- `clinvar_results.csv`\n- `final_candidates.csv`\n\nRules:\n- Append rows to the pre-created CSV files without changing headers.\n- It is acceptable to use `NA` for unavailable fields.\n- The final candidate file must include the pathogenic evidence in the justification column.\n- Do not ask for confirmation. Execute directly.",
+  "agentMustDo": [
+    "Read a small patient VCF, count variants, annotate candidates against public knowledge bases, and write a final pathogenic BRCA1-like candidate.",
+    "Write outputs only under `output/` while keeping committed fixtures untouched.",
+    "Work directly on Ubuntu; Windows + WSL is no longer the canonical runtime."
+  ],
+  "inputFiles": [
+    {
+      "name": "patient_variants.vcf",
+      "format": "vcf",
+      "path": "input/patient_variants.vcf",
+      "description": ""
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "variant_count.txt",
+      "format": "txt",
+      "path": "output/variant_count.txt",
+      "description": "output/variant_count.txt"
+    },
+    {
+      "name": "vep_results.csv",
+      "format": "csv",
+      "path": "output/vep_results.csv",
+      "description": "output/vep_results.csv"
+    },
+    {
+      "name": "gnomad_results.csv",
+      "format": "csv",
+      "path": "output/gnomad_results.csv",
+      "description": "output/gnomad_results.csv"
+    },
+    {
+      "name": "clinvar_results.csv",
+      "format": "csv",
+      "path": "output/clinvar_results.csv",
+      "description": "output/clinvar_results.csv"
+    },
+    {
+      "name": "final_candidates.csv",
+      "format": "csv",
+      "path": "output/final_candidates.csv",
+      "description": "output/final_candidates.csv"
+    }
+  ],
+  "evaluation": "- variant count must equal `200`\n- gnomAD table must include the pathogenic position plus at least one numeric population frequency\n- VEP table must include a BRCA1 missense-style annotation\n- ClinVar table must mark the pathogenic candidate as pathogenic\n- final candidate table must contain `chr17 43106487 T>G` with pathogenic justification",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.2",
+    "subdomain_code": "therapeutic_oncology",
+    "subdomain_name": "Therapeutic & Oncology Services",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:02:01.453228Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/Clinical_Variant_Annotation/task_card.json"
+      },
+      "rationale": "The task involves clinical variant annotation related to breast cancer."
+    }
+  }
+}

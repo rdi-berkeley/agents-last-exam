@@ -1,0 +1,40 @@
+{
+  "taskId": "computing_math/ranking_node_feature_parity_recovery_instance_1",
+  "title": "Ranking Node Feature Parity Recovery",
+  "summary": "Recover a ranking-service node by rebuilding the feature manifest, deleting only safe rollback debris, and preserving required serving shards.",
+  "category": "computing_math",
+  "software": [
+    "Python 3",
+    "pytest"
+  ],
+  "taskPrompt": "You are the on-call ML platform engineer for a Linux ranking-serving node.\n\nThe evaluator will prepare a writable task workspace at:\n- `/workspace`\n\nStart by reading:\n- `/workspace/instruction.md`\n- `/workspace/config.json`\n- `/workspace/logs/service.log`\n\nYou must repair the node by implementing:\n- `/workspace/safe_recover.py`\n\nYour tool must:\n1. Rebuild the serving feature manifest from authoritative evidence on disk.\n2. Free enough space by deleting only safe debris inside `/workspace/cache` and `/workspace/trash`.\n3. Produce these files:\n   - `/workspace/cleanup_summary.json`\n   - `/workspace/incident_report.md`\n   - `/workspace/state/feature_manifest.json`\n\nImportant constraints:\n- Do not touch `/protected`.\n- Do not modify files outside the allowed outputs listed in the task instruction.\n- Do not delete anything outside `/workspace/cache` and `/workspace/trash`.\n- The staged task-local pytest runtime is available via `/workspace/.venv/bin/pytest`.\n\nNotes:\n- The evaluator may also replay fixture candidates from `/media/user/data/agenthle/computing_math/ranking_node_feature_parity_recovery_instance_1/base/output_test_pos` and `/media/user/data/agenthle/computing_math/ranking_node_feature_parity_recovery_instance_1/base/output_test_neg`.\n- Runtime dependencies are staged task-locally; do not rely on installing packages globally.\n",
+  "repoRecoveryNote": "This task was rebuilt from preserved source assets after the repo copy went missing, then independently rerun on 2026-04-08 to restore truthful verified status.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.1",
+    "subdomain_code": "software_eng",
+    "subdomain_name": "Software Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:32:44.159581Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/ranking_node_feature_parity_recovery_instance_1/task_card.json"
+      },
+      "rationale": "The task involves software engineering for a machine learning platform."
+    }
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "taskId": "business_finance/basel_operational_risk_bia_cn",
+  "title": "Basel Operational Risk BIA Classification",
+  "summary": "Classify Chinese operational-risk loss events into Basel event categories and business lines, then calculate regulatory capital under the Basic Indicator Approach.",
+  "category": "business_finance",
+  "software": [
+    "LibreOffice Calc",
+    "Python",
+    "openpyxl"
+  ],
+  "taskPrompt": "You are working on a Linux VM as an operational-risk analyst.\n\n## Task Directory\n`/media/user/data/agenthle/business_finance/basel_operational_risk_bia_cn/base`\n\n## Visible Inputs\n- Task prompt: `/media/user/data/agenthle/business_finance/basel_operational_risk_bia_cn/base/input/TASK_PROMPT.md`\n- Raw Chinese loss events: `/media/user/data/agenthle/business_finance/basel_operational_risk_bia_cn/base/input/operational_risk_events.xlsx`\n- Basel loss event categories: `/media/user/data/agenthle/business_finance/basel_operational_risk_bia_cn/base/input/loss_event_categories.xlsx`\n- Basel business line mapping: `/media/user/data/agenthle/business_finance/basel_operational_risk_bia_cn/base/input/business_line_mapping.xlsx`\n- BIA capital parameters: `/media/user/data/agenthle/business_finance/basel_operational_risk_bia_cn/base/input/capital_calculation_params.xlsx`\n- Output schemas/examples: `/media/user/data/agenthle/business_finance/basel_operational_risk_bia_cn/base/input/output_schemas`\n\n## Your Task\nClassify each of the 60 loss events into one Basel loss event category code\n(`EL1` through `EL7`) and one Basel business line code (`BL1` through `BL8`).\nThen calculate operational-risk regulatory capital under the Basel Basic\nIndicator Approach.\n\nWrite all final files under `/media/user/data/agenthle/business_finance/basel_operational_risk_bia_cn/base/output`:\n- `classified_events.csv`\n- `capital_calculation.json`\n- `execution_log.txt`\n\nFollow the file contracts in `/media/user/data/agenthle/business_finance/basel_operational_risk_bia_cn/base/input/TASK_PROMPT.md` and the schemas under\n`/media/user/data/agenthle/business_finance/basel_operational_risk_bia_cn/base/input/output_schemas`. Do not modify files under `/media/user/data/agenthle/business_finance/basel_operational_risk_bia_cn/base/input`.\n",
+  "agentMustDo": [
+    "Read all 60 Chinese operational-risk event descriptions.",
+    "Assign one Basel loss event category code from `EL1` through `EL7` to each event.",
+    "Assign one Basel business line code from `BL1` through `BL8` to each event.",
+    "Calculate operational-risk regulatory capital using the Basel Basic Indicator Approach parameters.",
+    "Write `classified_events.csv`, `capital_calculation.json`, and `execution_log.txt` under the output directory."
+  ],
+  "inputFiles": [
+    {
+      "name": "TASK_PROMPT.md",
+      "format": "md",
+      "path": "input/TASK_PROMPT.md",
+      "description": "Solve-time task instructions and output contract."
+    },
+    {
+      "name": "operational_risk_events.xlsx",
+      "format": "xlsx",
+      "path": "input/operational_risk_events.xlsx",
+      "description": "Chinese operational-risk event records to classify."
+    },
+    {
+      "name": "loss_event_categories.xlsx",
+      "format": "xlsx",
+      "path": "input/loss_event_categories.xlsx",
+      "description": "Basel loss event category definitions and indicators."
+    },
+    {
+      "name": "business_line_mapping.xlsx",
+      "format": "xlsx",
+      "path": "input/business_line_mapping.xlsx",
+      "description": "Basel business line definitions and mapping guidance."
+    },
+    {
+      "name": "capital_calculation_params.xlsx",
+      "format": "xlsx",
+      "path": "input/capital_calculation_params.xlsx",
+      "description": "BIA alpha coefficient and gross income parameters."
+    },
+    {
+      "name": "output_schemas",
+      "format": "csv/json/txt",
+      "path": "input/output_schemas",
+      "description": "Required schemas and format examples for the deliverables."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "classified_events.csv",
+      "format": "csv",
+      "path": "output/classified_events.csv",
+      "description": "One row per event with `Event_ID`, `Loss_Event_Category`, `Business_Line`, and `Loss_Amount_CNY`."
+    },
+    {
+      "name": "capital_calculation.json",
+      "format": "json",
+      "path": "output/capital_calculation.json",
+      "description": "Structured BIA calculation fields and final operational-risk regulatory capital."
+    },
+    {
+      "name": "execution_log.txt",
+      "format": "txt",
+      "path": "output/execution_log.txt",
+      "description": "Brief note describing how the analysis was performed."
+    }
+  ],
+  "evaluation": "The evaluator requires all three output files. The classification CSV must contain all 60 expected event IDs exactly once, use valid `EL1`-`EL7` and `BL1`-`BL8` codes, and preserve loss amounts. The task returns `1.0` only when loss event category accuracy is at least 90%, business line accuracy is at least 90%, loss amounts are preserved, and the final BIA capital value is within the configured absolute or relative tolerance. Otherwise it returns `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.2",
+    "subdomain_code": "actuarial_risk",
+    "subdomain_name": "Actuarial & Risk Modeling",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:23:52.097113Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/basel_operational_risk_bia_cn/task_card.json"
+      },
+      "rationale": "The task involves classifying operational risk and calculating regulatory capital, which aligns with actuarial and risk modeling."
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "taskId": "physical_sciences/egt710_table1_smiles_extraction",
+  "title": "Egt710 Table1 SMILES Extraction",
+  "summary": "Extract Table 1 from the staged paper, reconstruct the nine compounds, and deliver a CSV with validated SMILES and reported assay values.",
+  "category": "physical_sciences",
+  "software": [
+    "Chrome"
+  ],
+  "taskPrompt": "You are a medicinal chemistry researcher extracting a structure-activity table.\n\n## Your Task\nUse the uploaded paper PDF to reconstruct the nine compounds in **Table 1** and produce a CSV with validated SMILES strings.\n\n## Input Files\n- Paper PDF: `C:\\Users\\User\\Desktop\\physical_sciences\\egt710_table1_smiles_extraction\\table1\\input\\source_paper.pdf`\n\n## Software\n- Launch the mandated SMILES validator from: `C:\\Users\\User\\Desktop\\physical_sciences\\egt710_table1_smiles_extraction\\table1\\software\\ChemInfo.lnk`\n- The shortcut opens the ChemInfo SMILES Generator & Checker:\n  `https://www.cheminfo.org/flavor/malaria/Utilities/SMILES_generator___checker/index.html`\n\n## What You Must Do\n1. Open `C:\\Users\\User\\Desktop\\physical_sciences\\egt710_table1_smiles_extraction\\table1\\input\\source_paper.pdf`\n2. Locate Table 1 in the paper titled:\n   `Discovery of EGT710, an Oral Nonpeptidomimetic Reversible Covalent SARS-CoV-2 Main Protease Inhibitor`\n3. Extract compounds `1` through `9`\n4. Reconstruct and validate each compound's SMILES string using ChemInfo\n5. Save a CSV exactly to:\n   `C:\\Users\\User\\Desktop\\physical_sciences\\egt710_table1_smiles_extraction\\table1\\output\\submission.csv`\n\n## Output Requirements\n- The file must be CSV\n- The columns must be exactly:\n  `Compound_ID,SMILES,IC50_uM,Solubility_mM`\n- Include exactly one row each for compound IDs `1,2,3,4,5,6,7,8,9`\n- Do not save extra files\n\n## Evaluation\n- Rows are matched by `Compound_ID`\n- `SMILES` is checked by chemical identity, not raw string equality\n- `IC50_uM` and `Solubility_mM` must match the reference values\n- Final score = fraction of correctly matched rows out of 9",
+  "agentMustDo": [
+    "Open the manuscript PDF from `input/source_paper.pdf`.",
+    "Locate Table 1 in the EGT710 paper and inspect compounds `1` through `9`.",
+    "Reconstruct each full molecule and validate the structure with the staged ChemInfo launcher.",
+    "Save one CSV exactly to `output/submission.csv`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Source paper",
+      "format": "`.pdf`",
+      "path": "input/source_paper.pdf",
+      "description": "Full paper containing Table 1 and the compound drawings"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Extracted SAR table",
+      "format": "`.csv`",
+      "path": "output/submission.csv",
+      "description": "Must contain one row for each compound 1 through 9"
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- Output file missing\n- Output file does not end with `.csv`\n- CSV cannot be parsed\n- CSV columns are not exactly `Compound_ID,SMILES,IC50_uM,Solubility_mM`\n- Duplicate compound IDs\n- Compound ID set does not exactly match the reference IDs `1` through `9`\n\n**Scoring method:**\nScore each compound independently, then average across all 9 compounds.\n\nA row counts as correct only if all of the following match the reference row for that `Compound_ID`:\n- `SMILES` is chemically equivalent to the reference molecule, checked via RDKit-generated InChIKey\n- `IC50_uM` matches after normalization\n- `Solubility_mM` matches after normalization\n\n`score = matched_rows / 9`\n\n**Where does the main scoring logic run?** on the VM through a temp verifier script\n\n**What does a PERFECT output look like?**\nA CSV with the correct 9 compound IDs, chemically equivalent SMILES for every row, and matching activity / solubility values. Perfect score = `1.0`.\n\n**What does a WRONG/empty output look like?**\nMissing file, malformed CSV, wrong headers, wrong compound IDs, invalid SMILES, or rows with mismatched values. Wrong outputs score `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "2",
+    "domain_code": "physical_sciences",
+    "subdomain_id": "2.2",
+    "subdomain_code": "chemistry_materials",
+    "subdomain_name": "Chemistry & Materials Computation",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:04:32.680135Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/physical_sciences/egt710_table1_smiles_extraction/task_card.json"
+      },
+      "rationale": "The task involves extracting and validating chemical structures, specifically SMILES strings."
+    }
+  }
+}

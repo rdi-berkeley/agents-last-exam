@@ -1,0 +1,74 @@
+{
+  "taskId": "computing_math/branch_bound_atsp",
+  "title": "Branch-and-Bound ATSP Solver",
+  "summary": "Implement a Python branch-and-bound solver for deterministic asymmetric TSP instances and report certified results across three tiers.",
+  "category": "computing_math",
+  "software": [
+    "Python",
+    "NumPy",
+    "SciPy"
+  ],
+  "taskPrompt": "Read `input/problem_spec.md`, implement the allowed Python/NumPy/SciPy ATSP branch-and-bound workflow, and write `output/results.json` with the required tier metrics.",
+  "agentMustDo": [
+    "Regenerate the deterministic 3D city coordinates for the 12, 20, and 35 city tiers.",
+    "Implement branch-and-bound and assignment-relaxation based lower bounds without external optimization solvers.",
+    "Write a valid `results.json` containing tours, costs, bounds, gaps, node counts, and runtime metrics."
+  ],
+  "inputFiles": [
+    {
+      "name": "problem_spec.md",
+      "format": "markdown",
+      "path": "input/problem_spec.md",
+      "description": "Authoritative ATSP problem statement and output schema."
+    },
+    {
+      "name": "TASK_PROMPT.md",
+      "format": "markdown",
+      "path": "input/TASK_PROMPT.md",
+      "description": "Normalized solve-time instructions staged for the agent."
+    },
+    {
+      "name": "pyproject.toml",
+      "format": "toml",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Solve-time Python dependency manifest for NumPy and SciPy."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "results.json",
+      "format": "json",
+      "path": "output/results.json",
+      "description": "Required agent-produced tier results."
+    }
+  ],
+  "evaluation": "The evaluator validates tour permutations, recomputes tour costs from the deterministic instance generator, compares Tier 1 and Tier 2 to hidden optimal references, and checks Tier 3 satisfies the required 0.5% gap together with an evaluator-side incumbent-quality acceptance check.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 14400
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.4",
+    "subdomain_code": "math_ops_research",
+    "subdomain_name": "Mathematical & Operations Research",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:34:10.887714Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/branch_bound_atsp/task_card.json"
+      },
+      "rationale": "The task involves implementing a mathematical algorithm for solving the asymmetric traveling salesman problem."
+    }
+  }
+}

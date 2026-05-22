@@ -1,0 +1,86 @@
+{
+  "taskId": "agriculture_env/crop_rotation_d02",
+  "title": "Crop Rotation Audit for Stable Parcels",
+  "summary": "Audit French stable agricultural parcels for crop-rotation eligibility and risk, then produce full eligible and flagged GeoPackage outputs with exact schema and layer requirements.",
+  "category": "agriculture_env",
+  "software": [
+    "Python",
+    "GeoPandas",
+    "pandas",
+    "pyogrio",
+    "shapely",
+    "pyproj",
+    "fiona"
+  ],
+  "taskPrompt": "You are auditing crop rotation eligibility for stable agricultural parcels in France.\n\nTask directory:\n- `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base`\n\nVisible inputs:\n- Parcel GeoPackage: `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\input\\seq1524_d02.gpkg`\n- Task brief: `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\input\\task_prompt.md`\n- Citation note: `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\input\\citation.txt`\n- Optional Python runtime manifest:\n  - `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\input\\runtime_env\\pyproject.toml`\n  - `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\input\\runtime_env\\uv.lock`\n  - `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\input\\runtime_env\\requirements.txt`\n- Software note: `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\software\\README.txt`\n\nOptional Python runtime:\n- Use `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\software\\python_geo.bat` if you want the benchmark-provisioned geospatial Python stack (pinned `numpy`, `pandas`, `geopandas`, `shapely`, `pyogrio`, `fiona`, `pyproj`).\n- The package manifest is visible at `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\input\\runtime_env\\pyproject.toml` if you prefer to build your own environment.\n\nYour task:\n1. Read `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\input\\task_prompt.md` and follow it exactly.\n2. Load the input layer `seq1524_d02` from `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\input\\seq1524_d02.gpkg`.\n3. Produce these two GeoPackages under `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\output`:\n   - `eligible_units.gpkg`\n   - `flagged_units.gpkg`\n4. Use exact layer names:\n   - `eligible_units`\n   - `flagged_units`\n\nRules:\n- Do not modify files under `input/`.\n- Preserve the input geometry and original columns exactly as required by the task brief.\n- Keep the output CRS as EPSG:2154.\n- Write final outputs only under `E:\\agenthle\\agriculture_env\\crop_rotation_d02\\base\\output`.\n",
+  "agentMustDo": [
+    "Read the staged crop-rotation brief in `input/task_prompt.md` and apply it exactly.",
+    "Load the `seq1524_d02` layer from `input/seq1524_d02.gpkg`.",
+    "Compute the eight required audit columns for every eligible `id_lcp`.",
+    "Write `output/eligible_units.gpkg` with preserved original columns and geometry plus the audit fields.",
+    "Write `output/flagged_units.gpkg` as the flagged subset with the same schema and exact layer names."
+  ],
+  "inputFiles": [
+    {
+      "name": "seq1524_d02.gpkg",
+      "format": "GeoPackage",
+      "path": "input/seq1524_d02.gpkg",
+      "description": "Stable agricultural parcel polygons with yearly crop-code columns from 2015 through 2024"
+    },
+    {
+      "name": "task_prompt.md",
+      "format": "Markdown",
+      "path": "input/task_prompt.md",
+      "description": "Agent-visible crop-rotation audit contract with eligibility and field-computation rules"
+    },
+    {
+      "name": "runtime_env/requirements.txt",
+      "format": "text",
+      "path": "input/runtime_env/requirements.txt",
+      "description": "Optional pinned Python geospatial dependencies for an agent-created local runtime"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "eligible_units.gpkg",
+      "format": "GeoPackage",
+      "path": "output/eligible_units.gpkg",
+      "description": "Required full eligible-unit output with appended audit fields"
+    },
+    {
+      "name": "flagged_units.gpkg",
+      "format": "GeoPackage",
+      "path": "output/flagged_units.gpkg",
+      "description": "Required flagged-unit subset output using the same schema and layer ordering"
+    }
+  ],
+  "evaluation": "Both GeoPackages must exist, be readable, use exact layer names, keep EPSG:2154, contain a unique non-null `id_lcp`, include all eight computed audit fields on the eligible output, match the hidden eligible ID set exactly, and keep `flagged_units.gpkg` on the same schema and column order as `eligible_units.gpkg`. If those gates pass, the normalized score is the raw 100-point scorer divided by 100: 80 points from exact field matches across eligible units and 20 points from flagged count and flagged ID-set correctness.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "12",
+    "domain_code": "agriculture_env",
+    "subdomain_id": "12.2",
+    "subdomain_code": "precision_ag",
+    "subdomain_name": "Precision Agriculture",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:19:30.423798Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/agriculture_env/crop_rotation_d02/task_card.json"
+      },
+      "rationale": "The task involves auditing crop rotation eligibility, which is a key aspect of precision agriculture."
+    }
+  }
+}

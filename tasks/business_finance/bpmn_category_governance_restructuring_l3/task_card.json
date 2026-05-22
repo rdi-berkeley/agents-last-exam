@@ -1,0 +1,138 @@
+{
+  "taskId": "business_finance/bpmn_category_governance_restructuring_l3",
+  "title": "Flowable BPMN Category Governance Restructuring L3",
+  "summary": "Redesign Z Global's Maternal & Baby category governance workflow in Flowable BPMN 6.5.0 for a compound organizational disruption, then produce the required BPMN, compliance, scenario-result, and design-decision artifacts.",
+  "category": "business_finance",
+  "software": [
+    "Flowable 6.5.0",
+    "Docker",
+    "Docker Compose",
+    "Python",
+    "curl"
+  ],
+  "taskPrompt": "You are working on a Linux VM with Docker, Docker Compose, Python, and curl available.\n\n## Your Task\nRedesign Z Global's Maternal & Baby category governance workflow in Flowable BPMN 6.5.0 so it handles a compound organizational disruption:\n1. the M&B category owner vacancy immediately before a promotion cycle\n2. temporary Beauty peer-owner unavailability\n3. a regulator-triggered emergency delisting and brand-risk reassessment\n4. a hard 48-hour senior-lead decision SLA\n\n## Visible Inputs\n- task prompt: `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/input/task_prompt.md`\n- starter project directory: `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/input/starter_project`\n- original BPMN: `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/input/starter_project/original_process.bpmn20.xml`\n- disruption scenario: `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/input/starter_project/disruption_scenario_L3.md`\n- business rules: `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/input/starter_project/business_rules_L3.md`\n- org hierarchy: `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/input/starter_project/org_hierarchy.json`\n- scenario suite: `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/input/starter_project/test_scenarios_L3.json`\n- stakeholder artifacts: `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/input/starter_project/stakeholder_artifacts`\n- Flowable stack file: `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/input/starter_project/docker-compose.yml`\n- original diagram: `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/input/starter_project/original_process_diagram.png`\n\n## What You Must Do\n1. Read the staged task materials.\n2. Modify the BPMN while preserving original anchored elements and IDs.\n3. Use process definition key `zMBCategoryGovernance_modified_L3`.\n4. Start or reuse the local Flowable stack from the staged Docker Compose file.\n5. Deploy the modified BPMN and validate it against the provided scenario definitions.\n6. Write the final output bundle to `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/output`.\n\n## Required Output Files\n- `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/output/modified_process.bpmn20.xml`\n- `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/output/structural_changes.json`\n- `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/output/business_rules_compliance.json`\n- `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/output/test_results.json`\n- `/media/user/data/agenthle/business_finance/bpmn_category_governance_restructuring_l3/base/output/design_decisions.md`\n\nDo not modify files under `input/`. Do not write final outputs outside `output/`.",
+  "agentMustDo": [
+    "Read the staged task prompt, starter BPMN, business rules, org hierarchy, scenarios, and stakeholder artifacts.",
+    "Modify the BPMN to handle the L3 compound governance disruption while preserving anchored original elements and IDs.",
+    "Use process definition key `zMBCategoryGovernance_modified_L3` and keep new manual work as `userTask` nodes.",
+    "Start or reuse the Flowable stack and validate the design against the visible scenario definitions.",
+    "Write the BPMN plus structural, compliance, scenario-result, and design-decision artifacts under `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_prompt.md",
+      "format": "Markdown",
+      "path": "input/task_prompt.md",
+      "description": "Agent-visible task contract"
+    },
+    {
+      "name": "starter_project/original_process.bpmn20.xml",
+      "format": "BPMN XML",
+      "path": "input/starter_project/original_process.bpmn20.xml",
+      "description": "Original Flowable process definition to modify"
+    },
+    {
+      "name": "starter_project/disruption_scenario_L3.md",
+      "format": "Markdown",
+      "path": "input/starter_project/disruption_scenario_L3.md",
+      "description": "Compound organizational disruption narrative"
+    },
+    {
+      "name": "starter_project/business_rules_L3.md",
+      "format": "Markdown",
+      "path": "input/starter_project/business_rules_L3.md",
+      "description": "Authoritative L3 business rules"
+    },
+    {
+      "name": "starter_project/org_hierarchy.json",
+      "format": "JSON",
+      "path": "input/starter_project/org_hierarchy.json",
+      "description": "Role hierarchy and authority constraints"
+    },
+    {
+      "name": "starter_project/test_scenarios_L3.json",
+      "format": "JSON",
+      "path": "input/starter_project/test_scenarios_L3.json",
+      "description": "Scenario definitions for validation"
+    },
+    {
+      "name": "starter_project/stakeholder_artifacts/",
+      "format": "Markdown directory",
+      "path": "input/starter_project/stakeholder_artifacts/",
+      "description": "Context-bound stakeholder constraints"
+    },
+    {
+      "name": "starter_project/docker-compose.yml",
+      "format": "YAML",
+      "path": "input/starter_project/docker-compose.yml",
+      "description": "Flowable runtime stack definition"
+    },
+    {
+      "name": "starter_project/original_process_diagram.png",
+      "format": "PNG",
+      "path": "input/starter_project/original_process_diagram.png",
+      "description": "Visual diagram of the original workflow"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "modified_process.bpmn20.xml",
+      "format": "BPMN XML",
+      "path": "output/modified_process.bpmn20.xml",
+      "description": "Required final Flowable BPMN deliverable"
+    },
+    {
+      "name": "structural_changes.json",
+      "format": "JSON",
+      "path": "output/structural_changes.json",
+      "description": "Required structural modification mapping"
+    },
+    {
+      "name": "business_rules_compliance.json",
+      "format": "JSON",
+      "path": "output/business_rules_compliance.json",
+      "description": "Required business-rule compliance mapping"
+    },
+    {
+      "name": "test_results.json",
+      "format": "JSON",
+      "path": "output/test_results.json",
+      "description": "Required scenario-result summary"
+    },
+    {
+      "name": "design_decisions.md",
+      "format": "Markdown",
+      "path": "output/design_decisions.md",
+      "description": "Required design-decision audit trail"
+    }
+  ],
+  "evaluation": "**Evaluator design**\n- `start()` verifies staged visible assets exist and ensures the runtime output directory exists.\n- `evaluate()` pulls the five scored output files and runs the repo-side L3 evaluator through `scripts/score_output_bundle.py`.\n- The evaluator returns `1.0` only when structural topology, scenario summary, compliance binding, anti-gaming, role-coupling, fingerprint/novel-design, and design-decision audit checks all pass; otherwise it returns `0.0`.\n\n**Replay behavior**\n- `output_test_pos = 1.0`\n- `output_test_neg = 0.0`\n- missing output = 0.0",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.5",
+    "subdomain_code": "hr_pm",
+    "subdomain_name": "HR & Project Management",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:46:16.313473Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/bpmn_category_governance_restructuring_l3/task_card.json"
+      },
+      "rationale": "The task involves restructuring governance workflows, which relates to project management in a business context."
+    }
+  }
+}

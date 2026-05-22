@@ -1,0 +1,81 @@
+{
+  "taskId": "visual_media/music_transcription",
+  "title": "Music Transcription",
+  "summary": "Listen to a recorded orchestral piece and transcribe it into a professional music score, exporting PDF, MIDI with correct instrument program assignments, and a screenshot of the notation software.",
+  "category": "visual_media",
+  "software": [
+    "Dorico 6"
+  ],
+  "taskPrompt": "Goal: Transcribe a recorded piece into musical notation, export both a PDF score and a MIDI file with correct instrument assignments. You may use any music notation software available on the system.\n\nRead the task specification from `task_brief.json` in the variant's `input/` directory. It contains:\n- `title`: the title of the piece\n- `composer`: the composer of the piece\n- `tempo_bpm`: the tempo of the song\n- `instruments`: list of instruments to transcribe, each with name, clef, and GM program number\n\nInput audio files are available in the input directory:\n- `reference_song.mp3` \u2014 MP3 recording of the target song\n\n## Steps\n1. Listen to the reference audio to identify all instrumental parts.\n2. Open a music notation software and create a new project.\n3. Fill in the Title and Composer from `task_brief.json` in the project info.\n4. Add players/instruments matching those listed in `task_brief.json`.\n5. Configure the time signature, key signature, and tempo marking based on what you hear.\n6. Transcribe all notes, rhythms, dynamics, articulations, and expression markings for each part.\n7. Format the score layout professionally (proper spacing, alignment, readable note density).\n8. Configure playback: assign each instrument to the correct General MIDI (GM) program number as specified in `task_brief.json`.\n9. Export outputs:\n   - Export a PDF of the full score. Save it as `output/transcription.pdf`.\n   - Export MIDI: save as `output/transcription.mid`.\n10. Take ONE final screenshot showing the notation software with the score visible, saved as `output/overview.png`.\n\n## Output files\n- `transcription.pdf`: Exported PDF of the complete score with all parts.\n- `transcription.mid`: Exported MIDI file. Each track must have correct MIDI Program Change messages matching the GM program numbers in `task_brief.json`.\n- `overview.png`: Screenshot of the notation software showing the transcribed score with instrument staves visible.",
+  "agentMustDo": [
+    "Read `input/task_brief.json` for title, composer, tempo_bpm, and the instruments list (with clef and GM program).",
+    "Listen to `input/reference_song.mp3` to identify all instrumental parts.",
+    "Open a music notation application (Dorico 6 is staged) and create a new project with matching title, composer, and players.",
+    "Transcribe all notes, rhythms, dynamics, articulations, and expression markings; set time and key signatures based on the audio.",
+    "Assign each instrument to the correct General MIDI program number from `task_brief.json`.",
+    "Export `output/transcription.pdf`, `output/transcription.mid`, and save a final screenshot as `output/overview.png`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Task specification",
+      "format": "`.json`",
+      "path": "input/task_brief.json",
+      "description": "Piece title, composer, tempo_bpm, and per-instrument name / clef / GM program number."
+    },
+    {
+      "name": "Reference recording",
+      "format": "`.mp3`",
+      "path": "input/reference_song.mp3",
+      "description": "Audio recording of the target piece that the agent transcribes."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Exported PDF score",
+      "format": "`.pdf`",
+      "path": "output/transcription.pdf",
+      "description": "Full-score PDF export produced by the benchmarked agent."
+    },
+    {
+      "name": "Exported MIDI",
+      "format": "`.mid`",
+      "path": "output/transcription.mid",
+      "description": "MIDI export with correct GM Program Change per instrument track."
+    },
+    {
+      "name": "Notation software screenshot",
+      "format": "`.png`",
+      "path": "output/overview.png",
+      "description": "Screenshot of the notation software UI with the transcribed score visible."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score = 0 if triggered):\n- `transcription.pdf` missing or smaller than 1 KiB\n- `overview.png` missing or fails an LLM vision judge that checks whether a music notation UI with staves is visible\n- `transcription.mid` missing\n\n**Weighted scoring when all gates pass** (total up to 1.0):\n\n- Pitch accuracy: `30%` \u2014 MIDI F1 on `(pitch, quantized_onset)` after Hungarian track pairing against the reference MIDI\n- Rhythm accuracy: `30%` \u2014 MIDI F1 on `(quantized_onset, quantized_duration)` using the same pairing\n- Dynamics: `20%` \u2014 Spearman rank correlation on matched-note velocities and CC7 / CC11 curves\n- Instrument assignment: `10%` \u2014 exact match on GM program per matched track against `task_brief.json`\n- Score layout quality: `10%` \u2014 LLM vision judge comparing the agent PDF (rendered to PNG) against `reference/reference_score.pdf`\n\nQuantization resolution is `min(shortest_note_in_reference, sixteenth_note_at_tempo_bpm)` seconds.\n\n**What does a PERFECT output look like?** Pitch / rhythm F1 \u2248 1.0, dynamics \u2248 1.0, instrument = 1.0, layout = YES, total \u2248 1.0.\n\n**What does a WRONG / empty output look like?** Missing PDF, missing screenshot, or a screenshot that does not show a notation UI \u2014 any of which trip a hard gate and return 0.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.4",
+    "subdomain_code": "audio_music",
+    "subdomain_name": "Audio, Music & Post-Production Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:01:07.465352Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/music_transcription/task_card.json"
+      },
+      "rationale": "The task involves transcribing music and producing audio and notation outputs."
+    }
+  }
+}

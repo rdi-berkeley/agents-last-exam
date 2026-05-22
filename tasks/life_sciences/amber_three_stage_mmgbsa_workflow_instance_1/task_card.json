@@ -1,0 +1,99 @@
+{
+  "taskId": "life_sciences/amber_three_stage_mmgbsa_workflow_instance_1",
+  "title": "Amber Three-Stage MMGBSA Workflow Authoring",
+  "summary": "Author a Linux Amber workflow bundle for a three-chain protein complex, including the two SLURM driver scripts, the MMGBSA submission script, and the final MMGBSA result file based on a staged trajectory.",
+  "category": "life_sciences",
+  "software": [
+    "AmberTools 23 via software/run_ambertools.sh",
+    "Amber 22 / SLURM / CUDA 11.6.2 (reference environment only)"
+  ],
+  "taskPrompt": "You are preparing a Linux Amber workflow definition for a protein-only three-chain complex.\n\nTask directory:\n- `/media/user/data/agenthle/life_sciences/amber_three_stage_mmgbsa_workflow_instance_1/base`\n\nInput directory:\n- `/media/user/data/agenthle/life_sciences/amber_three_stage_mmgbsa_workflow_instance_1/base/input`\n\nSoftware:\n- Benchmark-owned AmberTools 23 CLI wrapper: `/media/user/data/agenthle/life_sciences/amber_three_stage_mmgbsa_workflow_instance_1/base/software/run_ambertools.sh`\n- Invoke staged AmberTools commands as: `/media/user/data/agenthle/life_sciences/amber_three_stage_mmgbsa_workflow_instance_1/base/software/run_ambertools.sh <tool> ...`\n- Supported tool names: `tleap, cpptraj, MMPBSA.py, ante-MMPBSA.py, antechamber, parmchk2`\n- `pmemd.cuda`, CUDA, and SLURM remain reference-environment details for the authored scripts; they are not benchmark-provided on this VM.\n\nYour task:\n1. Inspect `complex_structure.pdb` and the two markdown specs under `input/`.\n2. Treat chain `A` as the receptor and chains `B` plus `C` together as the ligand.\n3. Create exactly these four files under `/media/user/data/agenthle/life_sciences/amber_three_stage_mmgbsa_workflow_instance_1/base/output`:\n   - `submit_min.sh`\n   - `submit_prod.sh`\n   - `submit_mmgbsa.sh`\n   - `FINAL_RESULTS_MMGBSA.dat`\n\nRequirements:\n- Use basename `GLN_phb2_parl_pgam5_model_0` consistently in the workflow.\n- `submit_min.sh` should define topology/build plus minimization and short equilibration.\n- `submit_prod.sh` should define one implicit-solvent production MD stage with `pmemd.cuda`.\n- `submit_mmgbsa.sh` should run `MMPBSA.py` with complex / receptor-A / ligand-BC roles wired correctly.\n- The graded MMGBSA result must use the provided `input/prod.mdcrd` as trajectory input.\n- Do not write extra deliverable files.\n\nDo not modify `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.\n",
+  "agentMustDo": [
+    "Inspect `complex_structure.pdb` and the two staged markdown specs under `input/`.",
+    "Treat chain `A` as the receptor and chains `B` plus `C` together as the ligand.",
+    "Write `submit_min.sh` that covers topology construction plus minimization and short equilibration.",
+    "Write `submit_prod.sh` for one implicit-solvent production MD stage using `pmemd.cuda`.",
+    "Write `submit_mmgbsa.sh` plus `FINAL_RESULTS_MMGBSA.dat`, using the staged `prod.mdcrd` as the deterministic MMGBSA trajectory input."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_sop.md",
+      "format": "Markdown",
+      "path": "input/task_sop.md",
+      "description": "Agent-facing Amber workflow instructions and deliverable expectations."
+    },
+    {
+      "name": "input_environment_spec.md",
+      "format": "Markdown",
+      "path": "input/input_environment_spec.md",
+      "description": "Reference environment notes and naming conventions for the workflow."
+    },
+    {
+      "name": "complex_structure.pdb",
+      "format": "PDB",
+      "path": "input/complex_structure.pdb",
+      "description": "Cleaned three-chain protein complex structure used to define the workflow."
+    },
+    {
+      "name": "prod.mdcrd",
+      "format": "Amber trajectory",
+      "path": "input/prod.mdcrd",
+      "description": "Deterministic staged trajectory that the final MMGBSA step must use."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "submit_min.sh",
+      "format": "bash / SLURM script",
+      "path": "output/submit_min.sh",
+      "description": "Stage 1 topology-build and minimization/equilibration workflow script."
+    },
+    {
+      "name": "submit_prod.sh",
+      "format": "bash / SLURM script",
+      "path": "output/submit_prod.sh",
+      "description": "Stage 2 production MD workflow script."
+    },
+    {
+      "name": "submit_mmgbsa.sh",
+      "format": "bash / SLURM script",
+      "path": "output/submit_mmgbsa.sh",
+      "description": "Stage 3 MMGBSA submission script with the required complex/receptor/ligand wiring."
+    },
+    {
+      "name": "FINAL_RESULTS_MMGBSA.dat",
+      "format": "MMPBSA output",
+      "path": "output/FINAL_RESULTS_MMGBSA.dat",
+      "description": "Final MMGBSA result file produced from the staged trajectory."
+    }
+  ],
+  "evaluation": "Binary parser-based scoring.\n\nScore `1.0` only when exactly the four required non-empty output files are present, the three scripts use the required Amber/MMGBSA command shape with chain `A` as receptor and chains `B` plus `C` as ligand, and `FINAL_RESULTS_MMGBSA.dat` contains a parseable in-band `DELTA TOTAL`.\n\nMissing files, extra files, malformed script wiring, missing `DELTA TOTAL`, or an out-of-band MMGBSA result fail to `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.1",
+    "subdomain_code": "biomolecular",
+    "subdomain_name": "Biomolecular Structure & Design",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:10:14.189607Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/amber_three_stage_mmgbsa_workflow_instance_1/task_card.json"
+      },
+      "rationale": "The task involves computational structural biology focusing on protein complexes."
+    }
+  }
+}

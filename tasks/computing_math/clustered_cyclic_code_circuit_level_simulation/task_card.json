@@ -1,0 +1,85 @@
+{
+  "taskId": "computing_math/clustered_cyclic_code_circuit_level_simulation",
+  "title": "Clustered-Cyclic Code Circuit Simulation",
+  "summary": "Reproduce circuit-level logical failure-rate data for three clustered-cyclic CSS quantum error-correcting codes using the supplied construction notes and simulation grid.",
+  "category": "computing_math",
+  "software": [
+    "Python",
+    "Stim",
+    "ldpc",
+    "QUITS",
+    "NumPy",
+    "pandas"
+  ],
+  "taskPrompt": "You are working on a Linux VM.\n\n## Variant\n`base`: Three clustered-cyclic CSS codes with QUITS/Stim circuit-level memory simulation.\n\n## Input Files\n- Task notes: `/media/user/data/agenthle/computing_math/clustered_cyclic_code_circuit_level_simulation/base/input/cc_codes_quits_extraction.tex`\n- Simulation grid: `/media/user/data/agenthle/computing_math/clustered_cyclic_code_circuit_level_simulation/base/input/simulation_grid.csv`\n- Output requirements: `/media/user/data/agenthle/computing_math/clustered_cyclic_code_circuit_level_simulation/base/input/output_requirements.txt`\n- Python runtime manifest: `/media/user/data/agenthle/computing_math/clustered_cyclic_code_circuit_level_simulation/base/input/runtime_env/pyproject.toml`\n\n## Your Task\nReproduce the circuit-level memory-simulation logical failure-rate table for the three clustered-cyclic CSS codes described in the task notes.\n\nUse the staged notes to extract the code construction, QUITS repeated-syndrome-extraction workflow, direction-aware edge-coloring schedule, Stim detector-error-model workflow, BP+OSD decoder settings, and logical failure-rate formulas.\n\nRun every row in the simulation grid. For each row, report the logical failure count, total logical failure probability, per-round logical failure rate, and per-logical-qubit per-round logical failure rate.\n\nYou may install the task-specific open-source Python dependencies from `input/runtime_env/pyproject.toml` or `input/requirements.txt`.\n\n## Output\nWrite the final CSV here:\n- `/media/user/data/agenthle/computing_math/clustered_cyclic_code_circuit_level_simulation/base/output/logical_error_rates_3codes.csv`\n",
+  "agentMustDo": [
+    "Read `input/cc_codes_quits_extraction.tex`, `input/simulation_grid.csv`, and `input/output_requirements.txt`.",
+    "Install or inspect the open-source Python runtime from `input/runtime_env/pyproject.toml` or `input/requirements.txt`.",
+    "Construct and simulate the `[24,8,3]`, `[40,8,5]`, and `[54,18,3]` clustered-cyclic CSS code cases from the supplied notes.",
+    "Compute `num_failures`, `p_logical`, `lfr_per_round`, and `lfr_per_round_per_qubit` for every row in the simulation grid.",
+    "Save the final CSV as `output/logical_error_rates_3codes.csv`."
+  ],
+  "inputFiles": [
+    {
+      "name": "cc_codes_quits_extraction.tex",
+      "format": "tex",
+      "path": "input/cc_codes_quits_extraction.tex",
+      "description": "Agent-facing construction and simulation notes from the submitter."
+    },
+    {
+      "name": "simulation_grid.csv",
+      "format": "csv",
+      "path": "input/simulation_grid.csv",
+      "description": "The required code, physical error-rate, round-count, and shot-count grid."
+    },
+    {
+      "name": "output_requirements.txt",
+      "format": "txt",
+      "path": "input/output_requirements.txt",
+      "description": "The required output CSV schema and derived-rate formulas."
+    },
+    {
+      "name": "pyproject.toml",
+      "format": "toml",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Open-source Python dependency manifest for the simulation runtime."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "logical_error_rates_3codes.csv",
+      "format": "csv",
+      "path": "output/logical_error_rates_3codes.csv",
+      "description": "The completed logical failure-rate table."
+    }
+  ],
+  "evaluation": "The evaluator reads `output/logical_error_rates_3codes.csv`, verifies the exact CSV schema and simulation grid, checks declared code parameters and shot counts, checks failure-count/probability consistency, and compares the logical failure-rate columns against the benchmark reference on log scale. The positive fixture scores `1.0`; the realistic negative fixture scores `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.7",
+    "subdomain_code": "quantum",
+    "subdomain_name": "Quantum Computing",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:43:38.991943Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/clustered_cyclic_code_circuit_level_simulation/task_card.json"
+      },
+      "rationale": "The task involves quantum computing concepts and simulations."
+    }
+  }
+}

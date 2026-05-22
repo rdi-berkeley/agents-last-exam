@@ -1,0 +1,109 @@
+{
+  "taskId": "computing_math/particle_filter_nonlinear_tracking",
+  "title": "Particle Filter Nonlinear Tracking",
+  "summary": "Implement a three-tier particle-filter benchmark in Python, covering a linear-Gaussian validation case, 2D range-bearing tracking, and a coordinated-turn smoother case with Student-t process noise.",
+  "category": "computing_math",
+  "software": [
+    "Python",
+    "NumPy",
+    "SciPy",
+    "uv"
+  ],
+  "taskPrompt": "You are working on an Ubuntu coding task about particle filtering for nonlinear tracking.\n\nTask directory:\n- `/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base`\n\nVisible input files:\n- Problem specification: `/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base/input/problem_spec.md`\n- Python runtime manifest: `/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base/input/runtime_env/pyproject.toml`\n- Python lockfile: `/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base/input/runtime_env/uv.lock`\n- Canonical Python wrapper: `/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base/software/python.sh`\n\nRecommended workflow:\n1. Change into `/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base`\n2. Read `/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base/input/problem_spec.md` in full before coding\n3. Use `\"/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base/software/python.sh\" your_script.py` or `\"/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base/software/python.sh\" -c \"...\"` to run Python with the staged NumPy/SciPy environment\n4. Implement your solver and save it to `/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base/output/pf_solver.py`\n5. Run the solver and write every required artifact under `/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base/output`\n\nRequired outputs under `/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base/output`:\n- `pf_solver.py`\n- `tier1_results.npz`\n- `tier2_results.npz`\n- `tier3_results.npz`\n- `results.json`\n\nRequirements:\n- Use only Python + NumPy + SciPy. Do not use FilterPy, particles, pyro, Stan, or any state-estimation package.\n- Follow the seed, model, and schema requirements in `/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base/input/problem_spec.md`.\n- If you cannot complete Tier 3, still write truthful Tier 1 / Tier 2 outputs and a truthful `results.json` rather than fabricating missing work.\n- Do not modify files outside `/media/user/data/agenthle/computing_math/particle_filter_nonlinear_tracking/base/output`.\n",
+  "agentMustDo": [
+    "Read the staged problem specification in full before implementing the solver.",
+    "Use the staged Python wrapper if a task-local NumPy/SciPy runtime is needed.",
+    "Implement the solver in `output/pf_solver.py`.",
+    "Produce `tier1_results.npz`, `tier2_results.npz`, `tier3_results.npz`, and `results.json` under the writable output directory.",
+    "Keep the saved arrays and `results.json` truthful and internally consistent."
+  ],
+  "inputFiles": [
+    {
+      "name": "problem_spec.md",
+      "format": "Markdown",
+      "path": "input/problem_spec.md",
+      "description": "Full public task specification for the three-tier particle-filter benchmark."
+    },
+    {
+      "name": "runtime_env/pyproject.toml",
+      "format": "TOML",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Pinned staged runtime manifest for NumPy and SciPy."
+    },
+    {
+      "name": "runtime_env/uv.lock",
+      "format": "Lockfile",
+      "path": "input/runtime_env/uv.lock",
+      "description": "Pinned uv lockfile for the staged solve-time runtime."
+    },
+    {
+      "name": "software/python.sh",
+      "format": "Shell script",
+      "path": "software/python.sh",
+      "description": "Canonical agent-facing Python entry point for the staged task-local runtime."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "pf_solver.py",
+      "format": "Python",
+      "path": "output/pf_solver.py",
+      "description": "Submitted solver implementation."
+    },
+    {
+      "name": "tier1_results.npz",
+      "format": "NPZ",
+      "path": "output/tier1_results.npz",
+      "description": "Tier 1 posterior summaries, ESS trace, and validation metrics."
+    },
+    {
+      "name": "tier2_results.npz",
+      "format": "NPZ",
+      "path": "output/tier2_results.npz",
+      "description": "Tier 2 truth, observations, filter estimates, ESS trace, and RMSE summaries."
+    },
+    {
+      "name": "tier3_results.npz",
+      "format": "NPZ",
+      "path": "output/tier3_results.npz",
+      "description": "Tier 3 truth, observations, filter and smoother estimates, ESS trace, and RMSE summaries."
+    },
+    {
+      "name": "results.json",
+      "format": "JSON",
+      "path": "output/results.json",
+      "description": "Required summary sidecar that must remain consistent with the submitted arrays."
+    }
+  ],
+  "evaluation": "**Score behavior**\n- `1.0` when Tier 1, Tier 2, and Tier 3 all pass.\n- `0.5` when Tier 1 and Tier 2 pass but Tier 3 is missing or fails.\n- `0.0` when required files are missing, `results.json` is invalid / inconsistent, or Tier 1 or Tier 2 fail.\n\n**Visible benchmark thresholds**\n- Tier 1: `max_abs_error_mean < 0.20` and `max_rel_error_variance < 0.35`\n- Tier 2: `overall_rmse_pos < 1.5`, `overall_rmse_vel < 0.3`, and `mean_ess > 1000`\n- Tier 3: `overall_rmse_filter_pos < 3.0`, `overall_rmse_smoother_pos < overall_rmse_filter_pos`, and `mean_ess > 500`\n\n**What the evaluator checks**\n- deterministic truth arrays and observations\n- exact Tier 1 Kalman-filter recomputation from the submitted observations\n- Tier 1 / Tier 2 / Tier 3 RMSE summaries recomputed from the submitted arrays\n- ESS bounds and covariance sanity\n- consistency between `.npz` contents and `results.json`\n\n**What a correct run looks like**\nThe solver writes all required files, the saved arrays are structurally valid and truthful, Tier 1 and Tier 2 satisfy the required quality thresholds, and Tier 3 either passes for full credit or is omitted / fails honestly for partial credit.\n\n**What a wrong run looks like**\nMissing required outputs, mismatched deterministic truth arrays, fabricated summary metrics, invalid covariance matrices, or Tier 1 / Tier 2 threshold failures keep the score below `1.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "variants": 1,
+  "sourceSubmissionId": "fdb5beef-3ad6-4d09-bb01-1f17af9180e0",
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.3",
+    "subdomain_code": "ai_cs_research",
+    "subdomain_name": "AI Engineering, Safety & CS Research",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:32:01.116378Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/particle_filter_nonlinear_tracking/task_card.json"
+      },
+      "rationale": "The task involves implementing a particle filter, which is a method used in AI and computational research."
+    }
+  }
+}

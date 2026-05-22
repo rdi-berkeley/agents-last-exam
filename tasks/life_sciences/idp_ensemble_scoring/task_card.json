@@ -1,0 +1,87 @@
+{
+  "taskId": "life_sciences/idp_ensemble_scoring",
+  "title": "IDP Ensemble Scoring with Given Open-Source Tools",
+  "summary": "Rank 5 IDP ensemble generation models by how well their ensembles match experimental NMR data (chemical shifts, J-couplings, NOE/PRE) using UCBShift and X-EISD.",
+  "category": "life_sciences",
+  "software": [
+    "UCBShift (CSpred)",
+    "X-EISD (xeisd)"
+  ],
+  "taskPrompt": "Rank 5 IDP ensemble generation models by how well their ensembles match experimental NMR data. Use the locally provided UCBShift (CSpred) and X-EISD tools to back-calculate chemical shifts, J-couplings, and NOE/PRE from protein ensemble conformers, score each ensemble, then normalize and rank the models. Output a CSV with columns Method, Total, CS, JC, NOE/PRE. Web search is forbidden.",
+  "agentMustDo": [
+    "Set up a Python environment with correct dependencies (biopython==1.74, scikit-learn==0.22)",
+    "Back-calculate CS via UCBShift and JC/NOE/PRE via xeisd calculator",
+    "Score ensembles using xeisd.optimizer.XEISD.calc_scores()",
+    "Min-max normalize per observable and compute total ranking",
+    "Save Final_Output.csv to the output directory"
+  ],
+  "inputFiles": [
+    {
+      "name": "CSpred",
+      "format": "directory",
+      "path": "input/CSpred/",
+      "description": "UCBShift chemical shift predictor with models and binaries"
+    },
+    {
+      "name": "xeisd",
+      "format": "directory",
+      "path": "input/xeisd/",
+      "description": "X-EISD ensemble scoring module"
+    },
+    {
+      "name": "Ensembles",
+      "format": "directory",
+      "path": "input/Ensembles/",
+      "description": "5 models x ~36 proteins x 200 PDB conformers"
+    },
+    {
+      "name": "Experimental_Data",
+      "format": "directory",
+      "path": "input/Experimental_Data/",
+      "description": "Per-protein experimental NMR data"
+    },
+    {
+      "name": "info.py",
+      "format": "python",
+      "path": "input/info.py",
+      "description": "Test protein sets per observable"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Expected_Final_Output.csv",
+      "format": "CSV",
+      "path": "reference/Expected_Final_Output.csv",
+      "description": "Ground truth ranking with exact scores"
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0):\n- Output file missing\n- Forbidden observable columns (Rg/FRET/SAXS)\n- Values outside [0,1]\n- Missing required columns or models\n\n**Scoring method:**\n- Compare each of 20 numeric cells (5 models x 4 columns) against reference rounded to 2 decimal places\n- Score = fraction of matching cells (0.0 to 1.0)\n- Also checks ranking order matches reference",
+  "vm": {
+    "snapshot": "cpu-free-ubuntu",
+    "machineType": "c4-standard-16",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.1",
+    "subdomain_code": "biomolecular",
+    "subdomain_name": "Biomolecular Structure & Design",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:10:21.881832Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/idp_ensemble_scoring/task_card.json"
+      },
+      "rationale": "The task involves scoring IDP ensembles based on biomolecular data from NMR experiments."
+    }
+  }
+}

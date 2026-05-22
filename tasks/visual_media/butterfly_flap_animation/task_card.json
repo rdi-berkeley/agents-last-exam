@@ -1,0 +1,70 @@
+{
+  "taskId": "visual_media/butterfly_flap_animation",
+  "title": "butterfly_flap_animation",
+  "summary": "Animate a supplied butterfly image in Adobe After Effects with four wing-flap cycles and a smooth curved 2.5D flight path.",
+  "category": "visual_media",
+  "software": [
+    "Adobe After Effects"
+  ],
+  "taskPrompt": "Create a butterfly wing-flap animation in Adobe After Effects using input/butterfly.jpeg and input/task_spec.md. Split or mask the butterfly into body and wings, animate exactly 4 open-closed-open wing cycles, move it along a smooth curved path with at least 2 Y-direction turning points, use a plain dark/black background, and export a 30 fps H.264 MP4 lasting 4.0 to 5.5 seconds to output/output.mp4.",
+  "agentMustDo": [
+    "Launch Adobe After Effects from `software/launch_after_effects.bat`.",
+    "Import `input/butterfly.jpeg` and use it as the source butterfly artwork.",
+    "Split or mask the butterfly into a central body plus left and right wings.",
+    "Animate the wings with repeated Y-rotation or equivalent perspective deformation for exactly 4 complete flap cycles.",
+    "Move the butterfly along a smooth curved 2.5D-style path with at least 2 Y-direction turning points.",
+    "Use a plain dark or black background for clear motion detection.",
+    "Export one 30 fps H.264 MP4, 4.0 to 5.5 seconds long, to `output/output.mp4`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Butterfly artwork",
+      "format": "JPEG image",
+      "path": "input/butterfly.jpeg",
+      "description": "Agent-visible source artwork to animate"
+    },
+    {
+      "name": "Task specification",
+      "format": "Markdown",
+      "path": "input/task_spec.md",
+      "description": "Public animation and export requirements"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Final animation",
+      "format": "MP4 video",
+      "path": "output/output.mp4",
+      "description": "Evaluated output render"
+    }
+  ],
+  "evaluation": "The evaluator downloads `output/output.mp4` and the visible source image, then scores deterministic public-contract metrics. Hard gates return 0 for missing/unreadable video, invalid timing, or insufficient foreground detection. Scored components check 30 fps / 4.0-5.5s timing, periodic butterfly width changes with an estimated 4 flap cycles, smooth curved path motion with Y turning points and adequate Y range, and source-shape preservation on open-wing frames. The hidden reference MP4 is retained only as provenance / fixture seed and is not used as a frame-by-frame answer key.",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:35:31.986426Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/butterfly_flap_animation/task_card.json"
+      },
+      "rationale": "The task involves creating an animation using Adobe After Effects."
+    }
+  }
+}

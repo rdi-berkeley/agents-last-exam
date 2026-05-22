@@ -1,0 +1,81 @@
+{
+  "taskId": "transport_safety/capacitated_vehicle_routing_problems",
+  "title": "Capacitated Vehicle Routing Problems",
+  "summary": "Generate VRPLIB-format near-best-known CVRP solutions for three selected benchmark instances.",
+  "category": "transport_safety",
+  "software": [
+    "Python",
+    "uv",
+    "PyVRP",
+    "VRPLIB"
+  ],
+  "taskPrompt": "You are working on a Linux VM.\n\n## Your Task\nBuild a reproducible CVRP-solving workflow and generate VRPLIB-format solutions for exactly three selected instances.\n\n## Visible Inputs\n- Problem specification: `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/input/problem_spec.md`\n- Instance directory: `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/input/instances/`\n- Runtime manifest: `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/input/runtime_env/pyproject.toml`\n- Runtime lockfile: `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/input/runtime_env/uv.lock`\n- Python wrapper: `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/software/python_cvrp_env.sh`\n\n## What You Must Produce\nWrite these required files:\n- `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/output/solutions/M-n101-k10.sol`\n- `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/output/solutions/X-n101-k25.sol`\n- `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/output/solutions/X-n106-k14.sol`\n\nYou may also write helper scripts and logs anywhere under `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/output`.\n\n## Rules\n- Read `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/input/problem_spec.md` first.\n- Do not modify files under `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/input`.\n- Do not write outside `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/output`.\n- Use only the staged local inputs and software already available on this VM.\n",
+  "agentMustDo": [
+    "Inspect the three staged `.vrp` files and implement a CVRP-solving workflow.",
+    "Use the staged wrapper if needed to run Python with the pinned task runtime.",
+    "Write the three required `.sol` files under `output/solutions/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Problem specification",
+      "format": "Markdown",
+      "path": "input/problem_spec.md",
+      "description": "Public benchmark instructions and output contract."
+    },
+    {
+      "name": "Selected CVRP instances",
+      "format": "VRPLIB",
+      "path": "input/instances/",
+      "description": "Three benchmark instances that must all be solved."
+    },
+    {
+      "name": "Runtime manifest",
+      "format": "pyproject.toml + uv.lock",
+      "path": "input/runtime_env/",
+      "description": "Pinned Python runtime manifest for task-local solving."
+    },
+    {
+      "name": "Python wrapper",
+      "format": "shell script",
+      "path": "software/python_cvrp_env.sh",
+      "description": "Runs Python with the staged runtime and keeps the resolved environment under output."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Solution outputs",
+      "format": "VRPLIB .sol",
+      "path": "output/solutions/",
+      "description": "Exactly three required route files, one per selected instance."
+    }
+  ],
+  "evaluation": "The evaluator scores the three required `.sol` files independently. An instance passes only if the route file exists, every customer is visited exactly once, no route exceeds capacity, and the recomputed route cost is within 1% of a hidden best-known solution. Final score mapping: 1.0 for 3/3 passes, 0.67 for 2/3 passes, 0.33 for 1/3 passes, 0.0 for 0/3 passes.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "10",
+    "domain_code": "transport_safety",
+    "subdomain_id": "10.1",
+    "subdomain_code": "aviation",
+    "subdomain_name": "Aviation & Airspace Operations",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:46:24.387875Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/transport_safety/capacitated_vehicle_routing_problems/task_card.json"
+      },
+      "rationale": "The task involves solving vehicle routing problems, which is a key aspect of transportation engineering."
+    }
+  }
+}

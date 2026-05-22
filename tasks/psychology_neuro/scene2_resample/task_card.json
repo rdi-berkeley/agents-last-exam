@@ -1,0 +1,80 @@
+{
+  "taskId": "psychology_neuro/scene2_resample",
+  "title": "Scene2 Resample",
+  "summary": "Resample a 1 mm ROI mask onto the 2 mm statistical-map grid and save the required aligned output.",
+  "category": "psychology_neuro",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are a neuroimaging analyst completing a GUI workflow in 3D Slicer 5.0.3.\n\n## Your Task\nWorkflow 2: resample a 1mm ROI mask to the 2mm statistical-map grid\n\nGoal:\n1. Open the staged ROI mask and statistical map in 3D Slicer.\n2. Resample roi_mask_1mm.nii.gz onto statmap_z_2mm.nii.gz using nearest-neighbor interpolation.\n3. Save the resampled mask as roi_mask_2mm_nn.nii.gz.\n4. Export a screenshot of the resample settings as resample_settings.png.\n5. Compute the ROI statistics on the resampled mask and save them to scene2_stats.csv.\n\nRequired outputs:\n- output/roi_mask_2mm_nn.nii.gz\n- output/resample_settings.png\n- output/scene2_stats.csv\n\n## Input Files\nAll task inputs are staged in:\n- `/home/user/Desktop/psychology_neuro/scene2_resample/base/input`\n\nKey staged files:\n- `/home/user/Desktop/psychology_neuro/scene2_resample/base/input/statmap_z_2mm.nii.gz`\n- `/home/user/Desktop/psychology_neuro/scene2_resample/base/input/roi_mask_1mm.nii.gz`\n\n## Software\nLaunch the correct GUI workflow with:\n- `/home/user/Desktop/psychology_neuro/scene2_resample/base/software/launch_gui.sh`\n\nThe Desktop task folder is a symlink into `/media/user/data/agenthle/...`, so write all outputs under the staged task directory only.\n\n## Required Output Files\nSave these outputs exactly under `/home/user/Desktop/psychology_neuro/scene2_resample/base/output`:\n- `/home/user/Desktop/psychology_neuro/scene2_resample/base/output/roi_mask_2mm_nn.nii.gz`\n- `/home/user/Desktop/psychology_neuro/scene2_resample/base/output/resample_settings.png`\n- `/home/user/Desktop/psychology_neuro/scene2_resample/base/output/scene2_stats.csv`\n\n## Evaluation\nYou only pass if all required output files exist, are readable, and satisfy the task-specific correctness checks against hidden reference data.\nFocus on this correctness target:\n- The output mask must truly land on the 2 mm stat-map grid, the CSV must reflect that mask, and the settings screenshot must be readable.\nDo not read from `reference/`, `output_test_pos/`, or `output_test_neg/`.",
+  "agentMustDo": [
+    "Launch 3D Slicer from `software/launch_gui.sh`.",
+    "Open the staged `roi_mask_1mm.nii.gz` and `statmap_z_2mm.nii.gz` volumes.",
+    "Resample the 1 mm ROI mask onto the 2 mm stat-map grid using nearest-neighbor interpolation.",
+    "Save the resampled mask to `output/roi_mask_2mm_nn.nii.gz` and export a readable screenshot of the resample settings to `output/resample_settings.png`.",
+    "Compute ROI statistics on the resampled mask and save them to `output/scene2_stats.csv`."
+  ],
+  "inputFiles": [
+    {
+      "name": "statmap_z_2mm.nii.gz",
+      "format": "NIfTI volume",
+      "path": "input/statmap_z_2mm.nii.gz",
+      "description": "Reference 2 mm grid that the output mask must match."
+    },
+    {
+      "name": "roi_mask_1mm.nii.gz",
+      "format": "NIfTI mask",
+      "path": "input/roi_mask_1mm.nii.gz",
+      "description": "Correct source mask to resample with nearest-neighbor interpolation."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "roi_mask_2mm_nn.nii.gz",
+      "format": "NIfTI mask",
+      "path": "output/roi_mask_2mm_nn.nii.gz",
+      "description": "Must have the same shape and affine as statmap_z_2mm.nii.gz."
+    },
+    {
+      "name": "resample_settings.png",
+      "format": "PNG",
+      "path": "output/resample_settings.png",
+      "description": "Readability only is judged; exact pixels are not hidden-scored."
+    },
+    {
+      "name": "scene2_stats.csv",
+      "format": "CSV",
+      "path": "output/scene2_stats.csv",
+      "description": "Must contain the mean, max, and voxel count derived from the output mask."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- missing any required output file\n- unreadable `resample_settings.png`\n- output mask shape or affine does not match the 2 mm stat-map grid\n- output mask is empty\n\n**Scoring method:**\n- A task-local Python verifier loads the agent mask and the hidden reference stats.\n- `0.7` is awarded if the output mask, when applied to the stat map, reproduces the reference mean, max, and voxel count within `1e-6`.\n- `0.3` is awarded if `scene2_stats.csv` itself matches those same hidden reference values within `1e-6`.\n- Total score is in `[0.0, 1.0]`.\n\n- **Where does the main scoring logic run?** on the Linux VM via a small uploaded verifier script\n- **If any scoring step runs on the VM, why is that exception necessary?** The hidden reference stats and binary NIfTI artifacts are already staged on the selected VM; the current implementation keeps scoring beside those assets and avoids a separate result-pullback path.\n\n**What does a PERFECT output look like?**\nThe output mask is a true nearest-neighbor resample onto the 2 mm grid, the CSV matches the hidden stats, and the screenshot is readable.\n\n**What does a WRONG/empty output look like?**\nUsing the wrong source mask, linear/smoothed interpolation, mismatched geometry, missing screenshot, or an incorrect CSV should all drive the score to `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "5",
+    "domain_code": "psychology_neuro",
+    "subdomain_id": "5.2",
+    "subdomain_code": "exp_psychology",
+    "subdomain_name": "Experimental Psychology & Neuroimaging",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:07:08.898507Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/psychology_neuro/scene2_resample/task_card.json"
+      },
+      "rationale": "The task involves neuroimaging analysis, which fits within experimental psychology and neuroimaging."
+    }
+  }
+}

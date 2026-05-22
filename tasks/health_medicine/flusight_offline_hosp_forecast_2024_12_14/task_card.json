@@ -1,0 +1,106 @@
+{
+  "taskId": "health_medicine/flusight_offline_hosp_forecast_2024_12_14",
+  "title": "FluSight Offline Hospital Forecast",
+  "summary": "Produce a FluSight-style weekly influenza hospitalization forecast from an archived public snapshot as of 2024-12-14 and write the required submission CSV.",
+  "category": "health_medicine",
+  "software": [
+    "Python",
+    "uv",
+    "numpy",
+    "pandas"
+  ],
+  "taskPrompt": "You are working on a Linux VM to produce a FluSight-style offline influenza hospitalization forecast.\n\nVisible task files:\n- `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/task_prompt.md`\n- `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/output_contract.json`\n- `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/TASK_INSTRUCTIONS.md`\n- `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/forecast_output_schema.md`\n- `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/forecast_output_template.csv`\n- `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/historical_weekly_hospital_admissions_asof_2024-12-14.csv`\n- `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/locations.csv`\n- `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/source_provenance.md`\n- `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/runtime_env/pyproject.toml`\n- `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/runtime_env/uv.lock`\n- `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/software/bootstrap_runtime.sh`\n- `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/software/python_with_task_deps.sh`\n\nWhat you must do:\n1. Read `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/task_prompt.md` and `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/output_contract.json` first.\n2. Use the archived historical snapshot in `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input/historical_weekly_hospital_admissions_asof_2024-12-14.csv` to forecast weekly admissions for the 53 required jurisdictions and four required target weeks.\n3. Fill the staged template contract exactly and write one final file under `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/output`:\n   - `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/output/submission.csv`\n4. If you want the staged Python environment, materialize it with `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/software/bootstrap_runtime.sh` and run Python with `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/software/python_with_task_deps.sh`.\n\nRules:\n- Do not use the internet or external files.\n- Do not modify files under `/media/user/data/agenthle/health_medicine/flusight_offline_hosp_forecast_2024_12_14/base/input`.\n- Output must contain exactly 212 rows with the required columns and integer constraints.\n- Write only the required `submission.csv` into the writable output directory.\n",
+  "agentMustDo": [
+    "Read the staged task prompt and output contract before building the forecast.",
+    "Use the archived historical admissions snapshot to forecast the 53 required jurisdictions for four weekly horizons.",
+    "Keep the CSV schema and row-key contract exactly aligned with the staged template.",
+    "Write exactly one final `submission.csv` into the writable output directory."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_prompt.md",
+      "format": "markdown",
+      "path": "input/task_prompt.md",
+      "description": "Agent-visible benchmark brief for the offline FluSight forecasting task."
+    },
+    {
+      "name": "output_contract.json",
+      "format": "json",
+      "path": "input/output_contract.json",
+      "description": "Exact output filename, columns, row count, and structural constraints."
+    },
+    {
+      "name": "TASK_INSTRUCTIONS.md",
+      "format": "markdown",
+      "path": "input/TASK_INSTRUCTIONS.md",
+      "description": "Submission-supplied instructions describing the forecasting problem."
+    },
+    {
+      "name": "forecast_output_template.csv",
+      "format": "csv",
+      "path": "input/forecast_output_template.csv",
+      "description": "The required row-key template for the final submission."
+    },
+    {
+      "name": "historical_weekly_hospital_admissions_asof_2024-12-14.csv",
+      "format": "csv",
+      "path": "input/historical_weekly_hospital_admissions_asof_2024-12-14.csv",
+      "description": "Archived historical weekly admissions snapshot visible to the agent."
+    },
+    {
+      "name": "locations.csv",
+      "format": "csv",
+      "path": "input/locations.csv",
+      "description": "Canonical jurisdiction codes and names used by the evaluator."
+    },
+    {
+      "name": "source_provenance.md",
+      "format": "markdown",
+      "path": "input/source_provenance.md",
+      "description": "Public provenance note for the archived FluSight historical snapshot."
+    },
+    {
+      "name": "runtime_env",
+      "format": "uv Python environment",
+      "path": "input/runtime_env",
+      "description": "Optional pinned Python runtime manifest used by the staged wrappers."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "submission.csv",
+      "format": "csv",
+      "path": "output/submission.csv",
+      "description": "Required FluSight-style forecast file with 212 rows and the exact staged schema."
+    }
+  ],
+  "evaluation": "**Hard gate conditions**:\n- Missing `submission.csv`\n- Invalid column order, row count, row-key set, or `location_name` values\n- Invalid `target_end_date` logic, non-integer forecast fields, negative values, or interval-order violations\n\n**Primary metric:**\n- Mean 95% single-interval WIS excluding `US`\n\n**Secondary diagnostics:**\n- 95% empirical coverage excluding `US`\n- MAE excluding `US`\n\n**Scoring rule:**\nThe hidden evaluator first validates the CSV contract, then computes the FluSight metrics against hidden future weeks. AgentHLE converts the primary metric into a continuous score with `score = clamp(1 - candidate_wis / naive_baseline_wis, 0, 1)`, where the benchmark-owned naive baseline is derived only from the visible historical snapshot.\n\n**What a strong output looks like:**\nA structurally valid submission that materially improves on the benchmark-owned last-value baseline and approaches the hidden perfect reference.\n\n**What a weak output looks like:**\nA structurally invalid CSV or a valid forecast whose WIS is no better than the benchmark-owned baseline.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.4",
+    "subdomain_code": "public_health",
+    "subdomain_name": "Public Health & Epidemiology",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:41:10.662868Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/flusight_offline_hosp_forecast_2024_12_14/task_card.json"
+      },
+      "rationale": "The task involves forecasting influenza hospitalizations, which is related to public health and epidemiology."
+    }
+  }
+}

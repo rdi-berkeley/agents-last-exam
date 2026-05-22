@@ -1,0 +1,78 @@
+{
+  "taskId": "physical_sciences/glm_lake_calibration",
+  "title": "GLM Lake Calibration",
+  "summary": "Calibrate a staged GLM 3 Lake Mendota model by editing one namelist file so the simulated vertical temperature profiles match the staged field observations.",
+  "category": "physical_sciences",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are calibrating GLM (General Lake Model) 3 for Lake Mendota, Wisconsin.\n\n## Your Task\nTune the staged GLM namelist so the simulated vertical water-temperature\nprofiles match the staged observations with RMSE below 1.5 C.\n\n## Visible Inputs\n- GLM namelist to edit: `/media/user/data/agenthle/physical_sciences/glm_lake_calibration/base/input/glm3.nml`\n- Observation file: `/media/user/data/agenthle/physical_sciences/glm_lake_calibration/base/input/field_temp_oxy.csv`\n- Forcing directory: `/media/user/data/agenthle/physical_sciences/glm_lake_calibration/base/input/bcs`\n- Runtime wrapper: `/media/user/data/agenthle/physical_sciences/glm_lake_calibration/base/software/run_glm_from_input.sh`\n\n## Software\n- Use the staged GLM runtime wrapper at `/media/user/data/agenthle/physical_sciences/glm_lake_calibration/base/software/run_glm_from_input.sh`\n- The wrapper uses the benchmark-provided GLM 3 binary and shared libraries in\n  `/media/user/data/agenthle/physical_sciences/glm_lake_calibration/base/software`\n- Do not assume `/usr/local/bin/glm` exists on this VM\n\n## What You Must Do\n1. Modify only `/media/user/data/agenthle/physical_sciences/glm_lake_calibration/base/input/glm3.nml`.\n2. Leave the observation CSV, forcing CSVs, and staged GLM runtime unchanged.\n3. Run `/media/user/data/agenthle/physical_sciences/glm_lake_calibration/base/software/run_glm_from_input.sh` to generate the simulation output.\n4. Save the final simulation NetCDF exactly to `/media/user/data/agenthle/physical_sciences/glm_lake_calibration/base/output/output.nc`.\n\n## Important Constraints\n- Only edit `/media/user/data/agenthle/physical_sciences/glm_lake_calibration/base/input/glm3.nml` and write under `/media/user/data/agenthle/physical_sciences/glm_lake_calibration/base/output`\n- Do not replace the staged GLM binary\n- The output must cover the required 2009-01-01 through late-2015 simulation window",
+  "agentMustDo": [
+    "Work in the staged Linux benchmark tree under `/media/user/data/agenthle/physical_sciences/glm_lake_calibration/base/`.",
+    "Modify only `input/glm3.nml`.",
+    "Run the staged entrypoint `software/run_glm_from_input.sh`, which exposes the bundled GLM binary and libraries.",
+    "Produce `output/output.nc` covering the required 2009-01-01 through at least 2015-12-29.",
+    "Achieve overall RMSE `< 1.5 C` against `input/field_temp_oxy.csv`.",
+    "`software/run_glm_from_input.sh`",
+    "`software/glm`",
+    "`software/bin/glm.bin`",
+    "`software/lib/`"
+  ],
+  "inputFiles": [
+    {
+      "name": "glm3.nml",
+      "format": "GLM namelist",
+      "path": "input/glm3.nml",
+      "description": "Only benchmark file the agent may modify; it contains the GLM parameter settings the agent must tune"
+    },
+    {
+      "name": "field_temp_oxy.csv",
+      "format": "CSV",
+      "path": "input/field_temp_oxy.csv",
+      "description": "Lake Mendota observation table with columns datetime, depth, temp, and OXY_oxy; the scorer compares simulated temperatures against the observed temp profiles"
+    },
+    {
+      "name": "bcs/",
+      "format": "CSV directory",
+      "path": "input/bcs/",
+      "description": "Boundary-condition inputs used by GLM: meteo.csv, outflow.csv, pheasant.csv, and yahara.csv"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "output.nc",
+      "format": "NetCDF",
+      "path": "output/output.nc",
+      "description": "Required GLM NetCDF output containing the simulated temperature profile over time and depth for the staged Lake Mendota run"
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- `input/field_temp_oxy.csv` modified\n- any file under `input/bcs/` modified\n- staged GLM binary/runtime replaced or altered\n- GLM run fails\n- `output/output.nc` missing\n- output time range does not reach late December 2015\n\n**Scoring method**\n- Multi-solution calibration task: do **not** compare against `reference_glm3.nml`\n- Use the submission's `test_outputs.py` semantics\n- Success requires all integrity checks plus overall RMSE `< 1.5 C` between the simulated and observed temperature profiles from `field_temp_oxy.csv`\n\n**Known fixture behavior**\n- the local negative fixture path scores RMSE `8.299831332096531`\n- the local positive fixture path scores RMSE `1.4112804217745158`",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "2",
+    "domain_code": "physical_sciences",
+    "subdomain_id": "2.4",
+    "subdomain_code": "earth_atmo",
+    "subdomain_name": "Earth & Atmospheric Sciences",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:19:53.546914Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/physical_sciences/glm_lake_calibration/task_card.json"
+      },
+      "rationale": "The task involves calibrating a lake model related to Earth and Atmospheric Sciences."
+    }
+  }
+}

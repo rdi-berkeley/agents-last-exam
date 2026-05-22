@@ -1,0 +1,51 @@
+{
+  "taskId": "other/mota_exploration",
+  "title": "Mota Exploration",
+  "summary": "Play through the staged Magic Tower scenario, reach the required floor, and save the required result artifact.",
+  "category": "other",
+  "software": [],
+  "taskPrompt": "Goal: Launch Magic Tower and navigate to the 3rd floor.\n1. Open the game at E:\\agenthle\\other\\mota_exploration\\mota_24_ez\\input\\mota-24.swf on Ruffle (the game should be opened automatically).\n2. Wait for the game to load and enter the game.\n3. Navigate to the 3rd floor.\n\nVerification:\n1. When you reach each new floor, take a screenshot and save it to \"E:\\agenthle\\other\\mota_exploration\\mota_24_ez\\output\\$FLOOR_NUMBER$.png\", where $FLOOR_NUMBER$ is the floor number you reached.\n2. The task is successful if the screenshot files exist and demonstrate the floor you reached.",
+  "agentMustDo": [
+    "Open the Flash game (auto-launched by start())",
+    "Wait for the game to load and enter the game",
+    "Navigate to the 3rd floor",
+    "Take a screenshot at each new floor and save it to the output directory"
+  ],
+  "inputFiles": [
+    {
+      "name": "mota-24.swf",
+      "format": "SWF",
+      "path": "input/mota-24.swf",
+      "description": "Flash game to play"
+    }
+  ],
+  "referenceFiles": [],
+  "evaluation": "**Hard gate conditions:** Screenshot files must exist\n**Scoring method:** LLM vision comparison using `evaluate_milestone_mode` with `compare_screenshots_game`; checks if player is on the correct floor\n**What does a PERFECT output look like?** Screenshots matching reference for each floor up to floor 3\n**What does a WRONG/empty output look like?** Missing screenshots or wrong floor content (score 0.0)",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "14",
+    "domain_code": "other",
+    "subdomain_id": null,
+    "subdomain_code": null,
+    "subdomain_name": null,
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:26:31.939821Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/other/mota_exploration/task_card.json"
+      },
+      "rationale": "The task involves gameplay and exploration, which does not fit into the provided subdomains."
+    }
+  }
+}

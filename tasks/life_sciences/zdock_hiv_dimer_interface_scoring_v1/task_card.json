@@ -1,0 +1,89 @@
+{
+  "taskId": "life_sciences/zdock_hiv_dimer_interface_scoring_v1",
+  "title": "ZDOCK HIV Dimer Interface Scoring",
+  "summary": "Evaluate ten precomputed HIV protease dimer docking poses by computing fixed interface overlap, Fnat, IRMSD, and final ranking metrics.",
+  "category": "life_sciences",
+  "software": [
+    "Python",
+    "BioPython",
+    "NumPy"
+  ],
+  "taskPrompt": "You are evaluating precomputed HIV protease dimer docking predictions on a Linux VM.\n\n## Input Files\n- Native complex: `input/1HVR.pdb`\n- Chain A structure: `input/1HVR_chainA.pdb`\n- Chain B structure: `input/1HVR_chainB.pdb`\n- Docking-pose archive: `input/top_preds.tar.gz`\n\n## Your Task\n1. Use `input/1HVR.pdb` to derive native Chain A / Chain B interface residues. An interface residue is any residue with at least one atom within 5 Angstrom of any atom on the opposite chain.\n2. Unpack `input/top_preds.tar.gz` to obtain `complex.1.pdb` through `complex.10.pdb`.\n3. For each docking pose, identify predicted interface residues using the same 5 Angstrom atom-distance cutoff.\n4. Compute `Overlap Score`, `Fnat`, `IRMSD`, and `Final Score` for every pose using the fixed definitions in the runtime prompt.\n5. Rank all 10 poses by `Final Score`, higher is better.\n\n## Required Output\nSave exactly one CSV file at `output/zdock_interface_scores.csv` with exactly 10 rows and the required columns.",
+  "agentMustDo": [
+    "Use `input/1HVR.pdb` to derive native Chain A / Chain B interface residues with a 5 Angstrom atom-distance cutoff.",
+    "Unpack `input/top_preds.tar.gz` and process `complex.1.pdb` through `complex.10.pdb`.",
+    "Compute overlap, Fnat, interface C-alpha IRMSD after superposition, and the final score for every pose.",
+    "Rank all ten poses by final score and write `output/zdock_interface_scores.csv`."
+  ],
+  "inputFiles": [
+    {
+      "name": "1HVR.pdb",
+      "format": "pdb",
+      "path": "input/1HVR.pdb",
+      "description": "Native Chain A / Chain B complex used to derive the native interface and contacts."
+    },
+    {
+      "name": "1HVR_chainA.pdb",
+      "format": "pdb",
+      "path": "input/1HVR_chainA.pdb",
+      "description": "Submitted Chain A structure."
+    },
+    {
+      "name": "1HVR_chainB.pdb",
+      "format": "pdb",
+      "path": "input/1HVR_chainB.pdb",
+      "description": "Submitted Chain B structure."
+    },
+    {
+      "name": "top_preds.tar.gz",
+      "format": "tar.gz",
+      "path": "input/top_preds.tar.gz",
+      "description": "Archive containing the ten docking pose PDB files."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "zdock_interface_scores.csv",
+      "format": "csv",
+      "path": "output/zdock_interface_scores.csv",
+      "description": "Required agent-produced scoring and ranking table."
+    }
+  ],
+  "outputContracts": [
+    {
+      "name": "CSV output columns",
+      "format": "prompt",
+      "path": "runtime task prompt",
+      "description": "The output CSV must contain `Pose Rank (ZDOCK)`, `Overlap Score`, `Fnat`, `IRMSD`, `Final Score`, and `Final Rank`."
+    }
+  ],
+  "evaluation": "The evaluator expects exactly 10 pose rows in `output/zdock_interface_scores.csv`. Required columns must be present with exact spelling. Numeric checks use the submitted tolerances: `Overlap Score` +/- 0.01, `Fnat` +/- 0.05, `IRMSD` +/- 0.5 Angstrom, and `Final Score` +/- 0.05. `Final Rank` must match exactly. Any missing file, malformed CSV, row-count error, required-column error, duplicate or wrong pose rank, non-finite value, rank mismatch, or out-of-tolerance metric returns score 0.0; a fully matching output returns 1.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.1",
+    "subdomain_code": "biomolecular",
+    "subdomain_name": "Biomolecular Structure & Design",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:47.010819Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/zdock_hiv_dimer_interface_scoring_v1/task_card.json"
+      },
+      "rationale": "The task involves evaluating protein docking predictions, which falls under biomolecular structure and design."
+    }
+  }
+}

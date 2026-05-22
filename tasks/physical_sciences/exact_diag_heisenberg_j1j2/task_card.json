@@ -1,0 +1,82 @@
+{
+  "taskId": "physical_sciences/exact_diag_heisenberg_j1j2",
+  "title": "Exact Diagonalization of the J1-J2 Heisenberg Model",
+  "summary": "Implement an exact-diagonalization workflow for a frustrated 4x4 spin-1/2 J1-J2 Heisenberg antiferromagnet and produce ground-state, correlation, and dynamical-structure-factor outputs.",
+  "category": "physical_sciences",
+  "software": [
+    "Python 3.10",
+    "NumPy",
+    "SciPy"
+  ],
+  "taskPrompt": "You are working on a Linux VM.\n\n## Your Task\nImplement an exact diagonalization workflow for the spin-1/2 `J1-J2` Heisenberg antiferromagnet on a `4x4` periodic square lattice in the conserved `S_z = 0` sector.\n\n## Visible Input\n- Problem specification: `/media/user/data/agenthle/physical_sciences/exact_diag_heisenberg_j1j2/base/input/problem_spec.md`\n\n## Runtime\n- Use the benchmark-provided `software/python` entry point at `/media/user/data/agenthle/physical_sciences/exact_diag_heisenberg_j1j2/base/software/python`.\n- That entry point resolves to the VM's preinstalled `/usr/bin/python3.10` with NumPy and SciPy available.\n- Do not install extra packages or use external quantum frameworks.\n\n## What You Must Produce\nWrite the required files under `/media/user/data/agenthle/physical_sciences/exact_diag_heisenberg_j1j2/base/output`:\n- `ground_state.npz`\n- `correlations.npz`\n- `dynamical_sf.npz`\n- `results.json`\n\n## Important Constraints\n- Follow the file schema and scientific checks in `/media/user/data/agenthle/physical_sciences/exact_diag_heisenberg_j1j2/base/input/problem_spec.md`.\n- Do not modify files under `/media/user/data/agenthle/physical_sciences/exact_diag_heisenberg_j1j2/base/input`.\n- Do not write outside `/media/user/data/agenthle/physical_sciences/exact_diag_heisenberg_j1j2/base/output`.\n",
+  "agentMustDo": [
+    "Read the staged scientific specification in `input/problem_spec.md`.",
+    "Compute Tier 1 energies, spin gap, and a normalized ground-state vector in the `S_z = 0` sector.",
+    "Compute the full 16x16 spin-spin correlation matrix and static structure factor.",
+    "Compute the dynamical structure factor on 16 q-points and 500 omega points with Lanczos reproducibility coefficients.",
+    "Write `ground_state.npz`, `correlations.npz`, `dynamical_sf.npz`, and `results.json` under `output/` only."
+  ],
+  "inputFiles": [
+    {
+      "name": "Problem specification",
+      "format": "Markdown",
+      "path": "input/problem_spec.md",
+      "description": "Visible task statement, output contract, and scientific constraints for the 4x4 J1-J2 exact-diagonalization benchmark."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "ground_state.npz",
+      "format": "NumPy archive",
+      "path": "output/ground_state.npz",
+      "description": "Tier 1 energies, spin gap, and normalized ground-state vector."
+    },
+    {
+      "name": "correlations.npz",
+      "format": "NumPy archive",
+      "path": "output/correlations.npz",
+      "description": "Tier 2 correlation matrix, q-points, and static structure factor."
+    },
+    {
+      "name": "dynamical_sf.npz",
+      "format": "NumPy archive",
+      "path": "output/dynamical_sf.npz",
+      "description": "Tier 3 dynamical structure factor plus accepted Lanczos reproducibility coefficients."
+    },
+    {
+      "name": "results.json",
+      "format": "JSON",
+      "path": "output/results.json",
+      "description": "Structured scalar summary for all three benchmark tiers."
+    }
+  ],
+  "evaluation": "**Score mapping**\n- `1.0` when Tier 1, Tier 2, and Tier 3 all pass.\n- `2/3 (= 0.6666666666666666)` when Tier 1 and Tier 2 pass but Tier 3 fails.\n- `0.0` when Tier 1 fails or fewer than two tiers pass.\n\n**Tier 1**\n- Validate file presence, array shapes, finite values, and `results.json` schema.\n- Reconstruct the `S_z = 0` Hamiltonian locally and require `||H psi - E0 psi|| < 1e-8`.\n- Compare `E0`, `E1`, and `spin_gap` against the hidden reference.\n\n**Tier 2**\n- Validate correlation matrix shape, q-point coverage, static sum rule, and non-negativity.\n- Reorder by `q_points` and compare correlations / static structure factor to the hidden reference.\n- Cross-check Tier 2 summary values in `results.json`.\n\n**Tier 3**\n- Validate the 16x500 spectrum grid, non-negativity, uniform `omega_grid`, and `eta = 0.1`.\n- Enforce the visible coefficient contract: structured `lanczos_coefficients` or equivalent flat `a_<q_index>` / `b_<q_index>` arrays.\n- Enforce 200 Lanczos steps for active q-points, with `b` lengths allowed to use either 199 or 200 entries.\n- Reorder by `q_points`, check the static sum rule, peak positions, and Tier 3 summary consistency.\n\n**Current replay truth**\n- `output_test_pos` scores `1.0`.\n- `output_test_neg` is an intentional hard-fail fixture and scores `0.0`.\n- default empty `output/` scores `0.0` during setup-only replay because no solver outputs exist yet.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "2",
+    "domain_code": "physical_sciences",
+    "subdomain_id": "2.1",
+    "subdomain_code": "physics",
+    "subdomain_name": "Physics",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:40:46.955539Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/physical_sciences/exact_diag_heisenberg_j1j2/task_card.json"
+      },
+      "rationale": "The task involves implementing a quantum physics model using exact diagonalization."
+    }
+  }
+}

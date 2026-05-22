@@ -1,0 +1,96 @@
+{
+  "taskId": "engineering/abb_irb6700_asset_to_urdf_instance_1",
+  "title": "ABB IRB6700 Asset To URDF",
+  "summary": "Reconstruct a complete ABB IRB6700 robot URDF from staged mesh assets and structural metadata. The agent must preserve the required links, joints, limits, mimic behavior, and auxiliary frames while producing exactly one valid `submission.urdf` file.",
+  "category": "engineering",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are reconstructing a robot URDF on a Linux VM.\n\n## Variant\n`base`: ABB IRB6700 URDF reconstruction\n\n## Input Files\n- Mesh assets: `/media/user/data/agenthle/engineering/abb_irb6700_asset_to_urdf_instance_1/base/input/meshes`\n- Structural metadata: `/media/user/data/agenthle/engineering/abb_irb6700_asset_to_urdf_instance_1/base/input/metadata`\n- Task brief: `/media/user/data/agenthle/engineering/abb_irb6700_asset_to_urdf_instance_1/base/input/task_brief.md`\n\n## What You Must Do\n1. Read `/media/user/data/agenthle/engineering/abb_irb6700_asset_to_urdf_instance_1/base/input/task_brief.md`.\n2. Use the mesh assets and metadata under `/media/user/data/agenthle/engineering/abb_irb6700_asset_to_urdf_instance_1/base/input` to reconstruct the ABB IRB6700 robot as a URDF.\n3. Save exactly one final file at `/media/user/data/agenthle/engineering/abb_irb6700_asset_to_urdf_instance_1/base/output/submission.urdf`.\n\n## Output Requirements\n- The file must be named `submission.urdf`.\n- The file must be valid XML/URDF.\n- Preserve the required link names, joint names, kinematic tree, joint limits, mimic rules, and auxiliary frames.\n- Reference meshes under the staged `meshes/` directory.\n- Do not place the final answer anywhere outside `/media/user/data/agenthle/engineering/abb_irb6700_asset_to_urdf_instance_1/base/output`.\n",
+  "agentMustDo": [
+    "1. Read the staged task brief and inspect the ABB IRB6700 meshes plus metadata.",
+    "2. Reconstruct a valid URDF with the required links, joints, limits, mimic behavior, and auxiliary frames.",
+    "3. Save exactly one final file named `submission.urdf` under `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "meshes/",
+      "format": "stl directory",
+      "path": "input/meshes/",
+      "description": "Visual and collision STL meshes for the ABB IRB6700 links."
+    },
+    {
+      "name": "link_manifest.json",
+      "format": "json",
+      "path": "input/metadata/link_manifest.json",
+      "description": "Lists the required mesh-bearing and auxiliary links."
+    },
+    {
+      "name": "joint_manifest.json",
+      "format": "json",
+      "path": "input/metadata/joint_manifest.json",
+      "description": "Lists the required joints and their joint types."
+    },
+    {
+      "name": "kinematic_tree_hint.json",
+      "format": "json",
+      "path": "input/metadata/kinematic_tree_hint.json",
+      "description": "Defines the required parent-child tree edges."
+    },
+    {
+      "name": "joint_limits.csv",
+      "format": "csv",
+      "path": "input/metadata/joint_limits.csv",
+      "description": "Normalized joint limits for the actuated joints."
+    },
+    {
+      "name": "mimic_rules.json",
+      "format": "json",
+      "path": "input/metadata/mimic_rules.json",
+      "description": "Defines the required mimic-joint source and multiplier rules."
+    },
+    {
+      "name": "task_brief.md",
+      "format": "markdown",
+      "path": "input/task_brief.md",
+      "description": "Agent-visible solve-time brief with the output contract and constraints."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "submission.urdf",
+      "format": "urdf/xml",
+      "path": "output/submission.urdf",
+      "description": "The single required final robot model file."
+    }
+  ],
+  "evaluation": "- Binary score: `1.0` only if every required check passes, otherwise `0.0`.\n- Hard gates: the output directory must contain exactly one file named `submission.urdf`, and that file must parse as valid XML/URDF.\n- Semantic checks: hidden gold tables verify the exact link set, joint set, mesh filenames, parent-child structure, joint origins, axes, limits, and mimic behavior.\n- Pose checks: the evaluator uses hidden sample joint configurations from `reference/joint_manifest.json` and compares the candidate URDF forward kinematics against the gold URDF at those configurations.\n",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.11",
+    "subdomain_code": "robotics",
+    "subdomain_name": "Robotics & Autonomous Systems",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:44:19.184471Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/abb_irb6700_asset_to_urdf_instance_1/task_card.json"
+      },
+      "rationale": "The task involves reconstructing a robot URDF, which falls under the robotics subdomain."
+    }
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "id": "health_medicine/nsclc_radiomics_cox_signature_v1",
+  "taskId": "health_medicine/nsclc_radiomics_cox_signature_v1",
+  "title": "NSCLC Radiomics Cox Signature",
+  "summary": "Build a CPU-only radiomics survival-risk model for non-small-cell lung cancer from CT volumes, tumor masks, training clinical outcomes, and fixed held-out prediction IDs.",
+  "category": "health_medicine",
+  "domain": "health_medicine",
+  "task_name": "nsclc_radiomics_cox_signature_v1",
+  "variant": "base",
+  "os": "linux",
+  "description": "Build a radiomics-based NSCLC survival risk signature from CT volumes, tumor masks, training clinical outcomes, and held-out prediction IDs.",
+  "software": [
+    "Python",
+    "uv",
+    "PyRadiomics",
+    "SimpleITK",
+    "lifelines",
+    "pandas",
+    "NumPy"
+  ],
+  "taskPrompt": "You are building an Aerts-2014-style radiomic prognostic risk model for non-small-cell lung cancer. Use the data under the task input directory: `images/`, `masks/`, `clinical/train_clinical.csv`, `prediction_ids.csv`, `split.json`, and `runtime_env/pyproject.toml`. Extract features from CT/mask pairs, fit a Cox-style or other survival-risk model using the labeled training patients, and generate risk scores for the held-out patients. Write `risk_scores.csv` under the configured output directory with columns `PatientID` and `risk_score`; higher risk must mean higher predicted hazard / shorter survival.",
+  "agentMustDo": [
+    "Read CT images and tumor masks from `input/images/` and `input/masks/`.",
+    "Use only `input/clinical/train_clinical.csv` as labeled survival training data.",
+    "Generate one held-out prediction for each patient listed in `input/prediction_ids.csv`.",
+    "Write `risk_scores.csv` with columns `PatientID` and `risk_score` to the configured output directory."
+  ],
+  "inputs": [
+    "images/*.nii.gz",
+    "masks/*.nii.gz",
+    "clinical/train_clinical.csv",
+    "prediction_ids.csv",
+    "split.json",
+    "runtime_env/pyproject.toml"
+  ],
+  "inputFiles": [
+    {
+      "name": "CT volumes",
+      "format": "NIfTI gzip",
+      "path": "input/images/*.nii.gz",
+      "description": "Lung CT volumes for the submitted NSCLC cohort."
+    },
+    {
+      "name": "Tumor masks",
+      "format": "NIfTI gzip",
+      "path": "input/masks/*.nii.gz",
+      "description": "GTV-1 tumor segmentation masks for the usable cohort."
+    },
+    {
+      "name": "Training clinical outcomes",
+      "format": "CSV",
+      "path": "input/clinical/train_clinical.csv",
+      "description": "Survival labels for the training patients only."
+    },
+    {
+      "name": "Held-out prediction IDs",
+      "format": "CSV",
+      "path": "input/prediction_ids.csv",
+      "description": "Patient IDs that require output risk scores."
+    },
+    {
+      "name": "Split metadata",
+      "format": "JSON",
+      "path": "input/split.json",
+      "description": "Fixed train/test split and the excluded missing-mask case."
+    },
+    {
+      "name": "Runtime environment manifest",
+      "format": "TOML",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Agent-visible Python dependency manifest for the radiomics stack."
+    }
+  ],
+  "outputs": [
+    "risk_scores.csv"
+  ],
+  "referenceFiles": [
+    {
+      "name": "Risk score predictions",
+      "format": "CSV",
+      "path": "output/risk_scores.csv",
+      "description": "Required agent deliverable with columns `PatientID` and `risk_score`."
+    }
+  ],
+  "outputContracts": [
+    {
+      "name": "Risk score CSV contract",
+      "format": "prompt",
+      "path": "task_description",
+      "description": "`risk_scores.csv` must contain exactly one row per held-out patient and columns `PatientID` and `risk_score`; higher values indicate higher predicted hazard."
+    }
+  ],
+  "evaluation": "The evaluator validates `risk_scores.csv` against the held-out patient set, rejects missing, duplicate, unknown, or non-finite scores, and computes Harrell C-index against evaluator-only survival labels. Scores at or above 0.55 return the rounded C-index; lower scores return 0.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.2",
+    "subdomain_code": "therapeutic_oncology",
+    "subdomain_name": "Therapeutic & Oncology Services",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:39:28.195925Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/nsclc_radiomics_cox_signature_v1/task_card.json"
+      },
+      "rationale": "The task involves building a prognostic model for non-small-cell lung cancer, which falls under therapeutic oncology."
+    }
+  }
+}

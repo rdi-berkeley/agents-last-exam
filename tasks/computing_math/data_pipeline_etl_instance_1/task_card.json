@@ -1,0 +1,118 @@
+{
+  "taskId": "computing_math/data_pipeline_etl_instance_1",
+  "title": "Retail ETL Warehouse Cleanup",
+  "summary": "Build a cleaned SQLite star-schema warehouse plus two truthful JSON sidecars from messy retail CSV, JSON, and TSV source files on a Linux VM.",
+  "category": "computing_math",
+  "software": [
+    "Python 3.10",
+    "uv",
+    "pandas",
+    "SQLite"
+  ],
+  "taskPrompt": "You are working on a Linux VM to build a cleaned SQLite warehouse from messy retail source files.\n\nVisible task files:\n- `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/input/task_prompt.md`\n- `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/input/target_schema_spec.json`\n- `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/input/output_contract.json`\n- `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/input/raw_transactions/`\n- `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/input/raw_customers/customers.json`\n- `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/input/raw_products/product_catalog.tsv`\n- `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/input/runtime_env/`\n- `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/software/README.txt`\n- `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/software/python_etl_env.sh`\n\nWhat you must do:\n1. Read the staged task prompt, schema spec, and output contract.\n2. Build the final SQLite warehouse and truthful JSON sidecars from the staged raw inputs.\n3. Write these three deliverables at the output-directory root:\n   - `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/output/warehouse.db`\n   - `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/output/data_quality_report.json`\n   - `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/output/warehouse_summary.json`\n4. If you use the staged helper wrapper, its runtime scratch may live under `/media/user/data/agenthle/computing_math/data_pipeline_etl_instance_1/base/output/_runtime`.\n\nRules:\n- Do not modify files under `input/`.\n- Keep the final deliverables at the output-directory root.\n- Write valid SQLite / JSON outputs only.\n",
+  "agentMustDo": [
+    "Read the staged prompt, schema spec, output contract, and messy retail source files under `input/`.",
+    "Build a cleaned SQLite warehouse with deduplication, null handling, standardization, surrogate keys, and a full `dim_dates` table.",
+    "Write `output/warehouse.db`, `output/data_quality_report.json`, and `output/warehouse_summary.json`.",
+    "Keep the JSON sidecars truthful to the produced warehouse."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_prompt.md",
+      "format": "Markdown",
+      "path": "input/task_prompt.md",
+      "description": "Agent-visible task brief for the ETL workflow."
+    },
+    {
+      "name": "target_schema_spec.json",
+      "format": "JSON",
+      "path": "input/target_schema_spec.json",
+      "description": "Semantic warehouse schema contract and transformation requirements."
+    },
+    {
+      "name": "output_contract.json",
+      "format": "JSON",
+      "path": "input/output_contract.json",
+      "description": "Required deliverable filenames and JSON key structure."
+    },
+    {
+      "name": "raw_transactions",
+      "format": "CSV directory",
+      "path": "input/raw_transactions",
+      "description": "Six monthly transaction CSV files with schema drift and dirty rows."
+    },
+    {
+      "name": "customers.json",
+      "format": "JSON",
+      "path": "input/raw_customers/customers.json",
+      "description": "Retail customer records including unresolved ghost-customer rows."
+    },
+    {
+      "name": "product_catalog.tsv",
+      "format": "TSV",
+      "path": "input/raw_products/product_catalog.tsv",
+      "description": "Product catalog with supplier, category, and boolean normalization issues."
+    },
+    {
+      "name": "runtime_env",
+      "format": "uv Python environment",
+      "path": "input/runtime_env",
+      "description": "Optional locked Python environment staged for the agent."
+    },
+    {
+      "name": "python_etl_env.sh",
+      "format": "Shell wrapper",
+      "path": "software/python_etl_env.sh",
+      "description": "Optional helper wrapper that runs the staged Python environment and keeps scratch under `output/_runtime/`."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "warehouse.db",
+      "format": "SQLite database",
+      "path": "output/warehouse.db",
+      "description": "Cleaned star-schema warehouse deliverable."
+    },
+    {
+      "name": "data_quality_report.json",
+      "format": "JSON",
+      "path": "output/data_quality_report.json",
+      "description": "Structured ETL quality report with extraction, transformation, load, and quality-check sections."
+    },
+    {
+      "name": "warehouse_summary.json",
+      "format": "JSON",
+      "path": "output/warehouse_summary.json",
+      "description": "Structured warehouse summary with fact and dimension table metrics."
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- Missing required output files returns `0.0`.\n- Unreadable or malformed SQLite / JSON outputs return `0.0`.\n- Missing required top-level or nested JSON sections fail the sidecar criterion.\n\n**Scoring method**\nThe committed evaluator returns the fraction of six deterministic criteria that pass:\n1. schema correctness, including the full `dim_dates` range plus the Unknown Customer and ghost-customer contracts\n2. row-count tolerance versus the hidden reference warehouse\n3. data-quality checks on duplicates, nulls, formula correctness, and foreign keys\n4. standardization correctness for segments, country codes, booleans, and suppliers\n5. revenue tolerance versus the hidden reference warehouse\n6. JSON sidecar truthfulness and completeness, including fixed raw-input counts and required summary/report fields\n\n**Expected reviewed fixture behavior**\n- positive fixture: `1.0`\n- negative fixture: `0.3333333333333333`\n\n**What does a perfect output look like?**\nA valid SQLite warehouse and two JSON sidecars at the output root that satisfy all six criteria.\n\n**What does a wrong output look like?**\nA warehouse that keeps duplicate transaction IDs, drops required ghost-customer rows, misses standardization rules, drifts on revenue, or writes stale / broken report metadata.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.2",
+    "subdomain_code": "data_analytics",
+    "subdomain_name": "Data & Analytics Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:14:34.138105Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/data_pipeline_etl_instance_1/task_card.json"
+      },
+      "rationale": "The task involves building a data pipeline and cleaning data for analytics purposes."
+    }
+  }
+}

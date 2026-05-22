@@ -1,0 +1,82 @@
+{
+  "taskId": "education_info/homework_grading_numerical_pdes_instance_02",
+  "title": "Homework Grading Numerical PDEs 02",
+  "taskName": "Homework Grading Numerical PDEs 02",
+  "summary": "Grade five synthetic graduate numerical-PDE homework submissions from released materials, then emit scores, error tags, per-student feedback, a class summary, and a grader manifest.",
+  "category": "education_info",
+  "software": [
+    "Python"
+  ],
+  "tags": [
+    "grading",
+    "rubric evaluation",
+    "education",
+    "text processing",
+    "csv json markdown"
+  ],
+  "taskPrompt": "You are grading synthetic graduate numerical-PDE homework submissions on Linux.\n\nTask directory:\n- `/media/user/data/agenthle/education_info/homework_grading_numerical_pdes_instance_02/base`\n\nVisible inputs:\n- Instructions: `/media/user/data/agenthle/education_info/homework_grading_numerical_pdes_instance_02/base/input/TASK_PROMPT.md`\n- Released materials: `/media/user/data/agenthle/education_info/homework_grading_numerical_pdes_instance_02/base/input/released/`\n- Starter scaffold: `/media/user/data/agenthle/education_info/homework_grading_numerical_pdes_instance_02/base/input/starter_project/`\n\nYour task:\n1. Read the grading protocol, rubric, solution key, and the five student submissions.\n2. Grade each student submission part by part.\n3. Assign rubric-aligned error tags where appropriate.\n4. Write concise student feedback and a short common-mistakes summary.\n5. Save exactly these files under `/media/user/data/agenthle/education_info/homework_grading_numerical_pdes_instance_02/base/output/`:\n   - `grades.csv`\n   - `error_tags.csv`\n   - `per_student_feedback.json`\n   - `common_mistakes_summary.md`\n   - `grader_manifest.json`\n\nRules:\n- Treat `input/` as read-only.\n- Do not read or modify evaluator-only files under `reference/`.\n- Keep student IDs stable across every output file.\n- Use the task-local `software/python` wrapper if you want to script the grading workflow (it `exec`s the preinstalled system Python).\n- Write final deliverables only under `output/`.\n",
+  "agentMustDo": [
+    "Read the released grading materials and student submissions.",
+    "Produce rubric-aligned grades for all five students.",
+    "Assign the appropriate error tags.",
+    "Write all five required deliverables under `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Released materials",
+      "format": "Markdown, PDF, JSON",
+      "path": "input/released/",
+      "description": "Problem set, rubric, solution key, protocol, and student submissions."
+    },
+    {
+      "name": "Starter scaffold",
+      "format": "Python + JSON",
+      "path": "input/starter_project/",
+      "description": "Benchmark-owned helper scaffold for output formatting and manifest writing."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Required output bundle",
+      "format": "CSV, JSON, Markdown",
+      "path": "output/",
+      "description": "The final deliverables scored by the evaluator."
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- any required deliverable is missing\n- any required file has the wrong top-level shape and cannot be parsed\n\n**Scoring method**\n1. Compare `grades.csv` field by field against hidden gold scores.\n2. Compare `error_tags.csv` with Jaccard overlap over `(student_id, error_tag)` pairs.\n3. Check required hidden phrase coverage in `per_student_feedback.json`.\n4. Check required hidden phrase coverage in `common_mistakes_summary.md`.\n5. Check that `grader_manifest.json` includes `python_version`, `platform`, and `rubric_version`.\n6. Return the arithmetic mean of the five artifact-level scores.\n\n**Benchmark note**\n- Positive fixtures score `1.0`.\n- The benchmark-owned negative fixture is structurally complete and currently scores `0.24`.\n",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "os": "linux",
+    "project": "sunblaze-4",
+    "zone": "us-west2-a",
+    "name": "agenthle-ubuntu",
+    "timeout": 7200
+  },
+  "variants": [
+    "base"
+  ],
+  "taxonomy": {
+    "domain_id": "11",
+    "domain_code": "education_info",
+    "subdomain_id": "11.1",
+    "subdomain_code": "edtech",
+    "subdomain_name": "Educational Technology",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:22:19.266252Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/education_info/homework_grading_numerical_pdes_instance_02/task_card.json"
+      },
+      "rationale": "The task involves grading homework submissions in an educational context."
+    }
+  }
+}

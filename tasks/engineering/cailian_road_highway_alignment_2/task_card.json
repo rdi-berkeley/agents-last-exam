@@ -1,0 +1,74 @@
+{
+  "taskId": "engineering/cailian_road_highway_alignment_2",
+  "title": "Cailian Road Highway Alignment",
+  "summary": "Use AutoCAD Civil 3D 2024 to design a Cailian Road horizontal alignment, generate an existing-ground surface profile, and export station-sampled alignment metrics.",
+  "category": "engineering",
+  "software": [
+    "Autodesk Civil 3D 2024"
+  ],
+  "taskPrompt": "You are a civil engineer using AutoCAD Civil 3D 2024 on Windows.\n\n## Your Task\nDesign a horizontal alignment for Cailian Road and generate a vertical profile that follows the existing ground surface.\n\n## Control Points\n- Start: X = -52093.6660, Y = -5836.2683, Z = 5.5\n- End:   X = -50855.6202, Y = -4142.4687, Z = 5.3\n- Both endpoints must be connected within 0.5 m.\n\n## Design Constraints\n- Minimum curve radius: 85.0 m\n- Minimum spiral length (if spirals are used): 25.0 m\n- Design speed: 30 km/h\n- Total alignment length: 1800.0 m - 2400.0 m\n- The alignment should include at least 2 horizontal curves to form a meaningful highway design.\n\n## Steps\n1. Open `E:\\agenthle\\engineering\\cailian_road_highway_alignment_2\\base\\input\\topo_surface.dwg` - the existing-ground TIN surface.\n2. Create a horizontal Alignment between the start and end control points, respecting the design constraints above.\n3. Use *Create Profile from Surface* to generate the raw existing-ground profile along the alignment. Do NOT edit the profile.\n4. Save the drawing with the alignment and profile to: `E:\\agenthle\\engineering\\cailian_road_highway_alignment_2\\base\\output\\alignment.dwg`\n5. Export alignment metrics at 20 m station intervals to: `E:\\agenthle\\engineering\\cailian_road_highway_alignment_2\\base\\output\\alignment_metrics.tsv`\n   - TSV columns must be exactly: Station, X, Y, Z\n   - Z values must be the surface elevations at each (X, Y) point.\n\n## Software\n- Launch Civil 3D from: `E:\\agenthle\\engineering\\cailian_road_highway_alignment_2\\base\\software\\open_civil3d_2024.bat`\n\n## Output\n- Save alignment drawing to: `E:\\agenthle\\engineering\\cailian_road_highway_alignment_2\\base\\output\\alignment.dwg`\n- Save metrics TSV to: `E:\\agenthle\\engineering\\cailian_road_highway_alignment_2\\base\\output\\alignment_metrics.tsv`\n- Keep all work inside `E:\\agenthle\\engineering\\cailian_road_highway_alignment_2\\base\\output`",
+  "agentMustDo": [
+    "Launch AutoCAD Civil 3D 2024 through the staged task-local launcher.",
+    "Open the staged `input/topo_surface.dwg` existing-ground TIN surface.",
+    "Create a non-trivial Cailian Road horizontal alignment that connects the fixed control points and satisfies the stated curve, spiral, speed, and total-length constraints.",
+    "Generate an unedited existing-ground profile from the surface along the alignment.",
+    "Save `output/alignment.dwg` and export `output/alignment_metrics.tsv` with 20 m stations and columns `Station`, `X`, `Y`, `Z`."
+  ],
+  "inputFiles": [
+    {
+      "name": "topo_surface.dwg",
+      "format": "Autodesk DWG",
+      "path": "input/topo_surface.dwg",
+      "description": "Existing-ground TIN surface for the Cailian Road corridor."
+    },
+    {
+      "name": "open_civil3d_2024.bat",
+      "format": "Windows batch script",
+      "path": "software/open_civil3d_2024.bat",
+      "description": "Task-local launcher for the installed and licensed AutoCAD Civil 3D 2024 application."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "alignment.dwg",
+      "format": "Autodesk DWG",
+      "path": "output/alignment.dwg",
+      "description": "Required output drawing containing the submitted horizontal alignment and associated surface-derived profile."
+    },
+    {
+      "name": "alignment_metrics.tsv",
+      "format": "TSV",
+      "path": "output/alignment_metrics.tsv",
+      "description": "Required station-sampled alignment table with columns `Station`, `X`, `Y`, `Z`."
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- `output/alignment.dwg` is missing or does not contain a Civil 3D Alignment object.\n- `output/alignment_metrics.tsv` is missing or does not have exactly the required `Station`, `X`, `Y`, `Z` columns.\n- The alignment start or end point is more than 0.5 m from the required control point.\n- The total alignment length is outside 1800 m to 2400 m.\n- The drawing does not contain at least one Profile associated with the alignment.\n- The alignment has fewer than 2 horizontal curves.\n- The alignment path length divided by the start-to-end chord length is less than 1.05.\n\n**Scoring method**\nThe evaluator runs a VM-side Civil 3D verifier because Civil 3D COM is required to inspect DWG alignment objects and query the TIN surface. After hard gates pass, the score is computed from the submitter rubric: 20 points for curve radii at least 85 m, 20 points for optional spirals meeting the 25 m minimum when present, 40 points for TSV Z values matching surface elevations within 0.2 m, and 20 points for TSV headers plus 20 m station spacing. The final normalized score is the 0-100 rubric score divided by 100.\n\nA perfect output is a valid `alignment.dwg` and `alignment_metrics.tsv` pair with a non-trivial two-or-more-curve alignment, valid radii, surface-derived profile elevations, and correct formatting. A wrong output is missing required artifacts, contains a straight or near-straight alignment, lacks curves or a surface profile, or reports TSV elevations that do not match the surface.",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.3",
+    "subdomain_code": "civil_geo",
+    "subdomain_name": "Civil, Architectural & Geospatial Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:05:27.148705Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/cailian_road_highway_alignment_2/task_card.json"
+      },
+      "rationale": "The task involves civil engineering design for road alignment."
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "taskId": "computing_math/newyear_keygen2",
+  "title": "Newyear Keygen2",
+  "summary": "Reverse engineer the bundled program, recover the key-generation logic, and write the correct answer for the staged UID.",
+  "category": "computing_math",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "Provided UID:\n- `20252025`\n\nGoal:\nReverse the bundled Windows crackme and compute the correct password for the provided UID.\n\nInputs:\n- Executable to analyze: C:\\Users\\User\\Desktop\\computing_math\\newyear_keygen2\\base\\input\\crackme.exe\n\nOutput:\n- Save EXACTLY one UTF-8 text file to: C:\\Users\\User\\Desktop\\computing_math\\newyear_keygen2\\base\\output\\key.txt\n- The file must contain exactly one line in the form `flag{...}`\n- Do not add commentary, labels, or extra blank lines\n\nImportant:\n- The valid password depends on the current UTC time.\n- Use the most recent UTC half-hour boundary, i.e. the current UTC timestamp rounded down to a multiple of 1800 seconds.\n\nVerification:\n- Score is 1.0 only if the output matches the password for this UID using the evaluation-time UTC half-hour slot.",
+  "agentMustDo": [
+    "Reverse the bundled crackme.",
+    "Use the provided UID `20252025`.",
+    "Compute the password for the most recent UTC half-hour slot.",
+    "Write exactly one line to `output/key.txt`."
+  ],
+  "inputFiles": [
+    {
+      "name": "crackme.exe",
+      "format": "Windows PE",
+      "path": "input/crackme.exe",
+      "description": "agent-visible crackme"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "key.txt",
+      "format": "UTF-8 text",
+      "path": "output/key.txt",
+      "description": "exactly one flag{...} line"
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- missing output file\n- more than one non-empty output line\n- candidate does not equal the password for the evaluation-time UTC half-hour slot\n\n**Scoring method:**\n- evaluator recomputes the password from fixed UID `20252025`\n- it uses the current UTC timestamp rounded down to a multiple of `1800`\n- exact match yields `1.0`, otherwise `0.0`\n\n- **Where does the main scoring logic run?** local task Python\n- **If any scoring step runs on the VM, why is that exception necessary?** not needed\n\n**What does a PERFECT output look like?**\n- one exact `flag{...}` line for the current slot\n\n**What does a WRONG/empty output look like?**\n- missing file, multiple lines, or wrong slot-derived password yields `0.0`",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.5",
+    "subdomain_code": "cybersecurity",
+    "subdomain_name": "Cybersecurity & Digital Forensics",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:13:19.680748Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/newyear_keygen2/task_card.json"
+      },
+      "rationale": "The task involves reverse engineering and password generation related to cybersecurity."
+    }
+  }
+}

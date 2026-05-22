@@ -1,0 +1,93 @@
+{
+  "taskId": "engineering/humanoid_velocity_tracking_policy",
+  "title": "Humanoid Velocity Tracking Policy",
+  "summary": "Produce a deterministic Isaac Lab humanoid locomotion policy that tracks commanded planar velocities and satisfies fixed API, stability, and rollout metric gates.",
+  "category": "engineering",
+  "software": [
+    "Isaac Lab",
+    "Isaac Sim",
+    "PyTorch",
+    "CUDA"
+  ],
+  "taskPrompt": "You are producing a policy submission for an Isaac Lab humanoid velocity-tracking benchmark.\n\n## Variant\n`base`: Humanoid velocity tracking policy\n\n## Input Files\n- Task brief: `E:\\agenthle\\engineering\\humanoid_velocity_tracking_policy\\base\\input\\task_brief.md`\n- Success criteria and exact evaluation command: `E:\\agenthle\\engineering\\humanoid_velocity_tracking_policy\\base\\input\\SUCCESS.md`\n- Observation/action ordering: `E:\\agenthle\\engineering\\humanoid_velocity_tracking_policy\\base\\input\\PROPRIO_SPEC.md`\n- Robot asset and articulation config: `E:\\agenthle\\engineering\\humanoid_velocity_tracking_policy\\base\\input\\assets`\n- Evaluation harness: `E:\\agenthle\\engineering\\humanoid_velocity_tracking_policy\\base\\input\\eval`\n- Starter template: `E:\\agenthle\\engineering\\humanoid_velocity_tracking_policy\\base\\input\\submission_template`\n\n## What You Must Do\n1. Read the staged task brief, proprioceptive-state spec, and success criteria.\n2. Train, distill, hand-author, or otherwise produce a deterministic policy that implements the required `Policy` API.\n3. Save exactly two files in `E:\\agenthle\\engineering\\humanoid_velocity_tracking_policy\\base\\output`: `policy.py` and `checkpoint.pt`.\n\n## Output Requirements\n- `policy.py` must define `Policy(checkpoint_path: str, device: str)`.\n- `Policy.inference(obs)` must return exactly `{\"action\": tensor}`.\n- The action tensor must have shape `(N, 23)`, dtype `torch.float32`, and live on the same device as `obs[\"command\"]`.\n- Do not write final answers outside `E:\\agenthle\\engineering\\humanoid_velocity_tracking_policy\\base\\output`.",
+  "agentMustDo": [
+    "Read the staged task brief, proprioceptive-state spec, and success criteria.",
+    "Produce a deterministic `Policy` implementation that maps `(command, state)` tensors to 23 humanoid joint actions.",
+    "Save exactly `policy.py` and `checkpoint.pt` in the runtime output directory."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_brief.md",
+      "format": "md",
+      "path": "input/task_brief.md",
+      "description": "Agent-facing summary of the policy submission task."
+    },
+    {
+      "name": "SUCCESS.md",
+      "format": "md",
+      "path": "input/SUCCESS.md",
+      "description": "Hard gates, reference evaluation command, metrics, and acceptance thresholds."
+    },
+    {
+      "name": "PROPRIO_SPEC.md",
+      "format": "md",
+      "path": "input/PROPRIO_SPEC.md",
+      "description": "Fixed observation vector and 23-DOF action ordering."
+    },
+    {
+      "name": "assets/",
+      "format": "directory",
+      "path": "input/assets/",
+      "description": "Humanoid URDF, meshes, and articulation configuration."
+    },
+    {
+      "name": "eval/",
+      "format": "directory",
+      "path": "input/eval/",
+      "description": "Isaac Lab evaluation environment and `run_eval.py` entry point."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "policy.py",
+      "format": "py",
+      "path": "output/policy.py",
+      "description": "Required policy implementation submitted by the agent."
+    },
+    {
+      "name": "checkpoint.pt",
+      "format": "pt",
+      "path": "output/checkpoint.pt",
+      "description": "Required checkpoint consumed by `Policy.__init__`."
+    }
+  ],
+  "evaluation": "The evaluator first enforces exact two-file structure, forbidden import/runtime checks, and a deterministic `Policy.inference` API smoke test with action shape `(N, 23)`. After Stage 4 provisions Isaac Lab / Isaac Sim, the full-sim path runs the fixed `input/eval/run_eval.py` command twice over seeds 0-9, checks per-seed metrics agree within `1e-4`, and passes only when `fall_rate <= 0.05` and rounded `lin_vel_rmse_xy + ang_vel_mae_z <= 0.5691`. Real submissions do not receive a passing score from API checks alone.",
+  "vm": {
+    "machineType": "g2-standard-16",
+    "snapshot": "gpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.11",
+    "subdomain_code": "robotics",
+    "subdomain_name": "Robotics & Autonomous Systems",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:44:25.906709Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/humanoid_velocity_tracking_policy/task_card.json"
+      },
+      "rationale": "The task involves developing a policy for humanoid robotics."
+    }
+  }
+}

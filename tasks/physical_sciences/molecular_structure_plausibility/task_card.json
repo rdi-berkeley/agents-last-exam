@@ -1,0 +1,75 @@
+{
+  "taskId": "physical_sciences/molecular_structure_plausibility",
+  "title": "Molecular Structure Plausibility",
+  "summary": "Inspect a set of molecular XYZ files and identify the structures that are physically implausible under basic chemistry and geometry constraints.",
+  "category": "physical_sciences",
+  "software": [
+    "Python",
+    "RDKit",
+    "NumPy",
+    "SciPy"
+  ],
+  "taskPrompt": "You are filtering molecular structure files based on physical plausibility.\n\n## Variant\n`base`: Molecular structure plausibility filtering\n\n## Input Files\n- Structure directory: `/media/user/data/agenthle/physical_sciences/molecular_structure_plausibility/base/input/xyz_files`\n- Task brief: `/media/user/data/agenthle/physical_sciences/molecular_structure_plausibility/base/input/task_brief.md`\n- Optional Python dependency manifest: `/media/user/data/agenthle/physical_sciences/molecular_structure_plausibility/base/input/runtime_env`\n\n## Optional Python Setup\nIf you want RDKit and scientific Python tools, use the staged runtime manifest:\n\n```bash\ncd \"/media/user/data/agenthle/physical_sciences/molecular_structure_plausibility/base/input/runtime_env\"\nuv sync --frozen\n```\n\n## What You Must Do\n1. Read `/media/user/data/agenthle/physical_sciences/molecular_structure_plausibility/base/input/task_brief.md`.\n2. Inspect the `.xyz` molecular structures in `/media/user/data/agenthle/physical_sciences/molecular_structure_plausibility/base/input/xyz_files`.\n3. Identify every structure that is physically implausible under the task brief.\n4. Save one text file at `/media/user/data/agenthle/physical_sciences/molecular_structure_plausibility/base/output/problematic_structures.txt`.\n\n## Output Requirements\n- Write one `.xyz` filename per line.\n- Use filenames exactly as they appear in `/media/user/data/agenthle/physical_sciences/molecular_structure_plausibility/base/input/xyz_files`.\n- Do not include paths.\n- Save the final answer only at `/media/user/data/agenthle/physical_sciences/molecular_structure_plausibility/base/output/problematic_structures.txt`.\n",
+  "agentMustDo": [
+    "Read `input/task_brief.md` and inspect the 54 molecular `.xyz` files under `input/xyz_files/`.",
+    "Identify every file whose molecular structure is physically implausible under the brief, using chemistry and geometry sanity checks.",
+    "Write `output/problematic_structures.txt` with one exact `.xyz` filename per line and no paths."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_brief.md",
+      "format": "Markdown",
+      "path": "input/task_brief.md",
+      "description": "Agent-visible instructions for the molecular plausibility filtering task."
+    },
+    {
+      "name": "xyz_files",
+      "format": "XYZ molecule directory",
+      "path": "input/xyz_files",
+      "description": "Directory containing 54 molecular structure files to inspect."
+    },
+    {
+      "name": "runtime_env",
+      "format": "uv Python environment",
+      "path": "input/runtime_env",
+      "description": "Optional locked Python environment with RDKit and scientific Python dependencies."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "problematic_structures.txt",
+      "format": "Text",
+      "path": "output/problematic_structures.txt",
+      "description": "Required runtime deliverable containing one problematic `.xyz` filename per line."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (score `0.0` if triggered):\n- Missing or empty `output/problematic_structures.txt`\n- Output larger than the evaluator size limit\n- Output contains no `.xyz` filenames\n- Output names any filename that is not present in the input directory\n- Submitted filename set does not exactly match the hidden evaluator reference set\n\n**Scoring method:**\nThe evaluator parses `.xyz` filenames from the submitted text, accepting common formats such as one filename per line, bullets, comma-separated lists, or short prose. It treats the result as an unordered set, validates every submitted filename against `input/xyz_files/`, and compares the set to the hidden reference set. An exact set match returns `1.0`; any mismatch returns `0.0`.\n\n**What does a perfect output look like?**\nA text file named `problematic_structures.txt` in `output/` that lists exactly the problematic `.xyz` filenames, one per line, with no paths.\n\n**What does a wrong output look like?**\nA missing or empty file, a file with invalid filenames, a partial set, extra filenames, or a plausible-looking list that swaps one molecule for another.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "2",
+    "domain_code": "physical_sciences",
+    "subdomain_id": "2.2",
+    "subdomain_code": "chemistry_materials",
+    "subdomain_name": "Chemistry & Materials Computation",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:05:18.566277Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/physical_sciences/molecular_structure_plausibility/task_card.json"
+      },
+      "rationale": "The task involves filtering molecular structures based on chemical plausibility."
+    }
+  }
+}

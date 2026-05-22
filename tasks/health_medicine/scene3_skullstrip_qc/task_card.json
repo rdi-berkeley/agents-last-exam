@@ -1,0 +1,91 @@
+{
+  "taskId": "health_medicine/scene3_skullstrip_qc",
+  "title": "Scene3 Skullstrip QC",
+  "summary": "Review skull-stripping results for the staged brain MRI case and record the required QC decision.",
+  "category": "health_medicine",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are a neuroimaging analyst completing a GUI workflow in FSLeyes 6.0.7.18.\n\n## Your Task\nWorkflow 3: skull-stripping QC\n\nGoal:\n1. Open the staged T1w image and candidate masks in FSLeyes or 3D Slicer.\n2. Visually compare the three candidate masks for over- and under-stripping.\n3. Choose the best candidate.\n4. Save qc_result.json containing the chosen mask, verdict, and a short rationale.\n\nRequired output:\n- output/qc_result.json\n\n## Input Files\nAll task inputs are staged in:\n- `/home/user/Desktop/health_medicine/scene3_skullstrip_qc/base/input`\n\nKey staged files:\n- `/home/user/Desktop/health_medicine/scene3_skullstrip_qc/base/input/T1w.nii.gz`\n- `/home/user/Desktop/health_medicine/scene3_skullstrip_qc/base/input/cand1_loose_mask.nii.gz`\n- `/home/user/Desktop/health_medicine/scene3_skullstrip_qc/base/input/cand2_mid_mask.nii.gz`\n- `/home/user/Desktop/health_medicine/scene3_skullstrip_qc/base/input/cand3_strict_mask.nii.gz`\n- `/home/user/Desktop/health_medicine/scene3_skullstrip_qc/base/input/cand1_loose_brain.nii.gz`\n- `/home/user/Desktop/health_medicine/scene3_skullstrip_qc/base/input/cand2_mid_brain.nii.gz`\n- `/home/user/Desktop/health_medicine/scene3_skullstrip_qc/base/input/cand3_strict_brain.nii.gz`\n- `/home/user/Desktop/health_medicine/scene3_skullstrip_qc/base/input/candidates.json`\n\n## Software\nLaunch the correct GUI workflow with:\n- `/home/user/Desktop/health_medicine/scene3_skullstrip_qc/base/software/launch_gui.sh`\n\nThe Desktop task folder is a symlink into `/media/user/data/agenthle/...`, so write all outputs under the staged task directory only.\n\n## Required Output Files\nSave these outputs exactly under `/home/user/Desktop/health_medicine/scene3_skullstrip_qc/base/output`:\n- `/home/user/Desktop/health_medicine/scene3_skullstrip_qc/base/output/qc_result.json`\n\n## Evaluation\nYou only pass if all required output files exist, are readable, and satisfy the task-specific correctness checks against hidden reference data.\nFocus on this correctness target:\n- The JSON must identify the best candidate mask, include a QC verdict, and include a short rationale.\nDo not read from `reference/`, `output_test_pos/`, or `output_test_neg/`.",
+  "agentMustDo": [
+    "Launch FSLeyes from `software/launch_gui.sh`.",
+    "Open the staged T1w image and inspect the three candidate masks and extracted brain images.",
+    "Decide which candidate best balances over- and under-stripping.",
+    "Save `output/qc_result.json` containing the chosen mask filename, a verdict, and a short rationale."
+  ],
+  "inputFiles": [
+    {
+      "name": "T1w.nii.gz",
+      "format": "NIfTI volume",
+      "path": "input/T1w.nii.gz",
+      "description": "Anatomical image used for skull-strip QC."
+    },
+    {
+      "name": "cand1_loose_mask.nii.gz",
+      "format": "NIfTI mask",
+      "path": "input/cand1_loose_mask.nii.gz",
+      "description": "Deliberately loose candidate."
+    },
+    {
+      "name": "cand2_mid_mask.nii.gz",
+      "format": "NIfTI mask",
+      "path": "input/cand2_mid_mask.nii.gz",
+      "description": "Mid-volume candidate; this is the hidden correct choice."
+    },
+    {
+      "name": "cand3_strict_mask.nii.gz",
+      "format": "NIfTI mask",
+      "path": "input/cand3_strict_mask.nii.gz",
+      "description": "Deliberately strict candidate."
+    },
+    {
+      "name": "cand1_loose_brain.nii.gz / cand2_mid_brain.nii.gz / cand3_strict_brain.nii.gz",
+      "format": "NIfTI volume",
+      "path": "input/*.nii.gz",
+      "description": "Auxiliary extracted-brain views for faster qualitative comparison."
+    },
+    {
+      "name": "candidates.json",
+      "format": "JSON",
+      "path": "input/candidates.json",
+      "description": "Candidate manifest copied from the raw bundle."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "qc_result.json",
+      "format": "JSON",
+      "path": "output/qc_result.json",
+      "description": "Must include chosen_mask, verdict, and a non-empty rationale."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- missing `qc_result.json`\n- missing or empty rationale\n- wrong `chosen_mask`\n- wrong verdict\n\n**Scoring method:**\n- A task-local Python verifier compares `output/qc_result.json` to the hidden reference JSON.\n- `chosen_mask` must match exactly.\n- `verdict` is normalized case-insensitively and with `-` vs `_` differences collapsed.\n- `rationale` only needs to be non-empty.\n- Score is binary: `1.0` if all checks pass, else `0.0`.\n\n- **Where does the main scoring logic run?** on the Linux VM via a small uploaded verifier script\n- **If any scoring step runs on the VM, why is that exception necessary?** The staged reference JSON already lives on the selected VM alongside the scene assets; the current task implementation keeps scoring colocated with that data instead of adding a separate result-pullback path.\n\n**What does a PERFECT output look like?**\n`qc_result.json` selects `cand2_mid_mask.nii.gz`, uses an OK verdict, and includes a short rationale.\n\n**What does a WRONG/empty output look like?**\nChoosing the loose or strict candidate, using a non-OK verdict, or omitting the rationale yields `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.1",
+    "subdomain_code": "clinical_diagnostics",
+    "subdomain_name": "Clinical Diagnostics & Imaging",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:07:10.816848Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/scene3_skullstrip_qc/task_card.json"
+      },
+      "rationale": "The task involves quality control of neuroimaging data, which is relevant to clinical diagnostics."
+    }
+  }
+}

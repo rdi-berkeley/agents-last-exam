@@ -1,0 +1,74 @@
+{
+  "taskId": "business_finance/financial_stmt_reconstruction_aapl_fy2024",
+  "title": "Apple FY2024 Balance Sheet Reconstruction",
+  "summary": "Extract Apple Inc.'s FY2024 Consolidated Balance Sheet from its Form 10-K and return a structured JSON report with exact USD-million values.",
+  "category": "business_finance",
+  "software": [
+    "Python",
+    "pdftotext",
+    "grep"
+  ],
+  "taskPrompt": "You are working on a Linux VM as a financial statement extraction analyst. Read Apple's FY2024 Form 10-K PDF or SEC HTML filing, reconstruct the fiscal 2024 Consolidated Balance Sheet, and write `output/balance_sheet.json` using the required schema and exact USD-million values.",
+  "agentMustDo": [
+    "Locate the Consolidated Balance Sheets in the staged Apple FY2024 Form 10-K materials.",
+    "Extract the September 28, 2024 value for every required field in the schema.",
+    "Write `output/balance_sheet.json` without modifying staged input files."
+  ],
+  "inputFiles": [
+    {
+      "name": "aapl-2024-10k.pdf",
+      "format": "pdf",
+      "path": "input/aapl-2024-10k.pdf",
+      "description": "Cached Apple FY2024 Form 10-K PDF."
+    },
+    {
+      "name": "aapl-20240928.htm",
+      "format": "html",
+      "path": "input/aapl-20240928.htm",
+      "description": "SEC EDGAR HTML filing for the same 10-K."
+    },
+    {
+      "name": "output_schema.json",
+      "format": "json",
+      "path": "input/output_schema.json",
+      "description": "Required output keys and types."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "balance_sheet.json",
+      "format": "json",
+      "path": "output/balance_sheet.json",
+      "description": "Structured balance-sheet output produced by the agent."
+    }
+  ],
+  "evaluation": "The evaluator compares every numeric leaf under `consolidated_balance_sheet` against hidden reference values exactly and returns the fraction of correct fields. Missing or malformed JSON returns `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.1",
+    "subdomain_code": "accounting",
+    "subdomain_name": "Accounting & Finance",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:24:16.153072Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/financial_stmt_reconstruction_aapl_fy2024/task_card.json"
+      },
+      "rationale": "The task involves reconstructing a financial statement, which falls under accounting and finance."
+    }
+  }
+}

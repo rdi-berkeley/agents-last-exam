@@ -1,0 +1,79 @@
+{
+  "taskId": "engineering/Analog_Active",
+  "title": "Analog Active",
+  "summary": "Design and simulate the required analog circuit in LTspice from the staged specification and deliver the completed schematic output.",
+  "category": "engineering",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are given an LTspice schematic with the LTM4648 \u00b5Module DC/DC buck regulator IC already         placed on the canvas. Your task is to complete the circuit design by adding all required external components,         wiring them to the correct IC pins, and running a transient simulation to verify the output.\n\n        Existing File Structure:\n        E:\\agenthle\\engineering\\Analog_Active\\Analog_Active_v1\\\n        \u251c\u2500\u2500 input\\\n        \u2502   \u2514\u2500\u2500 design_spec.txt               # Design specification\n        \u2502   \u2514\u2500\u2500 ltm4648_datasheet.pdf         # Datasheet for LTM4648 IC\n        \u2514\u2500\u2500 output\\\n            \u2514\u2500\u2500 circuit.asc                    # LTspice schematic with LTM4648 IC (open in LTspice)\n\n        Design Specification:\n        - IC: LTM4648 \u00b5Module DC/DC Buck Regulator\n        - Input Voltage: 5.0V\n        - Output Voltage: 1.5V\n        - Output Current: 10.0A\n        - Output Ripple: < 30.0mV peak-to-peak\n        - Startup Settling Time: Output must reach 1.5V within ~0.6ms\n        - Simulation: Transient analysis, 1ms duration, with startup.\n\n        Component Value Formats (use these exact formats in LTspice):\n        - Voltage source: Set value to \"5.0\" (plain number, no suffix)\n        - Resistors: Use plain numeric values (e.g., \"5700\" not \"5.7k\", \"0.19\" not \"190m\")\n\n        Environment:\n        - LTspice is open with circuit.asc loaded, showing the LTM4648 \u00b5Module IC on the canvas\n        - The output node is pre-labeled \"out\"\n\n        Once the circuit is complete:\n        1. Save the schematic (Ctrl+S) to ensure circuit.asc is updated\n        2. Run the transient simulation to verify output behavior\n        3. Save a screenshot of the completed schematic using save_milestone_screenshot(path=\"E:\\agenthle\\engineering\\Analog_Active\\Analog_Active_v1\\output\\schematic_screenshot.png\")\n\n        Do not ask for confirmation. Execute each step directly.",
+  "agentMustDo": [
+    "Open the staged LTspice starter schematic for the active variant.",
+    "Read the design specification and LTM4648 datasheet to choose the required external component values and wiring.",
+    "Complete the buck-converter schematic, add a `1 ms` startup transient analysis, save the updated `circuit.asc`, and run simulation.",
+    "Keep the generated `circuit.raw` plus a schematic screenshot under `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "design_spec.txt",
+      "format": "text",
+      "path": "input/design_spec.txt",
+      "description": "Active-variant targets for VIN, VOUT, load current, ripple, and startup behavior"
+    },
+    {
+      "name": "ltm4648_datasheet.pdf",
+      "format": "PDF",
+      "path": "input/ltm4648_datasheet.pdf",
+      "description": "Reference datasheet for the staged regulator"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "circuit.asc",
+      "format": "LTspice schematic",
+      "path": "output/circuit.asc",
+      "description": "Completed schematic the agent edits and saves"
+    },
+    {
+      "name": "circuit.raw",
+      "format": "LTspice waveform data",
+      "path": "output/circuit.raw",
+      "description": "Must contain simulation traces for V(out) and I(Rload)"
+    },
+    {
+      "name": "schematic_screenshot.png",
+      "format": "PNG",
+      "path": "output/schematic_screenshot.png",
+      "description": "GUI-workflow evidence requested by the prompt"
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- None. The evaluator is additive; missing runtime artifacts simply prevents later checkpoints from being earned.\n\n**Scoring method:**\n- `0.10` correct input source value\n- `0.10` feedback resistor within the active variant tolerance band\n- `0.10` load resistor within the active variant tolerance band\n- `0.10` required capacitor placement detected around the regulator\n- `0.10` `1 ms` startup transient directive present and simulation output produced\n- `0.20` output voltage within tolerance of the variant target\n- `0.15` output ripple below the configured maximum\n- `0.15` load current within tolerance of the variant target\n\n- **Where does the main scoring logic run?** local Python evaluation after reading back the staged `circuit.asc` and `circuit.raw`\n- **If any scoring step runs on the VM, why is that exception necessary?** The VM only runs LTspice itself; the actual judge logic is local and does not require a VM-side verifier\n\n**What does a PERFECT output look like?**\nA saved LTspice schematic with the required external circuitry and a transient simulation whose voltage, ripple, and load-current behavior all match the active variant's targets.\n\n**What does a WRONG/empty output look like?**\nAn unchanged starter schematic, a missing simulation result, or a circuit that produces the wrong steady-state voltage or load behavior.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.2",
+    "subdomain_code": "electronics",
+    "subdomain_name": "Electronics Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:26:47.143444Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/Analog_Active/task_card.json"
+      },
+      "rationale": "The task involves designing and simulating an analog circuit using an electronic component."
+    }
+  }
+}

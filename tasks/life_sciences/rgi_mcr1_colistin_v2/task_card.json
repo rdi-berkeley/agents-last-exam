@@ -1,0 +1,78 @@
+{
+  "taskId": "life_sciences/rgi_mcr1_colistin_v2",
+  "title": "RGI Contig Resistance Annotation",
+  "summary": "Annotate one staged antimicrobial-resistance contig with CARD RGI and report the best-hit ARO gene name, percent identity, drug class, and resistance mechanism in a JSON output.",
+  "category": "life_sciences",
+  "software": [
+    "Python",
+    "uv",
+    "RGI",
+    "CARD",
+    "NCBI BLAST+"
+  ],
+  "taskPrompt": "You are working on a Linux VM to annotate one plasmid-mediated antimicrobial-resistance gene from a staged DNA contig with CARD RGI.\n\nVisible task workspace:\n- `/media/user/data/agenthle/life_sciences/amr_contig_annotation_instance_1/base`\n\nVisible inputs:\n- Contig FASTA: `/media/user/data/agenthle/life_sciences/amr_contig_annotation_instance_1/base/input/input_contig.fasta`\n- CARD database JSON: `/media/user/data/agenthle/life_sciences/amr_contig_annotation_instance_1/base/input/card.json`\n- Runtime manifest for installing the official GitHub RGI package: `/media/user/data/agenthle/life_sciences/amr_contig_annotation_instance_1/base/input/runtime_env/pyproject.toml`\n\nRequired workflow:\n1. Work from a writable directory under `/media/user/data/agenthle/life_sciences/amr_contig_annotation_instance_1/base/output`.\n2. Create a task-local Python environment from `/media/user/data/agenthle/life_sciences/amr_contig_annotation_instance_1/base/input/runtime_env` so the `rgi` CLI is available.\n3. Use the staged `/media/user/data/agenthle/life_sciences/amr_contig_annotation_instance_1/base/input/card.json` with `rgi load --local -i ../input/card.json`.\n4. Run RGI in contig mode against `../input/input_contig.fasta` with:\n   `rgi main -i ../input/input_contig.fasta -o rgi_result -t contig --local --clean -g PYRODIGAL`\n5. Parse the first data row of `rgi_result.txt`.\n6. Write exactly one UTF-8 JSON file to `/media/user/data/agenthle/life_sciences/amr_contig_annotation_instance_1/base/output/answer.json` with these keys:\n   - `best_hit_aro`\n   - `percent_identity`\n   - `drug_class`\n   - `resistance_mechanism`\n\nOutput requirements:\n- `best_hit_aro` should be the best-hit ARO gene name string from the RGI TSV.\n- `percent_identity` should be numeric.\n- `drug_class` should report CARD's drug class wording for the hit.\n- `resistance_mechanism` should report CARD's resistance mechanism wording for the hit.\n- Keep solver-created files under `/media/user/data/agenthle/life_sciences/amr_contig_annotation_instance_1/base/output`.\n- Treat `/media/user/data/agenthle/life_sciences/amr_contig_annotation_instance_1/base/input` as read-only source data.\n\nImportant constraints:\n- Use the provided `/media/user/data/agenthle/life_sciences/amr_contig_annotation_instance_1/base/input/card.json` instead of downloading a different CARD version.\n- Use contig mode, not protein mode.\n- Report the specific best-hit ARO gene name from the RGI TSV rather than a generic enzyme-family label.\n- Keep hidden evaluator-owned directories out of your workflow.\n",
+  "agentMustDo": [
+    "Create a task-local Python environment from `input/runtime_env/pyproject.toml` so the official GitHub `rgi` package is available.",
+    "Load the staged CARD JSON with `rgi load --local -i card.json`.",
+    "Run `rgi main` in contig mode against `input_contig.fasta` with `--local --clean -g PYRODIGAL`.",
+    "Parse the first row of `rgi_result.txt`.",
+    "Write `output/answer.json` with `best_hit_aro`, `percent_identity`, `drug_class`, and `resistance_mechanism`."
+  ],
+  "inputFiles": [
+    {
+      "name": "input_contig.fasta",
+      "format": "FASTA",
+      "path": "input/input_contig.fasta",
+      "description": "Staged DNA contig for resistance annotation."
+    },
+    {
+      "name": "card.json",
+      "format": "JSON",
+      "path": "input/card.json",
+      "description": "CARD detection-model payload used by `rgi load --local`."
+    },
+    {
+      "name": "pyproject.toml",
+      "format": "TOML",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Runtime manifest pinning the official GitHub RGI install."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "answer.json",
+      "format": "JSON",
+      "path": "output/answer.json",
+      "description": "Required output containing the best-hit ARO gene name, percent identity, drug class, and resistance mechanism."
+    }
+  ],
+  "evaluation": "Hard fails: missing or invalid `output/answer.json`, missing required keys, or non-numeric `percent_identity` score `0.0`.\n\nScoring compares the output against hidden evaluator metadata and averages four components:\n- gene name: `1.0` for a specific `MCR-*` hit, `0.5` for a generic phosphoethanolamine-transferase family string, otherwise `0.0`\n- percent identity: `1.0` within `+-0.5`, `0.5` within `+-2.0`, otherwise `0.0`\n- drug class: `1.0` if the reported text contains `peptide`\n- resistance mechanism: `1.0` if the reported text contains `target alteration`\n\nThe final score is the raw mean of those four components. Passing threshold: `>= 0.75`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.2",
+    "subdomain_code": "genomics",
+    "subdomain_name": "Genomics & Sequence Analysis",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:29.431608Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/rgi_mcr1_colistin_v2/task_card.json"
+      },
+      "rationale": "The task involves annotating antimicrobial-resistance genes from DNA sequences, which fits within genomics."
+    }
+  }
+}

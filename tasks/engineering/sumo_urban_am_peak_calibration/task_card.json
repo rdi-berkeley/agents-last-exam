@@ -1,0 +1,139 @@
+{
+  "taskId": "engineering/sumo_urban_am_peak_calibration",
+  "title": "SUMO Urban AM Peak Calibration",
+  "summary": "Repair and calibrate a submitted SUMO 1.26 AM-peak microsimulation package for a synthetic downtown network, then export the required submission tree and calibration report.",
+  "category": "engineering",
+  "software": [
+    "SUMO",
+    "Python",
+    "uv",
+    "jsonschema",
+    "lxml"
+  ],
+  "taskPrompt": "You are working on a Linux VM to build a calibrated SUMO AM-peak submission for an urban grid sub-network.\n\nVisible task files:\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/input/task_prompt.md`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/input/calibration_report.schema.json`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/input/output_contract.json`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/input/examples/report_template.example.json`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/input/starter_project/`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/input/runtime_env/`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/software/bootstrap_uv_env.sh`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/software/python_with_task_deps.sh`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/software/run_in_task_env.sh`\n\nWhat you must do:\n1. Read `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/input/task_prompt.md` and `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/input/output_contract.json` first.\n2. Use the visible starter project under `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/input/starter_project` to repair the broken SUMO configuration, demand, signal timing, and vehicle-type setup.\n3. If you want the staged Python environment, materialize it with `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/software/bootstrap_uv_env.sh` and run Python with `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/software/python_with_task_deps.sh`. Use `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/software/run_in_task_env.sh` for SUMO-facing commands inside that task-local environment.\n4. Write the final submission tree under `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/output` with the required files at the documented locations.\n\nRequired output files:\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/output/network.net.xml`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/output/additionals/bus_stops.add.xml`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/output/additionals/tlsLogic.add.xml`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/output/additionals/vtypes.add.xml`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/output/demand/calibrated_od.xml`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/output/demand/routes.rou.xml`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/output/simulation/sumocfg.sumocfg`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/output/calibration_report.json`\n- `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/output/DECISIONS.md`\n\nRules:\n- Do not modify files under `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/input`.\n- Keep any runtime state you create outside `input/`; the staged wrappers already use `/media/user/data/agenthle/engineering/sumo_urban_am_peak_calibration/base/output/.runtime_state` by default.\n- Do not rely on evaluator-only data or fixture directories.\n- You do not need to submit simulation result folders; the evaluator re-runs your SUMO configuration itself.\n",
+  "agentMustDo": [
+    "Read the staged task prompt and output contract before editing the submission tree.",
+    "Repair the starter SUMO configuration, demand, signal timing, and vehicle-type files inside the writable output tree.",
+    "Use the staged runtime wrappers if Python or SUMO commands are needed inside the task-local environment.",
+    "Write the required submission files plus a truthful `calibration_report.json` and `DECISIONS.md`."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_prompt.md",
+      "format": "markdown",
+      "path": "input/task_prompt.md",
+      "description": "Agent-visible benchmark brief describing the visible contract and repair goals."
+    },
+    {
+      "name": "output_contract.json",
+      "format": "json",
+      "path": "input/output_contract.json",
+      "description": "Exact required output filenames and layout for the submission tree."
+    },
+    {
+      "name": "calibration_report.schema.json",
+      "format": "json",
+      "path": "input/calibration_report.schema.json",
+      "description": "Schema for the required calibration report."
+    },
+    {
+      "name": "report_template.example.json",
+      "format": "json",
+      "path": "input/examples/report_template.example.json",
+      "description": "Example structure for the required calibration report."
+    },
+    {
+      "name": "starter_project",
+      "format": "SUMO project tree",
+      "path": "input/starter_project",
+      "description": "Visible starter microsimulation package that must be repaired and calibrated."
+    },
+    {
+      "name": "runtime_env",
+      "format": "uv Python environment",
+      "path": "input/runtime_env",
+      "description": "Pinned optional Python runtime manifest used by the staged wrappers."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "network.net.xml",
+      "format": "xml",
+      "path": "output/network.net.xml",
+      "description": "Required calibrated SUMO network."
+    },
+    {
+      "name": "bus_stops.add.xml",
+      "format": "xml",
+      "path": "output/additionals/bus_stops.add.xml",
+      "description": "Required bus-stop definitions used by the evaluator reruns."
+    },
+    {
+      "name": "tlsLogic.add.xml",
+      "format": "xml",
+      "path": "output/additionals/tlsLogic.add.xml",
+      "description": "Required calibrated traffic-signal program."
+    },
+    {
+      "name": "vtypes.add.xml",
+      "format": "xml",
+      "path": "output/additionals/vtypes.add.xml",
+      "description": "Required vehicle-type configuration used by the rerun evaluator."
+    },
+    {
+      "name": "calibrated_od.xml",
+      "format": "xml",
+      "path": "output/demand/calibrated_od.xml",
+      "description": "Required calibrated OD demand file."
+    },
+    {
+      "name": "routes.rou.xml",
+      "format": "xml",
+      "path": "output/demand/routes.rou.xml",
+      "description": "Required route file for the calibrated demand."
+    },
+    {
+      "name": "sumocfg.sumocfg",
+      "format": "xml",
+      "path": "output/simulation/sumocfg.sumocfg",
+      "description": "Required SUMO configuration entrypoint used by the evaluator reruns."
+    },
+    {
+      "name": "calibration_report.json",
+      "format": "json",
+      "path": "output/calibration_report.json",
+      "description": "Required report whose public metrics must reproduce from evaluator reruns."
+    },
+    {
+      "name": "DECISIONS.md",
+      "format": "markdown",
+      "path": "output/DECISIONS.md",
+      "description": "Required notes describing the submitted repair and calibration choices."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (binary scoring):\n- Missing or unparseable required submission files\n- Broken SUMO reruns or invalid configuration wiring\n- Traffic-signal timing or phase-order mismatches beyond the documented tolerances\n- AM-peak trip-total, detector-flow, or corridor travel-time thresholds not met\n- Public report metrics that do not reproduce from evaluator reruns\n- Report schema or cardinality violations\n\n**Scoring method:**\nThe hidden evaluator reruns the submitted `simulation/sumocfg.sumocfg` on benchmark-controlled seeds and returns binary `1.0` or `0.0`. The report is evidence only: the evaluator recomputes the public metrics from the submitted configuration tree. Benchmark-owned evaluator launch failures or malformed evaluator reports are treated as infrastructure errors, not as ordinary task score `0.0`.\n\n**What does a perfect output look like?**\nA complete submission tree whose rerun metrics satisfy every hard gate and whose `calibration_report.json` reproduces within the evaluator's documented tolerances.\n\n**What does a wrong output look like?**\nA submission with missing files, broken SUMO wiring, threshold misses, or report values that do not reproduce from evaluator reruns.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.10",
+    "subdomain_code": "urban_planning",
+    "subdomain_name": "Urban & Spatial Planning",
+    "classifier": {
+      "model": "manual",
+      "classified_at": "2026-05-13T09:48:57.094870Z",
+      "source": {
+        "submission_id": "(backfill: manual override)",
+        "fields": [],
+        "mode": "manual_override",
+        "reason": "gpt-4o-mini repeatedly returned subdomain_id=1.1 paired with subdomain_code=urban_planning (correct code is 1.10); strict validator rejected. SUMO urban-traffic calibration belongs under Urban & Spatial Planning.",
+        "task_card_path": "tasks/engineering/sumo_urban_am_peak_calibration/task_card.json"
+      },
+      "rationale": "Manual override: SUMO urban traffic AM-peak calibration is urban planning / traffic engineering."
+    }
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "taskId": "transport_safety/abm_hangzhou_metro",
+  "title": "Hangzhou Metro Passenger Simulation",
+  "summary": "Simulate one operating day of Hangzhou metro passenger trips from staged AFC demand, GIS, and network configuration inputs.",
+  "category": "transport_safety",
+  "software": [
+    "Python",
+    "uv",
+    "geopandas",
+    "matplotlib",
+    "networkx",
+    "numpy",
+    "pandas"
+  ],
+  "taskPrompt": "You are working on a Linux VM to produce a one-day Hangzhou metro passenger simulation output bundle.\\n\\n## Variant\\n`base`: Hangzhou metro daily AFC simulation bundle\\n\\n## Visible Input Files\\n- task prompt: `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/input/task_prompt.md`\\n- output contract: `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/input/output_contract.json`\\n- AFC demand: `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/input/data/afc_hangzhou.csv`\\n- line GeoJSON: `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/input/gis/hangzhou_lines.json`\\n- station GeoJSON: `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/input/gis/hangzhou_stations.json`\\n- station sequence CSV: `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/input/network_config/station_sequence.csv`\\n- operation parameters JSON: `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/input/network_config/operation_parameters.json`\\n- runtime manifest: `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/input/runtime_env/`\\n\\n## Runtime Entry Points\\n- bootstrap helper: `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/software/bootstrap_uv_env.sh`\\n- python helper: `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/software/python_with_task_deps.sh`\\n\\n## What You Must Do\\n1. Read the staged task prompt and output contract.\\n2. Use the staged AFC, GIS, and network configuration files to simulate metro passenger trips.\\n3. Write `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/output/passenger_records.csv`.\\n4. Write `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/output/validation_report.txt`.\\n5. You may also write `/media/user/data/agenthle/transport_safety/abm_hangzhou_metro/base/output/scatter_plot.png`.\\n\\n## Output Requirements\\n- `passenger_records.csv` columns must be exactly: `card_id,o_station,d_station,start_time,end_time_simulate,transfer_times,end_time_real,duration_simulation,duration_real`\\n- keep trip identity aligned to the visible AFC rows\\n- keep final deliverables at the output-directory root\\n- do not modify files under `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`\\n",
+  "agentMustDo": [
+    "Read the staged task prompt and output contract from `input/`.",
+    "Build a one-day Hangzhou metro passenger simulation from the AFC, GIS, and network configuration inputs.",
+    "Write `passenger_records.csv` and `validation_report.txt` into `output/` with the required schema.",
+    "Use the staged runtime manifest only if extra Python dependencies are needed."
+  ],
+  "inputFiles": [
+    {
+      "name": "afc_hangzhou.csv",
+      "format": "CSV",
+      "path": "input/data/afc_hangzhou.csv",
+      "description": "Visible AFC trip records for one operating day."
+    },
+    {
+      "name": "hangzhou_lines.json",
+      "format": "GeoJSON",
+      "path": "input/gis/hangzhou_lines.json",
+      "description": "Hangzhou metro line geometry features."
+    },
+    {
+      "name": "hangzhou_stations.json",
+      "format": "GeoJSON",
+      "path": "input/gis/hangzhou_stations.json",
+      "description": "Hangzhou metro station features."
+    },
+    {
+      "name": "station_sequence.csv",
+      "format": "CSV",
+      "path": "input/network_config/station_sequence.csv",
+      "description": "Ordered station sequences by line and direction."
+    },
+    {
+      "name": "operation_parameters.json",
+      "format": "JSON",
+      "path": "input/network_config/operation_parameters.json",
+      "description": "Simulation and routing parameters for the metro task."
+    },
+    {
+      "name": "runtime_env/",
+      "format": "uv Python environment manifest",
+      "path": "input/runtime_env/",
+      "description": "Agent-installable dependency manifest for optional Python tooling."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "passenger_records.csv",
+      "format": "CSV",
+      "path": "output/passenger_records.csv",
+      "description": "Required passenger-trip simulation output."
+    },
+    {
+      "name": "validation_report.txt",
+      "format": "text",
+      "path": "output/validation_report.txt",
+      "description": "Required summary-metric report derived from the candidate CSV."
+    }
+  ],
+  "evaluation": "The evaluator checks that both required files exist, parse, cover enough AFC trips, avoid near-copying visible labels, align to the hidden reference by trip identity, and report truthful metrics. The common positive replay result is `1.0`; the staged negative replay result is `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "10",
+    "domain_code": "transport_safety",
+    "subdomain_id": "10.1",
+    "subdomain_code": "aviation",
+    "subdomain_name": "Aviation & Airspace Operations",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:46:22.632001Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/transport_safety/abm_hangzhou_metro/task_card.json"
+      },
+      "rationale": "The task involves simulating metro passenger trips, which falls under transportation operations."
+    }
+  }
+}

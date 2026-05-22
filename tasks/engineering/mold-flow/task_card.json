@@ -1,0 +1,87 @@
+{
+  "taskId": "engineering/mold-flow",
+  "title": "mold-flow",
+  "summary": "Configure process parameters in Moldex3D, run the staged mold-flow analysis, and save the required outputs.",
+  "category": "engineering",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are a CAE (Computer-Aided Engineering) engineer performing injection molding simulation using Moldex3D.\n\n## Your Task\nConfigure process parameters and run a mold-flow analysis for project **230057** using the Moldex3D software.\n\n## Input Files\n- **Moldex3D project** (mesh + material already configured, NO process parameters or analysis results):\n  `E:\\agenthle\\engineering\\mold-flow\\230057\\input\\4\u7a74230057`\n- **Process specification**: `E:\\agenthle\\engineering\\mold-flow\\230057\\input\\process_spec.json`\n  This JSON file contains all the injection molding parameters you must configure.\n- **Results template**: `E:\\agenthle\\engineering\\mold-flow\\230057\\input\\results_template.json`\n  This JSON file has fields with null values that you must reproduce in `E:\\agenthle\\engineering\\mold-flow\\230057\\output\\results.json`.\n- **Part geometry** (.x_t Parasolid): `E:\\agenthle\\engineering\\mold-flow\\230057\\input\\230057.x_t` (for visual reference only)\n\n## What You Must Do\n1. Open Moldex3D from `E:\\agenthle\\engineering\\mold-flow\\230057\\software\\MDXStudio.lnk` and load the project at:\n   `E:\\agenthle\\engineering\\mold-flow\\230057\\input\\4\u7a74230057`\n2. Read the process specification JSON carefully\n3. Configure ALL process parameters in Moldex3D's Process Wizard:\n   - Melt temperature, mold temperature\n   - Injection flow rate profile\n   - V/P switch point (volume filled %)\n   - Packing pressure profile and time\n   - Cooling time, coolant temperature, coolant flow rate\n4. Set up the analysis sequence: **Fill \u2192 Pack \u2192 Cool (Transient) \u2192 Warp**\n4. Use the optional `.x_t` CAD file as a visual cross-check if helpful\n5. Run the full analysis (this may take 1-2 hours)\n6. After analysis completes, extract the simulation results from the Moldex3D result viewer\n7. Create `E:\\agenthle\\engineering\\mold-flow\\230057\\output\\results.json` using the same JSON structure as `E:\\agenthle\\engineering\\mold-flow\\230057\\input\\results_template.json` and fill in all null fields with the simulation values\n8. Save any working project artifacts under `E:\\agenthle\\engineering\\mold-flow\\230057\\output` if you choose to create a writable copy\n\n## Results to Extract\nAfter analysis completes, fill in these fields in results.json:\n- **Max injection pressure** (MPa)\n- **V/P switch pressure** (MPa)\n- **Runner pressure drop** (MPa)\n- **Max clamping force** (ton)\n- **Filling time** (sec)\n- **Estimated cooling time** (sec)\n- **Cycle time** (sec)\n- **Part weight** per cavity (g)\n- **Part volume** per cavity (cc)\n\n## Evaluation\nYour work will be evaluated by comparing your results.json against the reference values.\nEach field within \u00b11% tolerance of the reference scores 1 point.\nFinal score = fraction of correct fields.\n\n## Important\n- Treat `E:\\agenthle\\engineering\\mold-flow\\230057\\input\\4\u7a74230057` as the staged clean baseline\n- Do not modify or rename the staged input project in place\n- SAVE your project when finished\n- The results template at `E:\\agenthle\\engineering\\mold-flow\\230057\\input\\results_template.json` shows the exact JSON structure expected",
+  "agentMustDo": [
+    "Open the staged Moldex3D project for the selected variant.",
+    "Read `input/process_spec.json` and configure the process parameters inside Moldex3D.",
+    "Run the Fill \u2192 Pack \u2192 Cool (Transient) \u2192 Warp analysis sequence.",
+    "Extract the required simulation values after the run completes.",
+    "Fill `output/results.json` using the staged template structure.",
+    "Save the modified project in `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Clean Moldex3D project",
+      "format": "directory",
+      "path": "input/<PROJECT_NAME>/",
+      "description": "mesh/material/source present; answer-leaking .sum and .pro files removed"
+    },
+    {
+      "name": "Part CAD geometry (optional)",
+      "format": "`.x_t`",
+      "path": "input/<variant_name>.x_t",
+      "description": "visual reference for the molded part; only staged for variants whose raw source includes a CAD sidecar"
+    },
+    {
+      "name": "Process specification",
+      "format": "`.json`",
+      "path": "input/process_spec.json",
+      "description": "the process parameters the agent must configure"
+    },
+    {
+      "name": "Results template",
+      "format": "`.json`",
+      "path": "input/results_template.json",
+      "description": "exact output structure with null-valued fields"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Simulation results",
+      "format": "`.json`",
+      "path": "output/results.json",
+      "description": "filled version of the staged results template"
+    },
+    {
+      "name": "Modified Moldex3D project",
+      "format": "directory",
+      "path": "output/<PROJECT_NAME>/",
+      "description": "saved project containing the configured run and generated analysis outputs"
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- `output/results.json` is missing\n- `output/results.json` is not valid JSON\n- all values in `output/results.json` remain null or empty\n\n**Scoring method:**\nThe primary score compares `output/results.json` against the hidden reference JSON on a field-by-field basis with `<= 1%` relative tolerance per numeric field. If the main score is low and the output project contains a generated `.pro` file, the evaluator can award limited partial credit from the process-parameter comparison.\n\n- **Where does the main scoring logic run?** on the Windows VM through temp-uploaded Python scripts\n- **If any scoring step runs on the VM, why is that exception necessary?** the output project, the optional generated `.pro` file, and the hidden references already live beside the Moldex3D project on the VM, so the committed implementation keeps verification there\n\n**What does a PERFECT output look like?**\nA completed analysis whose `output/results.json` matches the hidden reference values within tolerance across all required fields. Perfect score is near `1.0`.\n\n**What does a WRONG/empty output look like?**\nMissing JSON, malformed JSON, all-null values, or materially incorrect numeric results. These cases score near `0.0`.",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.5",
+    "subdomain_code": "manufacturing",
+    "subdomain_name": "Manufacturing & Industrial Systems",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:33:27.968596Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/mold-flow/task_card.json"
+      },
+      "rationale": "The task involves configuring parameters and running simulations for injection molding, which falls under manufacturing."
+    }
+  }
+}

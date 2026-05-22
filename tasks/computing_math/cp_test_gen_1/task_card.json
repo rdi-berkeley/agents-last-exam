@@ -1,0 +1,69 @@
+{
+  "taskId": "computing_math/cp_test_gen_1",
+  "title": "Competitive Programming Test Generator \u2014 Binary String Copying",
+  "summary": "Write gen.cpp, a C++ test case generator for the Binary String Copying problem that produces adversarial inputs to distinguish correct from incorrect solutions among 10 hidden submissions.",
+  "category": "computing_math",
+  "software": [
+    "g++ (C++17)",
+    "bash"
+  ],
+  "taskPrompt": "You are tasked with writing gen.cpp, a C++ program that prints one complete valid test case to stdout per invocation and accepts a single integer seed as argv[1] (e.g. ./gen 1, ./gen 2, ./gen 50) to vary output across invocations.\n\nThe problem statement is provided in Binary String Copying Problem Statement.pdf. The 10 submission IDs are listed in Binary String Copying Inputs.xlsx: they are each a single letter, proceeding alphabetically from top to bottom (row 2 is a, row 3 is b, etc). Without knowledge of the submission implementations, the generator must be designed by reasoning purely from the problem structure about what kinds of inputs stress different algorithmic approaches.\n\ngen.cpp must be compiled and verified locally with g++ before submission. The final generator must be saved as /media/user/data/agenthle/computing_math/cp_test_gen_1/default/output/gen.cpp.\n\n## Input Files\nLocated at: /media/user/data/agenthle/computing_math/cp_test_gen_1/default/input\n- Binary String Copying Problem Statement.pdf\n- Binary String Copying Inputs.xlsx\n\n## Compilation\nUse: g++ -O2 -std=c++17 gen.cpp -o gen\n\n## Evaluation\nYour generator will be called as ./gen $seed for seeds 1 through 50 to produce 50 test cases. Each submission will be run against all 50 test cases with a 2-second time limit and 256MB memory limit per execution.",
+  "agentMustDo": [
+    "Read the Binary String Copying problem statement PDF and submission IDs from the xlsx.",
+    "Analyze the problem structure to identify adversarial test case strategies (TLE, WA, boundary conditions).",
+    "Write gen.cpp that generates varied test cases across 50 seeds respecting all constraints.",
+    "Compile and verify gen.cpp with g++ -O2 -std=c++17.",
+    "Save the final generator to the output directory as gen.cpp."
+  ],
+  "inputFiles": [
+    {
+      "name": "Binary String Copying Problem Statement.pdf",
+      "format": "pdf",
+      "path": "input/Binary String Copying Problem Statement.pdf",
+      "description": "Full Codeforces problem statement with constraints."
+    },
+    {
+      "name": "Binary String Copying Inputs.xlsx",
+      "format": "xlsx",
+      "path": "input/Binary String Copying Inputs.xlsx",
+      "description": "Lists the 10 submission IDs (a through j)."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "gen.cpp",
+      "format": "cpp",
+      "path": "output/gen.cpp",
+      "description": "Agent-produced C++ test case generator."
+    }
+  ],
+  "evaluation": "The evaluator compiles gen.cpp and 10 hidden C++ submissions, generates 50 test cases via ./gen $seed, runs all submissions against all test cases (2s timeout, 256MB memory), and produces compound verdicts. Scoring is based on how many submissions receive the expected verdict (AC, WA, TLE, or AC/WA). Maximum score: 10 points normalized to 1.0. Pass threshold: 9/10 (0.9).",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.1",
+    "subdomain_code": "software_eng",
+    "subdomain_name": "Software Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:06:29.415639Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/cp_test_gen_1/task_card.json"
+      },
+      "rationale": "The task involves writing a C++ program, which falls under software engineering."
+    }
+  }
+}

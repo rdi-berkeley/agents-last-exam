@@ -1,0 +1,101 @@
+{
+  "taskId": "computing_math/ising_post_measurement_1",
+  "title": "Post-Measurement States for a Quantum Ising Chain",
+  "summary": "Compute the post-measurement output bundle for several 1D quantum Ising chain variants, including the critical ground state, measurement probabilities, one-site reduced density matrices, and optional one-body correlators.",
+  "category": "computing_math",
+  "software": [
+    "Python",
+    "NumPy",
+    "SciPy",
+    "uv"
+  ],
+  "taskPrompt": "You are working on a Linux VM.\n\n## Variant\n`n10_critical_u01_correlators`: N=10, u=0.1, critical ancilla equal to the computed ground state, with one-body correlators\n\n## Input Files\n- Task specification: `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/input/task_specification.md`\n- Numerical parameters: `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/input/config.json`\n- Optional ancilla state file when staged by the selected variant: `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/input/ancilla_state.npy`\n- Runtime manifest: `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/input/runtime_env/pyproject.toml`\n- Requirements fallback: `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/input/requirements.txt`\n- Runtime notes: `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/software/README.txt`\n\n## Your Task\n1. Read `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/input/task_specification.md` for the full physics definition, conventions, output contract, and public tolerances.\n2. Read `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/input/config.json` for the variant parameters.\n3. If `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/input/ancilla_state.npy` is present, use it as the staged ancilla state; otherwise use the critical ancilla rule from the spec.\n4. If you need Python packages, install them from `input/runtime_env/pyproject.toml` or `input/requirements.txt`.\n5. Compute the required outputs and write them under `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/output`.\n\n## Required Outputs\n- `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/output/critical_state.npy`\n- `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/output/post_probs.npy`\n- `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/output/rdm_site1.npy`\n- If the selected variant requires one-body correlators, also write `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/output/correlators.npz` with keys `Z_one_body` and `X_one_body`\n\nDo not modify files under `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/input`.\nWrite final outputs only under `/media/user/data/agenthle/computing_math/ising_post_measurement_1/n10_critical_u01_correlators/output`.\n",
+  "agentMustDo": [
+    "Read the staged task specification and variant parameters from `input/task_specification.md` and `input/config.json`.",
+    "Use the staged `ancilla_state.npy` only for the paramagnetic-ancilla variants; otherwise follow the critical-ancilla rule from the visible task spec.",
+    "Optionally install task-specific Python packages from `input/runtime_env/pyproject.toml` or `input/requirements.txt`.",
+    "Compute `critical_state.npy`, `post_probs.npy`, and `rdm_site1.npy` for the selected variant.",
+    "Also produce `correlators.npz` with `Z_one_body` and `X_one_body` for the correlator variants."
+  ],
+  "inputFiles": [
+    {
+      "name": "config.json",
+      "format": "JSON",
+      "path": "input/config.json",
+      "description": "Variant-specific numerical parameters such as system size, coupling strength, ancilla mode, and site index."
+    },
+    {
+      "name": "task_specification.md",
+      "format": "Markdown",
+      "path": "input/task_specification.md",
+      "description": "Visible physics specification, conventions, output contract, and public tolerances."
+    },
+    {
+      "name": "ancilla_state.npy",
+      "format": "NumPy .npy",
+      "path": "input/ancilla_state.npy",
+      "description": "Optional staged ancilla state for the paramagnetic-ancilla variants only."
+    },
+    {
+      "name": "runtime_env/pyproject.toml",
+      "format": "TOML",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Visible `uv` runtime manifest for the task-specific Python environment."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "critical_state.npy",
+      "format": "NumPy .npy",
+      "path": "output/critical_state.npy",
+      "description": "Critical-chain ground-state vector for the selected variant."
+    },
+    {
+      "name": "post_probs.npy",
+      "format": "NumPy .npy",
+      "path": "output/post_probs.npy",
+      "description": "Measurement-outcome probability vector for the selected variant."
+    },
+    {
+      "name": "rdm_site1.npy",
+      "format": "NumPy .npy",
+      "path": "output/rdm_site1.npy",
+      "description": "Per-outcome one-site reduced density matrices at site 1."
+    },
+    {
+      "name": "correlators.npz",
+      "format": "NumPy .npz",
+      "path": "output/correlators.npz",
+      "description": "Optional one-body correlator bundle required only for the correlator variants."
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- Any required output file is missing.\n- Any required file cannot be loaded as `.npy` or `.npz`.\n- A required array has the wrong shape.\n- `correlators.npz` is missing `Z_one_body` or `X_one_body` when that file is required.\n- Any required numeric array contains non-finite values.\n\n**Scoring method**\n1. Load the required agent outputs for the active variant.\n2. Load the hidden reference arrays for the same variant.\n3. Compute state infidelity for `critical_state.npy` and max absolute error for the other required outputs.\n4. Apply the published tolerances: state infidelity `<= 1e-4`; probability, RDM, and correlator max absolute errors `<= 1e-2`.\n5. Return binary score `1.0` only when every required output for the active variant passes; otherwise return `0.0`.\n\n**Reviewed fixture behavior**\n- Positive fixtures score `1.0`.\n- Negative fixtures score `0.0`.\n- Missing hidden reference files are treated as evaluator failure and now raise `RuntimeError` instead of being silently scored as `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.7",
+    "subdomain_code": "quantum",
+    "subdomain_name": "Quantum Computing",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:43:41.654435Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/ising_post_measurement_1/task_card.json"
+      },
+      "rationale": "The task involves quantum computing concepts related to the Ising model."
+    }
+  }
+}

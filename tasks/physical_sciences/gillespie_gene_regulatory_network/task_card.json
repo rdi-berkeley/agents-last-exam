@@ -1,0 +1,94 @@
+{
+  "taskId": "physical_sciences/gillespie_gene_regulatory_network",
+  "title": "Gillespie SSA For A Tristable Gene Regulatory Network",
+  "summary": "Implement exact Gillespie stochastic simulation and tau-leaping in NumPy for a three-gene mutual-inhibition chemical kinetics model, then report validation, multistability, bifurcation, and acceleration results.",
+  "category": "physical_sciences",
+  "software": [
+    "Python",
+    "NumPy"
+  ],
+  "taskPrompt": "You are implementing a NumPy-only stochastic simulation workflow for a three-gene mutual-inhibition regulatory network. Read `input/problem_spec.md`, set up the runtime with `uv sync --frozen --project input/runtime_env`, implement exact SSA for Tier 1 and Tier 2, implement tau-leaping for Tier 3, and write `tier1_results.json`, `tier2_results.json`, `tier3_results.json`, and `gillespie_solver.py` under `output/`. Use `numpy.random.default_rng(seed)`, follow the schemas and parameter grids in the specification, do not use SciPy or dedicated stochastic simulation libraries, do not modify `input/`, and write only under `output/`.",
+  "agentMustDo": [
+    "Read `input/problem_spec.md` for the birth-death validation, three-gene mutual-inhibition model, bifurcation scan, tau-leaping requirements, seeds, event counts, and JSON schemas.",
+    "Provision the Python runtime via `uv sync --frozen --project input/runtime_env` and run with the resulting NumPy environment.",
+    "Implement exact Gillespie SSA for Tier 1 and Tier 2 using `numpy.random.default_rng(seed)`.",
+    "Compute Tier 2 trajectory statistics, basin fractions, ensemble statistics, and 50 lag autocorrelation arrays.",
+    "Implement the Tier 3 alpha scan and tau-leaping comparison, enforcing non-negative populations and the specified leap condition.",
+    "Write the three result JSON files plus reusable `gillespie_solver.py` under `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Problem specification",
+      "format": "`.md`",
+      "path": "input/problem_spec.md",
+      "description": "Full task specification with models, parameters, seeds, required simulations, output schemas, banned libraries, and runtime budget."
+    },
+    {
+      "name": "Runtime manifest",
+      "format": "`.toml`",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Declares the NumPy-only Python runtime the agent installs with uv."
+    },
+    {
+      "name": "Runtime lockfile",
+      "format": "`.lock`",
+      "path": "input/runtime_env/uv.lock",
+      "description": "Reproducible lock companion to the runtime manifest."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Tier 1 results",
+      "format": "`.json`",
+      "path": "output/tier1_results.json",
+      "description": "Birth-death SSA validation summary."
+    },
+    {
+      "name": "Tier 2 results",
+      "format": "`.json`",
+      "path": "output/tier2_results.json",
+      "description": "Three-gene trajectory, ensemble, autocorrelation, and multistability summary."
+    },
+    {
+      "name": "Tier 3 results",
+      "format": "`.json`",
+      "path": "output/tier3_results.json",
+      "description": "Bifurcation scan and tau-leaping comparison summary."
+    },
+    {
+      "name": "Solver source",
+      "format": "`.py`",
+      "path": "output/gillespie_solver.py",
+      "description": "Reusable NumPy implementation used to produce the result files."
+    }
+  ],
+  "evaluation": "Hard gates include missing or unparseable required JSON/source files, banned imports, malformed Tier 2 trajectory structure, or malformed Tier 3 grid/comparison structure. The scorer awards continuous credit for source/code structure, Tier 1 validation behavior, Tier 2 reproducibility and schema, and Tier 3 public-contract consistency. Positive fixture score is 1.0 and negative fixture score is 0.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 28800
+  },
+  "taxonomy": {
+    "domain_id": "2",
+    "domain_code": "physical_sciences",
+    "subdomain_id": "2.2",
+    "subdomain_code": "chemistry_materials",
+    "subdomain_name": "Chemistry & Materials Computation",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:09:23.983777Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/physical_sciences/gillespie_gene_regulatory_network/task_card.json"
+      },
+      "rationale": "The task involves implementing a stochastic simulation for a gene regulatory network, which falls under computational chemistry."
+    }
+  }
+}

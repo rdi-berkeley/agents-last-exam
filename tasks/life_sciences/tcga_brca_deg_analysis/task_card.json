@@ -1,0 +1,139 @@
+{
+  "taskId": "life_sciences/tcga_brca_deg_analysis",
+  "title": "TCGA BRCA Differential Expression Analysis",
+  "summary": "Analyze TCGA Breast Cancer expression and clinical matrices to identify genes differentially expressed between primary tumor and solid tissue normal samples.",
+  "category": "life_sciences",
+  "software": [
+    "Python",
+    "pandas",
+    "scipy",
+    "statsmodels",
+    "matplotlib",
+    "scikit-learn"
+  ],
+  "taskPrompt": "You are a bioinformatics analyst performing a TCGA Breast Cancer differential gene expression analysis on Linux.\n\nTask directory:\n- `/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base`\n\nVisible input files:\n- Expression matrix: `/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base/input/expression_matrix.tsv.gz`\n- Clinical annotations: `/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base/input/clinical_matrix.tsv`\n- Benchmark gene list: `/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base/input/truth_breast_degs.csv`\n- Runtime dependency manifest: `/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base/input/runtime_env/pyproject.toml`\n- Requirements file: `/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base/input/requirements.txt`\n- Manifest template: `/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base/input/run_manifest_template.json`\n- Detailed task brief: `/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base/input/task_description.txt`\n- Output contract: `/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base/input/output_requirements.txt`\n\nRecommended setup:\n- Work in `/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base`\n- Install the Python analysis packages into your own environment from the staged input, for example:\n  `uv sync --project \"/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base/input/runtime_env\"`\n  or `pip install -r \"/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base/input/requirements.txt\"`\n\nAnalysis requirements:\n1. Match expression matrix sample columns with clinical rows.\n2. Compare `Primary Tumor` against `Solid Tissue Normal` using the clinical `sample_type` field.\n3. Filter genes where more than 80% of matched samples have expression equal to zero.\n4. Run Welch's t-test for each remaining gene.\n5. Compute `log2FC = mean(tumor) - mean(normal)`.\n6. Apply Benjamini-Hochberg correction.\n7. Mark significant DEGs using `abs(log2FC) > 1` and `padj < 0.05`.\n8. Generate PCA and volcano plots.\n9. Benchmark significant DEGs against `/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base/input/truth_breast_degs.csv`.\n\nRequired output directory:\n- Write every deliverable under `/media/user/data/agenthle/life_sciences/tcga_brca_deg_analysis/base/output`\n\nRequired output files:\n- `sample_summary.txt`\n- `pca_plot.png`\n- `deg_results_all.csv`\n- `deg_results_significant.csv`\n- `volcano_plot.png`\n- `benchmark_summary.csv`\n- `run_manifest.json`\n\nDo not modify input files or any non-output task directories.\nDo not ask for confirmation. Execute directly.",
+  "agentMustDo": [
+    "Match expression-matrix sample columns to clinical metadata rows.",
+    "Compare `Primary Tumor` samples against `Solid Tissue Normal` samples.",
+    "Filter genes with more than 80% zero expression across matched samples.",
+    "Run Welch's t-test for each retained gene.",
+    "Compute `log2FC = mean(tumor) - mean(normal)` and apply Benjamini-Hochberg correction.",
+    "Write complete and significant DEG CSV tables with the required columns.",
+    "Generate PCA and volcano PNG plots.",
+    "Benchmark significant DEGs against the provided gene list.",
+    "Write `sample_summary.txt`, `benchmark_summary.csv`, and `run_manifest.json` under `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "expression_matrix.tsv.gz",
+      "format": "TSV.GZ",
+      "path": "input/expression_matrix.tsv.gz",
+      "description": "Gene-by-sample TCGA BRCA expression matrix."
+    },
+    {
+      "name": "clinical_matrix.tsv",
+      "format": "TSV",
+      "path": "input/clinical_matrix.tsv",
+      "description": "Clinical sample annotations including the `sample_type` field used for tumor-normal grouping."
+    },
+    {
+      "name": "truth_breast_degs.csv",
+      "format": "CSV",
+      "path": "input/truth_breast_degs.csv",
+      "description": "Benchmark gene list used by the task workflow."
+    },
+    {
+      "name": "runtime_env/pyproject.toml",
+      "format": "TOML",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Python dependency manifest for the analysis environment."
+    },
+    {
+      "name": "run_manifest_template.json",
+      "format": "JSON",
+      "path": "input/run_manifest_template.json",
+      "description": "Template for the required output manifest."
+    },
+    {
+      "name": "output_requirements.txt",
+      "format": "TXT",
+      "path": "input/output_requirements.txt",
+      "description": "Lists the required output artifact names and content expectations."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "sample_summary.txt",
+      "format": "TXT",
+      "path": "output/sample_summary.txt",
+      "description": "Summary of matched tumor and normal samples."
+    },
+    {
+      "name": "pca_plot.png",
+      "format": "PNG",
+      "path": "output/pca_plot.png",
+      "description": "PCA visualization of the matched expression data."
+    },
+    {
+      "name": "deg_results_all.csv",
+      "format": "CSV",
+      "path": "output/deg_results_all.csv",
+      "description": "Complete per-gene differential expression results."
+    },
+    {
+      "name": "deg_results_significant.csv",
+      "format": "CSV",
+      "path": "output/deg_results_significant.csv",
+      "description": "Significant DEGs satisfying the required fold-change and adjusted-p-value thresholds."
+    },
+    {
+      "name": "volcano_plot.png",
+      "format": "PNG",
+      "path": "output/volcano_plot.png",
+      "description": "Volcano plot for the differential expression run."
+    },
+    {
+      "name": "benchmark_summary.csv",
+      "format": "CSV",
+      "path": "output/benchmark_summary.csv",
+      "description": "Precision, recall, and F1 benchmark summary."
+    },
+    {
+      "name": "run_manifest.json",
+      "format": "JSON",
+      "path": "output/run_manifest.json",
+      "description": "Run metadata including dataset, comparison, thresholds, sample counts, and completion status."
+    }
+  ],
+  "evaluation": "Binary pass/fail. The evaluator requires all seven output files, validates real PNG structure and dimensions, checks DEG CSV schemas and row counts, verifies significant rows satisfy `abs(log2FC) > 1` and `padj < 0.05`, parses sample counts and manifest fields, validates benchmark-summary structure, compares submitted benchmark values with recomputed precision/recall/F1, and checks numeric consistency of the DEG results. A complete valid run scores `1.0`; missing, malformed, undercomplete, or inconsistent outputs score `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "variants": 1,
+  "sourceSubmissionId": "32536f2b-9a02-4bb7-b0f9-52392c5099eb",
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.2",
+    "subdomain_code": "genomics",
+    "subdomain_name": "Genomics & Sequence Analysis",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:38.517061Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/tcga_brca_deg_analysis/task_card.json"
+      },
+      "rationale": "The task involves differential gene expression analysis in a cancer genomics context."
+    }
+  }
+}

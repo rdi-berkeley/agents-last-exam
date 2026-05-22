@@ -1,0 +1,91 @@
+{
+  "taskId": "business_finance/american_option_pricing_ls",
+  "title": "American Option Pricing via Longstaff-Schwartz",
+  "summary": "Implement a three-tier Monte Carlo option-pricing benchmark covering Black-Scholes validation, a single-asset American put solved with Longstaff-Schwartz regression, and a correlated 5-asset basket American put with pathwise Greeks.",
+  "category": "business_finance",
+  "software": [
+    "Python",
+    "NumPy",
+    "SciPy",
+    "uv"
+  ],
+  "taskPrompt": "You are working on an Ubuntu coding task about pricing American-style options with Monte Carlo and Longstaff-Schwartz regression.\n\nTask directory:\n- `/media/user/data/agenthle/business_finance/american_option_pricing_ls/base`\n\nVisible input files:\n- Problem specification: `/media/user/data/agenthle/business_finance/american_option_pricing_ls/base/input/problem_spec.md`\n- Python runtime manifest: `/media/user/data/agenthle/business_finance/american_option_pricing_ls/base/input/runtime_env/pyproject.toml`\n- Python lockfile: `/media/user/data/agenthle/business_finance/american_option_pricing_ls/base/input/runtime_env/uv.lock`\n- Canonical Python wrapper: `/media/user/data/agenthle/business_finance/american_option_pricing_ls/base/software/python.sh`\n\nRecommended workflow:\n1. Change into `/media/user/data/agenthle/business_finance/american_option_pricing_ls/base`\n2. Read the staged problem specification in full before coding\n3. Use `\"/media/user/data/agenthle/business_finance/american_option_pricing_ls/base/software/python.sh\" your_script.py` or `\"/media/user/data/agenthle/business_finance/american_option_pricing_ls/base/software/python.sh\" -c \"...\"` to run Python with the staged NumPy/SciPy runtime\n4. Implement the solver under the writable output directory\n5. Write every required artifact under `/media/user/data/agenthle/business_finance/american_option_pricing_ls/base/output`\n\nRequired outputs under `/media/user/data/agenthle/business_finance/american_option_pricing_ls/base/output`:\n- `results.json`\n- `exercise_boundary_tier2.npy`\n\nRequirements:\n- Use only Python + NumPy + SciPy. Do not use financial libraries or autodiff frameworks.\n- Use exact log-normal GBM simulation, not Euler discretization.\n- Follow the fixed seeds, path counts, regression basis requirements, and output schema from the problem spec.\n- Tier 1 and Tier 2 are required for any passing score; Tier 3 is required for full credit.\n- If Tier 3 is incomplete, keep Tier 1 / Tier 2 outputs truthful rather than fabricating Tier 3 metrics.\n",
+  "agentMustDo": [
+    "Read the staged problem specification in full before implementing the solver.",
+    "Use the staged Python wrapper if a task-local NumPy/SciPy runtime is needed.",
+    "Produce `results.json` and `exercise_boundary_tier2.npy` under the writable output directory.",
+    "Keep the reported metrics, exercise boundary sample, and saved `.npy` boundary internally consistent.",
+    "Treat Tier 1 and Tier 2 as mandatory and Tier 3 as the full-credit upgrade path."
+  ],
+  "inputFiles": [
+    {
+      "name": "problem_spec.md",
+      "format": "Markdown",
+      "path": "input/problem_spec.md",
+      "description": "Full public specification for the three-tier American option pricing benchmark."
+    },
+    {
+      "name": "runtime_env/pyproject.toml",
+      "format": "TOML",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Pinned solve-time manifest for NumPy and SciPy."
+    },
+    {
+      "name": "runtime_env/uv.lock",
+      "format": "Lockfile",
+      "path": "input/runtime_env/uv.lock",
+      "description": "Pinned uv lockfile for the staged runtime."
+    },
+    {
+      "name": "software/python.sh",
+      "format": "Shell script",
+      "path": "software/python.sh",
+      "description": "Canonical agent-facing Python entry point for the staged runtime."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "results.json",
+      "format": "JSON",
+      "path": "output/results.json",
+      "description": "Tier summaries for the Black-Scholes validation, single-asset American put, and basket American put benchmark."
+    },
+    {
+      "name": "exercise_boundary_tier2.npy",
+      "format": "NumPy array",
+      "path": "output/exercise_boundary_tier2.npy",
+      "description": "Length-100 Tier 2 early-exercise boundary used for structural validation."
+    }
+  ],
+  "evaluation": "**Score behavior**\n- `1.0` when Tier 1, Tier 2, and Tier 3 all pass.\n- `0.5` when Tier 1 and Tier 2 pass but Tier 3 is missing or fails.\n- `0.0` when required files are missing, `results.json` is malformed, or Tier 1 / Tier 2 fail.\n\n**Visible benchmark thresholds**\n- Tier 1: Black-Scholes price and Greeks must match the closed-form reference, and the Monte Carlo estimate must lie within 2 standard errors.\n- Tier 2: American put price must be within `0.20` of the hidden reference, `bs_underestimates` must be true, the early-exercise premium must exceed `0.5`, standard error must be below `0.05`, and the saved exercise boundary must pass monotonicity / range checks.\n- Tier 3: Basket American put price must be within `0.30` of the hidden reference, all deltas must be negative, all vegas must be positive, and each greek must remain within a factor of 3 of the hidden reference.\n\n**What the evaluator checks**\n- fixed problem constants and schema fields in each tier\n- Black-Scholes price / Greeks against the hidden reference\n- internal consistency of Monte Carlo and early-exercise premium fields\n- shape, sampled values, monotonicity, and range of `exercise_boundary_tier2.npy`\n- Tier 3 sign and magnitude sanity for deltas and vegas\n- score downgrades for truthful Tier 1 / Tier 2 submissions that omit or fail Tier 3\n\n**What a correct run looks like**\nThe solver writes both required files, Tier 1 matches the closed-form Black-Scholes target, Tier 2 produces a realistic American premium and exercise boundary, and Tier 3 adds a truthful basket price plus reasonable Greeks for full credit.\n\n**What a wrong run looks like**\nMissing outputs, fabricated JSON-only metrics, an implausible or inconsistent exercise boundary, or a Tier 2 result that collapses back to the European price keep the score below `1.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "variants": 1,
+  "sourceSubmissionId": "2090fc20-6faf-425c-9c12-145afde1af35",
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.7",
+    "subdomain_code": "quant_finance",
+    "subdomain_name": "Quantitative Finance & Trading",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:22:48.193263Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/american_option_pricing_ls/task_card.json"
+      },
+      "rationale": "The task involves quantitative finance techniques for pricing American options."
+    }
+  }
+}

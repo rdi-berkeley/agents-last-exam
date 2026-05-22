@@ -1,0 +1,110 @@
+{
+  "taskId": "engineering/openroad_sky130_ibex_pnr_signoff",
+  "title": "OpenROAD SKY130 Ibex PnR Signoff",
+  "taskName": "OpenROAD SKY130 Ibex PnR Signoff",
+  "summary": "Tune the lowRISC Ibex SKY130HD OpenROAD-flow-scripts configuration, rerun the pinned Docker flow, and submit the final config plus pass-audit evidence needed for signoff review.",
+  "category": "engineering",
+  "software": [
+    "OpenROAD-flow-scripts",
+    "Docker",
+    "Python"
+  ],
+  "tags": [
+    "eda",
+    "physical-design",
+    "pnr",
+    "openroad",
+    "sky130",
+    "ibex",
+    "signoff"
+  ],
+  "taskPrompt": "You are working on Linux on an RTL-to-GDSII signoff-closure task for lowRISC ibex on sky130hd.\n\n## Task Root\n- `/media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base`\n\n## Visible Inputs\n- Task brief: `/media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base/input/task_instructions.md`\n- Starter tree: `/media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base/input/starter_project`\n- Workspace helper: `/media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base/software/prepare_workspace.sh`\n\n## What You Should Do\n1. Read `/media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base/input/task_instructions.md`.\n2. Create a writable workspace by running:\n   `bash /media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base/software/prepare_workspace.sh`\n3. Work only inside `/media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base/output/workspace`.\n4. Tune only the allowed files described in the staged task brief.\n5. When finished, copy the required deliverables into `/media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base/output`.\n\n## Final Deliverables\n- `/media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base/output/config.mk`\n- `/media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base/output/JOURNAL.md`\n- `/media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base/output/flow/logs/sky130hd/ibex/base/config.mk.pass*` if any completed pass exists\n- `/media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base/output/flow/logs/sky130hd/ibex/base/pass*.stamp` if any completed pass exists\n\nDo not modify files under `/media/user/data/agenthle/engineering/openroad_sky130_ibex_pnr_signoff/base/input`.\nDo not rely on hidden evaluator-only data.\n",
+  "agentMustDo": [
+    "Read the staged task brief and create a writable workspace with `software/prepare_workspace.sh`.",
+    "Edit only `output/workspace/flow/designs/sky130hd/ibex/config.mk` and `output/workspace/JOURNAL.md`.",
+    "Run the pinned OpenROAD-flow-scripts Docker flow from the writable workspace.",
+    "Copy `config.mk`, `JOURNAL.md`, and any completed-pass audit files into `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_instructions.md",
+      "format": "Markdown",
+      "path": "input/task_instructions.md",
+      "description": "Staged task brief defining the allowed edits, pass budget, and required handoff files."
+    },
+    {
+      "name": "starter_project",
+      "format": "directory",
+      "path": "input/starter_project",
+      "description": "Read-only OpenROAD starter tree copied into the agent's writable workspace before tuning."
+    },
+    {
+      "name": "prepare_workspace.sh",
+      "format": "shell script",
+      "path": "software/prepare_workspace.sh",
+      "description": "Helper that creates `output/workspace/` from the staged starter tree."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "config.mk",
+      "format": "Makefile fragment",
+      "path": "output/config.mk",
+      "description": "Final tuned OpenROAD configuration submitted for scoring."
+    },
+    {
+      "name": "JOURNAL.md",
+      "format": "Markdown",
+      "path": "output/JOURNAL.md",
+      "description": "Run journal describing attempted passes and the final selected result."
+    },
+    {
+      "name": "config.mk.pass*",
+      "format": "log artifact",
+      "path": "output/flow/logs/sky130hd/ibex/base/config.mk.pass*",
+      "description": "Completed-pass configuration snapshots used for pass-budget and anti-gaming checks."
+    },
+    {
+      "name": "pass*.stamp",
+      "format": "stamp file",
+      "path": "output/flow/logs/sky130hd/ibex/base/pass*.stamp",
+      "description": "Completed-pass markers proving which optimization passes actually finished."
+    }
+  ],
+  "evaluation": "**Hard gate conditions for overall pass**\n- Total normalized score must land at or above the task pass bar (`80/100` raw points).\n- DRC must score full-credit.\n- LVS must reach at least the rubric's partial-credit verdict threshold.\n- Setup WNS, setup TNS, and power must each reach at least half-credit.\n- Anti-gaming checks must pass.\n\n**Scoring method**\n- The evaluator rebuilds a pristine starter tree, overlays the submitted `config.mk` and `JOURNAL.md`, reruns the pinned OpenROAD-flow-scripts Docker flow, and scores the rebuilt artifacts with a weighted 12-gate rubric normalized to `[0.0, 1.0]`.\n- Hold, pass-budget, and journal-fidelity still contribute to the total score, but they are not separately hard-gated beyond the overall score threshold.\n- This is a genuine partial-credit evaluator. The current positive fixture is documented to score `0.875`, while the current weak negative fixture scores `0.675` and still fails overall because power overshoots the rubric target.\n- VM-side scoring is necessary because the authoritative Docker flow and heavyweight signoff artifacts live on the Linux VM.\n\n**What a successful output looks like**\nA tuned `config.mk` and matching `JOURNAL.md` whose rebuilt flow satisfies the pass-gated rubric conditions and lands above the task's pass bar, with completed-pass audit files copied into `output/` when passes finish.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "os": "linux",
+    "project": "sunblaze-4",
+    "zone": "us-west2-a",
+    "name": "agenthle-ubuntu",
+    "timeout": 7200
+  },
+  "variants": [
+    "base"
+  ],
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.8",
+    "subdomain_code": "semiconductor",
+    "subdomain_name": "Semiconductor & Microelectronics Design",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:27:50.985013Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/openroad_sky130_ibex_pnr_signoff/task_card.json"
+      },
+      "rationale": "The task involves RTL-to-GDSII signoff for a semiconductor design."
+    }
+  }
+}

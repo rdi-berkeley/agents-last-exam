@@ -1,0 +1,85 @@
+{
+  "taskId": "business_finance/taxform_4_1",
+  "title": "Taxform 4 1",
+  "summary": "Prepare a U.S. tax return from staged wage documents and instructions, then save the required JSON outputs.",
+  "category": "business_finance",
+  "software": [
+    "Python",
+    "Chrome"
+  ],
+  "taskPrompt": "You are preparing a U.S. tax return inside a browser-based local task environment.\n\n## Variant\n`variant_1`: W-2 income with a single Form 1040 output.\n\n## Runtime Entry Points\n- Start the local HTTP server by running: `C:\\Users\\User\\Desktop\\business_finance\\taxform_4_1\\variant_1\\software\\start_http_server.bat`\n- Read the taxpayer instructions at: `C:\\Users\\User\\Desktop\\business_finance\\taxform_4_1\\variant_1\\input\\instruction.txt`\n\n## Source Forms To Read\nThese pages are prefilled reference documents. Read them, but do not edit them.\n- Form W-2 \u2014 Wage and Tax Statement: `http://localhost:8080/forms/formw2.html?data=/`\n\n## Output Forms To Complete\nFill these blank return pages in the browser, then click `Save Results` on each one.\n- Form 1040 \u2014 U.S. Individual Income Tax Return: `http://localhost:8080/forms/form1040.html`\n\n## What You Must Do\n1. Run `C:\\Users\\User\\Desktop\\business_finance\\taxform_4_1\\variant_1\\software\\start_http_server.bat` to serve the staged `input/` directory on `http://localhost:8080`.\n2. Read `C:\\Users\\User\\Desktop\\business_finance\\taxform_4_1\\variant_1\\input\\instruction.txt` carefully.\n3. Open every source form listed above and extract the needed values.\n4. Open every output form listed above and complete the tax return.\n5. Click `Save Results` on each required output form.\n6. Move the downloaded JSON file(s) into `C:\\Users\\User\\Desktop\\business_finance\\taxform_4_1\\variant_1\\output`.\n\n## Required Final Output Files\nPlace these exact files in `C:\\Users\\User\\Desktop\\business_finance\\taxform_4_1\\variant_1\\output`:\n- `form1040_output.json`",
+  "agentMustDo": [
+    "Launch the task-local HTTP server from `software/start_http_server.bat`, which serves the staged `input/` directory at `http://localhost:8080`.",
+    "Read `input/instruction.txt` and the staged source forms listed in `input/README.md`, combining free-text tax instructions with values shown on the pre-filled W-2 / 1099 forms.",
+    "Fill the blank output form pages (`form1040.html`, and `form1040s1.html` for `variant_5`) in the browser, then click `Save Results` on each output form so the browser downloads the required JSON outputs."
+  ],
+  "inputFiles": [
+    {
+      "name": "README.md",
+      "format": "Markdown",
+      "path": "input/README.md",
+      "description": "Source-authored setup and page-order instructions"
+    },
+    {
+      "name": "instruction.txt",
+      "format": "UTF-8 text",
+      "path": "input/instruction.txt",
+      "description": "Taxpayer scenario, filing rules, and calculation instructions"
+    },
+    {
+      "name": "forms/",
+      "format": "HTML, PDF, JS, CSS",
+      "path": "input/forms/...",
+      "description": "Interactive tax forms and static assets served locally"
+    },
+    {
+      "name": "*_input.json",
+      "format": "JSON",
+      "path": "input/*.json",
+      "description": "Source-form payloads read via the ?data=/ query string"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "form1040_output.json",
+      "format": "JSON",
+      "path": "output/form1040_output.json",
+      "description": "Required for every variant"
+    },
+    {
+      "name": "form1040s1_output.json",
+      "format": "JSON",
+      "path": "output/form1040s1_output.json",
+      "description": "Required only for variant_5"
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- Any required output JSON is missing.\n- Any required field is missing or represented as an unexpected type/value shape.\n- Any extra field appears in the submitted output JSON.\n- Any unexpected top-level key appears in the submitted output JSON.\n\n**Scoring method:**\nUse a fine-grained informative-field score with equal weights.\n\n- An `informative field` is any GT field whose expected value is not the default empty state:\n  - text field with a non-empty string\n  - radio/select field with a non-empty string value\n  - checkbox field with a non-empty selected list\n- Compare informative fields with the task's field-level JSON matching rules:\n  - checkbox/radio arrays compare as unordered sets\n  - numeric normalization applies to `line_*` text fields by stripping commas and comparing as floats with tolerance `< 0.01`\n- For a single-form variant, score:\n\n```text\nscore = matched_informative_fields / total_informative_fields\n```\n\n- For `variant_5`, score over the union of informative fields across both required output forms (`form1040` and `form1040s1`), again with equal weight per informative field.\n- The hard-gate checks above still apply before the ratio is computed.\n\n**What does a PERFECT output look like?**\nThe agent produces exactly the expected JSON files for the active variant, with every informative field matching the provided ground truth after robust numeric normalization for `line_*` fields. For `variant_5`, all informative fields across both `form1040_output.json` and `form1040s1_output.json` match.\n\n**What does a WRONG/empty output look like?**\nAn empty or partially filled JSON scores poorly because it misses most or all informative fields. A JSON with missing required fields, wrong field types/value shapes, or extra fields still triggers the hard gate and scores `0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.1",
+    "subdomain_code": "accounting",
+    "subdomain_name": "Accounting & Finance",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:25:42.986363Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/taxform_4_1/task_card.json"
+      },
+      "rationale": "The task involves preparing a U.S. tax return, which falls under accounting and finance."
+    }
+  }
+}

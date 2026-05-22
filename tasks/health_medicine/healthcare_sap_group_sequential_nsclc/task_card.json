@@ -1,0 +1,88 @@
+{
+  "taskId": "health_medicine/healthcare_sap_group_sequential_nsclc",
+  "title": "NSCLC Group-Sequential SAP",
+  "summary": "Produce a statistical analysis plan package for a Phase III NSCLC trial with log-rank sample size, O'Brien-Fleming interim boundaries, futility, Hochberg secondary testing, and plots.",
+  "category": "health_medicine",
+  "software": [
+    "R",
+    "gsDesign",
+    "rpact",
+    "ggplot2"
+  ],
+  "taskPrompt": "You are preparing a clinical-trial Statistical Analysis Plan on a Linux VM.\n\n## Task Folder\n`/media/user/data/agenthle/health_medicine/healthcare_sap_group_sequential_nsclc/base`\n\n## Inputs\n- Protocol JSON: `/media/user/data/agenthle/health_medicine/healthcare_sap_group_sequential_nsclc/base/input/protocol.json`\n- Detailed instructions: `/media/user/data/agenthle/health_medicine/healthcare_sap_group_sequential_nsclc/base/input/task_instructions.md`\n\n## Goal\nCreate the full SAP deliverable set in:\n`/media/user/data/agenthle/health_medicine/healthcare_sap_group_sequential_nsclc/base/output`\n\nRequired output filenames:\n- `SAP.md`\n- `analysis.R`\n- `sample_size.json`\n- `boundaries.csv`\n- `multiple_testing.json`\n- `power_curve.csv`\n- `power_curve.png`\n- `boundary_plot.png`\n\nRead the protocol and instructions, compute the group-sequential design quantities, document the SAP, and include a reproducible R script. Do not use internet access. Hidden reference values and grading logic are not visible during solve time.",
+  "agentMustDo": [
+    "Read `input/protocol.json` and `input/task_instructions.md`.",
+    "Compute the sample size, interim monitoring boundaries, futility rule, multiplicity allocation, and power curve.",
+    "Write the required JSON, CSV, PNG, Markdown, and R script outputs under `output/`.",
+    "Use only the staged protocol and instructions; do not use internet access."
+  ],
+  "inputFiles": [
+    {
+      "name": "Protocol",
+      "format": "json",
+      "path": "input/protocol.json",
+      "description": "Sanitized self-contained NSCLC trial protocol parameters."
+    },
+    {
+      "name": "Task Instructions",
+      "format": "md",
+      "path": "input/task_instructions.md",
+      "description": "Output contract and statistical requirements."
+    },
+    {
+      "name": "Runtime Note",
+      "format": "txt",
+      "path": "input/runtime_env.txt",
+      "description": "Recommended R package stack."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Statistical Analysis Plan",
+      "format": "md",
+      "path": "output/SAP.md",
+      "description": "Narrative SAP document."
+    },
+    {
+      "name": "Analysis Script",
+      "format": "R",
+      "path": "output/analysis.R",
+      "description": "Reproducible R script for generating the outputs."
+    },
+    {
+      "name": "Numerical Outputs",
+      "format": "json/csv/png",
+      "path": "output/",
+      "description": "Sample size, boundaries, multiplicity, power curve, and plot artifacts."
+    }
+  ],
+  "evaluation": "The evaluator requires the eight named output files to exist and be non-empty. Sample size must be within 3% of hidden reference values, interim Z boundaries within 0.05, Hochberg alpha allocation to 4 decimals, power-curve CSV structure and monotonicity, non-empty PNG plots, and sufficiently complete SAP/script documentation. Harmless extra top-level files are ignored.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.5",
+    "subdomain_code": "clinical_trials",
+    "subdomain_name": "Clinical Research & Trial Operations",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:41:44.284160Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/healthcare_sap_group_sequential_nsclc/task_card.json"
+      },
+      "rationale": "The task involves creating a statistical analysis plan for a clinical trial."
+    }
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "taskId": "engineering/aerospace_low_thrust_trajectory",
+  "title": "Low-Thrust LEO To GEO Trajectory",
+  "summary": "Compute a three-tier orbital transfer from inclined low Earth orbit to geostationary orbit using analytic, numerical low-thrust, and optimal-control methods.",
+  "category": "engineering",
+  "software": [
+    "Python",
+    "uv",
+    "NumPy",
+    "SciPy"
+  ],
+  "taskPrompt": "You are working on a Linux VM.\n\nTask root:\n- `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base`\n\nVisible files:\n- Problem specification: `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base/input/problem_spec.md`\n- Task prompt: `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base/input/task_prompt.md`\n- Output contract: `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base/input/output_contract.json`\n- Python runtime manifest: `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base/input/runtime_env/pyproject.toml`\n- Task-scoped Python entry point: `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base/software/python`\n- uv entry point: `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base/software/uv`\n\nRequired output directory:\n- `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base/output`\n\nRead the staged problem specification and output contract, then create the required result and trajectory files directly under the output directory. Use `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base/software/python` for Python/NumPy/SciPy work. If the task-scoped Python runtime is missing, use `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base/software/uv` and `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base/input/runtime_env/pyproject.toml` to create or repair it under `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base/.runtime_env`. Do not modify files under `/media/user/data/agenthle/engineering/aerospace_low_thrust_trajectory/base/input`.\n",
+  "agentMustDo": [
+    "1. Compute the Tier 1 Hohmann transfer quantities.",
+    "2. Integrate the Tier 2 continuous tangential low-thrust spiral and save the required trajectory array.",
+    "3. Solve the Tier 3 fixed-time low-thrust transfer with inclination change and save the required trajectory and control arrays.",
+    "4. Write `output/results.json` with the required `tier1`, `tier2`, and `tier3` sections.",
+    "5. Save `output/tier2_trajectory.npy`, `output/tier3_trajectory.npy`, and `output/tier3_control.npy` with the required schemas."
+  ],
+  "inputFiles": [
+    {
+      "name": "problem_spec.md",
+      "format": "md",
+      "path": "input/problem_spec.md",
+      "description": "Full low-thrust LEO-to-GEO problem statement with formulas, state definitions, and output requirements."
+    },
+    {
+      "name": "task_prompt.md",
+      "format": "md",
+      "path": "input/task_prompt.md",
+      "description": "Concise instruction listing the required output files and the task-scoped Python/uv entry points."
+    },
+    {
+      "name": "output_contract.json",
+      "format": "json",
+      "path": "input/output_contract.json",
+      "description": "Machine-readable schema for the required output files."
+    },
+    {
+      "name": "pyproject.toml",
+      "format": "toml",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Pinned runtime dependency manifest for NumPy and SciPy."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "results.json",
+      "format": "json",
+      "path": "output/results.json",
+      "description": "Required final JSON deliverable containing all three tier result sections."
+    },
+    {
+      "name": "tier2_trajectory.npy",
+      "format": "npy",
+      "path": "output/tier2_trajectory.npy",
+      "description": "Required Tier 2 state trajectory array."
+    },
+    {
+      "name": "tier3_trajectory.npy",
+      "format": "npy",
+      "path": "output/tier3_trajectory.npy",
+      "description": "Required Tier 3 state and costate trajectory array."
+    },
+    {
+      "name": "tier3_control.npy",
+      "format": "npy",
+      "path": "output/tier3_control.npy",
+      "description": "Required Tier 3 control history array."
+    }
+  ],
+  "evaluation": "The evaluator requires all four output files. `results.json` must contain complete `tier1`, `tier2`, and `tier3` sections. Tier 1 is checked against analytic Hohmann formulas. Tier 2 must satisfy final-orbit, mass, delta-V, trajectory-history, and finite-difference gravity-plus-thrust dynamics checks. Tier 3 must satisfy final-orbit, convergence, Hamiltonian, mass, active-control, trajectory-history, and control-direction checks. The score is binary: `1.0` only when all checks pass; malformed files, missing files, fabricated trajectories, inactive control, or failed physics checks score `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 28800
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.1",
+    "subdomain_code": "aerospace_mech",
+    "subdomain_name": "Aerospace & Mechanical Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T08:59:41.308309Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/aerospace_low_thrust_trajectory/task_card.json"
+      },
+      "rationale": "The task involves computing orbital transfers in aerospace engineering."
+    }
+  }
+}

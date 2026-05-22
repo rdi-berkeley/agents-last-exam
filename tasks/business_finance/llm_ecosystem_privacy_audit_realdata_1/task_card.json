@@ -1,0 +1,85 @@
+{
+  "taskId": "business_finance/llm_ecosystem_privacy_audit_realdata_1",
+  "title": "GPT Actions Privacy & Policy Audit",
+  "summary": "Audit 2,253 real GPT Actions against OpenAI's published GPT Actions Usage Policy and compute cross-domain data-exposure amplification across shared backend domains on a Linux VM.",
+  "category": "business_finance",
+  "software": [
+    "Python (`software/python`)"
+  ],
+  "taskPrompt": "You are working on a Linux VM to perform a compliance audit of GPT Actions against OpenAI's published GPT Actions Usage Policy. All inputs are staged locally on this VM. No network access is required or permitted.\n\n## Input Files (read-only)\n- Pre-classified Action data: `/media/user/data/agenthle/business_finance/llm_ecosystem_privacy_audit_realdata_1/base/input/pp_action_data_entities.json`\n- Data taxonomy (CSV, UTF-8 BOM): `/media/user/data/agenthle/business_finance/llm_ecosystem_privacy_audit_realdata_1/base/input/taxonomy.csv`\n- OpenAI GPT Actions Usage Policy + Policy-to-Taxonomy Mapping Guide: `/media/user/data/agenthle/business_finance/llm_ecosystem_privacy_audit_realdata_1/base/input/openai_gpt_actions_usage_policy.md`\n- GPT \u2192 Action metadata: `/media/user/data/agenthle/business_finance/llm_ecosystem_privacy_audit_realdata_1/base/input/gpt_action_metadata.json`\n\n## Your Task\n1. Parse all four input files using only Python 3 standard library modules (`json`, `csv`, `re`, `collections`).\n   - If you want to script the audit, use the canonical task-local Python entry point `/media/user/data/agenthle/business_finance/llm_ecosystem_privacy_audit_realdata_1/base/software/python`. It `exec`s the preinstalled system interpreter at `/usr/bin/python`.\n2. Apply the Policy-to-Taxonomy Mapping Guide inside the policy markdown verbatim \u2014 it is the authoritative mapping from taxonomy `data_type` values to CRITICAL and HIGH violations.\n3. Produce `output/policy_violations.json` as a JSON document with `total_violations`, `severity_breakdown` (CRITICAL/HIGH counts), and `violations`: a list with one entry per offending Action field. Each entry must include `severity`, `policy_clause`, `action_domain`, `api_name`, `data_field_name`, and `data_type`. Entries missing `policy_clause` or `action_domain` will be discarded before scoring.\n4. Produce `output/cross_domain_exposure_report.csv` with the header `domain,gpt_count,action_count,avg_datatypes_per_action,union_datatypes_count,amplification_factor,union_datatypes`. Include exactly one row for every backend `domain` served by at least 3 distinct GPTs. `amplification_factor` is `f\"{round(union_datatypes_count / avg_datatypes_per_action, 3)}x\"` (three-decimal numeric prefix plus trailing `x`). `union_datatypes` is a semicolon-delimited, alphabetically sorted list of the distinct `data_type` values.\n\n## Hints\n- `taxonomy.csv` begins with a UTF-8 BOM \u2014 open it with `encoding=\"utf-8-sig\"`.\n- Keys in `pp_action_data_entities.json` are literal `\"<domain>, <api_name>\"` strings separated by `\", \"` (comma + single space). Split on the first `\", \"` only; some `api_name` values contain commas.\n- Do not modify any file under `input/`.\n- Write only to `output/`.\n",
+  "agentMustDo": [
+    "Parse `pp_action_data_entities.json`, `taxonomy.csv`, `openai_gpt_actions_usage_policy.md`, and `gpt_action_metadata.json` with only Python stdlib modules.",
+    "Apply the Policy-to-Taxonomy Mapping Guide verbatim to flag CRITICAL and HIGH taxonomy types per Action field.",
+    "Write `output/policy_violations.json` with `total_violations`, `severity_breakdown`, and per-field violation records carrying `severity`, `policy_clause`, `action_domain`, `api_name`, `data_field_name`, and `data_type`.",
+    "Write `output/cross_domain_exposure_report.csv` with one row per backend domain served by \u2265 3 distinct GPTs, computing amplification as `round(union_datatypes_count / avg_datatypes_per_action, 3)` suffixed with `x`."
+  ],
+  "inputFiles": [
+    {
+      "name": "pp_action_data_entities.json",
+      "format": "JSON",
+      "path": "input/pp_action_data_entities.json",
+      "description": "Pre-classified data collection profiles for 2,253 GPT Actions, keyed by `\"<backend_domain>, <api_name>\"`. Each Action lists its data fields with an assigned taxonomy `data_type`."
+    },
+    {
+      "name": "taxonomy.csv",
+      "format": "CSV (UTF-8 BOM)",
+      "path": "input/taxonomy.csv",
+      "description": "Data taxonomy reference (category, data type, description) used to interpret each field's `data_type`."
+    },
+    {
+      "name": "openai_gpt_actions_usage_policy.md",
+      "format": "Markdown",
+      "path": "input/openai_gpt_actions_usage_policy.md",
+      "description": "OpenAI's published GPT Actions Usage Policy with a Policy-to-Taxonomy Mapping Guide that enumerates CRITICAL and HIGH taxonomy types."
+    },
+    {
+      "name": "gpt_action_metadata.json",
+      "format": "JSON",
+      "path": "input/gpt_action_metadata.json",
+      "description": "Mapping of 3,116 GPT IDs to their embedded Actions and backend domains, used to compute GPT counts per backend domain."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "policy_violations.json",
+      "format": "JSON",
+      "path": "output/policy_violations.json",
+      "description": "All detected policy violations with severity, cited policy clause, backend domain, API name, offending data field, and data type."
+    },
+    {
+      "name": "cross_domain_exposure_report.csv",
+      "format": "CSV",
+      "path": "output/cross_domain_exposure_report.csv",
+      "description": "Per backend domain (\u2265 3 GPTs): GPT count, Action count, average and union taxonomy data-type counts, and amplification factor string."
+    }
+  ],
+  "evaluation": "Scoring is a 2-of-2 independent sub-task gate computed locally inside `evaluate()`; the agent never invokes scoring.\n\n**Sub-task 1 \u2014 `policy_violations.json`**\n- Discard any violation missing `policy_clause` or `action_domain`.\n- Compute CRITICAL recall and overall precision against the hidden reference.\n- Sub-task 1 passes only when both CRITICAL recall and overall precision meet the submitter-defined thresholds.\n\n**Sub-task 2 \u2014 `cross_domain_exposure_report.csv`**\n- Hard gate: every backend domain in the reference (gpt_count \u2265 3) must appear in the agent CSV.\n- On the overlap of reported and reference domains, the amplification factor must fall within a relative-error tolerance for a supermajority of domains.\n\n**Score behavior**\n- both gates pass \u2192 `1.0`\n- exactly one gate passes \u2192 `0.5`\n- otherwise \u2192 `0.0`\n\n**Hard-fail conditions**: missing or unreadable output files, malformed agent JSON, malformed agent CSV, or any reference domain with gpt_count \u2265 3 missing from the agent CSV.\n",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.4",
+    "subdomain_code": "compliance",
+    "subdomain_name": "Compliance & Regulatory",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:14:44.732683Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/llm_ecosystem_privacy_audit_realdata_1/task_card.json"
+      },
+      "rationale": "The task involves performing a compliance audit against a usage policy."
+    }
+  }
+}

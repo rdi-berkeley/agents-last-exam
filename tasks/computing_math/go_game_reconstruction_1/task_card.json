@@ -1,0 +1,69 @@
+{
+  "taskId": "computing_math/go_game_reconstruction_1",
+  "title": "Go Game Reconstruction 1",
+  "summary": "Reconstruct a professional 19x19 Go game inside Sabaki from a final board image, five known opening moves, and game metadata, then export the result as SGF.",
+  "category": "computing_math",
+  "software": [
+    "Sabaki v0.52.2",
+    "Python",
+    "sgfmill"
+  ],
+  "taskPrompt": "You are reconstructing a professional 19x19 Go game in Sabaki on Ubuntu.\n\n## Your Task\nUse the final board image plus the known metadata to reconstruct the game move by move inside Sabaki, then export the reconstructed game as SGF.\n\n## Visible Inputs\n- Final board image: `/media/user/data/agenthle/computing_math/go_game_reconstruction_1/base/input/input-board-position.png`\n- Sabaki AppImage: `/media/user/data/agenthle/computing_math/go_game_reconstruction_1/base/software/sabaki-v0.52.2-linux-x64.AppImage`\n\n## Known Constraints\n- Total moves: `168`\n- Rules: `Chinese rules`\n- Result: `White wins by resignation`\n- Move 1: `B at R4`\n- Move 2: `W at Q16`\n- Move 3: `B at C4`\n- Move 4: `W at C16`\n- Move 5: `B at E3`\n\n## What You Must Do\n1. Launch Sabaki from the staged AppImage.\n2. Use Sabaki's GUI to enter the game move by move.\n3. Do not use a Go engine or a web browser.\n4. Export the SGF into `/media/user/data/agenthle/computing_math/go_game_reconstruction_1/base/output/`.\n5. Prefer the exact filename `reconstructed_game.sgf`.\n\nOnly files under `/media/user/data/agenthle/computing_math/go_game_reconstruction_1/base/output/` count as your output.",
+  "agentMustDo": [
+    "Inspect the staged final-board image under `input/`.",
+    "Launch the staged Sabaki AppImage on the Ubuntu VM and use the GUI rather than bypassing the task with a browser or Go engine.",
+    "Reconstruct the move sequence using the visible board image, five fixed opening moves, and the provided metadata.",
+    "Export one SGF into `output/`, preferably as `reconstructed_game.sgf`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Final board image",
+      "format": "PNG image",
+      "path": "input/input-board-position.png",
+      "description": "The final 19x19 board state shown to the agent."
+    },
+    {
+      "name": "Sabaki runtime",
+      "format": "Linux AppImage",
+      "path": "software/sabaki-v0.52.2-linux-x64.AppImage",
+      "description": "Official Sabaki v0.52.2 runtime artifact staged on the Ubuntu VM."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Reconstructed SGF",
+      "format": "SGF",
+      "path": "output/reconstructed_game.sgf",
+      "description": "Preferred exported SGF deliverable. The evaluator may fall back to a single `.sgf` in `output/` if present."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- No SGF exists in `output/`.\n- The candidate SGF cannot be parsed as a 19x19 game.\n- The candidate SGF cannot be replayed successfully under the staged SGF evaluator logic.\n\n**Scoring method:**\n- Read the candidate SGF from the active output directory, preferring `reconstructed_game.sgf`.\n- Read the hidden reference SGF from repo-local `evaluator_assets/reference/ground-truth.sgf` rather than from VM-visible hidden files.\n- Replay both games and compare exact board states at checkpoints `10, 25, 50, 75, 100, 125, 150, 168`.\n- Return `checkpoints_passed / 8`.\n\n**Independent judge replay after the leakage fix:**\n- benchmark user sees `reference/`, `output_test_pos/`, and `output_test_neg/` as empty and cannot read `ground-truth.sgf` on the VM\n- setup-only: pass\n- `run_go_game_reconstruction_1.sh`: `pos = 1.0`, `neg = 0.0`, `output = 0.0`\n- direct `scripts/run_main_once.py`: `pos = 1.0`, `neg = 0.0`, `output = 0.0`\n\n**Where does the main scoring logic run?** local benchmark-side Python via `scripts/verify_sgf.py`.\n\n**What does a PERFECT output look like?**\nA valid exported SGF whose replayed board states match the hidden reference at all eight checkpoints, yielding score `1.0`.\n\n**What does a WRONG/empty output look like?**\nMissing SGF output, malformed SGF, or a plausible-looking SGF whose replayed checkpoints diverge from the hidden reference and therefore score below `1.0`.\n\n**Final review wording:** this task is closed out under an explicit benchmark-validity reservation.\n\n**Reservation:** the benchmark currently carries an explicit validity reservation that the visible evidence (final board image plus five opening moves) may not uniquely determine one historical trajectory. That reservation remains documented and unresolved.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.1",
+    "subdomain_code": "software_eng",
+    "subdomain_name": "Software Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:26:12.473913Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/go_game_reconstruction_1/task_card.json"
+      },
+      "rationale": "The task involves using software (Sabaki) to reconstruct a game, which fits under software engineering."
+    }
+  }
+}

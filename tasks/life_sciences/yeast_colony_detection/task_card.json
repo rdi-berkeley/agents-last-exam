@@ -1,0 +1,78 @@
+{
+  "taskId": "life_sciences/yeast_colony_detection",
+  "title": "Yeast Colony Detection",
+  "summary": "Detect red yeast colonies in a masked agar-plate image and export a colony count plus centroid measurement table.",
+  "category": "life_sciences",
+  "software": [
+    "CellProfiler 4.2.8",
+    "Python",
+    "NumPy"
+  ],
+  "taskPrompt": "You are analyzing a yeast colony plate image on Linux.\n\n## Your Task\nDetect the red yeast colonies growing on the agar plate while excluding white dots and other visual noise.\n\n## Visible Inputs\n- Plate image: `/media/user/data/agenthle/life_sciences/yeast_colony_detection/base/input/6-1.jpg`\n- Plate-region mask: `/media/user/data/agenthle/life_sciences/yeast_colony_detection/base/input/PlateTemplate.png`\n- CellProfiler entry point, if provisioned: `/media/user/data/agenthle/life_sciences/yeast_colony_detection/base/software/cellprofiler`\n\n## What You Must Do\n1. Use the plate image and mask to identify red yeast colonies inside the plate region.\n2. Create a reproducible detection workflow in CellProfiler 4.2.8 or another image-analysis workflow available on the VM.\n3. Count the detected red colonies.\n4. Save all required outputs under `/media/user/data/agenthle/life_sciences/yeast_colony_detection/base/output`.\n\n## Required Outputs\n- JSON count file: `/media/user/data/agenthle/life_sciences/yeast_colony_detection/base/output/answer.json`\n  - exact schema: `{\"colony_count\": <integer>}`\n- Measurement CSV: `/media/user/data/agenthle/life_sciences/yeast_colony_detection/base/output/measurements/RedColonies.csv`\n  - include one row per detected red colony\n  - include numeric centroid columns named `Location_Center_X` and `Location_Center_Y`\n  - include `ObjectNumber` if your workflow can provide it\n\n## Constraints\n- Do not modify files under `/media/user/data/agenthle/life_sciences/yeast_colony_detection/base/input`.\n- Only read the visible files under `/media/user/data/agenthle/life_sciences/yeast_colony_detection/base/input`.\n- Keep all task-produced files inside `/media/user/data/agenthle/life_sciences/yeast_colony_detection/base/output`.\n",
+  "agentMustDo": [
+    "Use the plate image and mask to identify red yeast colonies inside the plate region.",
+    "Exclude white dots and unrelated visual noise from the colony detections.",
+    "Create a reproducible CellProfiler or image-analysis workflow on the Linux VM.",
+    "Write `answer.json` with an integer `colony_count`.",
+    "Write `measurements/RedColonies.csv` with one row per detected colony and numeric centroid columns."
+  ],
+  "inputFiles": [
+    {
+      "name": "6-1.jpg",
+      "format": "JPEG",
+      "path": "input/6-1.jpg",
+      "description": "Yeast agar plate image."
+    },
+    {
+      "name": "PlateTemplate.png",
+      "format": "PNG",
+      "path": "input/PlateTemplate.png",
+      "description": "Aligned plate-region mask."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "answer.json",
+      "format": "JSON",
+      "path": "output/answer.json",
+      "description": "Machine-readable colony count."
+    },
+    {
+      "name": "RedColonies.csv",
+      "format": "CSV",
+      "path": "output/measurements/RedColonies.csv",
+      "description": "Detected red-colony measurement table with centroid columns."
+    }
+  ],
+  "evaluation": "Binary pass/fail. The evaluator requires valid `answer.json` and `measurements/RedColonies.csv`, checks the reported count against the hidden accepted band, and compares shared numeric measurement columns against the hidden reference using the fixed RBF-kernel MMD procedure from the source submission. A complete valid detection scores `1.0`; missing, malformed, undercounted, overcounted, or distribution-mismatched outputs score `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "variants": 1,
+  "sourceSubmissionId": "32244e9c-5fca-4890-8bf0-6a74fbfe8166",
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.3",
+    "subdomain_code": "cell_imaging",
+    "subdomain_name": "Cell & Imaging Biology",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:50.308407Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/yeast_colony_detection/task_card.json"
+      },
+      "rationale": "The task involves detecting and analyzing yeast colonies in images, which fits within cell imaging."
+    }
+  }
+}

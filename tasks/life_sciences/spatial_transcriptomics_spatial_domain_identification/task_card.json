@@ -1,0 +1,123 @@
+{
+  "taskId": "life_sciences/spatial_transcriptomics_spatial_domain_identification",
+  "title": "Spatial Transcriptomics Spatial Domain Identification",
+  "taskName": "Spatial Transcriptomics Spatial Domain Identification",
+  "summary": "Cluster 12 human DLPFC 10x Visium slices into spatial domains and submit per-spot labels, summary metrics, manifest metadata, and one UMAP overlay.",
+  "category": "life_sciences",
+  "software": [
+    "Python",
+    "uv",
+    "Scanpy",
+    "Squidpy",
+    "AnnData",
+    "scikit-learn"
+  ],
+  "tags": [
+    "spatial transcriptomics",
+    "10x Visium",
+    "clustering",
+    "bioinformatics"
+  ],
+  "taskPrompt": "You are given 12 human DLPFC 10x Visium slices and must identify spatial domains on every slice.\n\nTask directory:\n- `/media/user/data/agenthle/life_sciences/spatial_transcriptomics_spatial_domain_identification/base`\n\nVisible inputs:\n- Slice data directories: `/media/user/data/agenthle/life_sciences/spatial_transcriptomics_spatial_domain_identification/base/input/data/<slice_id>/`\n- Per-slice target cluster counts: `/media/user/data/agenthle/life_sciences/spatial_transcriptomics_spatial_domain_identification/base/input/data/slice_config.csv`\n- Optional Python runtime manifest: `/media/user/data/agenthle/life_sciences/spatial_transcriptomics_spatial_domain_identification/base/input/runtime_env/pyproject.toml`\n- Optional Python lockfile: `/media/user/data/agenthle/life_sciences/spatial_transcriptomics_spatial_domain_identification/base/input/runtime_env/uv.lock`\n- Baseline uv wrapper: `/media/user/data/agenthle/life_sciences/spatial_transcriptomics_spatial_domain_identification/base/software/uv`\n- Baseline Python 3.12 wrapper: `/media/user/data/agenthle/life_sciences/spatial_transcriptomics_spatial_domain_identification/base/software/python3.12`\n- Detailed task prompt: `/media/user/data/agenthle/life_sciences/spatial_transcriptomics_spatial_domain_identification/base/input/task_prompt.md`\n\nIf you need the staged spatial transcriptomics stack, run `/media/user/data/agenthle/life_sciences/spatial_transcriptomics_spatial_domain_identification/base/software/uv sync --frozen --python 3.12 --project /media/user/data/agenthle/life_sciences/spatial_transcriptomics_spatial_domain_identification/base/input/runtime_env`.\n\nRequired outputs under `/media/user/data/agenthle/life_sciences/spatial_transcriptomics_spatial_domain_identification/base/output`:\n- `summary.csv` with header `slice_id,n_spots_scored,n_clusters_pred,ari,nmi`\n- `manifest.json` with method metadata, an integer seed, and graph/embedding/clustering flags\n- `per_slice/<slice_id>_labels.csv` for all 12 slices with header `barcode,predicted_label`\n- `umap_overlay_151673.png`\n\nUse the exact per-slice target cluster counts from `slice_config.csv`, treat `input/` as read-only, and keep solver-created files under `output/`.",
+  "agentMustDo": [
+    "Load the staged matrix, features, barcodes, and spatial-coordinate files for all 12 Visium slices.",
+    "Use `input/data/slice_config.csv` as the exact target number of clusters per slice.",
+    "Run an unsupervised spatial-domain identification workflow.",
+    "Write one `per_slice/<slice_id>_labels.csv` file per slice with `barcode,predicted_label` columns.",
+    "Write `summary.csv`, `manifest.json`, and `umap_overlay_151673.png` under the runtime output directory."
+  ],
+  "inputFiles": [
+    {
+      "name": "matrix.mtx / features.tsv / barcodes.tsv",
+      "format": "MTX/TSV",
+      "path": "input/data/<slice_id>/",
+      "description": "Per-slice Visium count matrices and feature/barcode tables."
+    },
+    {
+      "name": "spatial",
+      "format": "CSV/JSON",
+      "path": "input/data/<slice_id>/spatial/",
+      "description": "Per-slice tissue positions and scale factors."
+    },
+    {
+      "name": "slice_config.csv",
+      "format": "CSV",
+      "path": "input/data/slice_config.csv",
+      "description": "Per-slice subject IDs and required cluster counts."
+    },
+    {
+      "name": "runtime_env",
+      "format": "uv project",
+      "path": "input/runtime_env/",
+      "description": "Optional pinned Python runtime for Scanpy/Squidpy-style analysis."
+    },
+    {
+      "name": "software wrappers",
+      "format": "shell scripts",
+      "path": "software/",
+      "description": "Task-local wrappers for the VM baseline uv and Python 3.12 tools."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "summary.csv",
+      "format": "CSV",
+      "path": "output/summary.csv",
+      "description": "Required per-slice metric summary."
+    },
+    {
+      "name": "manifest.json",
+      "format": "JSON",
+      "path": "output/manifest.json",
+      "description": "Required method metadata and graph/embedding/clustering flags."
+    },
+    {
+      "name": "<slice_id>_labels.csv",
+      "format": "CSV",
+      "path": "output/per_slice/",
+      "description": "Required per-barcode predicted spatial-domain labels for each slice."
+    },
+    {
+      "name": "umap_overlay_151673.png",
+      "format": "PNG",
+      "path": "output/umap_overlay_151673.png",
+      "description": "Required visualization artifact."
+    }
+  ],
+  "evaluation": "The evaluator hard-fails missing or malformed required outputs, wrong per-slice cluster counts, bad manifest fields, invalid/small PNG output, insufficient scored-barcode coverage, or summary metrics that disagree with recomputation. Passing outputs are scored from median ARI across the 12 slices, with the submitted positive fixture calibrated to score 1.0 and the deterministic round-robin negative fixture scoring 0.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "os": "linux",
+    "project": "sunblaze-4",
+    "zone": "us-west2-a",
+    "name": "agenthle-ubuntu",
+    "timeout": 7200
+  },
+  "variants": [
+    "base"
+  ],
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.3",
+    "subdomain_code": "cell_imaging",
+    "subdomain_name": "Cell & Imaging Biology",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:36.148034Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/spatial_transcriptomics_spatial_domain_identification/task_card.json"
+      },
+      "rationale": "The task involves identifying spatial domains in transcriptomic data, which relates to cell and imaging biology."
+    }
+  }
+}

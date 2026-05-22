@@ -1,0 +1,109 @@
+{
+  "taskId": "business_finance/saas_onepager_brand_refresh_instance_1",
+  "title": "SaaS One-Pager Brand Refresh",
+  "summary": "Rebuild a flattened SaaS one-pager as an editable single-slide PowerPoint on Windows, apply the staged NorthstarOS rebrand changes, and export both a PPTX and a PNG.",
+  "category": "business_finance",
+  "software": [
+    "Microsoft PowerPoint"
+  ],
+  "taskPrompt": "You are editing a SaaS one-pager on a Windows VM.\n\n## Variant\n`base`: NorthstarOS one-pager brand refresh\n\n## Runtime Entry Point\n- Open PowerPoint from: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\software\\OpenPowerPoint.bat`\n\n## Visible Inputs\n- Source one-pager PNG: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\original_onepager.png`\n- Edit brief: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\edit_request.txt`\n- Brand guide PDF: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\brand_guide.pdf`\n- KPI data CSV: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\metrics.csv`\n- Chart data CSV: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\chart_data.csv`\n- Replacement assets directory: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\assets`\n- Task brief: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\task_brief.md`\n- Output contract: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\output_contract.json`\n\n## What You Must Do\n1. Read the staged brief and input files.\n2. Rebuild the one-pager as a meaningfully editable single-slide PowerPoint.\n3. Apply the requested NorthstarOS brand refresh while preserving the overall composition.\n4. Save the editable PowerPoint exactly to `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\output\\edited_onepager.pptx`.\n5. Export the final slide exactly to `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\output\\edited_onepager.png`.\n\n## Output Requirements\n- The `.pptx` must remain meaningfully editable.\n- Save only the final required deliverables inside `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\output`.\n- Do not modify files under `input/`.\n",
+  "agentMustDo": [
+    "Read the staged source one-pager, edit brief, brand guide, KPI CSV, chart CSV, and asset bundle from `input/`.",
+    "Rebuild the page as a meaningfully editable single-slide PowerPoint on Windows.",
+    "Apply the requested NorthstarOS brand refresh while preserving the overall composition.",
+    "Save exactly `output/edited_onepager.pptx` and `output/edited_onepager.png`."
+  ],
+  "inputFiles": [
+    {
+      "name": "original_onepager.png",
+      "format": "PNG image",
+      "path": "input/original_onepager.png",
+      "description": "Flattened source one-pager to recreate and refresh."
+    },
+    {
+      "name": "edit_request.txt",
+      "format": "text",
+      "path": "input/edit_request.txt",
+      "description": "Natural-language NorthstarOS brand refresh request."
+    },
+    {
+      "name": "brand_guide.pdf",
+      "format": "PDF",
+      "path": "input/brand_guide.pdf",
+      "description": "Visible palette and style direction for the refresh."
+    },
+    {
+      "name": "metrics.csv",
+      "format": "CSV",
+      "path": "input/metrics.csv",
+      "description": "Replacement KPI values for the three metric cards."
+    },
+    {
+      "name": "chart_data.csv",
+      "format": "CSV",
+      "path": "input/chart_data.csv",
+      "description": "Replacement line-chart data for the throughput section."
+    },
+    {
+      "name": "assets",
+      "format": "asset directory",
+      "path": "input/assets",
+      "description": "Visible logo, hero, headshot, QR, and icon assets, including original and replacement variants where supplied."
+    },
+    {
+      "name": "task_brief.md",
+      "format": "Markdown",
+      "path": "input/task_brief.md",
+      "description": "Benchmark-authored solve-time instructions."
+    },
+    {
+      "name": "output_contract.json",
+      "format": "JSON",
+      "path": "input/output_contract.json",
+      "description": "Visible output filename contract."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "edited_onepager.pptx",
+      "format": "PowerPoint",
+      "path": "output/edited_onepager.pptx",
+      "description": "Editable final single-slide deck deliverable."
+    },
+    {
+      "name": "edited_onepager.png",
+      "format": "PNG image",
+      "path": "output/edited_onepager.png",
+      "description": "Raster export of the final slide."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (score `0.0` if triggered):\n- missing required outputs\n- unreadable or near-blank PNG\n- PNG below the minimum resolution ratio\n- unreadable or zero-slide PPTX\n- PPTX with more than one slide\n- PPTX that collapses into a full-slide raster-only style submission\n\n**Scoring method:**\n- overall grayscale SSIM against the hidden PNG reference\n- edited-region SSIM over the hidden crop map\n- expected text presence in visible, unobscured on-canvas PPTX content\n- expected numeric/pricing presence in visible, unobscured on-canvas PPTX content\n- exact chart-data match\n- PPTX structure/editability heuristics, including exact single-slide enforcement, minimum visible-area thresholds for counted PPTX objects, z-order-aware obscuration checks for later opaque overlays, on-canvas shape-count minima, and both per-image and total-image coverage caps\n\nThe committed evaluator is binary: it returns `1.0` only if all component thresholds and the final weighted threshold pass; otherwise it returns `0.0`.\n\n**What does a perfect output look like?**\nA close match to the hidden NorthstarOS one-pager with the requested text, KPI, chart, pricing, testimonial, and asset updates applied inside an editable PPTX plus matching PNG export.\n\n**What does a wrong output look like?**\nMissing files, blank/corrupt outputs, stale old-brand content, a multi-slide deck, a tiled or fully covered screenshot-style deck, a giant screenshot with only microscopic editable placeholders, or a mostly-updated page that still leaves the pricing/footer/CTA section wrong.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.6",
+    "subdomain_code": "sales_marketing",
+    "subdomain_name": "Sales & Marketing",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:08:20.285872Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/saas_onepager_brand_refresh_instance_1/task_card.json"
+      },
+      "rationale": "The task involves editing a marketing document for a SaaS product."
+    }
+  }
+}

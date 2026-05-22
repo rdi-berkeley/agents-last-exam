@@ -1,0 +1,140 @@
+{
+  "taskId": "health_medicine/healthcare_bias_audit_27a_public_replication_v1",
+  "title": "Public Synthetic Healthcare Bias Audit Replication",
+  "summary": "Reproduce the public synthetic Obermeyer fairness-audit workflow with the staged bundle and the preprovisioned `software/task_python` and `software/task_rscript` runtimes, then deliver the required audit CSVs, structured answers, and memo.",
+  "category": "health_medicine",
+  "software": [
+    "Python",
+    "R",
+    "uv",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "statsmodels"
+  ],
+  "taskPrompt": "You are working on a Linux VM to reproduce a public synthetic healthcare bias audit.\n\nRead these staged task materials first:\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/task_note.txt`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/bias.yml`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/audit_answers.json`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/audit_memo.md`\n\nUse the preprovisioned task-local runtimes under `software/`:\n- `software/task_python` for Python steps\n- `software/task_rscript` for R steps\n\n`bias.yml` is provided as provenance for the original public bundle. You do not need to solve or install the legacy conda environment yourself.\n\nInspect the provided workflow scripts before you run anything:\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/code/model/main.py`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/code/table2.py`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/code/figure1/figure1b.R`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/code/table3.R`\n\nVisible data files:\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/data/data_new.csv`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/data/data_dictionary.md`\n\nYour job is to:\n1. Create a writable working copy of the staged bundle under `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/output` (or another writable subdirectory inside it) so the supplied scripts can write `results/` without mutating the staged `input/` tree.\n2. Run the provided Python and R scripts in the dependency order needed to generate the five required CSV outputs, using `software/task_python` and `software/task_rscript`.\n3. Fill in `audit_answers.json` using only the public synthetic replication outputs from this run.\n4. Write `audit_memo.md` for a clinical analytics lead, grounding it in this run's outputs and clearly distinguishing the public synthetic replication from the paper's private-data values.\n5. Save exactly these deliverables under `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/output`:\n   - `results/model_lasso_predictors.csv`\n   - `results/model_r2.csv`\n   - `results/table2_concentration_metric.csv`\n   - `results/figure1b.csv`\n   - `results/table3.csv`\n   - `audit_answers.json`\n   - `audit_memo.md`\n\nRules:\n- Do not modify the staged dataset.\n- Do not add race as a model feature.\n- Do not replace the supplied workflow with a different analytical pipeline.\n- Do not use the original paper's `17.7% -> 46.5%` value or the later `59%` correction as the graded answer.\n- Treat the staged solve-time files as read-only and do not rely on any hidden evaluator-only data.\n- If you create scratch files under `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/output`, clean them up before finishing so only the required deliverables remain.\n",
+  "agentMustDo": [
+    "Read the staged task note, environment spec, starter JSON, starter memo, dataset, and data dictionary under `input/`.",
+    "Use the preprovisioned `software/task_python` and `software/task_rscript` runtimes rather than installing the legacy conda environment during solve time.",
+    "Inspect the provided Python and R scripts to determine the correct execution order.",
+    "Create a writable working copy under `output/` so the staged `input/` tree remains read-only.",
+    "Produce the five required CSV outputs under `output/results/` plus top-level `output/audit_answers.json` and `output/audit_memo.md`."
+  ],
+  "inputFiles": [
+    {
+      "name": "bias.yml",
+      "format": "YAML",
+      "path": "input/bias.yml",
+      "description": "Submitter-provided conda environment intent for the public synthetic replication workflow."
+    },
+    {
+      "name": "code/",
+      "format": "Directory",
+      "path": "input/code/",
+      "description": "Visible Python and R workflow scripts the agent must inspect and run."
+    },
+    {
+      "name": "data/data_new.csv",
+      "format": "CSV",
+      "path": "input/data/data_new.csv",
+      "description": "Public synthetic patient-level dataset used by the replication bundle."
+    },
+    {
+      "name": "data/data_dictionary.md",
+      "format": "Markdown",
+      "path": "input/data/data_dictionary.md",
+      "description": "Visible schema and variable guide for the synthetic cohort."
+    },
+    {
+      "name": "task_note.txt",
+      "format": "Text",
+      "path": "input/task_note.txt",
+      "description": "Submitter-authored solve-time instructions."
+    },
+    {
+      "name": "audit_answers.json",
+      "format": "JSON",
+      "path": "input/audit_answers.json",
+      "description": "Starter structured-answer template the agent must complete."
+    },
+    {
+      "name": "audit_memo.md",
+      "format": "Markdown",
+      "path": "input/audit_memo.md",
+      "description": "Starter memo template for the clinical analytics lead."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "results/model_lasso_predictors.csv",
+      "format": "CSV",
+      "path": "output/results/model_lasso_predictors.csv",
+      "description": "Required model output CSV."
+    },
+    {
+      "name": "results/model_r2.csv",
+      "format": "CSV",
+      "path": "output/results/model_r2.csv",
+      "description": "Required R-squared summary CSV."
+    },
+    {
+      "name": "results/table2_concentration_metric.csv",
+      "format": "CSV",
+      "path": "output/results/table2_concentration_metric.csv",
+      "description": "Required Table 2 replication output."
+    },
+    {
+      "name": "results/figure1b.csv",
+      "format": "CSV",
+      "path": "output/results/figure1b.csv",
+      "description": "Required Figure 1b replication output."
+    },
+    {
+      "name": "results/table3.csv",
+      "format": "CSV",
+      "path": "output/results/table3.csv",
+      "description": "Required Table 3 replication output."
+    },
+    {
+      "name": "audit_answers.json",
+      "format": "JSON",
+      "path": "output/audit_answers.json",
+      "description": "Required structured public-synthetic answer file."
+    },
+    {
+      "name": "audit_memo.md",
+      "format": "Markdown",
+      "path": "output/audit_memo.md",
+      "description": "Required memo explaining the public synthetic bias-audit conclusion."
+    }
+  ],
+  "evaluation": "The evaluator requires exactly five CSVs under `results/` plus top-level `audit_answers.json` and `audit_memo.md`. All five CSVs must match the hidden reference filenames, headers, row counts, row order, and numeric values within absolute tolerance `1e-6`. `audit_answers.json` must use the exact required key set, match the hidden numeric answers within absolute tolerance `1e-6`, and satisfy the exact-string fields `dataset_context`, `diagnosis`, and `recommended_action`. `audit_memo.md` must be valid UTF-8 text, distinguish the public synthetic replication from the original private-data paper values, diagnose why cost and need diverge, justify the need-based recommendation, and cite generated run outputs. Returned scoring is binary: canonical positive fixture `1.0`, canonical negative fixture `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.4",
+    "subdomain_code": "public_health",
+    "subdomain_name": "Public Health & Epidemiology",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:41:22.204563Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/healthcare_bias_audit_27a_public_replication_v1/task_card.json"
+      },
+      "rationale": "The task involves auditing healthcare bias, which falls under public health."
+    }
+  }
+}

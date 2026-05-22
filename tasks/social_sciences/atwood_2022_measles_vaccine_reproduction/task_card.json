@@ -1,0 +1,117 @@
+{
+  "taskId": "social_sciences/atwood_2022_measles_vaccine_reproduction",
+  "title": "Atwood 2022 Measles Vaccine Coefficient Reproduction",
+  "summary": "Reproduce the six Table 2 vaccination-effect coefficient estimates from Atwood (2022) using the published paper, appendix, and archived replication package.",
+  "category": "social_sciences",
+  "software": [
+    "Python",
+    "PDF tools",
+    "unzip"
+  ],
+  "taskPrompt": "You are working on a Linux VM as an applied-economics replication analyst.\n\n## Task Directory\n`/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base`\n\n## Visible Inputs\n- Task prompt: `/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base/input/TASK_PROMPT.md`\n- Published paper: `/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base/input/paper.pdf`\n- Online appendix: `/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base/input/paper-online-appendix.pdf`\n- Archived replication package: `/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base/input/replication_package.zip`\n- Task metadata: `/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base/input/task.json`\n- Environment manifest: `/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base/input/environment_manifest.json`\n- Allowed repairs: `/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base/input/allowed_repairs.json`\n- Output schemas/examples: `/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base/input/output_schemas`\n\n## Your Task\nUse the staged public materials to reproduce the coefficient report for Alicia Atwood (2022), Table 2, row \"Vaccination effect\".\n\nWrite all final files under `/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base/output`:\n- `execution_log.txt`\n- `repair_log.json`\n- `paper_coefficients.json`\n- `code_coefficients.json`\n- `coefficient_matches.csv`\n- `verdict.json`\n\nFollow the file contracts in `/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base/input/TASK_PROMPT.md` and the schemas under `/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base/input/output_schemas`. Do not modify files under `/media/user/data/agenthle/social_sciences/atwood_2022_measles_vaccine_reproduction/base/input`.",
+  "agentMustDo": [
+    "Read the paper, online appendix, task metadata, and archived replication package.",
+    "Extract the six Table 2 \"Vaccination effect\" point estimates.",
+    "Inspect or run the replication package enough to report corresponding code coefficients.",
+    "Write the six required structured output files under the runtime output directory."
+  ],
+  "inputFiles": [
+    {
+      "name": "TASK_PROMPT.md",
+      "format": "md",
+      "path": "input/TASK_PROMPT.md",
+      "description": "Detailed solve-time instructions and output contract."
+    },
+    {
+      "name": "paper.pdf",
+      "format": "pdf",
+      "path": "input/paper.pdf",
+      "description": "Published Atwood (2022) paper."
+    },
+    {
+      "name": "paper-online-appendix.pdf",
+      "format": "pdf",
+      "path": "input/paper-online-appendix.pdf",
+      "description": "Online appendix for the paper."
+    },
+    {
+      "name": "replication_package.zip",
+      "format": "zip",
+      "path": "input/replication_package.zip",
+      "description": "Archived author replication package."
+    },
+    {
+      "name": "output_schemas",
+      "format": "json/csv",
+      "path": "input/output_schemas/",
+      "description": "Schemas and sanitized examples for required deliverables."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "execution_log.txt",
+      "format": "txt",
+      "path": "output/execution_log.txt",
+      "description": "Execution or inspection log."
+    },
+    {
+      "name": "repair_log.json",
+      "format": "json",
+      "path": "output/repair_log.json",
+      "description": "Non-substantive repair log."
+    },
+    {
+      "name": "paper_coefficients.json",
+      "format": "json",
+      "path": "output/paper_coefficients.json",
+      "description": "Extracted paper estimates."
+    },
+    {
+      "name": "code_coefficients.json",
+      "format": "json",
+      "path": "output/code_coefficients.json",
+      "description": "Code-generated or package-derived estimates."
+    },
+    {
+      "name": "coefficient_matches.csv",
+      "format": "csv",
+      "path": "output/coefficient_matches.csv",
+      "description": "Per-outcome rounded comparison."
+    },
+    {
+      "name": "verdict.json",
+      "format": "json",
+      "path": "output/verdict.json",
+      "description": "Matched count, rate, and verdict label."
+    }
+  ],
+  "evaluation": "The evaluator requires all six deliverable files, validates their JSON/CSV structure, checks the six paper and code coefficient outcomes against evaluator-controlled reference values, recomputes the verdict, and returns `1.0` only for a fully correct bundle. Missing, malformed, or incorrect bundles return `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "13",
+    "domain_code": "social_sciences",
+    "subdomain_id": "13.1",
+    "subdomain_code": "economics",
+    "subdomain_name": "Economics & Quantitative Social Research",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:20:48.288341Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/social_sciences/atwood_2022_measles_vaccine_reproduction/task_card.json"
+      },
+      "rationale": "The task involves econometric analysis related to vaccination effects, fitting within the economics subdomain."
+    }
+  }
+}

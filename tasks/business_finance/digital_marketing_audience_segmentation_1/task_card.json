@@ -1,0 +1,104 @@
+{
+  "taskId": "business_finance/digital_marketing_audience_segmentation_1",
+  "title": "Digital Marketing Audience Segmentation",
+  "summary": "Segment customer profiles into a high-transaction email-disengaged cohort for re-engagement via SMS and push, applying governance rules and overlap analysis.",
+  "category": "business_finance",
+  "software": [
+    "Python",
+    "pandas",
+    "pyarrow"
+  ],
+  "taskPrompt": "Read a segmentation brief and governance policies, filter ~10k customer profiles to the target cohort, apply suppression and PII rules, and produce a segment definition JSON, a PII-stripped audience roster CSV, and an overlap report TSV.",
+  "agentMustDo": [
+    "Filter unified_profiles.parquet to high-transaction email-disengaged customers per the brief.",
+    "Apply governance suppression (active support tickets) and channel opt-in/out rules.",
+    "Strip geo/demographic PII columns (age, gender, city, state) from the output roster.",
+    "Compute per-customer SMS, push, and any-channel eligibility.",
+    "Produce overlap_report.tsv with overlap_pct = overlap_count / qualifying audience size * 100.",
+    "Save segment_definition.json, audience_roster.csv, and overlap_report.tsv to output/."
+  ],
+  "inputFiles": [
+    {
+      "name": "unified_profiles.parquet",
+      "format": "Parquet",
+      "path": "input/unified_profiles.parquet",
+      "description": "~10,000 customer profiles with demographics, purchase, and engagement fields."
+    },
+    {
+      "name": "segmentation_brief.md",
+      "format": "Markdown",
+      "path": "input/segmentation_brief.md",
+      "description": "Target audience definition and activation channels."
+    },
+    {
+      "name": "governance_policies.yaml",
+      "format": "YAML",
+      "path": "input/governance_policies.yaml",
+      "description": "PII restrictions, opt-out compliance, minimum audience size, suppression rules."
+    },
+    {
+      "name": "existing_audiences.csv",
+      "format": "CSV",
+      "path": "input/existing_audiences.csv",
+      "description": "Six existing audience definitions for overlap analysis."
+    },
+    {
+      "name": "data_dictionary.tsv",
+      "format": "TSV",
+      "path": "input/data_dictionary.tsv",
+      "description": "Field names, types, and permitted values for the profile data."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "segment_definition.json",
+      "format": "JSON",
+      "path": "output/segment_definition.json",
+      "description": "Canonical segment definition with filter predicates, suppression, channels, stats."
+    },
+    {
+      "name": "audience_roster.csv",
+      "format": "CSV",
+      "path": "output/audience_roster.csv",
+      "description": "Qualifying customer roster with PII removed and eligibility columns."
+    },
+    {
+      "name": "overlap_report.tsv",
+      "format": "TSV",
+      "path": "output/overlap_report.tsv",
+      "description": "Overlap counts and percentages against six existing audiences."
+    }
+  ],
+  "evaluation": "Local structured comparison: segment_definition filter-predicate set equivalence, audience_roster customer_id Jaccard similarity and per-row eligibility accuracy, overlap_report exact count match and percentage tolerance. Hard gates: missing/unparsable files, PII columns in roster, audience below governance minimum.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "variants": 1,
+  "sourceSubmissionId": "da44edb3-fb9c-4f60-896c-cfd9596f23bb",
+  "status": "stage2_implemented",
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.6",
+    "subdomain_code": "sales_marketing",
+    "subdomain_name": "Sales & Marketing",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:33:43.149759Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/digital_marketing_audience_segmentation_1/task_card.json"
+      },
+      "rationale": "The task involves audience segmentation for digital marketing purposes."
+    }
+  }
+}

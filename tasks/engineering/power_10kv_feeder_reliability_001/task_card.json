@@ -1,0 +1,87 @@
+{
+  "taskId": "engineering/power_10kv_feeder_reliability_001",
+  "title": "10kV Feeder Reliability Indices",
+  "summary": "Compute IEEE/IEC supply reliability indices for a 10kV distribution feeder from staged CIM/RDF XML, SVG topology, and parameter data, then write the structured JSON result to the canonical output path.",
+  "category": "engineering",
+  "software": [
+    "Python 3.12",
+    "pandas",
+    "openpyxl"
+  ],
+  "taskPrompt": "You are computing IEEE/IEC supply reliability indices for a 10kV distribution feeder.\n\nYour task is to read the staged feeder model, topology drawing, and reliability parameters, then compute the feeder-level indices and section-level contribution tables.\n\nAgent-visible inputs:\n- CIM/RDF XML: `input/gis.null.xml`\n- SVG topology: `input/gis.null.svg`\n- Reliability parameters: `input/params.json`\n- Agent-facing dependency manifests: `input/pyproject.toml` and `input/uv.lock`\n\nSoftware:\n- Use the staged Python environment manifests under `input/` if additional packages are needed.\n- Do not preinstall task-specific Python packages system-wide.\n\nRequired output:\n- Write one JSON file exactly at `output/reliability_indices.json`\n- Include the feeder totals and the three section-level tables\n- Keep `ASAI` as a fraction in the JSON contract\n\nThe benchmark is intended for code/data-processing workflows, not GUI interaction.",
+  "agentMustDo": [
+    "Parse the staged CIM/RDF XML, SVG topology, and parameter JSON.",
+    "Build a section-level feeder model and compute the required reliability indices.",
+    "Write the structured result to `output/reliability_indices.json`.",
+    "Preserve the staged input and evaluator-only reference data."
+  ],
+  "inputFiles": [
+    {
+      "name": "gis.null.xml",
+      "format": "XML",
+      "path": "input/gis.null.xml",
+      "description": "CIM/RDF feeder model."
+    },
+    {
+      "name": "gis.null.svg",
+      "format": "SVG",
+      "path": "input/gis.null.svg",
+      "description": "Single-line topology drawing."
+    },
+    {
+      "name": "params.json",
+      "format": "JSON",
+      "path": "input/params.json",
+      "description": "Regional reliability parameters."
+    },
+    {
+      "name": "pyproject.toml",
+      "format": "TOML",
+      "path": "input/pyproject.toml",
+      "description": "Agent-facing dependency manifest staged for uv."
+    },
+    {
+      "name": "uv.lock",
+      "format": "TOML lockfile",
+      "path": "input/uv.lock",
+      "description": "Locked agent-facing dependency set staged for uv."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "reliability_indices.json",
+      "format": "JSON",
+      "path": "reference/reliability_indices.json",
+      "description": "Hidden evaluator reference data kept out of agent-visible input."
+    }
+  ],
+  "evaluation": "The evaluator compares the submitted JSON against the hidden reference JSON using the submission tolerances and structural checks. The reviewed positive fixture passes, the reviewed negative fixture fails, and empty/default output fails closed at 0.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.6",
+    "subdomain_code": "energy_power",
+    "subdomain_name": "Energy, Power & Nuclear Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:40:54.142816Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/power_10kv_feeder_reliability_001/task_card.json"
+      },
+      "rationale": "The task involves computing reliability indices for a power distribution feeder, fitting within Energy, Power & Nuclear Engineering."
+    }
+  }
+}

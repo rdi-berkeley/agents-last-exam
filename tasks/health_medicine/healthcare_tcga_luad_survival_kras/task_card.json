@@ -1,0 +1,112 @@
+{
+  "taskId": "health_medicine/healthcare_tcga_luad_survival_kras",
+  "title": "TCGA LUAD KRAS Survival Analysis",
+  "summary": "Download public TCGA-LUAD data from GDC, build a KRAS-stratified survival cohort, and export Kaplan-Meier and Cox proportional hazards results.",
+  "category": "health_medicine",
+  "software": [
+    "R",
+    "TCGAbiolinks",
+    "survival",
+    "survminer",
+    "ggplot2",
+    "jsonlite"
+  ],
+  "taskPrompt": "You are a bioinformatics analyst performing a TCGA-LUAD KRAS survival analysis on Linux.\n\nTask directory:\n- `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base`\n\nVisible files and directories:\n- Task specification: `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base/input/task_spec.json`\n- Detailed instructions: `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base/input/task_description.txt`\n- Output contract: `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base/input/output_requirements.txt`\n- Runtime notes: `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base/input/runtime_notes.txt`\n- Software notes: `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base/software/README.txt`\n\nWhat you need to do:\n1. Use public TCGA-LUAD data from the GDC Data Portal.\n2. Download the clinical data and STAR-count expression data for the LUAD cohort.\n3. Extract KRAS (`ENSG00000133703`) expression, merge it with survival and clinical covariates, and stratify patients into high/low KRAS groups using the cohort median.\n4. Fit a Kaplan-Meier analysis, a log-rank test, and a Cox proportional hazards model with KRAS group, age, and stage grouping.\n5. Save every required output under `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base/output`.\n\nRequired output files:\n- `cohort.csv`\n- `km_plot.png`\n- `cox_results.json`\n- `analysis.R`\n\nDo not modify staged inputs or evaluator-only directories.\nDo not ask for confirmation. Execute directly.\n",
+  "agentMustDo": [
+    "Read the staged task specification and output contract.",
+    "Download public TCGA-LUAD clinical and STAR-count expression data from GDC.",
+    "Extract KRAS expression and merge it with survival and clinical covariates.",
+    "Stratify patients into high and low KRAS groups using the cohort median.",
+    "Fit Kaplan-Meier, log-rank, and Cox proportional hazards analyses.",
+    "Write `cohort.csv`, `km_plot.png`, `cox_results.json`, and `analysis.R` under `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_spec.json",
+      "format": "JSON",
+      "path": "input/task_spec.json",
+      "description": "Original submission specification describing the TCGA-LUAD KRAS survival task."
+    },
+    {
+      "name": "task_description.txt",
+      "format": "TXT",
+      "path": "input/task_description.txt",
+      "description": "Benchmark-owned execution brief derived from the submission."
+    },
+    {
+      "name": "output_requirements.txt",
+      "format": "TXT",
+      "path": "input/output_requirements.txt",
+      "description": "Lists the required output filenames and minimum content expectations."
+    },
+    {
+      "name": "runtime_notes.txt",
+      "format": "TXT",
+      "path": "input/runtime_notes.txt",
+      "description": "Notes about the public-data runtime workflow."
+    },
+    {
+      "name": "software/README.txt",
+      "format": "TXT",
+      "path": "software/README.txt",
+      "description": "Operational notes about the planned benchmark-owned R runtime surface."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "cohort.csv",
+      "format": "CSV",
+      "path": "output/cohort.csv",
+      "description": "Merged TCGA-LUAD KRAS survival cohort used for the analysis."
+    },
+    {
+      "name": "km_plot.png",
+      "format": "PNG",
+      "path": "output/km_plot.png",
+      "description": "Kaplan-Meier plot for the KRAS high versus low groups."
+    },
+    {
+      "name": "cox_results.json",
+      "format": "JSON",
+      "path": "output/cox_results.json",
+      "description": "Log-rank and Cox proportional hazards summary for the analysis."
+    },
+    {
+      "name": "analysis.R",
+      "format": "R",
+      "path": "output/analysis.R",
+      "description": "R script that performs the end-to-end public-data survival analysis."
+    }
+  ],
+  "evaluation": "Binary pass/fail. The evaluator requires all four output files, validates PNG signature and minimum byte size, checks that `analysis.R` contains the required workflow markers, validates the cohort schema and patient set, compares hidden-reference sample/file/stage fields, and compares key cohort, log-rank, and Cox-model values with the hidden reference contract. A complete valid run scores `1.0`; missing, malformed, or inconsistent outputs score `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "variants": 1,
+  "sourceSubmissionId": "a8c4207c-cdbf-42f0-9c97-23ba9122af01",
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.2",
+    "subdomain_code": "therapeutic_oncology",
+    "subdomain_name": "Therapeutic & Oncology Services",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:06.441323Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/healthcare_tcga_luad_survival_kras/task_card.json"
+      },
+      "rationale": "The task involves survival analysis related to cancer (LUAD) and KRAS, which falls under therapeutic oncology."
+    }
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "taskId": "computing_math/os_log_permission_guard_v1",
+  "title": "OS Log Permission Guard",
+  "summary": "Safely update sandboxed Linux log-file permissions from a filesystem snapshot while preserving protected system-owner, active-writer, and non-log files.",
+  "category": "computing_math",
+  "software": [
+    "Bash",
+    "GNU coreutils",
+    "tar",
+    "Python"
+  ],
+  "taskPrompt": "You are working on a Linux VM.\n\n## Task Directory\n`/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base`\n\n## Visible Inputs\n- Filesystem snapshot: `/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/input/fs_snapshot.tar.gz`\n- Ownership metadata: `/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/input/ownership.csv`\n- Initial permission metadata: `/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/input/permissions.csv`\n- Active-writer exclusion list: `/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/input/active_writers.json`\n- Workspace setup helper: `/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/input/setup_workspace.sh`\n- Detailed instructions: `/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/input/task_instructions.md`\n\n## Your Task\nUpdate the sandboxed `/var/logs` file permissions while respecting the safety constraints in the metadata files.\n\nUse this workflow:\n1. Read `/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/input/task_instructions.md`.\n2. Run `/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/input/setup_workspace.sh \"/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/output\"` to create a writable workspace at `/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/output/sandbox_fs`.\n3. Change every regular `.log` file under `/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/output/sandbox_fs/var/logs` to mode `444`, except files owned by `syslog` in `ownership.csv` and files listed in `active_writers.json`.\n4. Do not modify non-`.log` files. Do not change file contents.\n5. Do not change ownership/group metadata in your final state.\n6. Save final metadata to `/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/output/final_state.json`.\n\nThe active-writer list is a provided safety record for this benchmark. Treat listed files as actively written and leave them unchanged; do not terminate or interfere with any processes.\n\n## Output Contract\n`/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/output/final_state.json` must be valid JSON with a top-level `files` list or mapping. Include one entry for each file listed in `ownership.csv`, with path, type, owner, group, and final mode.\n\nDo not write outputs outside `/media/user/data/agenthle/computing_math/os_log_permission_guard_v1/base/output`.",
+  "agentMustDo": [
+    "Read the staged task instructions and metadata.",
+    "Create a writable sandbox workspace under `output/sandbox_fs`.",
+    "Change eligible `.log` files to mode `444` while leaving protected files unchanged.",
+    "Write `output/final_state.json` with final metadata for every listed file."
+  ],
+  "inputFiles": [
+    {
+      "name": "fs_snapshot.tar.gz",
+      "format": "tar.gz",
+      "path": "input/fs_snapshot.tar.gz",
+      "description": "Sandbox filesystem snapshot containing `/var/logs` files."
+    },
+    {
+      "name": "ownership.csv",
+      "format": "csv",
+      "path": "input/ownership.csv",
+      "description": "Owner/group metadata source of truth."
+    },
+    {
+      "name": "permissions.csv",
+      "format": "csv",
+      "path": "input/permissions.csv",
+      "description": "Initial file mode source of truth."
+    },
+    {
+      "name": "active_writers.json",
+      "format": "json",
+      "path": "input/active_writers.json",
+      "description": "Declarative list of files to treat as actively written and leave unchanged."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "final_state.json",
+      "format": "json",
+      "path": "output/final_state.json",
+      "description": "Required final metadata report."
+    },
+    {
+      "name": "sandbox_fs/",
+      "format": "directory",
+      "path": "output/sandbox_fs/",
+      "description": "Modified sandbox filesystem workspace."
+    }
+  ],
+  "evaluation": "Binary score. The evaluator requires valid `output/final_state.json` and `output/sandbox_fs/var/logs`. It checks every file from `ownership.csv`: eligible `.log` files must be mode `444`; files owned by `syslog`, files listed in `active_writers.json`, and non-log files must keep their initial modes; file contents must remain byte-identical to the input snapshot; and owner/group metadata in the final report must match `ownership.csv`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.1",
+    "subdomain_code": "software_eng",
+    "subdomain_name": "Software Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:40:01.022557Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/os_log_permission_guard_v1/task_card.json"
+      },
+      "rationale": "The task involves updating file permissions in a Linux environment, which relates to software engineering."
+    }
+  }
+}

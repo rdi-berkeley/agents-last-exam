@@ -1,0 +1,93 @@
+{
+  "taskId": "life_sciences/genomic_interval_processing_1",
+  "title": "ENCODE CTCF Union Peak Intervals",
+  "summary": "Process three ENCODE CTCF narrowPeak BED files into the requested non-overlapping union peak set, with a reproducible command log and summary counts.",
+  "category": "life_sciences",
+  "software": [
+    "BEDTools",
+    "GNU sort",
+    "Python"
+  ],
+  "taskPrompt": "You are a bioinformatics analyst working on a Linux genomic interval processing task.\n\nTask directory:\n- `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base`\n\nVisible input files:\n- `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base/input/ENCFF483KVM.bed`\n- `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base/input/ENCFF511NNV.bed`\n- `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base/input/ENCFF758CQW.bed`\n- Operation specification: `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base/input/operation_specification.txt`\n- Detailed task instructions: `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base/input/task_instructions.md`\n- Output contract: `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base/input/output_contract.json`\n- BEDTools v2.31.1 entry point: `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base/software/bedtools`\n- Software note: `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base/software/README.txt`\n\nWhat you must do:\n1. Read the operation specification and apply it to the three ENCODE CTCF narrowPeak BED files.\n2. Produce the final non-overlapping CTCF union peak set as a 3-column BED file with columns `chrom`, `start`, and `end`.\n3. Sort the final BED lexicographically by chromosome, then numerically by start and end.\n4. Record the commands or script steps you used.\n5. Write a JSON summary whose input and output counts match the files you used and produced.\n6. Write exactly these required files under `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base/output`:\n   - `union_peaks.bed`\n   - `commands.sh`\n   - `summary.json`\n\nUse `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base/software/bedtools` when you need BEDTools; do not rely on a PATH-resolved `bedtools`.\nDo not modify files under `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base/input`.\nDo not write final outputs outside `/media/user/data/agenthle/life_sciences/genomic_interval_processing_1/base/output`.\nUse local staged files only; do not download replacement data from the internet.\n",
+  "agentMustDo": [
+    "Read `operation_specification.txt` and apply it to all three ENCODE CTCF narrowPeak BED inputs.",
+    "Write a sorted, non-overlapping 3-column BED file named `union_peaks.bed`.",
+    "Record the interval-processing commands or script steps in `commands.sh`.",
+    "Write `summary.json` with input interval counts, total input intervals, output filename, and output interval count."
+  ],
+  "inputFiles": [
+    {
+      "name": "ENCFF483KVM.bed",
+      "format": "BED/narrowPeak",
+      "path": "input/ENCFF483KVM.bed",
+      "description": "ENCODE CTCF narrowPeak-style interval file."
+    },
+    {
+      "name": "ENCFF511NNV.bed",
+      "format": "BED/narrowPeak",
+      "path": "input/ENCFF511NNV.bed",
+      "description": "ENCODE CTCF narrowPeak-style interval file."
+    },
+    {
+      "name": "ENCFF758CQW.bed",
+      "format": "BED/narrowPeak",
+      "path": "input/ENCFF758CQW.bed",
+      "description": "ENCODE CTCF narrowPeak-style interval file."
+    },
+    {
+      "name": "operation_specification.txt",
+      "format": "txt",
+      "path": "input/operation_specification.txt",
+      "description": "Concise interval-operation specification supplied with the task."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "union_peaks.bed",
+      "format": "BED",
+      "path": "output/union_peaks.bed",
+      "description": "Agent-produced final 3-column union peak BED."
+    },
+    {
+      "name": "commands.sh",
+      "format": "sh",
+      "path": "output/commands.sh",
+      "description": "Agent-produced command log or script for reproducing the interval operation."
+    },
+    {
+      "name": "summary.json",
+      "format": "json",
+      "path": "output/summary.json",
+      "description": "Agent-produced input/output interval count summary."
+    }
+  ],
+  "evaluation": "The evaluator verifies input hashes, requires `union_peaks.bed`, `commands.sh`, and `summary.json`, checks that the BED output is valid/sorted/non-overlapping, checks summary consistency against the staged inputs and produced output, and compares the normalized BED output against the evaluator-only expected union peak set. Positive fixture score is 1.0; the realistic single-input shortcut negative replay scores 0.25.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.2",
+    "subdomain_code": "genomics",
+    "subdomain_name": "Genomics & Sequence Analysis",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:02.703266Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/genomic_interval_processing_1/task_card.json"
+      },
+      "rationale": "The task involves processing genomic interval data using bioinformatics tools."
+    }
+  }
+}

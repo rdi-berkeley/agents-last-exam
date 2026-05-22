@@ -1,0 +1,111 @@
+{
+  "taskId": "visual_media/compress_3dgs_scene_ply",
+  "title": "Compress A 3D Gaussian Splatting Scene",
+  "summary": "Compress a pretrained 3D Gaussian Splatting scene while preserving rendering quality on hidden LLFF holdout views, then report the resulting quality metrics and compression ratio.",
+  "category": "visual_media",
+  "software": [
+    "Gaussian Splatting",
+    "Python"
+  ],
+  "taskPrompt": "You are working on a Windows GPU neural-rendering benchmark.\n\nRead these staged inputs first:\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\input\\task_prompt.md`\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\input\\baseline_results.json`\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\input\\scene_manifest.json`\n\nCore visible asset roots:\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\input\\scene\\point_cloud_30000.ply`\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\input\\scene\\sparse\\0`\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\input\\scene\\images`\n\nPre-installed 3DGS rendering runtime (software entry points):\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\software\\python_3dgs.bat <script.py>` \u2014 Python with the official gaussian-splatting repo on PYTHONPATH and CUDA configured\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\software\\render_3dgs.bat --model_path <path> [...]` \u2014 official render.py wrapper\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\software\\README.md` \u2014 details on the installed runtime\n\nWrite your outputs only under `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\output`.\nRequired output files:\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\output\\point_cloud_30000_compressed.ply`\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\output\\rendered_test_views\\<holdout filename>.jpg`\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\output\\results.json`\n- `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\output\\compression_report.json`\n\nImportant:\n- the holdout filenames are public\n- the visible JPGs for those holdout names are placeholders only\n- hidden evaluator images are used for scoring after you finish\n- do not modify files under `E:\\agenthle\\visual_media\\compress_3dgs_scene_ply\\base\\input`\n",
+  "agentMustDo": [
+    "Read the staged prompt, baseline metrics, manifest, source PLY, sparse COLMAP bundle, and visible scene images.",
+    "Compress `input/scene/point_cloud_30000.ply` into `output/point_cloud_30000_compressed.ply`.",
+    "Render one holdout-view image for every filename listed in `input/scene_manifest.json` and save them under `output/rendered_test_views/`.",
+    "Write `output/results.json` with average PSNR, SSIM, LPIPS, and per-view PSNR/SSIM entries.",
+    "Write `output/compression_report.json` with the gaussian counts before and after compression."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_prompt.md",
+      "format": "Markdown",
+      "path": "input/task_prompt.md",
+      "description": "Agent-facing task contract and reminders."
+    },
+    {
+      "name": "baseline_results.json",
+      "format": "JSON",
+      "path": "input/baseline_results.json",
+      "description": "Baseline average metrics for the uncompressed source scene."
+    },
+    {
+      "name": "scene_manifest.json",
+      "format": "JSON",
+      "path": "input/scene_manifest.json",
+      "description": "Lists the holdout filenames, image counts, and source gaussian count."
+    },
+    {
+      "name": "point_cloud_30000.ply",
+      "format": "PLY",
+      "path": "input/scene/point_cloud_30000.ply",
+      "description": "Source 3D Gaussian scene to compress."
+    },
+    {
+      "name": "sparse/0/",
+      "format": "COLMAP bundle",
+      "path": "input/scene/sparse/0/",
+      "description": "Camera intrinsics and poses for rendering the holdout views."
+    },
+    {
+      "name": "images/",
+      "format": "JPG directory",
+      "path": "input/scene/images/",
+      "description": "Visible training images plus placeholder JPGs for the public holdout filenames."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "point_cloud_30000_compressed.ply",
+      "format": "PLY",
+      "path": "output/point_cloud_30000_compressed.ply",
+      "description": "Compressed scene output."
+    },
+    {
+      "name": "rendered_test_views/",
+      "format": "JPG directory",
+      "path": "output/rendered_test_views/",
+      "description": "Rendered holdout-view outputs, one image per holdout filename."
+    },
+    {
+      "name": "results.json",
+      "format": "JSON",
+      "path": "output/results.json",
+      "description": "Reported average PSNR, SSIM, LPIPS, and per-view PSNR/SSIM values."
+    },
+    {
+      "name": "compression_report.json",
+      "format": "JSON",
+      "path": "output/compression_report.json",
+      "description": "Before/after gaussian counts and achieved compression ratio."
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- Missing or unreadable `output/point_cloud_30000_compressed.ply` yields `0.0`.\n- Missing required holdout renders yields `0.0`.\n- Missing or malformed `output/results.json` yields `0.0`.\n- Gaussian-count reduction below `40%` yields `0.0`.\n- Average PSNR more than `2.0 dB` below baseline yields `0.0`.\n- Average SSIM below `92%` of baseline yields `0.0`.\n- Reported LPIPS must be finite and non-negative.\n\n**Scoring method**\n- The evaluator counts gaussians from the input and output PLY headers.\n- It recomputes PSNR and SSIM for each submitted holdout render against hidden evaluator-only holdout images.\n- It checks that the reported averages and per-view metrics in `output/results.json` match the recomputed values within small tolerances.\n- The scorer short-circuits obviously invalid oversized outputs before pulling the full PLY back, but the returned task score remains binary.\n\n**Reviewed fixture behavior**\n- Positive fixture: `1.0`\n- Negative fixture: `0.0`\n- Empty output: `0.0`",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:44:14.432600Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/compress_3dgs_scene_ply/task_card.json"
+      },
+      "rationale": "The task involves compressing and rendering 3D scenes, which fits within 3D and animation media."
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "taskId": "life_sciences/tp53_locus_variant_histone_browser_svg",
+  "title": "K562 Genome Browser SVG Export",
+  "summary": "Create an hg19 genome-browser SVG for a K562 regulatory locus using a structural-variant VCF and an H3K27ac BigWig signal track.",
+  "category": "life_sciences",
+  "software": [
+    "UCSC Genome Browser",
+    "Python"
+  ],
+  "taskPrompt": "Create a genome-browser SVG view for the specified hg19 gene locus. Load the provided K562 structural variant VCF track and K562 H3K27ac BigWig signal track together, then save exactly one valid SVG file as output/output.svg.",
+  "agentMustDo": [
+    "Open the specified hg19 locus for the assigned variant.",
+    "Load or display the provided VCF and H3K27ac BigWig tracks together.",
+    "Export or create a valid SVG with locus labels, both tracks, and browser/build provenance.",
+    "Save the final artifact as output/output.svg and use no alternate filename."
+  ],
+  "inputFiles": [
+    {
+      "name": "ENCFF960SSF.vcf.gz",
+      "format": "VCF.GZ",
+      "path": "input/ENCFF960SSF.vcf.gz",
+      "description": "K562 structural variant calls to show as the variant track."
+    },
+    {
+      "name": "wgEncodeBroadHistoneK562H3k27acStdSig.bigWig",
+      "format": "BigWig",
+      "path": "input/wgEncodeBroadHistoneK562H3k27acStdSig.bigWig",
+      "description": "K562 H3K27ac signal track for the target locus."
+    },
+    {
+      "name": "task_config.json",
+      "format": "JSON",
+      "path": "input/task_config.json",
+      "description": "Variant-specific locus, genome build, output name, and track filenames."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "output.svg",
+      "format": "SVG",
+      "path": "output/output.svg",
+      "description": "The required genome-browser SVG export."
+    }
+  ],
+  "evaluation": "The evaluator parses output/output.svg as XML and checks for a valid SVG root, target chromosome and coordinate evidence, both VCF/variant and K562 H3K27ac track evidence, a single signal path or polyline whose shape is consistent with the target locus signal, and genome-browser or hg19/GRCh37 provenance. Positive fixtures score 1.0; realistic wrong-region or missing-track outputs score 0.0; generic spoof curves remain below full credit.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "variants": 5,
+  "sourceSubmissionId": "5cfee2ee-1749-4f5a-aff6-7cae712ad4c7",
+  "status": "stage5_start",
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.2",
+    "subdomain_code": "genomics",
+    "subdomain_name": "Genomics & Sequence Analysis",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:03:41.849936Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/tp53_locus_variant_histone_browser_svg/task_card.json"
+      },
+      "rationale": "The task involves creating a genome-browser SVG view related to genomic data."
+    }
+  }
+}

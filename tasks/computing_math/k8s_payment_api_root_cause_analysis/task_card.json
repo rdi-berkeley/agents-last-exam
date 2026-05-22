@@ -1,0 +1,79 @@
+{
+  "taskId": "computing_math/k8s_payment_api_root_cause_analysis",
+  "title": "Kubernetes Payment API Root Cause Analysis",
+  "summary": "Analyze static Kubernetes incident artifacts for a flapping payment-api deployment and produce a grounded JSON root-cause report.",
+  "category": "computing_math",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are the on-call SRE for a Kubernetes production incident. Analyze the supplied static evidence for the payment-api incident, including why the HPA reports memory utilization above target. Ground every root cause in literal evidence from the visible files, list affected Kubernetes resources, propose a prioritized remediation plan, state whether rollback is safe, and write exactly one JSON report with incident_metadata, root_causes, affected_resources, remediation_plan, and summary.",
+  "agentMustDo": [
+    "Read the task prompt and three static incident artifacts.",
+    "Identify Kubernetes root causes and cite literal evidence from the input files.",
+    "List affected resources and prioritized remediation steps.",
+    "Write output/root_cause_analysis.json."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_prompt.md",
+      "format": "md",
+      "path": "input/task_prompt.md",
+      "description": "Sanitized task instructions."
+    },
+    {
+      "name": "cluster_state.txt",
+      "format": "txt",
+      "path": "input/cluster_state.txt",
+      "description": "Captured kubectl pod, event, top, deployment, and HPA output."
+    },
+    {
+      "name": "deployment.yaml",
+      "format": "yaml",
+      "path": "input/deployment.yaml",
+      "description": "Currently applied Deployment and HPA manifests."
+    },
+    {
+      "name": "failing_pod.log",
+      "format": "txt",
+      "path": "input/failing_pod.log",
+      "description": "Logs from a crashing payment-api pod across restart cycles."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "root_cause_analysis.json",
+      "format": "json",
+      "path": "output/root_cause_analysis.json",
+      "description": "Required root-cause analysis report."
+    }
+  ],
+  "evaluation": "Deterministic weighted JSON scoring with hard gates for valid JSON, required top-level keys, and non-empty root_causes. Components check OOM/memory root cause, liveness probe finding, missing metrics port, affected resources, remediation patterns, evidence grounding, and rollback/summary.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.6",
+    "subdomain_code": "infra_cloud",
+    "subdomain_name": "Infrastructure Engineering & Cloud Operations",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:06:33.444296Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/k8s_payment_api_root_cause_analysis/task_card.json"
+      },
+      "rationale": "The task involves analyzing a Kubernetes incident, which falls under cloud infrastructure operations."
+    }
+  }
+}

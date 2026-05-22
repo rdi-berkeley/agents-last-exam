@@ -1,0 +1,116 @@
+{
+  "taskId": "computing_math/recsys_cold_start_instance_1",
+  "title": "Hybrid Recommender Cold-Start Benchmark",
+  "summary": "Build a warm-plus-cold hybrid recommender on Linux, using temporal splitting, metadata/embedding cold-start ranking, and a combined output contract.",
+  "category": "computing_math",
+  "software": [
+    "Python 3.10",
+    "uv",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "scipy"
+  ],
+  "taskPrompt": "Use the staged interaction, metadata, embedding, and user-profile files to build a hybrid recommender. Materialize the staged runtime from `input/runtime_env/` with the provided software wrappers, then write `predictions_warm.csv`, `predictions_cold.csv`, `predictions_combined.csv`, `evaluation_report.json`, and `model_config.json` under `output/`.",
+  "agentMustDo": [
+    "Build a warm-item recommender that uses both `rating` and `watch_percentage`.",
+    "Build a cold-start model from `item_metadata.csv` and `item_embeddings.json` without using cold-item interactions.",
+    "Use the canonical per-user temporal split: `70%` train, `10%` validation, `20%` test.",
+    "Fuse warm and cold scores into one combined ranked recommendation surface.",
+    "Write the five required deliverables under `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "interactions.csv",
+      "format": "csv",
+      "path": "input/interactions.csv",
+      "description": "Warm-item user interaction history with rating, watch percentage, and timestamps."
+    },
+    {
+      "name": "item_metadata.csv",
+      "format": "csv",
+      "path": "input/item_metadata.csv",
+      "description": "Item features plus the `is_cold_start` label that defines warm vs. cold membership."
+    },
+    {
+      "name": "item_embeddings.json",
+      "format": "json",
+      "path": "input/item_embeddings.json",
+      "description": "Dense item embeddings used by the cold-start model."
+    },
+    {
+      "name": "user_profiles.csv",
+      "format": "csv",
+      "path": "input/user_profiles.csv",
+      "description": "Per-user profile attributes available at solve time."
+    },
+    {
+      "name": "runtime_env",
+      "format": "directory",
+      "path": "input/runtime_env/",
+      "description": "Pinned task-local `uv` manifest and lockfile for the agent-visible Python runtime."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "predictions_warm.csv",
+      "format": "csv",
+      "path": "output/predictions_warm.csv",
+      "description": "Warm-item ranked predictions with columns `user_id,item_id,predicted_rating,rank`."
+    },
+    {
+      "name": "predictions_cold.csv",
+      "format": "csv",
+      "path": "output/predictions_cold.csv",
+      "description": "Cold-item ranked predictions with columns `user_id,item_id,predicted_score,rank`."
+    },
+    {
+      "name": "predictions_combined.csv",
+      "format": "csv",
+      "path": "output/predictions_combined.csv",
+      "description": "Combined warm-plus-cold ranking with truthful `item_type` labels."
+    },
+    {
+      "name": "evaluation_report.json",
+      "format": "json",
+      "path": "output/evaluation_report.json",
+      "description": "Reported warm, cold, and combined evaluation summary."
+    },
+    {
+      "name": "model_config.json",
+      "format": "json",
+      "path": "output/model_config.json",
+      "description": "Warm/cold model description, hybrid method, and split ratios."
+    }
+  ],
+  "evaluation": "Additive score in `1/6` increments from `0.0` to `1.0`.\n\nChecks:\n1. output completeness and exact schema checks for all five required files\n2. split-contract correctness via documented temporal ratios, no cold items in warm predictions, and warm-item report metrics that stay broadly consistent with canonical recomputation\n3. warm metrics: `NDCG@10 >= 0.03`, `HitRate@10 >= 0.15`, `RMSE <= 5.0`\n4. cold metrics: `NDCG@10 >= 0.05`, `Coverage@10 >= 0.40`\n5. hybrid integration: both warm and cold items must appear in the combined ranking, `item_type` must be truthful, and per-user scores must be monotonic\n6. model documentation completeness for warm model, cold model, hybrid method, dimensionality parameter, and split ratios\n\nDocumented replay surface: positive fixture scores `1.0`, negative fixture scores `0.0`.",
+  "reservation": "The raw submission metadata lists PyTorch 2.0, but the normalized benchmark runtime currently targets a lighter scikit-learn / SciPy baseline unless later stages prove torch is required.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.3",
+    "subdomain_code": "ai_cs_research",
+    "subdomain_name": "AI Engineering, Safety & CS Research",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:32:47.686041Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/recsys_cold_start_instance_1/task_card.json"
+      },
+      "rationale": "The task involves building a hybrid recommender system, which falls under AI and computer science research."
+    }
+  }
+}

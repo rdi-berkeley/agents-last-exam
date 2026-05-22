@@ -1,0 +1,120 @@
+{
+  "taskId": "business_finance/sec_10k_financial_parsing",
+  "title": "SEC 10-K Financial Parsing",
+  "summary": "Parse a fixed 100-filing SEC 10-K corpus into normalized financial JSON outputs, preserve the raw text evidence used for extraction, answer three cross-filing analytical questions, and rerun a fixed validation subset deterministically.",
+  "category": "business_finance",
+  "software": [
+    "Python",
+    "uv",
+    "pdfplumber",
+    "pypdf",
+    "pydantic"
+  ],
+  "taskPrompt": "You are working on a Linux VM with a fixed corpus of SEC 10-K PDFs.\n\nVisible files and tools:\n- Filing corpus: `/media/user/data/agenthle/business_finance/sec_10k_financial_parsing/base/input/filings`\n- Filing metadata: `/media/user/data/agenthle/business_finance/sec_10k_financial_parsing/base/input/filings/manifest.json`\n- Output schema: `/media/user/data/agenthle/business_finance/sec_10k_financial_parsing/base/input/schema/extraction_schema.json`\n- Normalization rules: `/media/user/data/agenthle/business_finance/sec_10k_financial_parsing/base/input/schema/normalization_rules.txt`\n- Analytical questions: `/media/user/data/agenthle/business_finance/sec_10k_financial_parsing/base/input/questions.json`\n- Deterministic validation subset: `/media/user/data/agenthle/business_finance/sec_10k_financial_parsing/base/input/validation`\n- Python wrapper for the staged task runtime: `/media/user/data/agenthle/business_finance/sec_10k_financial_parsing/base/software/python_with_task_deps.sh`\n\nYour job:\n1. Parse every filing in `input/filings/`.\n2. Save one normalized extraction JSON per filing to `/media/user/data/agenthle/business_finance/sec_10k_financial_parsing/base/output/extractions`.\n3. Save one raw extraction text file per filing to `/media/user/data/agenthle/business_finance/sec_10k_financial_parsing/base/output/raw_extractions`.\n4. Answer the analytical questions and save them to `/media/user/data/agenthle/business_finance/sec_10k_financial_parsing/base/output/qa_answers.json`.\n5. Re-run the extraction workflow on the fixed validation subset in `input/validation/`\n   and save those second-pass extraction JSONs to `/media/user/data/agenthle/business_finance/sec_10k_financial_parsing/base/output/run2_extractions`.\n\nImportant requirements:\n- Follow the staged schema and normalization rules exactly.\n- Use raw USD integers for monetary fields and 2-decimal floats for EPS.\n- Do not write outside `/media/user/data/agenthle/business_finance/sec_10k_financial_parsing/base/output`.\n- Do not modify files under `input/`.\n- The validation rerun should reflect a second deterministic pass over the same\n  visible validation filings.\n",
+  "agentMustDo": [
+    "Inspect the staged SEC 10-K corpus in `input/filings/` and use `input/filings/manifest.json` to understand company, ticker, and year coverage.",
+    "Produce one normalized extraction JSON per filing under `output/extractions/`, following the staged schema and normalization rules exactly.",
+    "Save one raw extraction text file per filing under `output/raw_extractions/` that preserves the text evidence actually used from each PDF.",
+    "Answer the three staged analytical questions and save them to `output/qa_answers.json`.",
+    "Re-run the extraction workflow on the fixed 5-file validation subset in `input/validation/` and save the second-pass JSON outputs under `output/run2_extractions/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "filings/",
+      "format": "Directory of PDFs",
+      "path": "input/filings/",
+      "description": "Fixed 100-filing SEC 10-K corpus."
+    },
+    {
+      "name": "manifest.json",
+      "format": "JSON",
+      "path": "input/filings/manifest.json",
+      "description": "Filing metadata covering ticker, company name, CIK, year, and accession information."
+    },
+    {
+      "name": "extraction_schema.json",
+      "format": "JSON Schema",
+      "path": "input/schema/extraction_schema.json",
+      "description": "Required normalized output schema for each filing."
+    },
+    {
+      "name": "normalization_rules.txt",
+      "format": "Text",
+      "path": "input/schema/normalization_rules.txt",
+      "description": "Formatting and unit rules for extracted financial values."
+    },
+    {
+      "name": "questions.json",
+      "format": "JSON",
+      "path": "input/questions.json",
+      "description": "Three analytical questions that must be answered from the extracted data."
+    },
+    {
+      "name": "validation/",
+      "format": "Directory of PDFs",
+      "path": "input/validation/",
+      "description": "Fixed 5-filing subset used for the deterministic rerun contract."
+    },
+    {
+      "name": "python_with_task_deps.sh",
+      "format": "Shell wrapper",
+      "path": "software/python_with_task_deps.sh",
+      "description": "Task-scoped Python entrypoint that installs and runs the staged runtime environment."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "extractions/",
+      "format": "Directory of JSON files",
+      "path": "output/extractions/",
+      "description": "One normalized extraction JSON per filing."
+    },
+    {
+      "name": "raw_extractions/",
+      "format": "Directory of text files",
+      "path": "output/raw_extractions/",
+      "description": "One raw text evidence file per filing."
+    },
+    {
+      "name": "qa_answers.json",
+      "format": "JSON",
+      "path": "output/qa_answers.json",
+      "description": "Answers for the three staged analytical questions."
+    },
+    {
+      "name": "run2_extractions/",
+      "format": "Directory of JSON files",
+      "path": "output/run2_extractions/",
+      "description": "Second-pass extraction JSONs for the fixed validation subset."
+    }
+  ],
+  "evaluation": "**Scoring method:** weighted aggregate from the benchmark-owned verifier in `scripts/score_outputs.py`.\n\nScore components:\n- schema compliance: 5%\n- metadata accuracy: 5%\n- financial figure accuracy: 30%\n- ANLS raw-text verification: 10%\n- analytical QA: 25%\n- cross-validation consistency: 10%\n- completeness: 5%\n- deterministic rerun on the fixed validation subset: 10%\n\n**Score behavior:** there is no binary all-or-nothing file gate, but the verifier applies an ANLS threshold of `0.6` per filing. If a filing's raw-text evidence falls below that threshold, schema, metadata, financial, and cross-validation credit for that filing are all zeroed before aggregation. The scorer payload reports `passing_threshold = 0.75`.\n\n**Key checks:**\n- extraction JSON shape and required fields\n- filing metadata and financial values against the benchmark reference set\n- raw extraction text quality via ANLS comparison\n- cross-validation against benchmark-owned per-filing expectations, not a universal accounting-equation rule\n- correctness of the three analytical answers\n- completeness across the full corpus\n- field-by-field agreement between the first pass and the fixed validation-subset rerun\n\nA correct end-to-end output scores `1.0`. The committed negative fixture is a plausible partial/wrong submission and scores `0.0005` in the current verifier.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.1",
+    "subdomain_code": "accounting",
+    "subdomain_name": "Accounting & Finance",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:24:21.723255Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/sec_10k_financial_parsing/task_card.json"
+      },
+      "rationale": "The task involves parsing financial documents and extracting financial data."
+    }
+  }
+}

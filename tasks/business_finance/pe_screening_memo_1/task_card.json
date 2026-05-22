@@ -1,0 +1,106 @@
+{
+  "taskId": "business_finance/pe_screening_memo_1",
+  "title": "PE Screening Memo 1",
+  "summary": "Review a staged Zscaler diligence packet and write a structured private-equity screening memo with an explicit investment recommendation.",
+  "category": "business_finance",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are working on a Linux finance benchmark task.\n\nRead these staged files first:\n- `/media/user/data/agenthle/business_finance/pe_screening_memo_1/zscaler_fy2025/input/task_brief.md`\n- `/media/user/data/agenthle/business_finance/pe_screening_memo_1/zscaler_fy2025/input/memo_template.md`\n- `/media/user/data/agenthle/business_finance/pe_screening_memo_1/zscaler_fy2025/input/source_manifest.json`\n\nTask-local software notes:\n- `/media/user/data/agenthle/business_finance/pe_screening_memo_1/zscaler_fy2025/software/README.txt`\n\nYour job is to write the requested private-equity screening memo for Zscaler\nusing only the staged packet in `/media/user/data/agenthle/business_finance/pe_screening_memo_1/zscaler_fy2025/input`.\n\nWrite exactly one required file:\n- `/media/user/data/agenthle/business_finance/pe_screening_memo_1/zscaler_fy2025/output/screening_memo.md`\n\nOutput requirements:\n- filename must be exactly `screening_memo.md`\n- output must be valid UTF-8 Markdown\n- follow the structure from `memo_template.md`\n- make an explicit `Go`, `No-Go`, or `Hold / Needs More Diligence` recommendation\n\nConstraints:\n1. Use only the staged packet.\n2. Do not use web search.\n3. Do not modify files under `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.\n4. Write only your final memo under `/media/user/data/agenthle/business_finance/pe_screening_memo_1/zscaler_fy2025/output`.\n",
+  "agentMustDo": [
+    "Read the staged brief, memo template, and source manifest before starting.",
+    "Use only the staged Zscaler packet and do not use web search.",
+    "Write a Markdown screening memo that follows the visible template exactly enough to preserve the required section structure.",
+    "Make an explicit `Go`, `No-Go`, or `Hold / Needs More Diligence` recommendation and support it with packet-grounded reasoning.",
+    "Save the final memo as `output/screening_memo.md`."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_brief.md",
+      "format": "Markdown",
+      "path": "input/task_brief.md",
+      "description": "Primary agent-visible benchmark brief with the output contract and workflow constraints."
+    },
+    {
+      "name": "memo_template.md",
+      "format": "Markdown",
+      "path": "input/memo_template.md",
+      "description": "Required memo structure and section template."
+    },
+    {
+      "name": "source_manifest.json",
+      "format": "JSON",
+      "path": "input/source_manifest.json",
+      "description": "Human-readable inventory of the visible diligence packet."
+    },
+    {
+      "name": "q2_2025_earnings_release.pdf/.txt",
+      "format": "PDF and plaintext extract",
+      "path": "input/q2_2025_earnings_release.*",
+      "description": "Official Zscaler IR Q2 FY2025 results release."
+    },
+    {
+      "name": "q2_2025_earnings_presentation.pdf/.txt",
+      "format": "PDF and plaintext extract",
+      "path": "input/q2_2025_earnings_presentation.*",
+      "description": "Official Zscaler IR Q2 FY2025 earnings presentation."
+    },
+    {
+      "name": "q3_2025_earnings_release.pdf/.txt",
+      "format": "PDF and plaintext extract",
+      "path": "input/q3_2025_earnings_release.*",
+      "description": "Official Zscaler IR Q3 FY2025 results release."
+    },
+    {
+      "name": "q3_2025_earnings_presentation.pdf/.txt",
+      "format": "PDF and plaintext extract",
+      "path": "input/q3_2025_earnings_presentation.*",
+      "description": "Official Zscaler IR Q3 FY2025 earnings presentation."
+    },
+    {
+      "name": "zscaler_10k_2025.pdf/.txt",
+      "format": "PDF and plaintext extract",
+      "path": "input/zscaler_10k_2025.*",
+      "description": "Official FY2025 Zscaler Form 10-K plus plaintext extract."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "screening_memo.md",
+      "format": "Markdown",
+      "path": "output/screening_memo.md",
+      "description": "Required final PE screening memo deliverable."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score `0.0` if triggered):\n- Missing `output/screening_memo.md`\n- Missing required top-level headings from the visible template contract\n- No explicit `Go`, `No-Go`, or `Hold / Needs More Diligence` recommendation\n- Memo too short to count as a serious screening attempt\n\n**Scoring method:**\n- Score locally in Python using the hidden `reference/reference_memo.md` and `reference/evaluation_contract.json`.\n- Enforce the required section structure from the visible template.\n- Score section-level coverage across recommendation, thesis, financial summary, risks, and appendix.\n- Reward packet-specific evidence anchors drawn from the staged Zscaler materials.\n- Do not require sentence-level similarity to the hidden reference memo.\n\n**Current pass threshold:** `0.7`.\n\n**Perfect output:** a well-structured Markdown memo with strong packet-grounded discussion of the company, financials, risks, diligence gaps, and a clear supported recommendation.\n\n**Wrong output:** missing, generic, underspecified, or weakly grounded memos should score near `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "variants": 1,
+  "sourceSubmissionId": "0b50671b-2311-4a6b-aaec-ba0e6e62b1f2",
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.1",
+    "subdomain_code": "accounting",
+    "subdomain_name": "Accounting & Finance",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:24:19.693143Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/pe_screening_memo_1/task_card.json"
+      },
+      "rationale": "The task involves writing a private-equity screening memo, which falls under finance."
+    }
+  }
+}

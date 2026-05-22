@@ -1,0 +1,83 @@
+{
+  "taskId": "health_medicine/epidemiology_forecast",
+  "title": "Epidemiology Forecast",
+  "summary": "Reproduce the 2021-22 CDC FluSight influenza-hospitalization end-of-season scorecard and per-cell scoring table from staged forecast and truth data.",
+  "category": "health_medicine",
+  "software": [
+    "Python",
+    "uv",
+    "pandas",
+    "numpy",
+    "pyarrow"
+  ],
+  "taskPrompt": "You are working on a Linux VM to reproduce the 2021-22 CDC FluSight influenza-hospitalization forecast scorecard.\n\n## Variant\n`base`: 2021-22 FluSight hospitalization scoring bundle\n\n## Visible Input Files\n- forecast table: `/media/user/data/agenthle/health_medicine/epidemiology_forecast/base/input/forecasts_2021-22.parquet`\n- truth table: `/media/user/data/agenthle/health_medicine/epidemiology_forecast/base/input/truth_2021-22.csv`\n- runtime manifest: `/media/user/data/agenthle/health_medicine/epidemiology_forecast/base/input/runtime_env/`\n\n## Your Task\n1. Filter the staged forecast rows to the required submission window, targets, quantile type, and non-US jurisdictions.\n2. Join the staged truth table on `(location, target_end_date)`.\n3. Apply the round-outward quantile rule exactly.\n4. Compute per-cell `wis`, `ae_median`, `cov50_hit`, and `cov95_hit` for the eligible models.\n5. Aggregate the per-cell results into per-model `wis`, `rel_wis`, `mae`, `cov50`, and `cov95`.\n6. Write `/media/user/data/agenthle/health_medicine/epidemiology_forecast/base/output/per_cell_scores.csv` and `/media/user/data/agenthle/health_medicine/epidemiology_forecast/base/output/submission.csv`.\n\n## Output Requirements\n- `per_cell_scores.csv` columns: `model, location, target_end_date, target, wis, ae_median, cov50_hit, cov95_hit`\n- `submission.csv` columns: `model, wis, rel_wis, mae, cov50, cov95`\n- Use the staged files as the source of truth.\n- Do not modify files under `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.\n",
+  "agentMustDo": [
+    "Read the staged forecast parquet and truth CSV from `input/`.",
+    "Install any needed task-local dependencies from `input/runtime_env/`.",
+    "Reproduce the per-cell WIS, median-absolute-error, and coverage calculations for the eligible models.",
+    "Write both required CSV outputs into `output/` with the exact required schemas."
+  ],
+  "inputFiles": [
+    {
+      "name": "forecasts_2021-22.parquet",
+      "format": "Parquet",
+      "path": "input/forecasts_2021-22.parquet",
+      "description": "Long-format quantile forecasts for the 2021-22 FluSight hospitalization round."
+    },
+    {
+      "name": "truth_2021-22.csv",
+      "format": "CSV",
+      "path": "input/truth_2021-22.csv",
+      "description": "Observed weekly hospitalization counts aligned to the scored target_end_date values."
+    },
+    {
+      "name": "runtime_env/",
+      "format": "uv Python environment manifest",
+      "path": "input/runtime_env/",
+      "description": "Agent-installable dependency manifest for the scoring workflow."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "submission.csv",
+      "format": "CSV",
+      "path": "output/submission.csv",
+      "description": "Required model-level scorecard output."
+    },
+    {
+      "name": "per_cell_scores.csv",
+      "format": "CSV",
+      "path": "output/per_cell_scores.csv",
+      "description": "Required per-cell scoring output."
+    }
+  ],
+  "evaluation": "The evaluator checks that both required CSVs exist, have the required schemas, match the hidden row sets, and stay within the documented numeric tolerances. The common positive replay result is `1.0`; the staged negative replay result is `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.4",
+    "subdomain_code": "public_health",
+    "subdomain_name": "Public Health & Epidemiology",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:41:08.753170Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/epidemiology_forecast/task_card.json"
+      },
+      "rationale": "The task involves epidemiology forecasting related to public health."
+    }
+  }
+}

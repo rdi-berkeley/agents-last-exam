@@ -1,0 +1,86 @@
+{
+  "taskId": "psychology_neuro/neuroscience_pub_figure_reproduce_1",
+  "title": "Neuroscience Schematic Reproduction",
+  "summary": "Recreate a neuroscience virtual-plume behavior schematic as an editable Illustrator drawing and export the final figure as a PDF.",
+  "category": "psychology_neuro",
+  "software": [
+    "Adobe Illustrator"
+  ],
+  "taskPrompt": "You are recreating a neuroscience experimental schematic in Adobe Illustrator.\n\n## Variant\n`base`: virtual plume behavioral paradigm schematic\n\n## Runtime Entry Point\n- Open Adobe Illustrator from: `E:\\agenthle\\psychology_neuro\\neuroscience_pub_figure_reproduce_1\\base\\software\\launch_illustrator.bat`\n\n## Input Files\n- Visual reference PDF: `E:\\agenthle\\psychology_neuro\\neuroscience_pub_figure_reproduce_1\\base\\input\\reference_schematic.pdf`\n- Scientific caption: `E:\\agenthle\\psychology_neuro\\neuroscience_pub_figure_reproduce_1\\base\\input\\caption.txt`\n- Reusable fly component: `E:\\agenthle\\psychology_neuro\\neuroscience_pub_figure_reproduce_1\\base\\input\\template_fly.ai`\n- Brief: `E:\\agenthle\\psychology_neuro\\neuroscience_pub_figure_reproduce_1\\base\\input\\task_brief.md`\n\n## What You Must Do\n1. Open Illustrator using `E:\\agenthle\\psychology_neuro\\neuroscience_pub_figure_reproduce_1\\base\\software\\launch_illustrator.bat`.\n2. Inspect the reference schematic and caption.\n3. Use the fly component where useful, but create a genuine editable Illustrator reproduction.\n4. Preserve the key content: fly on spherical treadmill, visual landmark arena, odor tube, odor zones 1 and 2, and Protocol A/B block structures.\n5. Save the editable Illustrator file to `E:\\agenthle\\psychology_neuro\\neuroscience_pub_figure_reproduce_1\\base\\output\\schematic.ai`.\n6. Export the final PDF to `E:\\agenthle\\psychology_neuro\\neuroscience_pub_figure_reproduce_1\\base\\output\\schematic_reproduce.pdf`.\n\n## Output Requirements\n- Save exactly one final Illustrator file at `E:\\agenthle\\psychology_neuro\\neuroscience_pub_figure_reproduce_1\\base\\output\\schematic.ai`.\n- Save exactly one final PDF export at `E:\\agenthle\\psychology_neuro\\neuroscience_pub_figure_reproduce_1\\base\\output\\schematic_reproduce.pdf`.\n- Do not submit a direct copy of an input file as the final answer.\n",
+  "agentMustDo": [
+    "Open Adobe Illustrator using the staged launcher.",
+    "Inspect the reference schematic, caption, and reusable fly component.",
+    "Create a genuine editable Illustrator reproduction of the schematic.",
+    "Preserve the fly on spherical treadmill, visual landmark arena, odor tube, odor zones 1 and 2, and Protocol A/B block structures.",
+    "Save `output/schematic.ai` and export `output/schematic_reproduce.pdf`."
+  ],
+  "inputFiles": [
+    {
+      "name": "reference_schematic.pdf",
+      "format": "pdf",
+      "path": "input/reference_schematic.pdf",
+      "description": "Visible schematic reference for the figure to recreate."
+    },
+    {
+      "name": "caption.txt",
+      "format": "txt",
+      "path": "input/caption.txt",
+      "description": "Scientific caption describing the required schematic content."
+    },
+    {
+      "name": "template_fly.ai",
+      "format": "ai",
+      "path": "input/template_fly.ai",
+      "description": "Reusable Illustrator fly component."
+    },
+    {
+      "name": "task_brief.md",
+      "format": "md",
+      "path": "input/task_brief.md",
+      "description": "Runtime brief with expected output filenames."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "schematic.ai",
+      "format": "ai",
+      "path": "output/schematic.ai",
+      "description": "Required editable Illustrator deliverable."
+    },
+    {
+      "name": "schematic_reproduce.pdf",
+      "format": "pdf",
+      "path": "output/schematic_reproduce.pdf",
+      "description": "Required exported final figure PDF."
+    }
+  ],
+  "evaluation": "Scoring requires both final files. Missing or tiny outputs score `0.0`. Direct copies of the visible input PDF, direct copies of the visible template AI, and using the exported PDF itself as the `.ai` source all score `0.0`. The `.ai` file must look like an Illustrator-compatible source file and its rendered content must match the exported PDF. The exported PDF is then scored by visual similarity to the expected schematic, with scores clamped to `[0.0, 1.0]`; the canonical positive fixture scores `1.0` and the direct-copy negative fixture scores `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "5",
+    "domain_code": "psychology_neuro",
+    "subdomain_id": "5.1",
+    "subdomain_code": "comp_neuro",
+    "subdomain_name": "Computational Neuroscience",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:39:42.346993Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/psychology_neuro/neuroscience_pub_figure_reproduce_1/task_card.json"
+      },
+      "rationale": "The task involves recreating a neuroscience experimental schematic, which aligns with computational neuroscience."
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "task_id": "engineering/humanoid_wbc_policy_evaluation",
+  "domain": "engineering",
+  "task_name": "humanoid_wbc_policy_evaluation",
+  "variant_count": 1,
+  "os": "linux",
+  "vm_category": "cpu-free-ubuntu",
+  "snapshot": "cpu-free-ubuntu",
+  "vm": {
+    "snapshot": "cpu-free-ubuntu",
+    "machineType": "c4-standard-4"
+  },
+  "software": [
+    "mjlab",
+    "MuJoCo",
+    "PyTorch",
+    "wandb"
+  ],
+  "output_contract": "input/output_schema.json",
+  "source_submission_id": "09f76c57-9296-4bcc-87d9-41916d687be0",
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.11",
+    "subdomain_code": "robotics",
+    "subdomain_name": "Robotics & Autonomous Systems",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:44:35.771888Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "software",
+          "TASK_INTAKE.md"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/humanoid_wbc_policy_evaluation/task_card.json"
+      },
+      "rationale": "The task involves evaluating policies for humanoid robots, fitting within the robotics subdomain."
+    }
+  },
+  "category": "engineering"
+}

@@ -1,0 +1,79 @@
+{
+  "taskId": "legal/agora_governance_classify_instance_1",
+  "title": "AGORA AI Governance Document Classification",
+  "summary": "Classify three cached AI governance documents across legislative status, technical scope, and AI lifecycle stages with verbatim evidence and a gap analysis.",
+  "category": "legal",
+  "software": [
+    "Python 3.14.3"
+  ],
+  "taskPrompt": "You are working on a Linux VM as a policy analyst.\n\nVisible task files:\n- `input/task_spec.md`\n- `input/taxonomy_and_instructions.md`\n- `input/document_index.json`\n- `input/documents/`\n- `software/README.txt`\n- `software/python` (optional Python helper entry point)\n\nYour task:\n1. Read `task_spec.md`, the sanitized taxonomy instructions, and all three cached document text files.\n2. Classify AGORA IDs 768, 1293, and 2047 across legislative status, technical scope, and AI lifecycle stage.\n3. For every TRUE label, provide a verbatim evidence quote from the corresponding cached document text.\n4. Produce a cross-document matrix and a 150-300 word gap analysis.\n5. Write valid JSON to `output/agent_output.json`.\n\nRules:\n- Do not modify files under `input/`.\n- Use the cached documents under `input/documents/` as the canonical evidence source.\n- Keep the final deliverable at exactly `output/agent_output.json`.",
+  "agentMustDo": [
+    "Read input/task_spec.md, input/taxonomy_and_instructions.md, input/document_index.json, and the three cached document text files.",
+    "Classify each document across the provided legislative-status, technical-scope, and lifecycle-stage taxonomies.",
+    "Provide verbatim evidence quotes from the cached text for every TRUE label.",
+    "Write output/agent_output.json with the requested structured JSON, cross-document matrix, and gap analysis."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_spec.md",
+      "format": "Markdown",
+      "path": "input/task_spec.md",
+      "description": "Agent-visible task instructions and required output schema."
+    },
+    {
+      "name": "taxonomy_and_instructions.md",
+      "format": "Markdown",
+      "path": "input/taxonomy_and_instructions.md",
+      "description": "Sanitized taxonomy definitions and public task instructions."
+    },
+    {
+      "name": "document_index.json",
+      "format": "JSON",
+      "path": "input/document_index.json",
+      "description": "Cached document titles, source URLs, and local text filenames."
+    },
+    {
+      "name": "documents",
+      "format": "Text directory",
+      "path": "input/documents",
+      "description": "Cached public document text for AGORA IDs 768, 1293, and 2047."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "agent_output.json",
+      "format": "JSON",
+      "path": "output/agent_output.json",
+      "description": "Required deliverable containing document classifications, evidence quotes, cross-document matrix, and gap analysis."
+    }
+  ],
+  "evaluation": "The evaluator reads output/agent_output.json, compares labels to evaluator-side consensus labels, and applies a whitespace-normalized evidence gate that also checks minimum evidence length, label-relevant keywords, and repeated-evidence overuse. Legislative status contributes 20%, technical-scope F1 contributes 40%, and lifecycle-stage F1 contributes 40%. Severe multi-label overprediction is capped below threshold, and missing or invalid required matrix/gap artifacts cap the score at 0.69. Expected fixtures: positive 1.0, negative 0.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "7",
+    "domain_code": "legal",
+    "subdomain_id": "7.2",
+    "subdomain_code": "legal_research",
+    "subdomain_name": "Doctrinal Legal Research",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:29:44.242698Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/legal/agora_governance_classify_instance_1/task_card.json"
+      },
+      "rationale": "The task involves classifying AI governance documents, which relates to legal research and compliance."
+    }
+  }
+}

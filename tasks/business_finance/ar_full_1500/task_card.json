@@ -1,0 +1,68 @@
+{
+  "taskId": "business_finance/ar_full_1500",
+  "title": "Annual Report Full Extraction (1500 files)",
+  "summary": "Download 1500 annual reports from East Money, extract core technical personnel records, and produce one consolidated workbook with the required schema.",
+  "category": "business_finance",
+  "software": [
+    "Microsoft Edge",
+    "Python"
+  ],
+  "taskPrompt": "Task Type:\n- Full pipeline (download + parse + structure output), with file verification.\n\nGoal:\n- Download all reports listed in E:\\agenthle\\business_finance\\ar_full_1500\\base\\input\\file_list.txt from East Money (\u4e1c\u65b9\u8d22\u5bcc).\n- Extract core technical personnel data.\n- Output one consolidated Excel file.\n\nInput Files:\n1) E:\\agenthle\\business_finance\\ar_full_1500\\base\\input\\file_list.txt\n   - UTF-8 text file, one PDF filename per line.\n   - Example line: `688001_\u67d0\u516c\u53f8_2023\u5e74\u5e74\u62a5.pdf`\n\nOutput File:\n1) E:\\agenthle\\business_finance\\ar_full_1500\\base\\output\\final_dataset.xlsx\n   - One sheet.\n   - One row per person.\n   - Required columns (exact names):\n     \u8bc6\u522b\u7801, \u8bc1\u5238\u4ee3\u7801, \u80a1\u7968\u7b80\u79f0, \u59d3\u540d, \u6027\u522b, \u5e74\u9f84, \u56fd\u7c4d, \u6700\u9ad8\u5b66\u5386, \u7b80\u5386,\n     2019\u85aa\u916c, 2020\u85aa\u916c, 2021\u85aa\u916c, 2022\u85aa\u916c, 2023\u85aa\u916c, 2024\u85aa\u916c,\n     2019\u6301\u80a1, 2020\u6301\u80a1, 2021\u6301\u80a1, 2022\u6301\u80a1, 2023\u6301\u80a1, 2024\u6301\u80a1.\n\nData Rules:\n- `\u8bc6\u522b\u7801` (Identifier) format:\n  - Build as: `\u80a1\u7968\u7b80\u79f0 + \u59d3\u540d` (no separator).\n  - Use `\u80a1\u7968\u7b80\u79f0` for the company part (do NOT use `\u8bc1\u5238\u4ee3\u7801`).\n  - Example: if company is `\u534e\u5174\u6e90\u521b` and person is `\u66f9\u632f\u5b87`, then `\u8bc6\u522b\u7801` is `\u534e\u5174\u6e90\u521b\u66f9\u632f\u5b87`.\n  - Example: if company is `\u5929\u51c6\u79d1\u6280` and person is `\u5f90\u4e00\u534e`, then `\u8bc6\u522b\u7801` is `\u5929\u51c6\u79d1\u6280\u5f90\u4e00\u534e`.\n- Try to fill each required field from evidence as completely as possible.\n- Use NaN only when the value cannot be reliably found.\n- For numeric output values, keep at least 3 decimal places (0.001 precision) when applicable.\n- `\u6700\u9ad8\u5b66\u5386` code mapping:\n  - 1 = PhD\n  - 2 = Master\n  - 3 = Bachelor\n  - 4 = Associate\n  - 5 = Other / Undisclosed\n- Output format requirement for `\u6700\u9ad8\u5b66\u5386`:\n  - Use numeric code values only (1/2/3/4/5).\n  - `1` and `1.0` are treated as the same numeric value.\n  - Text labels like `\u535a\u58eb` / `\u7855\u58eb` are not accepted in this column.\n\nScoring:\n- Full score requires all conditions below to be satisfied:\n  1) Every required PDF in `file_list.txt` is correctly downloaded.\n  2) `final_dataset.xlsx` matches the required schema exactly.\n  3) Extracted values are accurate on hidden verification samples.\n",
+  "agentMustDo": [
+    "Read `input/file_list.txt` to determine the 1500 annual-report PDFs in scope",
+    "Download all listed annual reports from East Money into `output/downloads/`",
+    "Extract core technical personnel data for each report",
+    "Produce `final_dataset.xlsx` with the required columns and data rules"
+  ],
+  "inputFiles": [
+    {
+      "name": "file_list.txt",
+      "format": "txt",
+      "path": "input/file_list.txt",
+      "description": "UTF-8 list of 1500 annual-report PDF filenames"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "final_dataset.xlsx",
+      "format": "xlsx",
+      "path": "output/final_dataset.xlsx",
+      "description": "Consolidated personnel workbook with one row per person"
+    },
+    {
+      "name": "downloads/",
+      "format": "directory",
+      "path": "output/downloads/",
+      "description": "Downloaded annual-report PDFs for the 1500-file scope"
+    }
+  ],
+  "evaluation": "- Two 50-point components: remote PDF file verification against `reference/file_manifest.json` and sampled workbook verification against `reference/data_samples.json`\n- File score: `max(0, 50 - 5 * wrong_files)` after size screening plus remote MD5 hashing\n- Data score: `max(0, 50 - 5 * wrong_samples)` with numeric tolerance `< 0.01` and exact string matching after strip\n- Final score: `(file_score + data_score) / 100.0`\n- Current Stage 3 replay results: isolated positive fixture `0.5`, isolated negative fixture `0.0`",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.1",
+    "subdomain_code": "accounting",
+    "subdomain_name": "Accounting & Finance",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:23:19.280320Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/ar_full_1500/task_card.json"
+      },
+      "rationale": "The task involves financial data extraction and reporting."
+    }
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "taskId": "education_info/marc_remediation_folio_overlay",
+  "title": "MARC Remediation FOLIO Overlay",
+  "summary": "Complete a Python starter project that remediates legacy MARC batches, applies cataloging policy rules, and prepares deterministic FOLIO Data Import overlay artifacts.",
+  "category": "education_info",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are working on a Linux VM to complete a MARC remediation and FOLIO overlay starter project.\n\n## Task Directory\n`/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base`\n\n## Visible Inputs\n- Full prompt: `/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base/input/TASK_PROMPT.md`\n- Harness summary: `/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base/input/task_spec.md`\n- Editable starter project: `/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base/input/starter_project`\n- Visible public case: `/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base/input/starter_project/input/public_case`\n- Software note: `/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base/software/README.txt`\n- Python 3.12 entry point: `/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base/software/python3.12`\n\n## Your Task\n1. Copy `/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base/input/starter_project` to `/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base/output/submission`.\n2. Implement `scripts/remediate_catalog.py` in the copied project while preserving this CLI:\n   `python scripts/remediate_catalog.py --case-dir <case_dir> --output-dir <output_dir>`\n3. Use the case files and policy rules to remediate MARC records, choose FOLIO overlay actions, and emit all required output artifacts.\n4. Run the CLI on the visible public case before finishing:\n   `/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base/software/python3.12 scripts/remediate_catalog.py --case-dir input/public_case --output-dir outputs/public_case`\n\n## Final Deliverable\nLeave the completed project at:\n\n`/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base/output/submission`\n\nDo not modify files under `/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base/input`. Write final work only under `/media/user/data/agenthle/education_info/marc_remediation_folio_overlay/base/output`.\nThe benchmark harness exposes only the intended input/software surface and the writable output directory while you solve; evaluator-only reference data is not part of the solve-time task.\n",
+  "agentMustDo": [
+    "Copy `input/starter_project/` to `output/submission/` before editing.",
+    "Preserve the CLI contract: `python scripts/remediate_catalog.py --case-dir <case_dir> --output-dir <output_dir>`.",
+    "Apply the visible cataloging policy uniformly to MARCXML/MRK records, FOLIO matches, authority mappings, and 949 holdings/item data.",
+    "Write `remediated_records.xml`, `overlay_decisions.csv`, `folio_import_plan.json`, `qa_report.json`, and `remediation_summary.md` under `output/submission/outputs/public_case/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "TASK_PROMPT.md",
+      "format": "Markdown",
+      "path": "input/TASK_PROMPT.md",
+      "description": "Full agent-facing task prompt."
+    },
+    {
+      "name": "task_spec.md",
+      "format": "Markdown",
+      "path": "input/task_spec.md",
+      "description": "Harness-facing summary of the expected starter-copy workflow and output location."
+    },
+    {
+      "name": "starter_project",
+      "format": "Python project directory",
+      "path": "input/starter_project/",
+      "description": "Editable starter project with public MARC/FOLIO case files and a stub remediation CLI."
+    },
+    {
+      "name": "README.txt",
+      "format": "Text",
+      "path": "software/README.txt",
+      "description": "Stage 1 software note stating that the workflow is Python stdlib-only."
+    },
+    {
+      "name": "python3.12",
+      "format": "Shell wrapper",
+      "path": "software/python3.12",
+      "description": "Stage 4-verified Python 3.12.13 runtime entry point."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "remediated_records.xml",
+      "format": "MARCXML",
+      "path": "output/submission/outputs/public_case/remediated_records.xml",
+      "description": "Required remediated MARCXML collection for active records."
+    },
+    {
+      "name": "overlay_decisions.csv",
+      "format": "CSV",
+      "path": "output/submission/outputs/public_case/overlay_decisions.csv",
+      "description": "Required per-incoming-record action and match rationale table."
+    },
+    {
+      "name": "folio_import_plan.json",
+      "format": "JSON",
+      "path": "output/submission/outputs/public_case/folio_import_plan.json",
+      "description": "Required FOLIO Data Import plan payload."
+    },
+    {
+      "name": "qa_report.json",
+      "format": "JSON",
+      "path": "output/submission/outputs/public_case/qa_report.json",
+      "description": "Required deterministic QA counts."
+    },
+    {
+      "name": "remediation_summary.md",
+      "format": "Markdown",
+      "path": "output/submission/outputs/public_case/remediation_summary.md",
+      "description": "Required cataloging handoff memo."
+    }
+  ],
+  "evaluation": "The evaluator checks required artifacts, compares the visible public outputs against deterministic references, and reruns the submitted CLI on evaluator-owned hidden cases with the same file schema. The submitted 0-100 score is normalized to AgentHLE's 0.0-1.0 range; pass threshold is 85/100 in the submitted evaluator.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "11",
+    "domain_code": "education_info",
+    "subdomain_id": "11.2",
+    "subdomain_code": "library_info",
+    "subdomain_name": "Library & Information Science",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:30:53.831794Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/education_info/marc_remediation_folio_overlay/task_card.json"
+      },
+      "rationale": "The task involves MARC remediation and cataloging, which are key aspects of Library & Information Science."
+    }
+  }
+}

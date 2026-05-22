@@ -1,0 +1,83 @@
+{
+  "taskId": "business_finance/ff5_public_reconstruction",
+  "title": "FF5 Public Reconstruction",
+  "summary": "Reconstruct the monthly Fama-French five-factor series from 2015-01 onward using only the staged allowlisted public sources, then save the required factor CSV.",
+  "category": "business_finance",
+  "software": [
+    "Google Chrome",
+    "Python",
+    "uv"
+  ],
+  "taskPrompt": "You are working on a Linux finance benchmark task.\n\nRead these staged files first:\n- `/media/user/data/agenthle/business_finance/ff5_public_reconstruction/base/input/agent_prompt.md`\n- `/media/user/data/agenthle/business_finance/ff5_public_reconstruction/base/input/README.md`\n- `/media/user/data/agenthle/business_finance/ff5_public_reconstruction/base/input/manifest.json`\n\nTask-local entry points:\n- Browser launcher: `/media/user/data/agenthle/business_finance/ff5_public_reconstruction/base/software/browser`\n- Python wrapper: `/media/user/data/agenthle/business_finance/ff5_public_reconstruction/base/software/python`\n- UV wrapper: `/media/user/data/agenthle/business_finance/ff5_public_reconstruction/base/software/uv`\n\nIf you want the pinned Python runtime manifest, it is staged at:\n- `/media/user/data/agenthle/business_finance/ff5_public_reconstruction/base/input/runtime_env/pyproject.toml`\n- `/media/user/data/agenthle/business_finance/ff5_public_reconstruction/base/input/runtime_env/uv.lock`\n\nYour job is to reconstruct the monthly U.S. Fama-French five factors from public data starting at `2015-01`, following the full instructions in `agent_prompt.md`.\n\nWrite exactly one required file:\n- `/media/user/data/agenthle/business_finance/ff5_public_reconstruction/base/output/ff5_factors_monthly_2015_onward.csv`\n\nOutput requirements:\n- filename must be exactly `ff5_factors_monthly_2015_onward.csv`\n- columns must be exactly `date,MKT_RF,SMB,HML,RMW,CMA`\n- `date` format must be `YYYY-MM`\n- values must be monthly factor values in percent units\n- no duplicate dates\n\nConstraints:\n1. Follow the allowlist and workflow restrictions in `agent_prompt.md` and `manifest.json`.\n2. If you install Python dependencies, use the staged runtime manifest rather than modifying benchmark-owned evaluator state.\n3. Write only your task output under `/media/user/data/agenthle/business_finance/ff5_public_reconstruction/base/output`.\n4. Do not modify evaluator-owned directories such as `reference/`, `output_test_pos/`, or `output_test_neg/`.\n",
+  "agentMustDo": [
+    "Read `input/agent_prompt.md`, `input/README.md`, and `input/manifest.json` before starting.",
+    "Stay inside the staged public-data allowlist while reading the paper, gathering data, and building the factor pipeline.",
+    "Optionally install task-facing Python dependencies from `input/runtime_env/` with the staged `uv.lock`.",
+    "Write exactly one CSV named `ff5_factors_monthly_2015_onward.csv` under `output/` with columns `date,MKT_RF,SMB,HML,RMW,CMA`."
+  ],
+  "inputFiles": [
+    {
+      "name": "agent_prompt.md",
+      "format": "Markdown",
+      "path": "input/agent_prompt.md",
+      "description": "Primary agent-visible benchmark brief, including the allowed public sources and output contract."
+    },
+    {
+      "name": "README.md",
+      "format": "Markdown",
+      "path": "input/README.md",
+      "description": "Short runtime note describing how the staged package should be used."
+    },
+    {
+      "name": "manifest.json",
+      "format": "JSON",
+      "path": "input/manifest.json",
+      "description": "Visible allowlist and required output metadata."
+    },
+    {
+      "name": "runtime_env",
+      "format": "uv Python environment manifest",
+      "path": "input/runtime_env",
+      "description": "Optional pinned task-facing Python dependency manifest (`pyproject.toml` plus `uv.lock`)."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "ff5_factors_monthly_2015_onward.csv",
+      "format": "CSV",
+      "path": "output/ff5_factors_monthly_2015_onward.csv",
+      "description": "Required runtime deliverable containing monthly `date,MKT_RF,SMB,HML,RMW,CMA` rows from 2015-01 onward."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- Missing or unreadable `output/ff5_factors_monthly_2015_onward.csv`\n- Wrong CSV column order or missing required columns\n- Malformed `YYYY-MM` dates or duplicate months\n- Missing or extra monthly dates after the benchmark `2015-01` floor\n- Non-numeric or missing factor values in the required factor columns\n- Factor magnitudes inconsistent with the required percent-unit contract\n- No post-2015 rows after normalization\n- Any observable non-allowlisted URL, if a later harness supplies a trace path for best-effort allowlist enforcement\n\n**Scoring method:**\n- Read the candidate CSV and the evaluator-side benchmark series.\n- Keep rows on or after `2015-01`.\n- Require the candidate monthly date set to match the benchmark exactly after that floor.\n- Compute Pearson correlation separately for `MKT_RF`, `SMB`, `HML`, `RMW`, and `CMA`.\n- Fit an affine map per factor and require slope/intercept to remain inside the percent-unit consistency thresholds.\n- Take the arithmetic mean of the five correlations and clamp the final benchmark score to `0.0..1.0`.\n- Zero-variance aligned factor columns contribute `0.0` correlation rather than raising.\n\n**Current pass threshold:** `0.7` on the mean factor correlation.\n\n**What does a perfect output look like?**\nA CSV with the exact required filename and schema, the exact month coverage from `2015-01` onward, correct percent-unit magnitudes, and factor series that match the benchmark closely enough to return `1.0` on the canonical positive fixture.\n\n**What does a wrong output look like?**\nA malformed CSV, a file with missing or duplicated months, a wrong schema, a unit/scale-shifted submission, or a numerically poor reconstruction should score `0.0` or remain well below the pass threshold.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "variants": 1,
+  "sourceSubmissionId": "5c2157a6-f2ae-4ad7-a5c9-009a465dedee",
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.1",
+    "subdomain_code": "accounting",
+    "subdomain_name": "Accounting & Finance",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:24:11.355536Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/ff5_public_reconstruction/task_card.json"
+      },
+      "rationale": "The task involves reconstructing financial factors, which falls under accounting and finance."
+    }
+  }
+}

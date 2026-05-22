@@ -1,0 +1,75 @@
+{
+  "taskId": "physical_sciences/adapt_vqe_molecular_energy",
+  "title": "ADAPT-VQE Molecular Ground-State Energy",
+  "summary": "Use only NumPy and SciPy to solve three visible Jordan-Wigner molecular Hamiltonians with VQE / ADAPT-VQE style logic, then write a structured `results.json` with tier-wise energies and method metadata.",
+  "category": "physical_sciences",
+  "software": [
+    "Python",
+    "NumPy",
+    "SciPy"
+  ],
+  "taskPrompt": "You are solving a molecular ground-state energy benchmark using only NumPy and SciPy on Ubuntu. Read `/media/user/data/agenthle/physical_sciences/adapt_vqe_molecular_energy/base/input/problem_spec.md`, then use the visible Hamiltonians at `/media/user/data/agenthle/physical_sciences/adapt_vqe_molecular_energy/base/input/{h2_hamiltonian.json,lih_hamiltonian.json,beh2_hamiltonian.json}`. Set up the staged runtime with `uv sync --frozen --project /media/user/data/agenthle/physical_sciences/adapt_vqe_molecular_energy/base/input/runtime_env`. Implement dense-matrix VQE / ADAPT-VQE logic using only NumPy and SciPy, and write exactly one file, `/media/user/data/agenthle/physical_sciences/adapt_vqe_molecular_energy/base/output/results.json`, following the schema in the prompt.",
+  "agentMustDo": [
+    "Read the staged prompt and three visible Hamiltonian JSON files under `input/`.",
+    "Prepare the staged NumPy / SciPy runtime manifest under `input/runtime_env/`.",
+    "Implement VQE / ADAPT-VQE style logic without any quantum-computing libraries.",
+    "Write `output/results.json` with tier-wise `molecule`, `energy_ha`, and method metadata."
+  ],
+  "inputFiles": [
+    {
+      "name": "Problem specification",
+      "format": "Markdown",
+      "path": "input/problem_spec.md",
+      "description": "Sanitized visible task statement and output schema."
+    },
+    {
+      "name": "Tier Hamiltonians",
+      "format": "JSON",
+      "path": "input/{h2_hamiltonian.json,lih_hamiltonian.json,beh2_hamiltonian.json}",
+      "description": "Visible Jordan-Wigner Hamiltonians for H2, LiH, and BeH2."
+    },
+    {
+      "name": "Runtime manifest",
+      "format": "uv project",
+      "path": "input/runtime_env/",
+      "description": "Pinned NumPy / SciPy runtime manifest for the agent."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Result bundle",
+      "format": "JSON",
+      "path": "output/results.json",
+      "description": "Structured tier-wise energy and method metadata written by the agent."
+    }
+  ],
+  "evaluation": "Continuous `score = passed_tiers / 3`. Tier 1 passes if H2 is within `0.1 mHa`; Tier 2 / 3 pass if LiH / BeH2 are within `1.6 mHa`. The evaluator also checks `method`, `n_parameters`, and, for ADAPT tiers, `adapt_iterations` plus `operator_sequence` shape / consistency. Missing or invalid `results.json` yields `0.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "2",
+    "domain_code": "physical_sciences",
+    "subdomain_id": "2.2",
+    "subdomain_code": "chemistry_materials",
+    "subdomain_name": "Chemistry & Materials Computation",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:08:52.957233Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/physical_sciences/adapt_vqe_molecular_energy/task_card.json"
+      },
+      "rationale": "The task involves computational chemistry techniques to solve molecular energy problems."
+    }
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "taskId": "health_medicine/simglucose_safe_basal_control_instance_1",
+  "title": "SimGlucose Safe Basal Control",
+  "summary": "Implement a meal-unannounced, basal-only glucose controller for SimGlucose that satisfies safety gates across hidden patient episodes.",
+  "category": "health_medicine",
+  "software": [
+    "Python 3.11",
+    "uv",
+    "SimGlucose 0.2.11"
+  ],
+  "taskPrompt": "You are working on a Linux VM to implement a meal-unannounced basal-only glucose controller in SimGlucose. Read the staged public task package under input/public/ to learn the observation/action contract and required submission format. Install the staged task runtime from input/runtime_env/ if needed. Write submission/controller.py and submission/metadata.json under the runtime output/ directory.",
+  "agentMustDo": [
+    "Read the staged public task package under input/public/ including the observation/action contract and submission format",
+    "Implement submission/controller.py exposing build_controller() or SubmissionController",
+    "Write submission/metadata.json with all required fields",
+    "Design a meal-unannounced, basal-only controller using only current CGM, time of day, sample interval, and action bounds"
+  ],
+  "inputFiles": [
+    {
+      "name": "task.md",
+      "format": "Markdown",
+      "path": "input/public/task.md",
+      "description": "High-level task contract"
+    },
+    {
+      "name": "task_api.py",
+      "format": "Python",
+      "path": "input/public/task_api.py",
+      "description": "Stable observation wrapper API"
+    },
+    {
+      "name": "submission_format.md",
+      "format": "Markdown",
+      "path": "input/public/submission_format.md",
+      "description": "Exact required deliverable shape"
+    },
+    {
+      "name": "runtime_env/pyproject.toml",
+      "format": "TOML",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Canonical agent-facing runtime manifest"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "submission/controller.py",
+      "format": "Python",
+      "path": "output/submission/controller.py",
+      "description": "Agent-written controller implementation"
+    },
+    {
+      "name": "submission/metadata.json",
+      "format": "JSON",
+      "path": "output/submission/metadata.json",
+      "description": "Required submission metadata"
+    }
+  ],
+  "evaluation": "Hidden evaluation runs 72 deterministic SimGlucose episodes over 6 held-out patients. A submission must have zero catastrophic episodes, mean_tbr_lt_54 <= 0.01, and mean_tbr_lt_70 <= 0.04 to be eligible. Proxy scalar: mean_tir_70_180 * (1 - catastrophic_episode_count / episodes) ^ 1.5.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.3",
+    "subdomain_code": "clinical_informatics",
+    "subdomain_name": "Clinical Informatics & Care Operations",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:43:34.325991Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/simglucose_safe_basal_control_instance_1/task_card.json"
+      },
+      "rationale": "The task involves implementing a glucose controller, which relates to clinical informatics in health and medicine."
+    }
+  }
+}

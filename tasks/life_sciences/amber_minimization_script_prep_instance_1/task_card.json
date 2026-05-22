@@ -1,0 +1,89 @@
+{
+  "taskId": "life_sciences/amber_minimization_script_prep_instance_1",
+  "title": "Amber Implicit-Solvent Minimization Workflow Construction",
+  "summary": "Construct three Linux Amber workflow files from a cleaned protein-complex structure: a tleap build file, an implicit-solvent minimization control file, and a SLURM submission script.",
+  "category": "life_sciences",
+  "software": [
+    "Amber 22",
+    "AmberTools tleap",
+    "SLURM",
+    "CUDA 11.6.2"
+  ],
+  "taskPrompt": "You are preparing a Linux Amber workflow definition from a cleaned protein-complex structure.\n\nTask directory:\n- `/home/user/Desktop/life_sciences/amber_minimization_script_prep_instance_1/base`\n\nInput directory:\n- `/home/user/Desktop/life_sciences/amber_minimization_script_prep_instance_1/base/input`\n\nAvailable environment:\n- Linux terminal access\n- Python 3 on the VM\n- `uv` is available for evaluator-side tooling, but you should not rely on hidden benchmark scripts\n\nYour task:\n1. Inspect `complex_structure.pdb`\n2. Create exactly these three files under `/home/user/Desktop/life_sciences/amber_minimization_script_prep_instance_1/base/output`:\n   - `leap.in`\n   - `step2_implicit.mini.mdin`\n   - `submit_min.sh`\n\nRequirements:\n- Build the system from `complex_structure.pdb`\n- Use basename `GLN_phb2_lc3_aurka_model_0` consistently\n- Define a realistic implicit-solvent Amber minimization workflow\n- Write a SLURM submission script for one GPU using Amber 22 and CUDA 11.6.2 module loads\n- Do not write extra files\n\nDo not modify `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.\n",
+  "agentMustDo": [
+    "Inspect `complex_structure.pdb` and infer the workflow wiring needed for an Amber minimization setup.",
+    "Create `leap.in` that loads the structure, uses `leaprc.protein.ff14SB`, sets `mbondi3`, and writes the required Amber outputs.",
+    "Create `step2_implicit.mini.mdin` defining a realistic implicit-solvent GB minimization stage.",
+    "Create `submit_min.sh` as a SLURM one-GPU Amber minimization submission script.",
+    "Write exactly the three required files and no extras."
+  ],
+  "inputFiles": [
+    {
+      "name": "complex_structure.pdb",
+      "format": "PDB",
+      "path": "input/complex_structure.pdb",
+      "description": "Cleaned three-chain protein complex structure."
+    },
+    {
+      "name": "input_environment_spec.md",
+      "format": "Markdown",
+      "path": "input/input_environment_spec.md",
+      "description": "Reference environment and workflow expectations."
+    },
+    {
+      "name": "task_sop.md",
+      "format": "Markdown",
+      "path": "input/task_sop.md",
+      "description": "Workflow instructions and required deliverables."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "leap.in",
+      "format": "tleap input",
+      "path": "output/leap.in",
+      "description": "Amber system-build file."
+    },
+    {
+      "name": "step2_implicit.mini.mdin",
+      "format": "Amber mdin",
+      "path": "output/step2_implicit.mini.mdin",
+      "description": "Implicit-solvent minimization control file."
+    },
+    {
+      "name": "submit_min.sh",
+      "format": "bash / SLURM script",
+      "path": "output/submit_min.sh",
+      "description": "One-GPU Linux submission script for the minimization workflow."
+    }
+  ],
+  "evaluation": "**Current reviewed evaluator**\n- Parser-based only; it does not run Amber.\n- Checks that the output file set is exactly `leap.in`, `step2_implicit.mini.mdin`, and `submit_min.sh`.\n- Validates required `tleap` structure, required minimization parameters and ranges, and required SLURM / Amber command wiring.\n\n**Reviewed fixture behavior on `agenthle-ubuntu`**\n- direct setup-only: pass\n- direct positive fixture: `1.0`\n- direct negative fixture: `0.0`\n- standard runner positive: `1.0`\n- standard runner negative: `0.0`\n- standard runner default empty output: `0.0`\n",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.1",
+    "subdomain_code": "biomolecular",
+    "subdomain_name": "Biomolecular Structure & Design",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:10:11.528112Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/amber_minimization_script_prep_instance_1/task_card.json"
+      },
+      "rationale": "The task involves preparing a workflow for protein-complex structure analysis in computational structural biology."
+    }
+  }
+}

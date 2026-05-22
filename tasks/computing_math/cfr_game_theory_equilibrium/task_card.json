@@ -1,0 +1,86 @@
+{
+  "taskId": "computing_math/cfr_game_theory_equilibrium",
+  "title": "CFR Game Theory Equilibrium",
+  "summary": "Implement exact and regret-minimization solvers for three zero-sum games and write one combined JSON output.",
+  "category": "computing_math",
+  "software": [
+    "Python",
+    "uv",
+    "NumPy"
+  ],
+  "taskPrompt": "You are working on a Linux VM.\n\n## Your Task\nImplement equilibrium solvers for three progressively harder two-player zero-sum games and save one combined `results.json`.\n\n## Visible Input\n- Authoritative problem specification: `/media/user/data/agenthle/computing_math/cfr_game_theory_equilibrium/base/input/problem_spec.md`\n- Solve-time runtime manifest: `/media/user/data/agenthle/computing_math/cfr_game_theory_equilibrium/base/input/runtime_env/pyproject.toml`\n- Solve-time runtime lockfile: `/media/user/data/agenthle/computing_math/cfr_game_theory_equilibrium/base/input/runtime_env/uv.lock`\n\n## Runtime Entry Points\n- Bootstrap the staged NumPy runtime with `/media/user/data/agenthle/computing_math/cfr_game_theory_equilibrium/base/software/bootstrap_runtime.sh`\n- Run Python with staged task dependencies using `/media/user/data/agenthle/computing_math/cfr_game_theory_equilibrium/base/software/python_with_task_deps.sh`\n\n## What You Must Produce\nWrite exactly one file at `/media/user/data/agenthle/computing_math/cfr_game_theory_equilibrium/base/output/results.json`.\n\nThe JSON must contain top-level keys `tier1`, `tier2`, and `tier3`:\n- `tier1`: matrix-game equilibrium value, row/column mixed strategies, and row/column support indices\n- `tier2`: Kuhn poker CFR iterations, final exploitability, average strategy, game value estimate, and information-set count\n- `tier3`: 4-rank Leduc MCCFR iterations, final exploitability, full average strategy map, information-set count, and exact game parameters\n\n## Rules\n- Read `/media/user/data/agenthle/computing_math/cfr_game_theory_equilibrium/base/input/problem_spec.md` first and follow it closely.\n- Do not modify any files under `/media/user/data/agenthle/computing_math/cfr_game_theory_equilibrium/base/input`.\n- Do not write outside `/media/user/data/agenthle/computing_math/cfr_game_theory_equilibrium/base/output`.\n- Use only the staged local inputs and the software already available on this VM.\n",
+  "agentMustDo": [
+    "Read the staged problem specification and implement all three tiers of the benchmark.",
+    "Use the staged runtime wrappers to install and run the NumPy-only solve-time environment if needed.",
+    "Return one combined `results.json` containing Tier 1 matrix-game, Tier 2 Kuhn CFR, and Tier 3 Leduc MCCFR outputs."
+  ],
+  "inputFiles": [
+    {
+      "name": "Problem specification",
+      "format": "Markdown",
+      "path": "input/problem_spec.md",
+      "description": "Agent-visible task specification for all three game-solving tiers."
+    },
+    {
+      "name": "Runtime manifest",
+      "format": "pyproject.toml",
+      "path": "input/runtime_env/pyproject.toml",
+      "description": "Staged solve-time Python dependency manifest."
+    },
+    {
+      "name": "Runtime lockfile",
+      "format": "uv.lock",
+      "path": "input/runtime_env/uv.lock",
+      "description": "Locked solve-time dependency set for the staged runtime."
+    },
+    {
+      "name": "Bootstrap wrapper",
+      "format": "shell script",
+      "path": "software/bootstrap_runtime.sh",
+      "description": "Agent-visible helper for creating the staged runtime environment."
+    },
+    {
+      "name": "Python wrapper",
+      "format": "shell script",
+      "path": "software/python_with_task_deps.sh",
+      "description": "Agent-visible helper for running Python with the staged task dependencies."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Combined solver output",
+      "format": "JSON",
+      "path": "output/results.json",
+      "description": "Required runtime deliverable containing Tier 1, Tier 2, and Tier 3 outputs."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (always score `0.0` if triggered):\n- Missing `output/results.json`\n- JSON parse failure\n- Tier 1 missing, malformed, or failing its public minimax / support-consistency checks\n\n**Scoring method:**\nThe evaluator scores locally from `output/results.json`.\n- Tier 1 checks probability validity, realized-value consistency, no-profitable-deviation conditions, and reported support consistency.\n- Tier 2 checks the 12-information-set Kuhn strategy schema, reported summary fields, low exploitability, game-value consistency, and stable equilibrium-family behaviors.\n- Tier 3 checks exact game parameters, 504 information sets, valid strategy probabilities, reported summary fields, and independently recomputed exploitability.\n\nReturned score mapping:\n- `1.0` if all three tiers pass\n- `0.67` if Tier 1 and Tier 2 pass but Tier 3 fails\n- `0.33` if only Tier 1 passes\n- `0.0` if Tier 1 fails or the output is unusable\n\n**What does a perfect output look like?**\nA single `output/results.json` whose three tier sections all satisfy the public schema and the evaluator's independent equilibrium checks.\n\n**What does a wrong output look like?**\nMissing JSON, an invalid matrix-game equilibrium, or CFR / MCCFR outputs whose reported fields, game parameters, or exploitability checks fail enough tiers to reduce the score below `1.0`.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.4",
+    "subdomain_code": "math_ops_research",
+    "subdomain_name": "Mathematical & Operations Research",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:34:16.650134Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/cfr_game_theory_equilibrium/task_card.json"
+      },
+      "rationale": "The task involves implementing equilibrium solvers for game theory, which falls under mathematical and operations research."
+    }
+  }
+}

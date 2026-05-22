@@ -1,0 +1,111 @@
+{
+  "taskId": "life_sciences/cell_translocation_analysis",
+  "title": "Cell Translocation Analysis",
+  "taskName": "Cell Translocation Analysis",
+  "summary": "Analyze paired DNA and GFP microscopy images to quantify nuclear translocation across a drug dose series and report the minimum effective dose.",
+  "category": "life_sciences",
+  "software": [
+    "CellProfiler",
+    "Python",
+    "numpy",
+    "pandas",
+    "scikit-image",
+    "tifffile"
+  ],
+  "tags": [
+    "microscopy",
+    "cell biology",
+    "image analysis",
+    "dose response"
+  ],
+  "taskPrompt": "You are analyzing two-channel cell microscopy images for GFP nuclear translocation.\n\nTask directory:\n- `/media/user/data/agenthle/life_sciences/cell_translocation_analysis/base`\n\nVisible inputs:\n- Paired TIFF images: `/media/user/data/agenthle/life_sciences/cell_translocation_analysis/base/input/images`\n- Dose and control metadata: `/media/user/data/agenthle/life_sciences/cell_translocation_analysis/base/input/images/Translocation_doses_and_controls.csv`\n- Detailed task instructions: `/media/user/data/agenthle/life_sciences/cell_translocation_analysis/base/input/task_instructions.md`\n- Optional Python dependency manifest: `/media/user/data/agenthle/life_sciences/cell_translocation_analysis/base/input/runtime_env/pyproject.toml`\n- Optional Python wrapper: `/media/user/data/agenthle/life_sciences/cell_translocation_analysis/base/software/python_cell_translocation.sh`\n\nYour task is to pair the DNA and GFP channels by well, segment nuclei and cell/cytoplasm compartments, measure GFP and channel-correlation features, classify positive translocation using the dose/control metadata, identify the minimum effective dose, and save `Cells.csv`, `Cytoplasm.csv`, `Nuclei.csv`, and `answer.json` under `/media/user/data/agenthle/life_sciences/cell_translocation_analysis/base/output`.\n\n`answer.json` must be a JSON object with numeric keys `minimum_dose` and `positive_percentage`.\n\nDo not modify files under `input/`.",
+  "agentMustDo": [
+    "Pair DNA (`w1`) and GFP (`w2`) TIFF images by well.",
+    "Segment nuclei and derive cell/cytoplasm compartments.",
+    "Measure GFP intensity, channel-correlation, location, and ratio-style object features.",
+    "Classify positive translocation using the dose/control metadata.",
+    "Save `Cells.csv`, `Cytoplasm.csv`, `Nuclei.csv`, and `answer.json` under the runtime output directory."
+  ],
+  "inputFiles": [
+    {
+      "name": "BBBC013_<well>_s1_w1.tif / BBBC013_<well>_s1_w2.tif",
+      "format": "tiff",
+      "path": "input/images/",
+      "description": "Paired DNA and GFP microscopy channels for each staged well."
+    },
+    {
+      "name": "Translocation_doses_and_controls.csv",
+      "format": "csv",
+      "path": "input/images/Translocation_doses_and_controls.csv",
+      "description": "Well-to-dose and control metadata."
+    },
+    {
+      "name": "runtime_env",
+      "format": "uv project",
+      "path": "input/runtime_env/",
+      "description": "Optional pinned Python image-analysis runtime."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Cells.csv",
+      "format": "csv",
+      "path": "output/Cells.csv",
+      "description": "Required cell object table."
+    },
+    {
+      "name": "Cytoplasm.csv",
+      "format": "csv",
+      "path": "output/Cytoplasm.csv",
+      "description": "Required cytoplasm object table."
+    },
+    {
+      "name": "Nuclei.csv",
+      "format": "csv",
+      "path": "output/Nuclei.csv",
+      "description": "Required nucleus object table."
+    },
+    {
+      "name": "answer.json",
+      "format": "json",
+      "path": "output/answer.json",
+      "description": "Required aggregate result with `minimum_dose` and `positive_percentage`."
+    }
+  ],
+  "evaluation": "Hard gates return score 0.0 when the aggregate answer is missing, malformed, or outside accepted numeric tolerance, or when required measurement tables are missing. Passing solutions are scored from 0.0 to 1.0 using the aggregate answer and structural quality checks for CellProfiler-style object tables. Positive fixtures score 1.0; negative fixtures score 0.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "os": "linux",
+    "project": "sunblaze-4",
+    "zone": "us-west2-a",
+    "name": "agenthle-ubuntu",
+    "timeout": 7200
+  },
+  "variants": [
+    "base"
+  ],
+  "taxonomy": {
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.3",
+    "subdomain_code": "cell_imaging",
+    "subdomain_name": "Cell & Imaging Biology",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:09:36.467218Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/life_sciences/cell_translocation_analysis/task_card.json"
+      },
+      "rationale": "The task involves analyzing cell microscopy images for nuclear translocation."
+    }
+  }
+}

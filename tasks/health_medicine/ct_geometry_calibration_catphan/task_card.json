@@ -1,0 +1,79 @@
+{
+  "taskId": "health_medicine/ct_geometry_calibration_catphan",
+  "title": "CT Geometry Calibration (Catphan Phantom)",
+  "summary": "Calibrate CT geometry parameters (SAD, SDD, detector offset) for a Catphan phantom scan by iteratively optimizing a LEAP-based FBP reconstruction to match a reference image.",
+  "category": "health_medicine",
+  "software": [
+    "Python 3.10+",
+    "LEAP 1.26 (leaptorch)",
+    "NumPy",
+    "SciPy",
+    "scikit-image",
+    "PyTorch (CPU)"
+  ],
+  "taskPrompt": "Calibrate the CT geometry parameters for a Catphan phantom reconstruction. Inspect the provided LEAP-based FBP reconstruction script with nominal parameters, iteratively adjust SAD, SDD, and detector offset using optimization, and save the calibrated parameters and final reconstruction under output/.",
+  "agentMustDo": [
+    "Inspect reconstruct.py to understand the LEAP-based FBP pipeline and nominal geometry parameters.",
+    "Run the initial reconstruction with nominal parameters and compare against reference_image.npy.",
+    "Iteratively optimize geometry parameters until SSIM >= 0.95 and unnormalized MSE <= 4e-6.",
+    "Save calibrated parameters to output/geometry_calibrated.json.",
+    "Save the final reconstructed image to output/reconstructed_calibrated.npy."
+  ],
+  "inputFiles": [
+    {
+      "name": "Sinogram",
+      "format": "NumPy .npy (float32)",
+      "path": "input/sinogram.npy",
+      "description": "Measured sinogram of Catphan phantom (fan-beam CT)."
+    },
+    {
+      "name": "Reference image",
+      "format": "NumPy .npy (float32, 512x512)",
+      "path": "input/reference_image.npy",
+      "description": "Ground-truth reconstructed phantom image."
+    },
+    {
+      "name": "Reconstruction script",
+      "format": "Python script",
+      "path": "input/reconstruct.py",
+      "description": "FBP reconstruction script using LEAP/leaptorch with nominal (slightly wrong) geometry parameters."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Evaluator reference image",
+      "format": "NumPy .npy (float32, 512x512)",
+      "path": "reference/reference_image.npy",
+      "description": "Evaluator-owned clean copy of the reference image for scoring."
+    }
+  ],
+  "evaluation": "Binary pass/fail scoring. Computes SSIM and unnormalized MSE between the agent's reconstructed_calibrated.npy and the reference image. Score = 1.0 if SSIM >= 0.95 AND MSE <= 4e-6; else 0.0. Missing output files yield 0.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "4",
+    "domain_code": "health_medicine",
+    "subdomain_id": "4.1",
+    "subdomain_code": "clinical_diagnostics",
+    "subdomain_name": "Clinical Diagnostics & Imaging",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:43:50.537034Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/health_medicine/ct_geometry_calibration_catphan/task_card.json"
+      },
+      "rationale": "The task involves calibrating CT geometry parameters for medical imaging, which falls under clinical diagnostics."
+    }
+  }
+}

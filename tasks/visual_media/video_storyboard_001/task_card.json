@@ -1,0 +1,77 @@
+{
+  "taskId": "visual_media/video_storyboard_001",
+  "title": "Video Storyboard Document",
+  "summary": "Watch a short video and create a factual DOCX storyboard that preserves visual details needed to answer a later question set.",
+  "category": "visual_media",
+  "software": [
+    "VLC",
+    "Word processor",
+    "Python"
+  ],
+  "taskPrompt": "You are creating a storyboard document for a short video on a Windows VM.\n\n## Input Files\n- Video: `input/Yasuji_Murata-_A_Wolf_is_a_Wolf_(1931).ogv`\n- Question set: `input/video_storyboard_qa_set.docx`\n\n## Software\nUse any DOCX-capable workflow available on the VM. A task-local launcher is available at `software/launch_word_processor.cmd`.\n\n## Your Task\n1. Watch or inspect the full input video.\n2. Read the question set so your storyboard preserves facts needed for later answering.\n3. Create a concise, complete storyboard in temporal order.\n4. For each shot or segment, include shot/segment ID, start and end time, visual description, key actions, important objects/people/scene details, and visible text or dialogue needed for the questions.\n5. Do not answer the questions directly. Use only information grounded in the video.\n\n## Output\nSave the final readable Word document exactly as `output/storyboard.docx`.",
+  "agentMustDo": [
+    "Inspect the full video.",
+    "Use the question set to identify details the storyboard must preserve.",
+    "Write a temporal storyboard with segment IDs, times, visual descriptions, actions, objects, people, and relevant visible text or dialogue.",
+    "Save a valid DOCX file named `storyboard.docx`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Yasuji_Murata-_A_Wolf_is_a_Wolf_(1931).ogv",
+      "format": "ogv",
+      "path": "input/Yasuji_Murata-_A_Wolf_is_a_Wolf_(1931).ogv",
+      "description": "Input short video to inspect."
+    },
+    {
+      "name": "video_storyboard_qa_set.docx",
+      "format": "docx",
+      "path": "input/video_storyboard_qa_set.docx",
+      "description": "Question set that defines which factual details the storyboard must preserve."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "storyboard.docx",
+      "format": "docx",
+      "path": "output/storyboard.docx",
+      "description": "Required storyboard document."
+    }
+  ],
+  "outputContracts": [
+    {
+      "name": "Storyboard document requirements",
+      "format": "docx content contract",
+      "path": "task prompt",
+      "description": "The storyboard must be temporal, grounded in the video, and include the required shot or segment details."
+    }
+  ],
+  "evaluation": "The evaluator reads the submitted DOCX and scores whether it is valid, grounded in the video, temporally organized, and sufficiently complete to support the question set without directly answering it.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:39:23.122186Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/video_storyboard_001/task_card.json"
+      },
+      "rationale": "The task involves creating a storyboard for a video, which falls under visual media arts."
+    }
+  }
+}

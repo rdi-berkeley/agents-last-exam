@@ -1,0 +1,88 @@
+{
+  "taskId": "psychology_neuro/celegans_neuron_tracking",
+  "title": "C. elegans Neuron Tracking",
+  "summary": "Complete sparse whole-brain neuron trajectories in a staged HDF5 recording by preserving neuron identity across time and writing the finished track file for one of four variants.",
+  "category": "psychology_neuro",
+  "software": [
+    "POINTS",
+    "Python",
+    "h5py",
+    "PyQt5"
+  ],
+  "taskPrompt": "You are completing a C. elegans neuron-tracking task on Linux.\n\n## Task Directory\n`/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137`\n\n## Visible Inputs\n- Task file: `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/input/137.h5`\n- Solve guide: `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/input/AGENT_README.md`\n- Variant metadata: `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/input/variant_manifest.json`\n- Staged runtime manifest: `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/input/runtime_env/pyproject.toml`\n- Staged lockfile: `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/input/runtime_env/uv.lock`\n- GUI launcher: `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/software/open_points_on_output.sh`\n- Programmatic Python wrapper: `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/software/python_with_task_deps.sh`\n\n## Your Task\n1. Read `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/input/AGENT_README.md`.\n2. Work from `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/input/137.h5` for variant `137`.\n3. Either launch the GUI with `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/software/open_points_on_output.sh` or edit the file programmatically with `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/software/python_with_task_deps.sh`.\n4. Fill the `points[t, 1..30, :]` trajectories across frames while preserving neuron identity.\n5. Save the completed result only to `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/output/137.h5`.\n\n## Output Requirements\n- Preserve the existing image data and root attrs.\n- Keep `points[:, 0, :]` as `NaN`.\n- Do not rename datasets or change array shapes.\n- Do not modify files under `/media/user/data/agenthle/psychology_neuro/celegans_neuron_tracking/137/input`.\n",
+  "agentMustDo": [
+    "Read the staged solve guide and variant manifest for the selected recording.",
+    "Open the sparse task HDF5 through the POINTS GUI launcher or the staged Python wrapper.",
+    "Fill `points[t, 1..30, :]` across time while preserving neuron identity and leaving uncertain coordinates as `NaN`.",
+    "Write the completed HDF5 only to `output/<variant>.h5`."
+  ],
+  "inputFiles": [
+    {
+      "name": "<variant>.h5",
+      "format": "HDF5",
+      "path": "input/<variant>.h5",
+      "description": "Sparse whole-brain neuron-tracking task file with 3 seeded frames and volumetric image data."
+    },
+    {
+      "name": "AGENT_README.md",
+      "format": "Markdown",
+      "path": "input/AGENT_README.md",
+      "description": "Agent-visible solve guide for POINTS usage, coordinate conventions, and output rules."
+    },
+    {
+      "name": "variant_manifest.json",
+      "format": "JSON",
+      "path": "input/variant_manifest.json",
+      "description": "Per-variant metadata including `T`, seed frames, selected neuron ids, and `pixel_scale`."
+    },
+    {
+      "name": "runtime_env",
+      "format": "uv Python environment",
+      "path": "input/runtime_env/",
+      "description": "Pinned Python dependency manifest and lockfile for programmatic edits and evaluation."
+    },
+    {
+      "name": "open_points_on_output.sh",
+      "format": "Shell launcher",
+      "path": "software/open_points_on_output.sh",
+      "description": "Stable GUI launcher that opens POINTS on a writable output copy of the task file."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "<variant>.h5",
+      "format": "HDF5",
+      "path": "output/<variant>.h5",
+      "description": "Required runtime deliverable containing the completed `points` trajectories while preserving the staged image data and attrs."
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- Missing `output/<variant>.h5`\n- Missing `points` dataset or wrong `points` shape/dtype\n- Broken sentinel row at `points[:, 0, :]`\n- Root attrs or non-`points` dataset structure/data no longer match the staged input contract\n- Scoring step cannot evaluate the submitted file\n\n**Scoring method**\n1. The evaluator first validates that the submitted HDF5 preserves the staged contract: same dataset/group structure, same root attrs, same non-`points` image data, and an all-`NaN` sentinel row.\n2. If that contract check passes, it computes a continuous score from geometric mean tracking metrics over the completed trajectories.\n3. The score rewards positional accuracy, presence accuracy, and identity consistency while keeping malformed or contract-violating files at `0.0`.\n\n**Score behavior**\n- Positive fixtures score `1.0`.\n- Seed-only negative fixtures are realistic bad outputs and intentionally score low but nonzero (`0.18047920424271602`, `0.16614977061078395`, `0.13115192820751412`, `0.12610195606235935` for variants `137`, `153`, `184`, `185`).\n- Contract-violating files such as a broken sentinel row or a stripped-down `points`-only HDF5 score `0.0`.\n",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "5",
+    "domain_code": "psychology_neuro",
+    "subdomain_id": "5.1",
+    "subdomain_code": "comp_neuro",
+    "subdomain_name": "Computational Neuroscience",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:39:37.810110Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/psychology_neuro/celegans_neuron_tracking/task_card.json"
+      },
+      "rationale": "The task involves tracking neurons in C. elegans, which falls under computational neuroscience."
+    }
+  }
+}

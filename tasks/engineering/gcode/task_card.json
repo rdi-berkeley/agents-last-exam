@@ -1,0 +1,81 @@
+{
+  "taskId": "engineering/gcode",
+  "title": "gcode",
+  "summary": "Create machining toolpaths for the staged workpiece in PowerMill and deliver the required NC output.",
+  "category": "engineering",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are a CAM (Computer-Aided Manufacturing) engineer using Autodesk PowerMill.\n\n## Your Task\nDesign toolpaths to machine workpiece **125162_319** using the provided blank PowerMill project.\n\n## Input Files\n- **PowerMill project** (blank, with pre-configured tools, zero toolpaths):\n  `E:\\agenthle\\engineering\\gcode\\125162_319\\input\\125162-319-NCFM-T`\n- **Ideal workpiece geometry** (.prt format): `E:\\agenthle\\engineering\\gcode\\125162_319\\input\\125162_319.prt`\n- **Reference image**: `E:\\agenthle\\engineering\\gcode\\125162_319\\input\\125162_319.jpg`\n\n## What You Must Do\n1. Copy the PowerMill project from `E:\\agenthle\\engineering\\gcode\\125162_319\\input\\125162-319-NCFM-T` to `E:\\agenthle\\engineering\\gcode\\125162_319\\output\\125162-319-NCFM-T`\n   (work on the copy so the original stays intact)\n2. Open PowerMill from `E:\\agenthle\\engineering\\gcode\\125162_319\\software\\PowerMill 2025.lnk` and load the copied project at:\n   `E:\\agenthle\\engineering\\gcode\\125162_319\\output\\125162-319-NCFM-T`\n3. Study the ideal workpiece geometry (.prt file) to understand the target shape.\n   The copied PowerMill project already contains the machine, stock, tool library,\n   and workpiece setup; the `.prt` file is an external geometry reference.\n4. Design toolpaths that will machine the workpiece from raw stock:\n   - Use roughing toolpaths to remove bulk material\n   - Use finishing toolpaths for surfaces requiring higher precision\n   - Use the pre-configured tools already in the project (do NOT create new tools)\n5. **Critical**: Ensure each toolpath has NO collisions and NO gouging\n6. Run a stock model simulation to confirm the final result\n7. **Save** the PowerMill project (Ctrl+S)\n\n## Color Coding on the Workpiece\nThe .prt file has faces colored by precision requirement:\n- Tight tolerance faces (e.g., VDI12/15): require finer finish toolpaths\n- Loose tolerance faces (e.g., spray/texture faces): standard finish is acceptable\n\n## Evaluation\nYour toolpaths will be automatically evaluated by:\n1. Gate check: PowerMill exports per-toolpath collision / gouge status; any collision\n   or gouge reported in that export yields score 0\n2. Geometric accuracy: your saved project is simulated to `output/agent_sim.stl`, then\n   compared against a hidden expert `reference/reference_sim.stl`\n3. STL scoring:\n   - 10,000 surface points are sampled from the agent STL\n   - final score = 0.70 * fraction within 0.3 mm of the reference surface\n     + 0.30 * fraction within 2.0 mm\n\n## Important\n- Work ONLY within the project at `E:\\agenthle\\engineering\\gcode\\125162_319\\output\\125162-319-NCFM-T`\n- Do NOT move or rename the project folder\n- SAVE your project when finished",
+  "agentMustDo": [
+    "Open the staged blank PowerMill project for the selected workpiece.",
+    "Review the staged `.prt` geometry and `.jpg` visual reference.",
+    "Design roughing and finishing toolpaths using the preconfigured tool library.",
+    "Ensure the toolpaths have no collisions and no gouges.",
+    "Run a stock-model simulation in PowerMill.",
+    "Save the modified project inside `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Blank PowerMill project",
+      "format": "directory",
+      "path": "input/<PM_PROJECT_NAME>/",
+      "description": "cloned from the expert PM project with all toolpaths and stock models removed"
+    },
+    {
+      "name": "Ideal workpiece geometry",
+      "format": "`.prt`",
+      "path": "input/<variant_name>.prt",
+      "description": "agent-visible target geometry; colored faces communicate tolerance intent"
+    },
+    {
+      "name": "Workpiece preview",
+      "format": "`.jpg`",
+      "path": "input/<variant_name>.jpg",
+      "description": "visual reference image"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Modified PowerMill project",
+      "format": "directory",
+      "path": "output/<PM_PROJECT_NAME>/",
+      "description": "working project the agent edits and saves"
+    },
+    {
+      "name": "Simulated stock model",
+      "format": "`.stl`",
+      "path": "output/agent_sim.stl",
+      "description": "generated during evaluation from the agent's saved project"
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- any collision is reported\n- any gouge is reported\n- the agent simulation does not produce `output/agent_sim.stl`\n\n**Scoring method:**\nThe evaluator first runs a collision/gouge gate in PowerMill, then simulates the saved agent project to produce `output/agent_sim.stl`, then compares that STL against `reference/reference_sim.stl` with a point-to-mesh distance metric.\n\n- Collision/gouge gate: the evaluator applies PowerMill collision checking to every toolpath and parses the exported setup-sheet collision / gouge columns; any positive flag forces score `0`\n- Mesh comparison: sample `10,000` surface points from the agent STL, measure closest-point distance to the hidden reference STL, then compute `0.70 * ratio_within_0.3_mm + 0.30 * ratio_within_2.0_mm`\n\n- **Where does the main scoring logic run?** on the Windows VM through temp-uploaded scripts\n- **If any scoring step runs on the VM, why is that exception necessary?** collision checking and stock-model simulation require PowerMill itself, and the hidden reference STL already lives next to the staged projects on the VM\n\n**What does a PERFECT output look like?**\nThe agent's saved project simulates cleanly, produces no collisions or gouges, and yields a stock model nearly identical to the expert reference STL. Perfect score = `1.0`.\n\n**What does a WRONG/empty output look like?**\nA project with collisions, gouges, missing simulation output, or a stock model far from the expert result. These cases score near `0.0`.",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.5",
+    "subdomain_code": "manufacturing",
+    "subdomain_name": "Manufacturing & Industrial Systems",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:33:10.635243Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/engineering/gcode/task_card.json"
+      },
+      "rationale": "The task involves creating machining toolpaths in a manufacturing context."
+    }
+  }
+}

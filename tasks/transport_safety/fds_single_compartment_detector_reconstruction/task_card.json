@@ -1,0 +1,63 @@
+{
+  "taskId": "transport_safety/fds_single_compartment_detector_reconstruction",
+  "title": "FDS Single-Compartment Detector Reconstruction",
+  "summary": "Complete a Linux Python CLI that reconstructs a synthetic single-compartment FDS/Smokeview detector-response case from visible fire-safety engineering inputs.",
+  "category": "transport_safety",
+  "software": [
+    "Python 3.10",
+    "FDS 6.10.1",
+    "Smokeview 6.10.1"
+  ],
+  "taskPrompt": "You are acting as a senior fire protection engineer reconstructing a synthetic single-compartment detector-response incident on a Linux VM.\n\n## Visible Starter Project\n- Starter project directory: `/media/user/data/agenthle/transport_safety/fds_single_compartment_detector_reconstruction/base/input/project`\n- Task prompt: `/media/user/data/agenthle/transport_safety/fds_single_compartment_detector_reconstruction/base/input/TASK_PROMPT.md`\n- Visible scenario input: `/media/user/data/agenthle/transport_safety/fds_single_compartment_detector_reconstruction/base/input/project/input/visible`\n- Starter CLI: `/media/user/data/agenthle/transport_safety/fds_single_compartment_detector_reconstruction/base/input/project/reconstruct_fire_case.py`\n\n## Your Task\nComplete the reconstruction CLI so it can run with this exact contract:\n\n```bash\npython reconstruct_fire_case.py --input-dir <scenario_input_dir> --output-dir <output_dir>\n```\n\nUse the visible project files and the documented reconstruction contract. Your implementation must generalize to scenario directories with the same schema; do not hard-code the visible case ID or output values.\n\n## Required Final Submission\nWrite your completed submission package to:\n\n`/media/user/data/agenthle/transport_safety/fds_single_compartment_detector_reconstruction/base/output`\n\nAt minimum, `/media/user/data/agenthle/transport_safety/fds_single_compartment_detector_reconstruction/base/output/reconstruct_fire_case.py` must exist. The evaluator will run that script against scenario input directories and check the generated FDS/Smokeview artifacts.\n\n## Required CLI Outputs\nFor each scenario, your CLI must write these files into the CLI `--output-dir`:\n- `completed_case.fds`\n- `device_manifest.json`\n- `hrr_reconstruction.csv`\n- `detector_activation.csv`\n- `tenability_summary.csv`\n- `grid_sensitivity.csv`\n- `engineering_memo.md`\n\n## Important Rules\n- Do not modify files under `/media/user/data/agenthle/transport_safety/fds_single_compartment_detector_reconstruction/base/input`.\n- Use `/media/user/data/agenthle/transport_safety/fds_single_compartment_detector_reconstruction/base/output` only for your final submitted files.\n- FDS/Smokeview are available at `/media/user/data/agenthle/transport_safety/fds_single_compartment_detector_reconstruction/base/software/fds` and `/media/user/data/agenthle/transport_safety/fds_single_compartment_detector_reconstruction/base/software/smokeview` for optional professional validation, but the submitted CLI must run offline with Python standard-library code.",
+  "agentMustDo": [
+    "Inspect the visible starter project and task prompt under input/project.",
+    "Infer the HRR ramp from the supplied field_sensor_traces.csv rather than hard-coding case IDs or output values.",
+    "Complete reconstruct_fire_case.py so it works for any same-schema scenario directory.",
+    "Place the completed reconstruct_fire_case.py at the root of the runtime output directory."
+  ],
+  "inputFiles": [
+    {
+      "name": "Starter project",
+      "format": "Python project directory",
+      "path": "input/project/",
+      "description": "Visible starter CLI, visible scenario inputs, prompt, and reconstruction contract."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Completed submission package",
+      "format": "Python CLI plus generated artifacts",
+      "path": "output/reconstruct_fire_case.py",
+      "description": "The evaluator runs the submitted CLI against visible and hidden same-schema scenarios."
+    }
+  ],
+  "evaluation": "Offline deterministic Python evaluator. The submitted CLI is run against same-schema fire reconstruction scenarios, and the normalized score is returned as raw_score / 100. Reference fixture scores 1.0; untouched starter scores 0.0.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "10",
+    "domain_code": "transport_safety",
+    "subdomain_id": "10.3",
+    "subdomain_code": "fire_safety",
+    "subdomain_name": "Fire Science & Public Safety",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:25:53.148972Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/transport_safety/fds_single_compartment_detector_reconstruction/task_card.json"
+      },
+      "rationale": "The task involves fire protection engineering and reconstruction of fire safety scenarios."
+    }
+  }
+}

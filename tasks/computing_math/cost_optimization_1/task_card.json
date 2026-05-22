@@ -1,0 +1,100 @@
+{
+  "taskId": "computing_math/cost_optimization_1",
+  "title": "AWS Cost Optimization Analysis",
+  "summary": "Analyze a synthetic AWS billing dashboard screenshot plus usage and pricing tables to identify wasteful resources and produce a structured optimization report with projected monthly savings.",
+  "category": "computing_math",
+  "software": [
+    "Python",
+    "pandas",
+    "uv"
+  ],
+  "taskPrompt": "You are an AWS cost optimization analyst working on Linux.\n\n## Task Directory\n`/media/user/data/agenthle/computing_math/cost_optimization_1/base`\n\n## Visible Inputs\n- Task brief: `/media/user/data/agenthle/computing_math/cost_optimization_1/base/input/task_description.txt`\n- Dashboard image: `/media/user/data/agenthle/computing_math/cost_optimization_1/base/input/aws_billing_dashboard.png`\n- Structured usage data: `/media/user/data/agenthle/computing_math/cost_optimization_1/base/input/resource_usage.csv`\n- Pricing table: `/media/user/data/agenthle/computing_math/cost_optimization_1/base/input/aws_pricing_reference.csv`\n- Python runtime manifest: `/media/user/data/agenthle/computing_math/cost_optimization_1/base/input/runtime_env/pyproject.toml`\n\n- Python runtime lockfile: `/media/user/data/agenthle/computing_math/cost_optimization_1/base/input/runtime_env/uv.lock`\n\n## Your Task\n1. Read the task brief and inspect the dashboard image directly.\n2. Use the CSV inputs plus the dashboard-only findings to identify wasteful spend.\n3. Apply the EC2, RDS, S3, NAT Gateway, Elastic IP, and CloudWatch optimization rules described in the brief.\n4. Write `optimization_report.json` with an `executive_summary` object and a `recommendations` array.\n5. Write `savings_summary.csv` with columns:\n   `resource_id,resource_type,name,action,current_cost,projected_cost,monthly_savings`\n\n## Environment\n- Treat `/media/user/data/agenthle/computing_math/cost_optimization_1/base/input` as read-only.\n- Use `/media/user/data/agenthle/computing_math/cost_optimization_1/base/software/python_cost_optimization.sh` if you want a task-local Python environment with pandas.\n- The benchmark only exposes the visible input/software/output surface while you are solving the task.\n- Write final deliverables only under `/media/user/data/agenthle/computing_math/cost_optimization_1/base/output`.\n",
+  "agentMustDo": [
+    "Read `input/task_description.txt` and inspect the dashboard image directly.",
+    "Use the CSV inputs plus the 3 dashboard-only findings to identify wasteful EC2, RDS, S3, NAT Gateway, Elastic IP, and CloudWatch spend.",
+    "Apply the explicit pricing and optimization rules from the task brief using `input/aws_pricing_reference.csv`.",
+    "Write `output/optimization_report.json` with an `executive_summary` object and a `recommendations` array.",
+    "Write `output/savings_summary.csv` with `resource_id,resource_type,name,action,current_cost,projected_cost,monthly_savings`."
+  ],
+  "inputFiles": [
+    {
+      "name": "aws_billing_dashboard.png",
+      "format": "PNG",
+      "path": "input/aws_billing_dashboard.png",
+      "description": "Synthetic AWS billing dashboard screenshot containing both structured tables and 3 dashboard-only findings that are not present in the usage CSV."
+    },
+    {
+      "name": "resource_usage.csv",
+      "format": "CSV",
+      "path": "input/resource_usage.csv",
+      "description": "Structured inventory of EC2, RDS, and S3 resources with utilization, deployment, storage, and cost fields."
+    },
+    {
+      "name": "aws_pricing_reference.csv",
+      "format": "CSV",
+      "path": "input/aws_pricing_reference.csv",
+      "description": "Deterministic pricing reference used to compute downsizing, storage-tier, and monthly savings recommendations."
+    },
+    {
+      "name": "task_description.txt",
+      "format": "Text",
+      "path": "input/task_description.txt",
+      "description": "Agent-visible benchmark brief describing the rules, output contract, and dashboard-only requirement."
+    },
+    {
+      "name": "runtime_env",
+      "format": "uv Python environment metadata",
+      "path": "input/runtime_env",
+      "description": "Pinned `pyproject.toml` and `uv.lock` files that Stage 4 provisioning uses to build the task-scoped Python runtime."
+    },
+    {
+      "name": "python_cost_optimization.sh",
+      "format": "Shell wrapper",
+      "path": "software/python_cost_optimization.sh",
+      "description": "Agent-visible wrapper that launches the preprovisioned task-scoped Python runtime under `.runtime/python-3.10.12-pandas-2.3.3/`."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "optimization_report.json",
+      "format": "JSON",
+      "path": "output/optimization_report.json",
+      "description": "Required structured report containing `executive_summary` plus per-resource recommendations."
+    },
+    {
+      "name": "savings_summary.csv",
+      "format": "CSV",
+      "path": "output/savings_summary.csv",
+      "description": "Required flat savings table with the benchmark's expected summary columns."
+    }
+  ],
+  "evaluation": "**Submissions receive `0.0` when:**\n- `output/optimization_report.json` is missing or invalid JSON\n- the JSON is missing the `recommendations` array\n- `output/savings_summary.csv` is missing or malformed\n- projected savings are negative or exceed total current cost\n\n**Scoring method:**\n- `30%` coverage F1 over the hidden recommendation set, including the 3 dashboard-only resources\n- `30%` action correctness on matched resources\n- `25%` savings accuracy with full credit inside `+/-20%` relative error and linear decay to `0` at `+/-100%`\n- `15%` report completeness over the required executive-summary fields, recommendation schema, and CSV columns\n\nThe scorer also normalizes the CloudWatch dashboard alias `cw-loggroup-/aws/lambda/old-processor` to the hidden canonical resource ID `cw-loggroup-old-processor`.\n\n**What does a perfect output look like?**\nAll wasteful resources are identified, including the 3 dashboard-only findings, the actions are correct, savings stay within tolerance, and both required output files are structurally complete.\n\n**What does a wrong output look like?**\nA realistic wrong output misses the image-only findings while otherwise producing valid files, which yields partial credit below `1.0` rather than a hard gate.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.6",
+    "subdomain_code": "infra_cloud",
+    "subdomain_name": "Infrastructure Engineering & Cloud Operations",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:06:24.773454Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/computing_math/cost_optimization_1/task_card.json"
+      },
+      "rationale": "The task focuses on cost optimization within cloud infrastructure."
+    }
+  }
+}

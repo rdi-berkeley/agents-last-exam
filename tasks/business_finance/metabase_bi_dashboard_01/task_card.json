@@ -1,0 +1,75 @@
+{
+  "taskId": "business_finance/metabase_bi_dashboard_01",
+  "title": "Metabase BI Dashboard",
+  "summary": "Build a business analytics dashboard in Metabase using a pre-loaded SQLite database, then export key metrics as a structured JSON report.",
+  "category": "business_finance",
+  "software": [
+    "Metabase 0.54.3",
+    "Microsoft Edge"
+  ],
+  "taskPrompt": "You are a business analyst building a BI dashboard in Metabase.\n\n## Environment\n- Metabase is available on this Windows machine. To start it, run the launcher script:\n  `E:\\agenthle\\business_finance\\metabase_bi_dashboard_01\\base\\software\\launch_metabase.bat`\n  Then wait for the server to become ready and open http://localhost:3000 in the browser.\n- Login credentials are in: `E:\\agenthle\\business_finance\\metabase_bi_dashboard_01\\base\\input\\metabase_credentials.txt`\n- The database \"Business Analytics\" is already connected in Metabase.\n\n## Your Task\n1. Read the task requirements at `E:\\agenthle\\business_finance\\metabase_bi_dashboard_01\\base\\input\\requirements.md`\n2. Read the output schema at `E:\\agenthle\\business_finance\\metabase_bi_dashboard_01\\base\\input\\output_schema.json`\n3. Launch Metabase using the launcher script and log in\n4. Using the Metabase GUI, build the required dashboard with all 6 charts and a heading text card\n5. Query the Business Analytics database to extract the required metrics\n6. Save the final metrics as a JSON file conforming to the output schema\n\n## Output\n- Save your JSON report to: `E:\\agenthle\\business_finance\\metabase_bi_dashboard_01\\base\\output\\dashboard_metrics.json`\n- The JSON must conform to the schema in the output_schema.json\n- All numerical values must be rounded to 2 decimal places\n- Revenue calculations must only include orders with status = 'completed'",
+  "agentMustDo": [
+    "Launch Metabase via the launcher script and wait for the server to start",
+    "Log in at http://localhost:3000 with the provided credentials",
+    "Build a dashboard with 6 charts and a heading text card in the Metabase GUI",
+    "Query the Business Analytics SQLite database to extract all required metrics",
+    "Save dashboard_metrics.json conforming to the output schema to the output directory"
+  ],
+  "inputFiles": [
+    {
+      "name": "Task requirements",
+      "format": "md",
+      "path": "input/requirements.md",
+      "description": "Detailed dashboard requirements specifying 6 charts and a heading text card."
+    },
+    {
+      "name": "Output schema",
+      "format": "json",
+      "path": "input/output_schema.json",
+      "description": "JSON Schema defining the required structure for dashboard_metrics.json."
+    },
+    {
+      "name": "Metabase credentials",
+      "format": "txt",
+      "path": "input/metabase_credentials.txt",
+      "description": "Login credentials for the Metabase instance."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Reference metrics",
+      "format": "json",
+      "path": "reference/reference_metrics.json",
+      "description": "Hidden ground-truth metrics used for evaluation scoring."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- Output JSON is missing, unreadable, or violates the required top-level schema.\n- Any of the 11 required top-level keys is missing.\n\n**Scoring method:**\n11 top-level fields scored independently with equal weight:\n- Scalar numerics (total_revenue, average_order_value, conversion_rate): pass/fail within 0.5% relative tolerance\n- Exact integers (total_completed_orders, unique_purchasing_customers): exact match required\n- Dict numerics (revenue_by_category, monthly_revenue): partial credit per matching key within 0.5% tolerance\n- Dict integers (orders_by_device, orders_by_channel, event_funnel): partial credit per matching key with exact integer match\n- Array (top_10_customers): order-sensitive name + value match\n\nFinal score = weighted average of 11 equal-weight field scores (0.0 to 1.0).\n\n**Where does the main scoring logic run?** Local Python evaluation via scripts/evaluate_metrics.py.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.3",
+    "subdomain_code": "enterprise_analytics",
+    "subdomain_name": "Enterprise Analytics & Planning",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:33:47.594628Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/business_finance/metabase_bi_dashboard_01/task_card.json"
+      },
+      "rationale": "The task involves building a business intelligence dashboard and analyzing business metrics."
+    }
+  }
+}
