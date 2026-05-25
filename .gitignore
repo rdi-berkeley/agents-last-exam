@@ -3,6 +3,7 @@ __pycache__/
 *.pyo
 .venv/
 .uv/
+uv.lock
 dist/
 build/
 *.egg-info/
@@ -32,3 +33,4 @@ docs/dev
 # `.env` matches at any depth, so it also covers `secret/.env`.
 .env
 secret/*.json
+hf_token
