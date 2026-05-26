@@ -8,7 +8,7 @@ LOG_SPEC.md is the source of truth; this class is its only writer. Layout:
         trajectory.json    ATIF-v1.0 from Trajectory.model_dump_json(indent=2)
         eval_result.json   {eval_status, score, eval_duration_s, error}
         origin_log/<agent_name>/    deployer work_dir pulled from VM
-        output/                     stub: empty + output_gather_skipped event
+        output/                     agent output, when output_path="local"
 
 The constructor refuses to overwrite an existing run dir
 (``FileExistsError``). Each finalize write is wrapped in try/except; the
@@ -21,13 +21,40 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
 
-from .slug import build_run_id, slug_agent, slug_model, slug_task
-
 logger = logging.getLogger(__name__)
+
+# ----------------------------------------------------------------- slugs
+
+_SLUG_RE = re.compile(r"[^a-z0-9-]+")
+
+
+def slug_model(model: str) -> str:
+    if not model:
+        return "unknown-model"
+    s = model.lower().replace(".", "-").replace("/", "-").replace("_", "-")
+    s = _SLUG_RE.sub("-", s).strip("-")
+    return s or "unknown-model"
+
+
+def slug_task(task_path: str) -> str:
+    return task_path.strip("/").replace("/", "__")
+
+
+def slug_agent(agent_name: str) -> str:
+    s = (agent_name or "unknown").lower().replace("-", "_")
+    return re.sub(r"[^a-z0-9_]+", "_", s).strip("_") or "unknown"
+
+
+def build_run_id(*, agent_id: str, model: str, task_path: str, variant_index: int, ts: str) -> str:
+    return (
+        f"{slug_agent(agent_id)}__{slug_model(model)}__"
+        f"{slug_task(task_path)}__v{variant_index}__{ts}"
+    )
 
 
 class RunWriter:

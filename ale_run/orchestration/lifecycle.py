@@ -38,10 +38,8 @@ from ..environments.env import ALEEnv
 from ..executors import DockerExecutor, LocalExecutor, SandboxExecutor
 from ..tasks.loader import TaskLoader
 from ..tasks.driver import TaskDriver
-from . import gather
 from .factory import build_config, resolve_agent
-from .monitor import RateLimitDetector
-from .run_writer import RunWriter
+from .run_writer import RunWriter, slug_task
 from .experiment_spec import ArtifactsSpec, RunUnit, UnitResult
 from .termination import classify_error, err_dict, redact_config
 
@@ -59,9 +57,9 @@ _DEFAULT_TIMEOUT_S = 7200
 # ======================================================================
 
 
-# Process-wide shutdown event: set by SIGINT/SIGTERM handlers, read by the
-# rate-limit monitor + per-unit cleanup so signal arrival flips every
-# in-flight unit to "cancelled" without losing the events.jsonl tail.
+# Process-wide shutdown event: set by SIGINT/SIGTERM handlers, read by
+# per-unit cleanup so signal arrival flips every in-flight unit to
+# "cancelled" without losing the events.jsonl tail.
 _shutdown_event: asyncio.Event | None = None
 
 
@@ -131,10 +129,11 @@ async def run_one_unit(
     config = build_config(config_cls, unit.agent_spec.config)
     # Executor kind: yaml override > deployer's default_executor. resolve_agent
     # has already validated this against the deployer's supported_executors.
-    executor_kind = (
+    executor_type = (
         unit.agent_spec.executor
         or getattr(deployer_cls, "default_executor", "")
-        or "sandbox"    )
+        or "sandbox"
+    )
 
     # ---- 2. Open RunWriter (creates the run dir + events.jsonl) ----
     writer = RunWriter(
@@ -151,7 +150,7 @@ async def run_one_unit(
         model=config.model,
         task=unit.task_path,
         variant_index=unit.variant_index,
-        executor=executor_kind,
+        executor=executor_type,
     )
 
     env: ALEEnv | None = None
@@ -194,7 +193,7 @@ async def run_one_unit(
             writer.emit_event(
                 "provision_done",
                 env_id=env.sandbox.id,
-                capacity_profile=env.sandbox.metadata.get("capacity_profile"),
+                machine_type=env.sandbox.metadata.get("machine_type"),
             )
 
             builder = TrajectoryBuilder(
@@ -234,7 +233,7 @@ async def run_one_unit(
             host_artifacts_dir = writer.run_dir / "origin_log" / agent_name
             host_artifacts_dir.mkdir(parents=True, exist_ok=True)
             executor = _build_executor(
-                executor_kind=executor_kind,
+                executor_type=executor_type,
                 env=env,
                 config=config,
                 agent_name=agent_name,
@@ -243,121 +242,81 @@ async def run_one_unit(
             )
             writer.emit_event(
                 "agent_run_started",
-                executor=executor_kind,
+                executor=executor_type,
                 work_dir=executor.work_dir,
             )
-            # Construct + install the deployer. (Used to go through
-            # ``executor.install_deployer`` trampoline; that two-liner is
-            # gone — lifecycle's view of "construct + install" is direct.)
-            deployer = deployer_cls(executor)
-            await deployer.install()
 
-            # ─── Incremental sync (simprun parity) ─────────────────────
-            # Tail each ``hot_artifacts`` file on the remote env into its host
-            # mirror via download_file_range. Boundary-safe slicing at
-            # the last `\n` (jsonl) is in sync_helpers.apply_range_step.
-            # State (per-path byte offset) is held by the puller; on a
-            # transport / parse failure the offset is NOT advanced, so
-            # the next tick re-pulls the same bytes — matching simprun's
-            # _sync_incremental invariant.
-            puller, puller_targets = _build_incremental_puller(
-                deployer_cls=deployer_cls,
-                executor=executor,
-                run_id=writer.run_id,
-                task_id=unit.task_path,
-            )
-            if puller is not None:
-                writer.emit_event(
-                    "incremental_pull_started",
-                    targets=[t.remote_path for t in puller_targets],
-                    interval_s=puller.interval_s,
-                )
-                puller.start()
-
-            # ─── Rate-limit monitor (simprun parity) ────────────────────
-            # Tails the locally-mirrored stderr.log (which IncrementalPuller
-            # is writing at its own tick cadence) every 30s; on hit-rate threshold,
-            # cancels the agent and flags the run for cleanup_mode=keep so
-            # we don't waste the env boot on the retry. Matches simprun
-            # runner.py:_monitor_rate_limits + the paused-state cleanup.
-            rate_detector = RateLimitDetector()
-            stderr_host = host_artifacts_dir / "stderr.log"
-            launch_task = asyncio.create_task(
-                deployer.launch(task_meta["description"]),
-                name="agent_launch",
-            )
-            monitor_task = asyncio.create_task(
-                _monitor_rate_limits(rate_detector, stderr_host, writer),
-                name="rate_limit_monitor",
-            )
-
-            rate_limited = False
-            try:
-                try:
-                    done, _pending = await asyncio.wait(
-                        {launch_task, monitor_task},
-                        timeout=timeout_s,
-                        return_when=asyncio.FIRST_COMPLETED,
-                    )
-                except asyncio.CancelledError:
-                    launch_task.cancel()
-                    monitor_task.cancel()
-                    raise
-
-                if monitor_task in done and not launch_task.done():
-                    # Rate-limit detected mid-run.
-                    rate_limited = True
-                    launch_task.cancel()
-                    try:
-                        await launch_task
-                    except (asyncio.CancelledError, Exception):
-                        pass
-                    run_result = AgentRunResult(
-                        status="failed",
-                        error="rate limit triggered during agent run",
-                        duration_s=None,
-                    )
-                elif launch_task in done:
-                    monitor_task.cancel()
-                    try:
-                        await monitor_task
-                    except (asyncio.CancelledError, Exception):
-                        pass
-                    try:
-                        run_result = launch_task.result()
-                    except Exception as launch_exc:
-                        run_result = AgentRunResult(
-                            status="failed",
-                            error=str(launch_exc),
-                            duration_s=None,
+            # ─── Hot-artifact incremental tail (sandbox executor only) ───
+            # For sandbox runs, work_dir lives on the remote VM; we tail
+            # the deployer's declared hot files into host_artifacts_dir so
+            # a SIGTERM mid-agent doesn't lose the transcript.
+            # Local / docker executors keep work_dir = host_artifacts_dir,
+            # so the tail is unnecessary.
+            stop_event = asyncio.Event()
+            tail_task: asyncio.Task | None = None
+            tail_targets: list[tuple[str, Path]] = []
+            if isinstance(executor, SandboxExecutor):
+                hot = tuple(getattr(deployer_cls, "hot_artifacts", ()) or ())
+                if hot:
+                    sep = "/" if env.sandbox.is_linux else "\\"
+                    tail_targets = [
+                        (
+                            f"{executor.work_dir.rstrip(sep)}{sep}{name}",
+                            host_artifacts_dir / name,
                         )
-                else:
-                    # Neither completed → wall-clock timeout.
-                    launch_task.cancel()
-                    monitor_task.cancel()
-                    for t in (launch_task, monitor_task):
-                        try:
-                            await t
-                        except (asyncio.CancelledError, Exception):
-                            pass
-                    run_result = AgentRunResult(
-                        status="timeout",
-                        error=f"agent wall-budget exceeded after {timeout_s}s",
-                        duration_s=float(timeout_s),
+                        for name in hot
+                    ]
+                    from ..executors.sandbox import tail_hot_artifacts
+                    writer.emit_event(
+                        "incremental_pull_started",
+                        targets=[t[0] for t in tail_targets],
                     )
+                    tail_task = asyncio.create_task(
+                        tail_hot_artifacts(
+                            executor=executor,
+                            targets=tail_targets,
+                            stop_event=stop_event,
+                        ),
+                        name="tail_hot_artifacts",
+                    )
+
+            try:
+                run_result = await asyncio.wait_for(
+                    executor.run_deployer(
+                        deployer_cls=deployer_cls,
+                        prompt=task_meta["description"],
+                        timeout_s=float(timeout_s),
+                    ),
+                    timeout=timeout_s,
+                )
+            except asyncio.TimeoutError:
+                run_result = AgentRunResult(
+                    status="timeout",
+                    error=f"agent wall-budget exceeded after {timeout_s}s",
+                    duration_s=float(timeout_s),
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as launch_exc:
+                import traceback as _tb
+                run_result = AgentRunResult(
+                    status="failed",
+                    error=f"{type(launch_exc).__name__}: {launch_exc}\n"
+                          f"{_tb.format_exc()}",
+                    duration_s=None,
+                )
             finally:
-                if puller is not None:
-                    reconcile_err = await puller.stop()
+                if tail_task is not None:
+                    stop_event.set()
+                    try:
+                        reconcile_err = await asyncio.wait_for(tail_task, timeout=120)
+                    except asyncio.TimeoutError:
+                        tail_task.cancel()
+                        reconcile_err = "tail reconcile wait timed out"
                     if reconcile_err:
                         writer.emit_event(
                             "incremental_pull_final_failed", error=reconcile_err,
                         )
-
-            if rate_limited:
-                # Force the env to stay alive — operator retries the run
-                # after the rate-limit window without paying for a re-boot.
-                effective_cleanup_mode = "keep"
-                writer.emit_event("rate_limit_paused", cleanup_mode="keep")
             writer.emit_event(
                 "agent_finished",
                 status=run_result.status,
@@ -365,33 +324,35 @@ async def run_one_unit(
             )
 
             # ============================================================
-            # Phase 2b — post-launch fanout (origin_log gather + output stub)
-            #
-            # Gather is only meaningful for SandboxExecutor, where work_dir lives
-            # on the remote env. Local / docker runtimes write directly into
-            # host_artifacts_dir, so the gather step is a no-op.
+            # Phase 2b — post-launch gather (origin_log) via executor.gather_dir
             # ============================================================
             writer.emit_event("post_launch_fanout_started", gcs_bucket="(cua direct)")
-            if isinstance(executor, SandboxExecutor):
-                try:
-                    report = await gather.pull_dir(
-                        env.sandbox,
-                        src=executor.work_dir,
-                        dst=executor.host_artifacts_dir,
-                    )
-                    if report.get("error"):
-                        writer.emit_event("origin_log_gather_failed", report=report)
-                    else:
-                        writer.emit_event("origin_log_gather_done", report=report)
-                except Exception as e:
+            try:
+                gather_report = await executor.gather_dir(
+                    src=executor.work_dir, dst=host_artifacts_dir,
+                )
+                if gather_report.error:
                     writer.emit_event(
                         "origin_log_gather_failed",
-                        report={"transport": "cua", "files": 0, "error": str(e)},
+                        report={
+                            "transport": gather_report.transport,
+                            "files": gather_report.files,
+                            "error": gather_report.error,
+                        },
                     )
-            else:
+                else:
+                    writer.emit_event(
+                        "origin_log_gather_done",
+                        report={
+                            "transport": gather_report.transport,
+                            "files": gather_report.files,
+                            "bytes": gather_report.bytes,
+                        },
+                    )
+            except Exception as e:
                 writer.emit_event(
-                    "origin_log_gather_skipped",
-                    reason=f"runtime={executor.kind} writes to host directly",
+                    "origin_log_gather_failed",
+                    report={"transport": "?", "files": 0, "error": str(e)},
                 )
             # ============================================================
             # Phase 3 — gather env output, stage reference, evaluate
@@ -401,7 +362,7 @@ async def run_one_unit(
             #     "local"    → cua-direct pull → <run_dir>/output/
             #     "gs://..." → vm-side gsutil push → user bucket
             #     Best-effort: failure logs + emits event but doesn't abort.
-            await _handle_output_best_effort(
+            await pull_agent_output(
                 env=env, provider=provider, artifacts=artifacts, task_meta=task_meta,
                 run_id=writer.run_id, task_id=unit.task_path, writer=writer,
                 run_dir=writer.run_dir,
@@ -412,7 +373,7 @@ async def run_one_unit(
             #     it for scoring. Best-effort: many tasks don't have a
             #     reference/ prefix and we just log + continue.
             env.set_phase("stage_reference")
-            await _stage_reference_best_effort(
+            await stage_reference(
                 env=env, provider=provider, artifacts=artifacts, task_meta=task_meta,
                 run_id=writer.run_id, task_id=unit.task_path, writer=writer,
             )
@@ -449,7 +410,7 @@ async def run_one_unit(
             if builder is not None and run_result is not None:
                 try:
                     deployer_cls.parse_artifacts(
-                        work_dir=executor.host_artifacts_dir,
+                        work_dir=host_artifacts_dir,
                         config=config,
                         run_result=run_result,
                         builder=builder,
@@ -552,7 +513,7 @@ async def run_one_unit(
         run_id=writer.run_id,
         unit=unit,
         config=config,
-        executor_kind=executor_kind,
+        executor_type=executor_type,
         status=status,
         score=score,
         phase=phase,
@@ -627,9 +588,7 @@ def _build_env_spec(task_meta: dict[str, Any], *, unit: RunUnit | None = None) -
     return SandboxSpec(
         snapshot=snapshot,
         os=os_type,
-        vcpus=int(task_meta.get("vcpus") or 4),
-        memory_gb=int(task_meta.get("memory_gb") or 16),
-        disk_gb=int(task_meta.get("disk_gb") or 200),
+        machine_type=task_meta.get("machine_type"),
         gpu=task_meta.get("gpu"),
         task_id=task_id,
         harness=harness,
@@ -646,49 +605,48 @@ def _work_dir_remote(os_type: str, agent_name: str, run_id: str) -> str:
 
 def _build_executor(
     *,
-    executor_kind: str,
+    executor_type: str,
     env: ALEEnv,
     config: Any,
     agent_name: str,
     run_id: str,
     host_artifacts_dir: Path,
 ) -> BaseExecutor:
-    """Dispatch yaml ``runtime: <kind>`` to the concrete substrate adapter.
+    """Dispatch yaml ``executor: <type>`` to the concrete substrate adapter.
 
-    ``host_artifacts_dir`` is always a host path the lifecycle owns; for
+    ``host_artifacts_dir`` is owned by the lifecycle (not the executor); for
     Local/Docker it's also the deployer's work_dir (no gather step). For
-    Vm the deployer's work_dir is a remote-side path and gather copies into
-    ``host_artifacts_dir`` after launch.
+    Sandbox the deployer's work_dir is a remote-side path and gather copies
+    into ``host_artifacts_dir`` after launch.
     """
     env_passthrough = _collect_env_passthrough()
-    if executor_kind == "sandbox":
+    if executor_type == "sandbox":
         remote_work_dir = _work_dir_remote(env.sandbox.os, agent_name, run_id)
         return SandboxExecutor(
             config=config,
             work_dir=remote_work_dir,
-            host_artifacts_dir=host_artifacts_dir,
             sandbox=env.sandbox,
             env=env_passthrough,
         )
-    if executor_kind == "local":
+    if executor_type == "local":
         return LocalExecutor(
             config=config,
             work_dir=str(host_artifacts_dir),
-            host_artifacts_dir=host_artifacts_dir,
             sandbox=env.sandbox,
             env=env_passthrough,
         )
-    if executor_kind == "docker":
-        # The container's image is left empty here — the first concrete
-        # docker deployer will plumb that through yaml.
+    if executor_type == "docker":
+        # work_dir is the *host* path that will be bind-mounted into the
+        # container at /work. DockerExecutor's run_deployer creates it on
+        # host, writes spec.json there, then bind-mounts host_work → /work.
+        # The in-container LocalExecutor sees work_dir="/work" via the spec.
         return DockerExecutor(
             config=config,
-            work_dir="/work",
-            host_artifacts_dir=host_artifacts_dir,
+            work_dir=str(host_artifacts_dir),
             sandbox=env.sandbox,
             env=env_passthrough,
         )
-    raise NotImplementedError(f"runtime kind {executor_kind!r} not wired in lifecycle")
+    raise NotImplementedError(f"executor type {executor_type!r} not wired in lifecycle")
 
 
 def _collect_env_passthrough() -> dict[str, str]:
@@ -709,35 +667,7 @@ def _collect_env_passthrough() -> dict[str, str]:
     return {k: os.environ[k] for k in keys if k in os.environ}
 
 
-async def _monitor_rate_limits(
-    detector: RateLimitDetector,
-    stderr_local: Path,
-    writer,
-    interval: float = 30.0,
-) -> None:
-    """Tail the host-mirrored stderr.log; return when ``detector.is_triggered``.
-
-    Verbatim port of simprun runner.py:_monitor_rate_limits, swapping the
-    remote-side path for the host-mirrored copy (IncrementalPuller writes that
-    file at its own tick cadence — see ``_TICK_INTERVAL_S``). The CALLER's
-    `asyncio.wait` sees this task complete only on detection — on a clean
-    agent finish the caller cancels this task so it returns mid-sleep.
-    """
-    while True:
-        await asyncio.sleep(interval)
-        if not stderr_local.exists():
-            continue
-        try:
-            text = stderr_local.read_text(errors="replace")
-        except OSError:
-            continue
-        if detector.check(text, time.monotonic()):
-            logger.warning("Rate limiting detected — flagging run paused")
-            writer.emit_event("rate_limit_detected")
-            return
-
-
-async def _handle_output_best_effort(
+async def pull_agent_output(
     *,
     env: ALEEnv,
     provider: Provider,
@@ -819,7 +749,7 @@ async def _handle_output_best_effort(
         writer.emit_event("output_gather_failed", transport="gcs", error=str(e))
 
 
-async def _stage_reference_best_effort(
+async def stage_reference(
     *,
     env: ALEEnv,
     provider: Provider,
@@ -860,40 +790,6 @@ async def _stage_reference_best_effort(
         writer.emit_event("reference_stage_skipped", reason=str(e)[:200])
 
 
-def _build_incremental_puller(
-    *,
-    deployer_cls: type,
-    executor: BaseExecutor,
-    run_id: str,
-    task_id: str,
-):
-    """Return ``(puller, targets)`` for the deployer's hot artifacts.
-
-    Returns ``(None, [])`` when the deployer declares no ``hot_artifacts``
-    OR the runtime isn't remote-backed (Local/Docker write straight to host).
-    When non-empty, builds a puller targeting ``<work_dir>/<file>`` →
-    ``<host_artifacts_dir>/<file>`` for each entry.
-    """
-    from .incremental_puller import IncrementalPuller, PullTarget
-
-    if not isinstance(executor, SandboxExecutor):
-        return None, []
-    hot = tuple(getattr(deployer_cls, "hot_artifacts", ()) or ())
-    if not hot:
-        return None, []
-
-    sep = "/" if executor.env_os == "linux" else "\\"
-    targets = [
-        PullTarget(
-            remote_path=f"{executor.work_dir.rstrip(sep)}{sep}{name}",
-            host_path=executor.host_artifacts_dir / name,
-        )
-        for name in hot
-    ]
-    puller = IncrementalPuller(sandbox=executor.sandbox, targets=targets)
-    return puller, targets
-
-
 async def _stage_task_data(
     *,
     env: ALEEnv,
@@ -903,7 +799,7 @@ async def _stage_task_data(
 ) -> None:
     """Stage input/software onto the sandbox (Phase 1).
 
-    Dispatches on ``artifacts_path.task_data_path``:
+    Dispatches on ``artifacts_path.task_data_source``:
       ``"baked_in_sandbox"``  — image already has data; sanity-check only
       ``"gs://..."``          — gsutil rsync from a GCS bucket
       ``"hf://..."``          — HuggingFace (stub)
@@ -924,14 +820,14 @@ async def _stage_task_data(
 
 
 def _task_data_source(artifacts: ArtifactsSpec | None) -> str:
-    """Where to source task data from (yaml ``artifacts_path.task_data_path``).
+    """Where to source task data from (yaml ``artifacts_path.task_data_source``).
 
     One of ``"baked_in_sandbox"`` / ``"gs://<bucket>"`` / ``"hf://<dataset>"``.
     Defaults to the dataclass default when no ArtifactsSpec was built.
     """
     if artifacts is None:
-        return ArtifactsSpec().task_data_path
-    return artifacts.task_data_path
+        return ArtifactsSpec().task_data_source
+    return artifacts.task_data_source
 
 
 def _build_run_meta(
@@ -939,7 +835,7 @@ def _build_run_meta(
     run_id: str,
     unit: RunUnit,
     config: Any,
-    executor_kind: str,
+    executor_type: str,
     status: str,
     score: float | None,
     phase: str | None,
@@ -966,11 +862,11 @@ def _build_run_meta(
             "name": getattr(config, "name", unit.agent_spec.class_),
             "version": None,
             "model": config.model,
-            "executor": executor_kind,
+            "executor": executor_type,
             "config_repr": cfg_repr,
         },
         "task": {
-            "slug": _task_slug(unit.task_path),
+            "slug": slug_task(unit.task_path),
             "path": f"tasks/{unit.task_path}",
             "variant_index": unit.variant_index,
         },
@@ -987,17 +883,7 @@ def _build_run_meta(
     }
 
 
-def _task_slug(task_path: str) -> str:
-    from .slug import slug_task
-
-    return slug_task(task_path)
-
-
 def _category_from_error(error_str: str | None) -> str | None:
     if not error_str:
         return None
     return classify_error(Exception(error_str))
-
-
-# Keep an unused signal import — placeholder for future SIGTERM handling.
-_ = signal

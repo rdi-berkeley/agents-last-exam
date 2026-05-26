@@ -32,8 +32,8 @@ class AgentSpec:
             ``ale.runner.factory.AGENT_REGISTRY``, or a fully-qualified
             Deployer class path (e.g. ``"my_pkg.MyDeployer"``).
         config: kwargs passed verbatim into the deployer's Config dataclass.
-        executor: which substrate to run the deployer in: ``"vm"`` (drive
-            a remote cua-server VM), ``"local"`` (this Python process), or
+        executor: which substrate to run the deployer in: ``"sandbox"``
+            (in the cua-server VM), ``"local"`` (this Python process), or
             ``"docker"`` (host docker container). Must be in
             ``DeployerCls.supported_executors`` or ``None`` (factory uses
             ``DeployerCls.default_executor``).
@@ -57,10 +57,10 @@ class ProviderSpec:
 class ArtifactsSpec:
     """Artifact path config — yaml ``artifacts_path:`` block.
 
-    ``task_data_path`` is the GCS prefix the lifecycle's task-data staging
-    helpers (``stage_input`` / ``stage_reference``) read from. Defaults to
-    the public ``gs://ale-data-public`` mirror — override in yaml if you
-    host task data in your own bucket.
+    ``task_data_source`` selects where task data comes from:
+    ``"baked_in_sandbox"`` (image already has it — the default), a
+    ``"gs://<bucket>"`` prefix (rsync from GCS; public mirror is
+    ``gs://ale-data-public``), or ``"hf://<dataset>"``.
 
     ``output_path`` controls what happens to the env's output dir after the
     agent finishes. Tri-state:
@@ -78,7 +78,7 @@ class ArtifactsSpec:
       push fails — no fallback in V1.
     """
 
-    task_data_path: str = "gs://ale-data-public"
+    task_data_source: str = "baked_in_sandbox"
     output_path: str | None = None
 
 
@@ -107,16 +107,13 @@ class ExperimentSpec:
     collisions."""
 
     cleanup_mode: str = "delete"
-    """VM disposition after a unit finishes (simprun parity).
+    """VM disposition after a unit finishes.
 
     - ``"delete"`` (default): tear the VM down via ``gcloud instances delete``.
     - ``"stop"``: ``gcloud instances stop``; the disk remains so a later
       run can re-start the VM and inspect agent artifacts.
     - ``"keep"``: leave the VM running (debug / reproducer use).
-
-    Rate-limit-triggered runs always force ``"keep"`` regardless of this
-    setting — losing the VM on a rate-limit retryable failure costs the
-    next attempt's boot time for nothing."""
+    """
 
 
 # =============================================================================

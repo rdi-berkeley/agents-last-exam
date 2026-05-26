@@ -1,13 +1,12 @@
 """run.json termination resolver per LOG_SPEC §4.
 
-Three pure helpers:
+Pure helpers:
 
   - :func:`classify_error`   substring-match an exception against a small
                              category vocabulary.
-  - :func:`resolve_phase`    prefer ``env.current_phase`` over the
-                             lifecycle's coarse tracker.
   - :func:`redact_config`    redact ``*_api_key`` / ``api_key`` from an
                              agent's yaml config before logging.
+  - :func:`err_dict`         build the termination.error payload.
 """
 
 from __future__ import annotations
@@ -75,14 +74,6 @@ def classify_error(exc: BaseException) -> str | None:
         if any(s in msg for s in substrings):
             return category
     return None
-
-
-def resolve_phase(env_phase: str | None, fallback: str | None) -> str | None:
-    """Pick the phase reported by the env if present, else the lifecycle's tracker.
-
-    Returns None for clean completions (callers should pass None for both).
-    """
-    return env_phase or fallback
 
 
 _REDACTED_KEYS = frozenset(

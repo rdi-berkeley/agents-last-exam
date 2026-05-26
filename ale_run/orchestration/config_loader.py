@@ -282,18 +282,18 @@ def _build_artifacts(raw: dict[str, Any]) -> ArtifactsSpec:
             )
         output_path = op or None
 
-    task_data_path = raw.get("task_data_path") or defaults.task_data_path
-    tdp = str(task_data_path).strip()
+    task_data_source = raw.get("task_data_source") or defaults.task_data_source
+    tdp = str(task_data_source).strip()
     if (tdp not in _VALID_TASK_DATA_LITERALS
             and not tdp.startswith("gs://")
             and not tdp.startswith("hf://")):
         raise ValueError(
-            f"artifacts_path.task_data_path must be 'baked_in_sandbox', "
-            f"'gs://<bucket>', or 'hf://<dataset>'; got {task_data_path!r}"
+            f"artifacts_path.task_data_source must be 'baked_in_sandbox', "
+            f"'gs://<bucket>', or 'hf://<dataset>'; got {task_data_source!r}"
         )
 
     return ArtifactsSpec(
-        task_data_path=tdp,
+        task_data_source=tdp,
         output_path=output_path,
     )
 
