@@ -56,9 +56,9 @@ async def _run_command(
     }
 
 
-async def ensure_layout(session: cb.DesktopSession, task_name: str) -> None:
-    desktop_variant_root = f"{DESKTOP_ROOT}/{DOMAIN_NAME}/{task_name}/{DEFAULT_VARIANT}"
-    data_variant_root = f"{DATA_ROOT}/{DOMAIN_NAME}/{task_name}/{DEFAULT_VARIANT}"
+async def ensure_layout(session: cb.DesktopSession, task_name: str, domain_name: str = DOMAIN_NAME) -> None:
+    desktop_variant_root = f"{DESKTOP_ROOT}/{domain_name}/{task_name}/{DEFAULT_VARIANT}"
+    data_variant_root = f"{DATA_ROOT}/{domain_name}/{task_name}/{DEFAULT_VARIANT}"
     desktop_parent = desktop_variant_root.rsplit("/", 1)[0]
     result = await _run_command(
         session,
@@ -180,8 +180,11 @@ Do not read from `reference/`, `output_test_pos/`, or `output_test_neg/`.
         return metadata
 
 
-def load_single_task(task_name: str, task_title: str):
-    cfg = NeuroTaskConfig(TASK_NAME=task_name, TASK_TITLE=task_title)
+def load_single_task(task_name: str, task_title: str, *, domain_name: str | None = None):
+    kwargs = {"TASK_NAME": task_name, "TASK_TITLE": task_title}
+    if domain_name is not None:
+        kwargs["DOMAIN_NAME"] = domain_name
+    cfg = NeuroTaskConfig(**kwargs)
     return [
         cb.Task(
             description=cfg.task_description,
@@ -191,7 +194,7 @@ def load_single_task(task_name: str, task_title: str):
     ]
 
 
-async def ensure_neuro_runtime(session: cb.DesktopSession, task_name: str) -> None:
+async def ensure_neuro_runtime(session: cb.DesktopSession, task_name: str, domain_name: str = DOMAIN_NAME) -> None:
     """Verify the canonical neuro-runtime layout and runtime deps on the VM.
 
     Output-dir creation is orchestration's job (clean_remote_output_dir wipes
@@ -199,14 +202,15 @@ async def ensure_neuro_runtime(session: cb.DesktopSession, task_name: str) -> No
     the truly neuro-specific bits: ensure the data-root symlink layout and
     that the conda env + Python deps are available.
     """
-    await ensure_layout(session, task_name)
+    await ensure_layout(session, task_name, domain_name)
     await ensure_runtime_deps(session)
     logger.info("[%s] neuro runtime verified", task_name)
 
 
 async def evaluate_single_task(task_cfg, session: cb.DesktopSession, task_dir: Path) -> list[float]:
     task_name = task_cfg.metadata["task_name"]
-    await ensure_layout(session, task_name)
+    domain_name = task_cfg.metadata.get("domain_name", DOMAIN_NAME)
+    await ensure_layout(session, task_name, domain_name)
     await ensure_runtime_deps(session)
 
     eval_tmp_dir = f"{EVAL_TMP_ROOT}/{task_name}"

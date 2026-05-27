@@ -1,0 +1,9 @@
+Name,Status,Tenant,Site,Location,Rack,Role,Manufacturer,Type,IP Address
+ATL-AP-01,Active,,Atlanta Branch,,ATL-BR-01,Wireless AP,Ubiquiti,Ubiquiti AP,
+ATL-AP-02,Active,,Atlanta Branch,,ATL-BR-01,Wireless AP,Ubiquiti,Ubiquiti AP,
+ATL-AP-03,Active,,Atlanta Branch,,ATL-BR-01,Wireless AP,Ubiquiti,Ubiquiti AP,
+ATL-DIST-01,Active,,Atlanta Branch,,ATL-BR-01,Distribution Switch,Cisco,Aruba/Cisco small distribution switch,
+ATL-FW-01,Active,,Atlanta Branch,,ATL-BR-01,Firewall,Juniper,Juniper SRX firewall,
+ATL-RTR-01,Active,,Atlanta Branch,,ATL-BR-01,WAN Router,Cisco,Cisco ISR router,
+ATL-SW-01,Active,,Atlanta Branch,,ATL-BR-01,Access Switch,Cisco,Cisco Catalyst 24-port switch,
+ATL-SW-02,Active,,Atlanta Branch,,ATL-BR-01,Access Switch,Cisco,Cisco Catalyst 24-port switch,
