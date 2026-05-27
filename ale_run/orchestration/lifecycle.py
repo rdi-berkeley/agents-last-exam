@@ -648,8 +648,14 @@ def _collect_env_passthrough() -> dict[str, str]:
     """Env vars to propagate into the substrate so deployers see API keys.
 
     Keep this list small — only well-known LLM keys we know deployers need.
+
+    Special handling for ``CURSOR_AUTH_JSON_PATH``: if it points to an
+    existing file on the host, the file's content is also passed as
+    ``CURSOR_AUTH_JSON`` so the auth.json payload reaches the container
+    even when the file path itself isn't accessible from inside the sandbox.
     """
     import os
+    from pathlib import Path as _Path
 
     keys = (
         "ANTHROPIC_API_KEY",
@@ -658,8 +664,39 @@ def _collect_env_passthrough() -> dict[str, str]:
         "OPENAI_API_KEY",
         "OPENROUTER_API_KEY",
         "BRAVE_API_KEY",
+        "CURSOR_API_KEY",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+        "GROK_API_KEY",
+        "FACTORY_API_KEY",
+        "CURSOR_AUTH_JSON_PATH",
+        "CURSOR_AUTH_JSON",
     )
-    return {k: os.environ[k] for k in keys if k in os.environ}
+    result = {k: os.environ[k] for k in keys if k in os.environ}
+
+    # Materialise CURSOR_AUTH_JSON from the file when the env var itself
+    # is not already set but CURSOR_AUTH_JSON_PATH points to a readable file.
+    if "CURSOR_AUTH_JSON" not in result:
+        auth_path_str = os.environ.get("CURSOR_AUTH_JSON_PATH", "").strip()
+        if auth_path_str:
+            auth_path = _Path(auth_path_str)
+            if auth_path.is_file():
+                try:
+                    content = auth_path.read_text(encoding="utf-8")
+                    if content.strip():
+                        result["CURSOR_AUTH_JSON"] = content
+                        logger.info(
+                            "env_passthrough: materialised CURSOR_AUTH_JSON "
+                            "from CURSOR_AUTH_JSON_PATH (%d B)",
+                            len(content),
+                        )
+                except OSError as e:
+                    logger.warning(
+                        "env_passthrough: failed to read CURSOR_AUTH_JSON_PATH=%s: %s",
+                        auth_path_str, e,
+                    )
+
+    return result
 
 
 async def pull_agent_output(

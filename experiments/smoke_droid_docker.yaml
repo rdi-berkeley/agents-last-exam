@@ -1,0 +1,35 @@
+# Smoke: droid (Factory AI CLI) with Docker provider, OpenRouter BYOK.
+# Run:
+#   uv run python -m ale_run run experiments/smoke_droid_docker.yaml
+name: smoke_droid_docker
+
+secret_file: ../secret/.env
+
+agent:
+  harness: droid
+  model: anthropic/claude-sonnet-4-6
+  config:
+    timeout_s: 180
+    max_turns: 3
+    reasoning_effort: high
+    skip_permissions_unsafe: true
+    max_output_tokens: 128000
+    byok_provider: generic-chat-completion-api
+
+environment:
+  provider: docker
+  image: agentslastexam/ale-kasm:latest
+
+tasks:
+  - path: demo/hello
+    variants: [0]
+
+artifacts_path:
+  task_data_source: baked_in_sandbox
+  output_path: local
+
+output:
+  root: .logs/smoke
+
+concurrency: 1
+cleanup_mode: delete
