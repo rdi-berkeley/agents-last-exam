@@ -65,18 +65,46 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
     # install
     # =========================================================================
 
+    async def _auto_install_cli(self) -> None:
+        """Install claude CLI via npm if node is available."""
+        npm = shutil.which("npm")
+        if not npm:
+            raise RuntimeError(
+                "ClaudeCodeDeployer: 'claude' not found and 'npm' not on PATH — "
+                "cannot auto-install. Bake node+npm into the image."
+            )
+        home = os.path.expanduser("~")
+        env = {**os.environ, "npm_config_cache": f"{home}/.npm-ale"}
+        proc = await asyncio.to_thread(
+            subprocess.run,
+            [npm, "install", "-g", "--prefix", f"{home}/.local", "@anthropic-ai/claude-code"],
+            capture_output=True, text=True, timeout=300, env=env,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"npm install -g @anthropic-ai/claude-code failed "
+                f"(rc={proc.returncode}): {(proc.stderr or '')[:500]}"
+            )
+        bin_dir = f"{home}/.local/bin"
+        if bin_dir not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{bin_dir}:{os.environ.get('PATH', '')}"
+        logger.info("claude_code: auto-installed via npm — %s", (proc.stdout or "").strip()[-200:])
+
     async def install(self) -> None:
         sandbox = self.executor.sandbox
         is_linux = sandbox.is_linux
 
-        # 1. Discover the claude binary. Same lookup whether linux or windows
-        # (shutil.which honours PATHEXT on windows).
+        # 1. Discover — or install — the claude binary.
         claude_path = shutil.which("claude")
         if not claude_path:
-            raise RuntimeError(
-                "ClaudeCodeDeployer: 'claude' not found on PATH. Bake it "
-                "into the image or install it at provisioning time."
-            )
+            logger.info("claude_code: 'claude' not on PATH, installing via npm …")
+            await self._auto_install_cli()
+            claude_path = shutil.which("claude")
+            if not claude_path:
+                raise RuntimeError(
+                    "ClaudeCodeDeployer: 'claude' still not found after "
+                    "npm install -g @anthropic-ai/claude-code"
+                )
         self._claude_path = claude_path
 
         # 2. Version probe.
