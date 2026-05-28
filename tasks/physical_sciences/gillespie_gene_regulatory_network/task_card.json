@@ -69,26 +69,21 @@
     "timeout": 28800
   },
   "taxonomy": {
-    "domain_id": "2",
-    "domain_code": "physical_sciences",
-    "subdomain_id": "2.2",
-    "subdomain_code": "chemistry_materials",
-    "subdomain_name": "Chemistry & Materials Computation",
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.4",
+    "subdomain_code": "systems_microbial",
+    "subdomain_name": "Systems & Microbial Biology",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:09:23.983777Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/physical_sciences/gillespie_gene_regulatory_network/task_card.json"
-      },
-      "rationale": "The task involves implementing a stochastic simulation for a gene regulatory network, which falls under computational chemistry."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "2",
+        "domain_code": "physical_sciences",
+        "subdomain_id": "2.2",
+        "subdomain_code": "chemistry_materials",
+        "subdomain_name": "Chemistry & Materials Computation"
+      }
     }
   }
 }

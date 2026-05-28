@@ -56,26 +56,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "10",
-    "domain_code": "transport_safety",
-    "subdomain_id": "10.1",
-    "subdomain_code": "aviation",
-    "subdomain_name": "Aviation & Airspace Operations",
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.4",
+    "subdomain_code": "math_ops_research",
+    "subdomain_name": "Mathematical & Operations Research",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:46:24.387875Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/transport_safety/capacitated_vehicle_routing_problems/task_card.json"
-      },
-      "rationale": "The task involves solving vehicle routing problems, which is a key aspect of transportation engineering."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "10",
+        "domain_code": "transport_safety",
+        "subdomain_id": "10.1",
+        "subdomain_code": "aviation",
+        "subdomain_name": "Aviation & Airspace Operations"
+      }
     }
   }
 }

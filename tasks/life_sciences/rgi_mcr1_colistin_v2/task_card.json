@@ -55,24 +55,19 @@
   "taxonomy": {
     "domain_id": "3",
     "domain_code": "life_sciences",
-    "subdomain_id": "3.2",
-    "subdomain_code": "genomics",
-    "subdomain_name": "Genomics & Sequence Analysis",
+    "subdomain_id": "3.4",
+    "subdomain_code": "systems_microbial",
+    "subdomain_name": "Systems & Microbial Biology",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:03:29.431608Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/life_sciences/rgi_mcr1_colistin_v2/task_card.json"
-      },
-      "rationale": "The task involves annotating antimicrobial-resistance genes from DNA sequences, which fits within genomics."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "3",
+        "domain_code": "life_sciences",
+        "subdomain_id": "3.2",
+        "subdomain_code": "genomics",
+        "subdomain_name": "Genomics & Sequence Analysis"
+      }
     }
   }
 }

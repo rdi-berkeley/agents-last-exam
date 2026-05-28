@@ -78,26 +78,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "10",
-    "domain_code": "transport_safety",
-    "subdomain_id": "10.1",
-    "subdomain_code": "aviation",
-    "subdomain_name": "Aviation & Airspace Operations",
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.10",
+    "subdomain_code": "urban_planning",
+    "subdomain_name": "Urban & Spatial Planning",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:46:22.632001Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/transport_safety/abm_hangzhou_metro/task_card.json"
-      },
-      "rationale": "The task involves simulating metro passenger trips, which falls under transportation operations."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "10",
+        "domain_code": "transport_safety",
+        "subdomain_id": "10.1",
+        "subdomain_code": "aviation",
+        "subdomain_name": "Aviation & Airspace Operations"
+      }
     }
   }
 }

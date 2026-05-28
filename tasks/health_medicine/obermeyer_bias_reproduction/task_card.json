@@ -26,21 +26,19 @@
   "taxonomy": {
     "domain_id": "4",
     "domain_code": "health_medicine",
-    "subdomain_id": "4.3",
-    "subdomain_code": "clinical_informatics",
-    "subdomain_name": "Clinical Informatics & Care Operations",
+    "subdomain_id": "4.4",
+    "subdomain_code": "public_health",
+    "subdomain_name": "Public Health & Epidemiology",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:41:48.942448Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/health_medicine/obermeyer_bias_reproduction/task_card.json"
-      },
-      "rationale": "The task involves auditing a healthcare algorithm for bias, which falls under clinical informatics."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "4",
+        "domain_code": "health_medicine",
+        "subdomain_id": "4.3",
+        "subdomain_code": "clinical_informatics",
+        "subdomain_name": "Clinical Informatics & Care Operations"
+      }
     }
   }
 }

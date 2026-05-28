@@ -64,24 +64,19 @@
   "taxonomy": {
     "domain_id": "6",
     "domain_code": "business_finance",
-    "subdomain_id": "6.1",
-    "subdomain_code": "accounting",
-    "subdomain_name": "Accounting & Finance",
+    "subdomain_id": "6.8",
+    "subdomain_code": "supply_chain",
+    "subdomain_name": "Supply Chain & Logistics",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:46:20.927090Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/business_finance/odoo/task_card.json"
-      },
-      "rationale": "The task involves managing financial transactions and workflows within a supply chain context."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "6",
+        "domain_code": "business_finance",
+        "subdomain_id": "6.1",
+        "subdomain_code": "accounting",
+        "subdomain_name": "Accounting & Finance"
+      }
     }
   }
 }

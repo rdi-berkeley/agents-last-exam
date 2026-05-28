@@ -67,24 +67,19 @@
   "taxonomy": {
     "domain_id": "9",
     "domain_code": "computing_math",
-    "subdomain_id": "9.3",
-    "subdomain_code": "ai_cs_research",
-    "subdomain_name": "AI Engineering, Safety & CS Research",
+    "subdomain_id": "9.2",
+    "subdomain_code": "data_analytics",
+    "subdomain_name": "Data & Analytics Engineering",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:15:03.053122Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/computing_math/synthetic_causal_structure_inference/task_card.json"
-      },
-      "rationale": "The task involves synthetic causal structure inference, which aligns with AI and computer science research."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "9",
+        "domain_code": "computing_math",
+        "subdomain_id": "9.3",
+        "subdomain_code": "ai_cs_research",
+        "subdomain_name": "AI Engineering, Safety & CS Research"
+      }
     }
   }
 }

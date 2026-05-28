@@ -70,24 +70,19 @@
   "taxonomy": {
     "domain_id": "2",
     "domain_code": "physical_sciences",
-    "subdomain_id": "2.2",
-    "subdomain_code": "chemistry_materials",
-    "subdomain_name": "Chemistry & Materials Computation",
+    "subdomain_id": "2.1",
+    "subdomain_code": "physics",
+    "subdomain_name": "Physics",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:33:56.041104Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/physical_sciences/phonon_dispersion_thermodynamics/task_card.json"
-      },
-      "rationale": "The task involves computing phonon dispersion and thermodynamic properties related to materials science."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "2",
+        "domain_code": "physical_sciences",
+        "subdomain_id": "2.2",
+        "subdomain_code": "chemistry_materials",
+        "subdomain_name": "Chemistry & Materials Computation"
+      }
     }
   }
 }

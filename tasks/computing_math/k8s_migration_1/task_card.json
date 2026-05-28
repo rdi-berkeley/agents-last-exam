@@ -102,24 +102,19 @@
   "taxonomy": {
     "domain_id": "9",
     "domain_code": "computing_math",
-    "subdomain_id": "9.1",
-    "subdomain_code": "software_eng",
-    "subdomain_name": "Software Engineering",
+    "subdomain_id": "9.6",
+    "subdomain_code": "infra_cloud",
+    "subdomain_name": "Infrastructure Engineering & Cloud Operations",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:45:25.729880Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/computing_math/k8s_migration_1/task_card.json"
-      },
-      "rationale": "The task involves software development and deployment using Kubernetes, Docker, and CI/CD practices."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "9",
+        "domain_code": "computing_math",
+        "subdomain_id": "9.1",
+        "subdomain_code": "software_eng",
+        "subdomain_name": "Software Engineering"
+      }
     }
   }
 }

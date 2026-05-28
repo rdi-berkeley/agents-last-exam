@@ -115,24 +115,19 @@
   "taxonomy": {
     "domain_id": "6",
     "domain_code": "business_finance",
-    "subdomain_id": "6.5",
-    "subdomain_code": "hr_pm",
-    "subdomain_name": "HR & Project Management",
+    "subdomain_id": "6.3",
+    "subdomain_code": "enterprise_analytics",
+    "subdomain_name": "Enterprise Analytics & Planning",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:46:16.313473Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/business_finance/bpmn_category_governance_restructuring_l3/task_card.json"
-      },
-      "rationale": "The task involves restructuring governance workflows, which relates to project management in a business context."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "6",
+        "domain_code": "business_finance",
+        "subdomain_id": "6.5",
+        "subdomain_code": "hr_pm",
+        "subdomain_name": "HR & Project Management"
+      }
     }
   }
 }

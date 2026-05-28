@@ -102,26 +102,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "4",
-    "domain_code": "health_medicine",
-    "subdomain_id": "4.3",
-    "subdomain_code": "clinical_informatics",
-    "subdomain_name": "Clinical Informatics & Care Operations",
+    "domain_id": "13",
+    "domain_code": "social_sciences",
+    "subdomain_id": "13.1",
+    "subdomain_code": "economics",
+    "subdomain_name": "Economics & Quantitative Social Research",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:40:58.223238Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/health_medicine/causal_ihdp_ite_estimation_6a_v1/task_card.json"
-      },
-      "rationale": "The task involves estimating individualized treatment effects, which is relevant to clinical informatics."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "4",
+        "domain_code": "health_medicine",
+        "subdomain_id": "4.3",
+        "subdomain_code": "clinical_informatics",
+        "subdomain_name": "Clinical Informatics & Care Operations"
+      }
     }
   }
 }

@@ -54,24 +54,19 @@
   "taxonomy": {
     "domain_id": "8",
     "domain_code": "visual_media",
-    "subdomain_id": "8.1",
-    "subdomain_code": "animation_3d",
-    "subdomain_name": "3D, Animation & Interactive Media",
+    "subdomain_id": "8.4",
+    "subdomain_code": "audio_music",
+    "subdomain_name": "Audio, Music & Post-Production Media",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:39:23.122186Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/visual_media/video_storyboard_001/task_card.json"
-      },
-      "rationale": "The task involves creating a storyboard for a video, which falls under visual media arts."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "8",
+        "domain_code": "visual_media",
+        "subdomain_id": "8.1",
+        "subdomain_code": "animation_3d",
+        "subdomain_name": "3D, Animation & Interactive Media"
+      }
     }
   }
 }

@@ -56,24 +56,19 @@
   "taxonomy": {
     "domain_id": "9",
     "domain_code": "computing_math",
-    "subdomain_id": "9.6",
-    "subdomain_code": "infra_cloud",
-    "subdomain_name": "Infrastructure Engineering & Cloud Operations",
+    "subdomain_id": "9.2",
+    "subdomain_code": "data_analytics",
+    "subdomain_name": "Data & Analytics Engineering",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:06:33.444296Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/computing_math/k8s_payment_api_root_cause_analysis/task_card.json"
-      },
-      "rationale": "The task involves analyzing a Kubernetes incident, which falls under cloud infrastructure operations."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "9",
+        "domain_code": "computing_math",
+        "subdomain_id": "9.6",
+        "subdomain_code": "infra_cloud",
+        "subdomain_name": "Infrastructure Engineering & Cloud Operations"
+      }
     }
   }
 }

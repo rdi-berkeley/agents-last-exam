@@ -45,24 +45,19 @@
   "taxonomy": {
     "domain_id": "6",
     "domain_code": "business_finance",
-    "subdomain_id": "6.1",
-    "subdomain_code": "accounting",
-    "subdomain_name": "Accounting & Finance",
+    "subdomain_id": "6.3",
+    "subdomain_code": "enterprise_analytics",
+    "subdomain_name": "Enterprise Analytics & Planning",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:23:57.256358Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/business_finance/equity_research_summary/task_card.json"
-      },
-      "rationale": "The task involves creating an equity research workbook, which falls under accounting and finance."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "6",
+        "domain_code": "business_finance",
+        "subdomain_id": "6.1",
+        "subdomain_code": "accounting",
+        "subdomain_name": "Accounting & Finance"
+      }
     }
   }
 }

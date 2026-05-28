@@ -47,24 +47,19 @@
   "taxonomy": {
     "domain_id": "14",
     "domain_code": "other",
-    "subdomain_id": null,
-    "subdomain_code": null,
-    "subdomain_name": null,
+    "subdomain_id": "14.1",
+    "subdomain_code": "sports",
+    "subdomain_name": "Sports",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:46:13.649933Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/other/aerobics_wc2026_portugal_trio_difficulty_scoring/task_card.json"
-      },
-      "rationale": "The task relates to sports scoring and does not fit into the provided subdomains."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "14",
+        "domain_code": "other",
+        "subdomain_id": null,
+        "subdomain_code": null,
+        "subdomain_name": null
+      }
     }
   }
 }

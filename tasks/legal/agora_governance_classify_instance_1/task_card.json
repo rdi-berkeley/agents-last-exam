@@ -54,26 +54,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "7",
-    "domain_code": "legal",
-    "subdomain_id": "7.2",
-    "subdomain_code": "legal_research",
-    "subdomain_name": "Doctrinal Legal Research",
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.4",
+    "subdomain_code": "compliance",
+    "subdomain_name": "Compliance & Regulatory",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:29:44.242698Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/legal/agora_governance_classify_instance_1/task_card.json"
-      },
-      "rationale": "The task involves classifying AI governance documents, which relates to legal research and compliance."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "7",
+        "domain_code": "legal",
+        "subdomain_id": "7.2",
+        "subdomain_code": "legal_research",
+        "subdomain_name": "Doctrinal Legal Research"
+      }
     }
   }
 }

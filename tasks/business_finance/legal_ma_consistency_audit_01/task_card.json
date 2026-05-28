@@ -55,26 +55,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "6",
-    "domain_code": "business_finance",
-    "subdomain_id": "6.4",
-    "subdomain_code": "compliance",
-    "subdomain_name": "Compliance & Regulatory",
+    "domain_id": "7",
+    "domain_code": "legal",
+    "subdomain_id": "7.1",
+    "subdomain_code": "litigation",
+    "subdomain_name": "Litigation Support & Discovery",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:30:18.632987Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/business_finance/legal_ma_consistency_audit_01/task_card.json"
-      },
-      "rationale": "The task involves reviewing regulatory filings for compliance and consistency."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "6",
+        "domain_code": "business_finance",
+        "subdomain_id": "6.4",
+        "subdomain_code": "compliance",
+        "subdomain_name": "Compliance & Regulatory"
+      }
     }
   }
 }

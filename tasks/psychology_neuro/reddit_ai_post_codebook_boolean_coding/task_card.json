@@ -56,26 +56,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "5",
-    "domain_code": "psychology_neuro",
-    "subdomain_id": "5.1",
-    "subdomain_code": "comp_neuro",
-    "subdomain_name": "Computational Neuroscience",
+    "domain_id": "13",
+    "domain_code": "social_sciences",
+    "subdomain_id": "13.1",
+    "subdomain_code": "economics",
+    "subdomain_name": "Economics & Quantitative Social Research",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:43:37.359075Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/psychology_neuro/reddit_ai_post_codebook_boolean_coding/task_card.json"
-      },
-      "rationale": "The task involves coding and analyzing psychological data related to AI addiction."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "5",
+        "domain_code": "psychology_neuro",
+        "subdomain_id": "5.1",
+        "subdomain_code": "comp_neuro",
+        "subdomain_name": "Computational Neuroscience"
+      }
     }
   }
 }

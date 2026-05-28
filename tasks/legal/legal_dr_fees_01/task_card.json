@@ -75,24 +75,19 @@
   "taxonomy": {
     "domain_id": "7",
     "domain_code": "legal",
-    "subdomain_id": "7.1",
-    "subdomain_code": "litigation",
-    "subdomain_name": "Litigation Support & Discovery",
+    "subdomain_id": "7.2",
+    "subdomain_code": "legal_research",
+    "subdomain_name": "Doctrinal Legal Research",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:30:02.475249Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/legal/legal_dr_fees_01/task_card.json"
-      },
-      "rationale": "The task involves calculating arbitration fees, which falls under legal services."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "7",
+        "domain_code": "legal",
+        "subdomain_id": "7.1",
+        "subdomain_code": "litigation",
+        "subdomain_name": "Litigation Support & Discovery"
+      }
     }
   }
 }

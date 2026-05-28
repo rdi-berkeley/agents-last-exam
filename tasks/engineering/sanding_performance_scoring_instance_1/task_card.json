@@ -55,24 +55,19 @@
   "taxonomy": {
     "domain_id": "1",
     "domain_code": "engineering",
-    "subdomain_id": "1.11",
-    "subdomain_code": "robotics",
-    "subdomain_name": "Robotics & Autonomous Systems",
+    "subdomain_id": "1.5",
+    "subdomain_code": "manufacturing",
+    "subdomain_name": "Manufacturing & Industrial Systems",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:45:01.496369Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/engineering/sanding_performance_scoring_instance_1/task_card.json"
-      },
-      "rationale": "The task involves image processing and scoring related to robotic sanding performance."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "1",
+        "domain_code": "engineering",
+        "subdomain_id": "1.11",
+        "subdomain_code": "robotics",
+        "subdomain_name": "Robotics & Autonomous Systems"
+      }
     }
   }
 }

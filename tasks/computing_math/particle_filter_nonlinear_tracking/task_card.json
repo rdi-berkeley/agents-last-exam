@@ -86,24 +86,19 @@
   "taxonomy": {
     "domain_id": "9",
     "domain_code": "computing_math",
-    "subdomain_id": "9.3",
-    "subdomain_code": "ai_cs_research",
-    "subdomain_name": "AI Engineering, Safety & CS Research",
+    "subdomain_id": "9.4",
+    "subdomain_code": "math_ops_research",
+    "subdomain_name": "Mathematical & Operations Research",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:32:01.116378Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/computing_math/particle_filter_nonlinear_tracking/task_card.json"
-      },
-      "rationale": "The task involves implementing a particle filter, which is a method used in AI and computational research."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "9",
+        "domain_code": "computing_math",
+        "subdomain_id": "9.3",
+        "subdomain_code": "ai_cs_research",
+        "subdomain_name": "AI Engineering, Safety & CS Research"
+      }
     }
   }
 }

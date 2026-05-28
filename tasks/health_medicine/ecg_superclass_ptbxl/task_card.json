@@ -57,24 +57,19 @@
   "taxonomy": {
     "domain_id": "4",
     "domain_code": "health_medicine",
-    "subdomain_id": "4.1",
-    "subdomain_code": "clinical_diagnostics",
-    "subdomain_name": "Clinical Diagnostics & Imaging",
+    "subdomain_id": "4.2",
+    "subdomain_code": "therapeutic_oncology",
+    "subdomain_name": "Therapeutic & Oncology Services",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:41:01.651007Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/health_medicine/ecg_superclass_ptbxl/task_card.json"
-      },
-      "rationale": "The task involves multilabel diagnostic predictions from ECG data, fitting within clinical diagnostics."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "4",
+        "domain_code": "health_medicine",
+        "subdomain_id": "4.1",
+        "subdomain_code": "clinical_diagnostics",
+        "subdomain_name": "Clinical Diagnostics & Imaging"
+      }
     }
   }
 }

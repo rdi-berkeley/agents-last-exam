@@ -84,26 +84,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "6",
-    "domain_code": "business_finance",
-    "subdomain_id": "6.6",
-    "subdomain_code": "sales_marketing",
-    "subdomain_name": "Sales & Marketing",
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.2",
+    "subdomain_code": "graphic_design",
+    "subdomain_name": "Graphic, Visual & Product Design",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:08:20.285872Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/business_finance/saas_onepager_brand_refresh_instance_1/task_card.json"
-      },
-      "rationale": "The task involves editing a marketing document for a SaaS product."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "6",
+        "domain_code": "business_finance",
+        "subdomain_id": "6.6",
+        "subdomain_code": "sales_marketing",
+        "subdomain_name": "Sales & Marketing"
+      }
     }
   }
 }

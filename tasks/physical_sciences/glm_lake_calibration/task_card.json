@@ -53,26 +53,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "2",
-    "domain_code": "physical_sciences",
-    "subdomain_id": "2.4",
-    "subdomain_code": "earth_atmo",
-    "subdomain_name": "Earth & Atmospheric Sciences",
+    "domain_id": "12",
+    "domain_code": "agriculture_env",
+    "subdomain_id": "12.1",
+    "subdomain_code": "env_water",
+    "subdomain_name": "Environmental Modeling, Engineering & Water Resources",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:19:53.546914Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/physical_sciences/glm_lake_calibration/task_card.json"
-      },
-      "rationale": "The task involves calibrating a lake model related to Earth and Atmospheric Sciences."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "2",
+        "domain_code": "physical_sciences",
+        "subdomain_id": "2.4",
+        "subdomain_code": "earth_atmo",
+        "subdomain_name": "Earth & Atmospheric Sciences"
+      }
     }
   }
 }

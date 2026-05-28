@@ -44,26 +44,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "9",
-    "domain_code": "computing_math",
-    "subdomain_id": "9.1",
-    "subdomain_code": "software_eng",
-    "subdomain_name": "Software Engineering",
+    "domain_id": "14",
+    "domain_code": "other",
+    "subdomain_id": "14.1",
+    "subdomain_code": "sports",
+    "subdomain_name": "Sports",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:26:12.473913Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/computing_math/go_game_reconstruction_1/task_card.json"
-      },
-      "rationale": "The task involves using software (Sabaki) to reconstruct a game, which fits under software engineering."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "9",
+        "domain_code": "computing_math",
+        "subdomain_id": "9.1",
+        "subdomain_code": "software_eng",
+        "subdomain_name": "Software Engineering"
+      }
     }
   }
 }
