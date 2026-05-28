@@ -1,19 +1,19 @@
 {
   "taskId": "visual_media/video_storyboard_001",
-  "title": "Video Storyboard Document",
-  "summary": "Watch a short video and create a factual DOCX storyboard that preserves visual details needed to answer a later question set.",
+  "title": "Pre-Restoration Shot Log: Vintage Animation Remaster",
+  "summary": "Produce a temporal per-shot continuity log (DOCX) for a public-domain 1931 Yasuji Murata animation as the archival-documentation pass that precedes a restoration / remaster pipeline. The log must preserve the factual visual record the downstream QC team's fact-check brief depends on, without the archivist answering or editorializing.",
   "category": "visual_media",
   "software": [
     "VLC",
-    "Word processor",
+    "Word processor (any DOCX-capable editor)",
     "Python"
   ],
-  "taskPrompt": "You are creating a storyboard document for a short video on a Windows VM.\n\n## Input Files\n- Video: `input/Yasuji_Murata-_A_Wolf_is_a_Wolf_(1931).ogv`\n- Question set: `input/video_storyboard_qa_set.docx`\n\n## Software\nUse any DOCX-capable workflow available on the VM. A task-local launcher is available at `software/launch_word_processor.cmd`.\n\n## Your Task\n1. Watch or inspect the full input video.\n2. Read the question set so your storyboard preserves facts needed for later answering.\n3. Create a concise, complete storyboard in temporal order.\n4. For each shot or segment, include shot/segment ID, start and end time, visual description, key actions, important objects/people/scene details, and visible text or dialogue needed for the questions.\n5. Do not answer the questions directly. Use only information grounded in the video.\n\n## Output\nSave the final readable Word document exactly as `output/storyboard.docx`.",
+  "taskPrompt": "## Context\n\nA small restoration studio is about to begin a scan + remaster pass on a public-domain print of a vintage Yasuji Murata animation (*A Wolf is a Wolf*, 1931). Before any restoration work starts, the pipeline requires an **archival shot log / continuity report** of the source print: a temporal, per-shot factual record of what is on screen, written by an archival assistant editor.\n\nThe QC team has handed you a **restoration fact-check brief** (a DOCX of factual visual questions about the film). Your shot log must preserve enough detail that downstream QC engineers can verify every item in the brief by reading the log alone. As the archivist, you record facts \u2014 you do **not** answer the brief's questions or insert interpretation. Answering is the QC engineers' job.\n\n## Input Files\n- Source print: `input/Yasuji_Murata-_A_Wolf_is_a_Wolf_(1931).ogv`\n- QC fact-check brief: `input/video_storyboard_qa_set.docx`\n\n## Software\nUse any DOCX-capable workflow available on the VM. A task-local launcher is available at `software/launch_word_processor.cmd`.\n\n## Your Task\n1. Inspect the full source print end-to-end.\n2. Read the QC brief so your log preserves the facts each item depends on.\n3. Produce a concise, complete shot log in temporal order.\n4. For each shot or segment, include shot/segment ID, start and end time, visual description, key actions, important objects/people/animals/scene details, and visible on-screen text or dialogue relevant to the brief.\n5. Do **not** answer the brief's questions. Record only the observable facts a QC engineer would need to answer them.\n6. Use only information grounded in the source print \u2014 no external knowledge, plot context, or interpretation.\n\n## Output\nSave the final readable Word document exactly as `output/storyboard.docx`.",
   "agentMustDo": [
-    "Inspect the full video.",
-    "Use the question set to identify details the storyboard must preserve.",
-    "Write a temporal storyboard with segment IDs, times, visual descriptions, actions, objects, people, and relevant visible text or dialogue.",
-    "Save a valid DOCX file named `storyboard.docx`."
+    "Inspect the full source print end-to-end.",
+    "Use the QC fact-check brief to identify the visual facts the shot log must preserve (without answering the brief).",
+    "Write a temporal shot log with segment IDs, in/out times, visual descriptions, actions, objects, people/animals, and relevant on-screen text or dialogue.",
+    "Save a valid DOCX file named `storyboard.docx` under `output/`."
   ],
   "inputFiles": [
     {
@@ -45,7 +45,7 @@
       "description": "The storyboard must be temporal, grounded in the video, and include the required shot or segment details."
     }
   ],
-  "evaluation": "The evaluator reads the submitted DOCX and scores whether it is valid, grounded in the video, temporally organized, and sufficiently complete to support the question set without directly answering it.",
+  "evaluation": "The evaluator reads the submitted DOCX and scores whether it is a valid archival shot log: temporally organized per shot/segment, grounded only in the source print, and sufficiently complete for downstream QC engineers to verify every item in the fact-check brief from the log alone \u2014 without the archivist having pre-answered the brief's questions.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free",
