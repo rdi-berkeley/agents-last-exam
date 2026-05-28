@@ -1,15 +1,17 @@
 {
   "taskId": "other/mota_exploration",
-  "title": "Mota Exploration",
-  "summary": "Play through the staged Magic Tower scenario, reach the required floor, and save the required result artifact.",
+  "title": "Game Port Reference Capture: Magic Tower",
+  "summary": "Stand-in for the asset-capture step of a Flash-to-modern-engine port: drive the legacy Magic Tower (mota-24) build under Ruffle and collect per-floor reference screenshots that downstream engineers will use as ground-truth for tile layout, HUD placement, and level-script reconstruction.",
   "category": "other",
-  "software": [],
-  "taskPrompt": "Goal: Launch Magic Tower and navigate to the 3rd floor.\n1. Open the game at E:\\agenthle\\other\\mota_exploration\\mota_24_ez\\input\\mota-24.swf on Ruffle (the game should be opened automatically).\n2. Wait for the game to load and enter the game.\n3. Navigate to the 3rd floor.\n\nVerification:\n1. When you reach each new floor, take a screenshot and save it to \"E:\\agenthle\\other\\mota_exploration\\mota_24_ez\\output\\$FLOOR_NUMBER$.png\", where $FLOOR_NUMBER$ is the floor number you reached.\n2. The task is successful if the screenshot files exist and demonstrate the floor you reached.",
+  "software": [
+    "Ruffle (Flash emulator)"
+  ],
+  "taskPrompt": "## Context\n\nA small game studio plans to re-implement the legacy Flash dungeon-crawler **Magic Tower (mota-24)** on a modern stack. Before any port code is written, the porting workflow requires a clean set of **per-floor reference screenshots** captured from the original build \u2014 these screenshots become the visual contract that downstream engineers diff against while re-creating tile maps, HUD elements, and per-floor enemy/item placement.\n\nYour role in that workflow is the reference-capture pass: drive the original game far enough to expose floors 1\u20133, and save one labeled screenshot per floor reached.\n\n## Goal\n\nLaunch the original Flash build under Ruffle, advance through the early-game progression, and produce labeled per-floor reference screenshots up to and including floor 3.\n\n## Steps\n\n1. The game is auto-opened by the task setup at `E:\\agenthle\\other\\mota_exploration\\mota_24_ez\\input\\mota-24.swf` in Ruffle. If the window is not already focused, focus it.\n2. Wait for the title / loading screens to finish and enter the running game world.\n3. Play forward through floors 1 \u2192 3 using standard movement and interaction (no cheats, no save-state hacks). Combat / item pickups / stair-use are expected; this is what a porting engineer would do to surface each floor.\n4. Each time you arrive on a new floor, capture a full-window screenshot of the rendered game and save it to `E:\\agenthle\\other\\mota_exploration\\mota_24_ez\\output\\$FLOOR_NUMBER$.png`, where `$FLOOR_NUMBER$` is the integer floor index (`1.png`, `2.png`, `3.png`).\n\n## Acceptance\n\n- One PNG per floor reached, named by floor number, exists in the output directory.\n- Each PNG must depict the correct floor (visually matches the original game's floor layout) \u2014 these will be diffed against held-out reference frames.",
   "agentMustDo": [
-    "Open the Flash game (auto-launched by start())",
-    "Wait for the game to load and enter the game",
-    "Navigate to the 3rd floor",
-    "Take a screenshot at each new floor and save it to the output directory"
+    "Focus the Ruffle window with mota-24.swf loaded (the task setup auto-launches it)",
+    "Wait for the title / loading screens and enter the actual game world",
+    "Play forward through floors 1 \u2192 3 using normal movement and interaction (no cheats)",
+    "On arrival at each new floor, save a full-window screenshot as output/<floor>.png (1.png, 2.png, 3.png)"
   ],
   "inputFiles": [
     {
@@ -20,7 +22,7 @@
     }
   ],
   "referenceFiles": [],
-  "evaluation": "**Hard gate conditions:** Screenshot files must exist\n**Scoring method:** LLM vision comparison using `evaluate_milestone_mode` with `compare_screenshots_game`; checks if player is on the correct floor\n**What does a PERFECT output look like?** Screenshots matching reference for each floor up to floor 3\n**What does a WRONG/empty output look like?** Missing screenshots or wrong floor content (score 0.0)",
+  "evaluation": "**Hard gate conditions:** Per-floor screenshot files (`<floor>.png`) must exist under `output/`.\n**Scoring method:** Per-floor LLM-vision comparison via `evaluate_milestone_mode` + `compare_screenshots_game` \u2014 each captured floor screenshot is matched against a held-out reference frame of the same floor from the original build. Floors are scored independently and averaged; this mirrors the porting workflow where each floor's reference must independently match the original before reimplementation can proceed.\n**What does a PERFECT output look like?** A complete set of per-floor reference frames (`1.png`, `2.png`, `3.png`) under `output/`, each visually matching its corresponding original floor \u2014 ready to be handed off as the port's visual ground truth.\n**What does a WRONG/empty output look like?** Missing per-floor screenshots, mislabeled floor numbers, or captures from the wrong floor (e.g. all three screenshots from floor 1) \u2014 yields a partial or 0.0 score.",
   "vm": {
     "machineType": "g2-standard-8",
     "snapshot": "gpu-license",
