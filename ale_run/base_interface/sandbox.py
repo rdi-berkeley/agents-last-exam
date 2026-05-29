@@ -134,6 +134,11 @@ class SandboxHandle:
     mcp_server_dir: str
     """Where the cua MCP server is installed on this image."""
 
+    cua_server_port: int = 5000
+    """Port the cua-server listens on inside the sandbox (image-specific:
+    8000 on ale-kasm, 5000 on GCE families). The cua MCP bridge is told this
+    via ``CUA_SERVER_URL`` so it doesn't fall back to its built-in default."""
+
     # ─── provider extras (rarely-used, free-form) ───
     metadata: dict[str, Any] = field(default_factory=dict)
 

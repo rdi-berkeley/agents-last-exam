@@ -43,6 +43,7 @@ from ..base_interface import (
     RangeResult,
     SandboxHandle,
 )
+from ._secrets import SECRET_GATHER_EXCLUDES, SECRETS_FILE
 
 if TYPE_CHECKING:
     from ..base_interface import AgentRunResult, BaseAgentDeployer
@@ -99,6 +100,7 @@ class SandboxExecutor(BaseExecutor):
         ale_src_root = _ale_src_root_for(sb)
 
         spec_path = f"{wd}{sep}_spec.json"
+        secrets_path = f"{wd}{sep}{SECRETS_FILE}"
         pid_file = f"{wd}{sep}_pid"
         result_path = f"{wd}{sep}_result.json"
         done_marker = f"{wd}{sep}_done.marker"
@@ -122,9 +124,13 @@ class SandboxExecutor(BaseExecutor):
         await sb.mkdir(self.work_dir)
 
         # 3. Reset stale state from any prior attempt (best-effort)
-        await sb.rm([pid_file, result_path, done_marker, entry_log])
+        await sb.rm([pid_file, result_path, done_marker, entry_log, secrets_path])
 
-        # 4. Write spec.json into the sandbox's work_dir
+        # 4. Write spec.json into the sandbox's work_dir.
+        #    Secrets (api keys etc.) are deliberately KEPT OUT of the spec —
+        #    _spec.json is gathered back to host .logs and must stay keyless.
+        #    The env goes in a separate _secrets.json that the entry reads
+        #    once and deletes (see _secrets.py).
         spec = {
             "deployer_module": deployer_cls.__module__,
             "deployer_class": deployer_cls.__name__,
@@ -133,11 +139,15 @@ class SandboxExecutor(BaseExecutor):
             "config_kwargs": _config_to_kwargs(self.config),
             "sandbox_kwargs": _sandbox_to_kwargs(self.sandbox),
             "work_dir": self.work_dir,
-            "env": dict(self.env),
+            "secrets_file": SECRETS_FILE,
             "prompt": prompt,
             "timeout_s": float(timeout_s),
         }
         await sb.write_file(spec_path, json.dumps(spec, indent=2))
+
+        # 4b. Write the transient secrets sidecar (read-once + self-deleted
+        #     by the entry). Never gathered to host logs.
+        await sb.write_file(secrets_path, json.dumps(dict(self.env or {})))
 
         # 5. Write launcher script + fire it (short RPC: returns in seconds)
         launcher_body = _build_launcher(
@@ -161,20 +171,37 @@ class SandboxExecutor(BaseExecutor):
                 f'"{launcher_path}"'
             )
         spawn_res = await sb.run_command(spawn_cmd, timeout=60)
-        if spawn_res.returncode != 0:
+        # The launcher backgrounds the entry via setsid+disown and returns in
+        # milliseconds, so a slow cua-server can drop the spawn RPC's SSE
+        # response (rc=-1 "transport error") even though the command actually
+        # ran server-side. Don't treat a transport-level failure as fatal:
+        # fall through to the PID check, which authoritatively tells us whether
+        # the entry started. Only a clean command failure (rc>0) is fatal here.
+        if spawn_res.returncode > 0:
             return AgentRunResult(
                 status="failed",
                 error=f"launcher spawn rc={spawn_res.returncode}: "
                       f"{(spawn_res.stderr or '').strip()[:300]}",
+            )
+        if spawn_res.returncode != 0:
+            logger.warning(
+                "sandbox: launcher spawn RPC returned rc=%s (%s); "
+                "verifying via PID file",
+                spawn_res.returncode, (spawn_res.stderr or "").strip()[:120],
             )
 
         # 6. Read PID (launcher writes it synchronously; tolerate tiny flush gap)
         pid = await self._read_pid(pid_file)
         if pid is None:
             entry_tail = await self._tail_log(entry_log)
+            spawn_note = (
+                f"spawn rc={spawn_res.returncode}: "
+                f"{(spawn_res.stderr or '').strip()[:120]}; "
+                if spawn_res.returncode != 0 else ""
+            )
             return AgentRunResult(
                 status="failed",
-                error=f"launcher did not write usable PID; "
+                error=f"launcher did not write usable PID; {spawn_note}"
                       f"entry log tail: {entry_tail}",
             )
 
@@ -290,6 +317,9 @@ class SandboxExecutor(BaseExecutor):
 
         for entry in entries:
             rel = entry["relpath"]
+            # Never pull secret-bearing control files to host logs.
+            if Path(rel.replace("\\", "/")).name in SECRET_GATHER_EXCLUDES:
+                continue
             local = dst / rel.replace("\\", "/")
             if entry["is_dir"]:
                 local.mkdir(parents=True, exist_ok=True)
@@ -330,6 +360,14 @@ class SandboxExecutor(BaseExecutor):
 
         Idempotent: per-file size compare against the remote first;
         skip when bytes match.
+
+        Vendored upstream agent sources (``ale_run/agents/*/upstream/``) are
+        skipped: they carry no ``__init__.py``, are never imported by the
+        in-sandbox ``_sandbox_entry`` runner, and deployers that need them
+        re-fetch from their own git remote inside the container.  Shipping
+        them is pure waste -- the hermes fork alone is 1337 .py files, each a
+        base64 round-trip over the CUA endpoint, which under host load can
+        stretch the ship phase into tens of minutes.
         """
         host_root = _host_ale_root()
         sandbox = self.sandbox
@@ -338,10 +376,24 @@ class SandboxExecutor(BaseExecutor):
         await sandbox.mkdir(ale_src_root)
 
         files: list[tuple[Path, str]] = []
-        for src_path in sorted(host_root.rglob("*.py")):
-            rel = src_path.relative_to(host_root)
-            sandbox_rel = "ale_run" + sep + rel.as_posix().replace("/", sep)
-            files.append((src_path, sandbox_rel))
+        patterns = (
+            "*.py",
+            "agents/*/pyproject.toml",
+            # cua MCP bridge source (package.json + package-lock.json + src/*.js).
+            # Shipped so the in-sandbox ensure-step can install the bridge into
+            # mcp_server_dir; node_modules is never shipped (rebuilt on-VM by
+            # npm install). Scoped to the bridge dir so we don't sweep stray
+            # json across the tree. See ensure_cua_mcp_server.
+            "agents/_assets/cua_mcp_server/**/*.js",
+            "agents/_assets/cua_mcp_server/**/*.json",
+        )
+        for pattern in patterns:
+            for src_path in sorted(host_root.rglob(pattern)):
+                rel = src_path.relative_to(host_root)
+                if "upstream" in rel.parts or "node_modules" in rel.parts:
+                    continue
+                sandbox_rel = "ale_run" + sep + rel.as_posix().replace("/", sep)
+                files.append((src_path, sandbox_rel))
 
         for src_path, rel in files:
             remote_path = f"{ale_src_root.rstrip(sep)}{sep}{rel}"
@@ -425,15 +477,22 @@ def _build_launcher(
     connection is held.
     """
     if sandbox.is_linux:
+        # Idempotent: a dropped spawn-RPC response triggers a host-side retry
+        # that re-runs this launcher. Guard against spawning a second entry by
+        # bailing if the recorded PID is still alive.
         return (
             "#!/bin/bash\n"
             "set -u\n"
+            f"PIDF={shlex.quote(pid_file)}\n"
+            "if [ -s \"$PIDF\" ] && kill -0 \"$(cat \"$PIDF\")\" 2>/dev/null; then\n"
+            "  exit 0\n"
+            "fi\n"
             f"export PYTHONPATH={shlex.quote(ale_src_root)}:${{PYTHONPATH:-}}\n"
             f"setsid {shlex.quote(python)} -m ale_run.executors._sandbox_entry "
             f"{shlex.quote(spec_path)} "
             f"</dev/null >{shlex.quote(entry_log)} 2>&1 &\n"
             "CHILD=$!\n"
-            f"echo \"$CHILD\" > {shlex.quote(pid_file)}\n"
+            "echo \"$CHILD\" > \"$PIDF\"\n"
             "disown $CHILD 2>/dev/null || true\n"
         )
     # Windows: PowerShell launcher
@@ -444,15 +503,28 @@ def _build_launcher(
     spec_quoted = spec_path.replace("'", "''")
     pid_quoted = pid_file.replace("'", "''")
     log_quoted = entry_log.replace("'", "''")
+    # Idempotent guard (mirrors the Linux launcher): a dropped spawn-RPC
+    # response triggers a host-side retry that re-runs this launcher. Without
+    # the guard a second entry would spawn, and since the first entry reads +
+    # deletes _secrets.json, the second comes up with no API keys. Bail if the
+    # recorded PID is still alive.
     return (
         "$ErrorActionPreference = 'Continue'\n"
+        f"$pidFile = '{pid_quoted}'\n"
+        "if (Test-Path $pidFile) {\n"
+        "  $oldPid = (Get-Content $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1)\n"
+        "  if ($oldPid) {\n"
+        "    $running = Get-Process -Id ([int]$oldPid) -ErrorAction SilentlyContinue\n"
+        "    if ($running) { exit 0 }\n"
+        "  }\n"
+        "}\n"
         f"$env:PYTHONPATH = '{src_quoted};' + $env:PYTHONPATH\n"
         f"$proc = Start-Process -FilePath '{py_quoted}' "
         f"-ArgumentList '-m','ale_run.executors._sandbox_entry','{spec_quoted}' "
         f"-WindowStyle Hidden -PassThru "
         f"-RedirectStandardOutput '{log_quoted}' "
         f"-RedirectStandardError '{log_quoted}.err'\n"
-        f"$proc.Id | Out-File -FilePath '{pid_quoted}' -Encoding ascii -NoNewline\n"
+        f"$proc.Id | Out-File -FilePath $pidFile -Encoding ascii -NoNewline\n"
     )
 
 
@@ -602,6 +674,7 @@ def _sandbox_to_kwargs(sb: SandboxHandle) -> dict[str, Any]:
         "node": sb.node,
         "python": sb.python,
         "mcp_server_dir": sb.mcp_server_dir,
+        "cua_server_port": sb.cua_server_port,
         "metadata": dict(sb.metadata or {}),
     }
 

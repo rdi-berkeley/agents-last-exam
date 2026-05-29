@@ -737,7 +737,14 @@ class GcloudProvider(Provider):
                 name, used_zone, self._cfg.project, timeout=120,
             )
 
-        cua_url = f"http://{external_ip}:5000"
+        # GCE image name == framework Image-registry family name. Fetch it
+        # early so the cua-server URL uses the image's declared port instead
+        # of a hard-coded literal.
+        from ..images import get as get_image
+
+        image = get_image(snap.image)
+
+        cua_url = f"http://{external_ip}:{image.cua_server_port}"
         logger.info(
             "VM %s created via %s in %s at %s",
             name, used_machine, used_zone, cua_url,
@@ -747,10 +754,6 @@ class GcloudProvider(Provider):
         if not ready:
             raise RuntimeError(f"CUA server at {cua_url} did not become ready")
 
-        # GCE image name == framework Image-registry family name.
-        from ..images import get as get_image
-
-        image = get_image(snap.image)
         return SandboxHandle(
             id=name,
             endpoint=cua_url,

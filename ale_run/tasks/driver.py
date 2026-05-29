@@ -131,12 +131,17 @@ class TaskDriver:
         skip_setup: bool = False,
         os_type: str | None = None,
         session_rebuilder: Callable[[], Awaitable[RemoteDesktopSession]] | None = None,
+        data_root: str | None = None,
     ):
         self._variant = variant
         self._skip_setup = skip_setup
+        self._data_root = data_root
 
         self._task_loader = TaskLoader(task_path)
         self._task_info = self._task_loader.load(variant_index=variant)
+        if data_root:
+            from ale_run.orchestration.lifecycle import _inject_data_root
+            _inject_data_root(self._task_info, data_root)
         self._os_type = os_type or self._task_info.get("os_type", "windows")
 
         self._session: RemoteDesktopSession | None = session
@@ -270,4 +275,9 @@ class TaskDriver:
         task_cfg = self._task_loader.build_task_cfg(variant_index=self._variant)
         if not hasattr(task_cfg, "metadata") or getattr(task_cfg, "metadata") is None:
             task_cfg.metadata = self._task_info.get("metadata", {})
+        if self._data_root and isinstance(task_cfg.metadata, dict):
+            from tasks.common_config import _UNSET_DATA_ROOT
+            for k, v in task_cfg.metadata.items():
+                if isinstance(v, str) and _UNSET_DATA_ROOT in v:
+                    task_cfg.metadata[k] = v.replace(_UNSET_DATA_ROOT, self._data_root)
         return task_cfg

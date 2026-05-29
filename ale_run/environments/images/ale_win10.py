@@ -23,4 +23,7 @@ IMAGE = Image(
 
     # provisioning defaults
     default_machine_type="n2-standard-4",
+
+    # cua-server port on GCE-backed images
+    cua_server_port=5000,
 )

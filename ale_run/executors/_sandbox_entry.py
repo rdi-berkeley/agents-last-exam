@@ -34,18 +34,30 @@ logging.basicConfig(
 logger = logging.getLogger("sandbox_entry")
 
 
-def run(spec: dict) -> dict:
+def run(spec: dict, env: dict | None = None) -> dict:
     """Drive ``install() + launch()`` of the deployer. Return result dict.
 
     Pure data in / out. Caught exceptions become ``ok=False`` with a
     full traceback so the host poller can surface them.
+
+    ``env`` holds the framework-supplied secrets (api keys, base URLs)
+    read from the read-once ``_secrets.json`` sidecar; it is never part
+    of ``spec`` (which is gathered to host logs and must stay keyless).
     """
-    # Inject framework env vars (api keys, base URLs) so the deployer's
-    # spawned subprocess inherits them.
-    for k, v in (spec.get("env") or {}).items():
-        os.environ[k] = v
+    # Inject framework env vars so the deployer's spawned subprocess
+    # inherits them. Fall back to a legacy in-spec env for forward/back
+    # compatibility, but the writer no longer puts secrets in the spec.
+    if env is None:
+        env = spec.get("env") or {}
+    for k, v in env.items():
+        os.environ[str(k)] = str(v)
 
     try:
+        # Install agent-declared Python deps before importing the deployer
+        # so top-level imports (e.g. `import yaml`) don't crash.
+        from ale_run.base_interface import BaseExecutor
+        BaseExecutor.install_agent_deps(spec["deployer_module"])
+
         from ale_run.base_interface import SandboxHandle
         from ale_run.executors.local import LocalExecutor
 
@@ -56,11 +68,17 @@ def run(spec: dict) -> dict:
 
         cfg = cfg_cls(**spec["config_kwargs"])
         sandbox = SandboxHandle(**spec["sandbox_kwargs"])
+        # We are running INSIDE the sandbox: cua-server is co-located on
+        # loopback at the image's declared port. The handle's ``endpoint`` was
+        # the host-side URL (e.g. a socat sidecar port) which is NOT reachable
+        # from in here, so point it at loopback. This is what the cua MCP bridge
+        # (via executor.cua_bridge_url) and any in-sandbox run_command must use.
+        sandbox.endpoint = f"http://127.0.0.1:{sandbox.cua_server_port}"
         executor = LocalExecutor(
             config=cfg,
             work_dir=spec["work_dir"],
             sandbox=sandbox,
-            env=spec.get("env") or {},
+            env=env,
         )
         deployer = dep_cls(executor)
 
@@ -123,7 +141,12 @@ def main() -> int:
         print(f"sandbox_entry: cannot read spec {spec_path}: {e}", file=sys.stderr)
         return 2
 
-    out = run(spec)
+    # Read the read-once secrets sidecar (api keys) and delete it
+    # immediately so it never lingers to be gathered into host logs.
+    from ale_run.executors._secrets import read_and_delete_secrets
+    env = read_and_delete_secrets(spec_path.parent)
+
+    out = run(spec, env)
 
     work_dir = Path(spec["work_dir"])
     work_dir.mkdir(parents=True, exist_ok=True)

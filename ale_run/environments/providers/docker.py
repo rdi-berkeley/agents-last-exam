@@ -35,6 +35,7 @@ _CUA_READY_POLL_INTERVAL = 3
 _CUA_READY_STABLE_SUCCESSES = 2
 
 _DEFAULT_IMAGE = "agentslastexam/ale-kasm:latest"
+_KASM_ENTRYPOINT = "/dockerstartup/vnc_startup.sh"
 
 
 _GCS_KEY_CONTAINER_PATH = "/etc/agenthle/gcs-reader.json"
@@ -57,6 +58,7 @@ class DockerProviderConfig:
     """
 
     image: str = _DEFAULT_IMAGE
+    image_family: str = "ale-kasm"
     container_prefix: str = "ale"
     extra_env: dict[str, str] = dataclass_field(default_factory=dict)
     shm_size: str = "512m"
@@ -72,6 +74,7 @@ def _build_provider_config(raw: dict[str, Any]) -> DockerProviderConfig:
         gcs_sa = str(_P(gcs_sa).expanduser().resolve())
     return DockerProviderConfig(
         image=str(raw.get("image") or _DEFAULT_IMAGE),
+        image_family=str(raw.get("image_family") or "ale-kasm"),
         container_prefix=str(raw.get("container_prefix") or "ale"),
         extra_env=dict(raw.get("extra_env") or {}),
         shm_size=str(raw.get("shm_size") or "512m"),
@@ -162,12 +165,25 @@ class DockerProvider(Provider):
             model_tag=spec.model_tag,
         )
 
+        # The cua-server's in-container port is image-specific (8000 on
+        # ale-kasm, 5000 on GCE families). Read it from the Image registry
+        # rather than hard-coding, so the published port + handle URL stay
+        # correct for any image family.
+        from ..images import get as get_image
+        image = get_image(self._cfg.image_family)
+        cua_internal_port = image.cua_server_port
+
         run_args = [
             "run", "-d",
             "--name", name,
-            "-p", f"0:{_CUA_INTERNAL_PORT}",
+            "-p", f"0:{cua_internal_port}",
             "-p", f"0:{_VNC_INTERNAL_PORT}",
             f"--shm-size={self._cfg.shm_size}",
+            # The kasm desktop entrypoint boots the X/VNC display *and* the
+            # cua-server via custom_startup.sh. Some images ship a no-op CMD
+            # ("sleep infinity") that never starts it, so we always invoke the
+            # kasm startup script explicitly.
+            "--entrypoint", _KASM_ENTRYPOINT,
         ]
         if self._cfg.cpus > 0:
             run_args.extend(["--cpus", str(self._cfg.cpus)])
@@ -176,6 +192,7 @@ class DockerProvider(Provider):
         for k, v in self._cfg.extra_env.items():
             run_args.extend(["-e", f"{k}={v}"])
         run_args.append(self._cfg.image)
+        run_args.append("--wait")
 
         logger.info("Creating Docker container %s from %s", name, self._cfg.image)
         rc, stdout, stderr = await _run_docker(*run_args)
@@ -185,7 +202,7 @@ class DockerProvider(Provider):
             )
         logger.info("Container %s started (id=%s)", name, stdout[:12])
 
-        cua_port = await _get_host_port(name, _CUA_INTERNAL_PORT)
+        cua_port = await _get_host_port(name, cua_internal_port)
         vnc_port = await _get_host_port(name, _VNC_INTERNAL_PORT)
         cua_url = f"http://localhost:{cua_port}"
 
@@ -204,9 +221,6 @@ class DockerProvider(Provider):
 
         if self._cfg.gcs_sa_key:
             await self._inject_gcs_credentials(name, self._cfg.gcs_sa_key)
-
-        from ..images import get as get_image
-        image = get_image("ale-kasm")
 
         return SandboxHandle(
             id=name,

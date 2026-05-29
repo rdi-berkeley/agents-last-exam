@@ -44,11 +44,16 @@ abstract this.
 from __future__ import annotations
 
 import abc
+import logging
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, TYPE_CHECKING
 
 from .sandbox import RangeResult, SandboxHandle
+
+_logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .agent_deployer import AgentRunResult, BaseAgentDeployer
@@ -114,6 +119,82 @@ class BaseExecutor(abc.ABC):
                 f"{cls.__name__}: concrete Executor subclass must set "
                 "class attribute `type` to a non-empty string"
             )
+
+    # ──────── cua MCP bridge wiring ────────
+
+    def cua_bridge_url(self) -> str:
+        """URL the cua MCP bridge uses to reach the cua-server, from the
+        vantage point where the bridge (and the deployer) actually run.
+
+        Always ``sandbox.endpoint`` — but that field already carries the right
+        URL for each substrate:
+
+        * Local / Docker (``--network host``): the deployer runs on the host,
+          ``endpoint`` is the host-side cua URL the framework's own client uses.
+        * Sandbox: the deployer runs *inside* the sandbox, where the host-side
+          URL is unreachable; ``_sandbox_entry`` rewrites the in-sandbox handle's
+          ``endpoint`` to ``http://127.0.0.1:<image cua_server_port>`` before
+          constructing the in-sandbox executor."""
+        return self.sandbox.endpoint
+
+    # ──────── agent dependency bootstrap ────────
+
+    @staticmethod
+    def install_agent_deps(deployer_module: str) -> None:
+        """Install Python deps declared in the agent's ``pyproject.toml``.
+
+        Called by entry points (``_sandbox_entry``, ``_docker_entry``)
+        **before** ``importlib.import_module(deployer_module)`` so that
+        top-level imports in deployers (e.g. ``import yaml``) don't crash
+        when the package isn't pre-installed in the environment.
+
+        Locates the agent package from *deployer_module*
+        (e.g. ``ale_run.agents.hermes.deployer`` → ``ale_run/agents/hermes/``),
+        reads ``[project].dependencies`` from its ``pyproject.toml``, and
+        ``pip install``s any that are listed into the current interpreter
+        (``sys.executable`` — the python the Image declares). Every image's
+        declared python ships with pip, so a single ``pip`` path is used (no
+        uv); ``ensurepip`` self-heals the rare case where pip is absent.
+        """
+        pkg_path = deployer_module.rsplit(".", 1)[0].replace(".", "/")
+        toml_path: Path | None = None
+        for base in sys.path:
+            candidate = Path(base) / pkg_path / "pyproject.toml"
+            if candidate.is_file():
+                toml_path = candidate
+                break
+        if toml_path is None:
+            return
+
+        try:
+            import tomllib
+        except ModuleNotFoundError:
+            import tomli as tomllib  # type: ignore[no-redef]
+
+        with open(toml_path, "rb") as f:
+            data = tomllib.load(f)
+        deps = data.get("project", {}).get("dependencies", [])
+        if not deps:
+            return
+
+        # Ensure pip is importable for this interpreter (uv-created venvs
+        # may omit it); ensurepip is stdlib and a no-op when pip exists.
+        if subprocess.run(
+            [sys.executable, "-m", "pip", "--version"],
+            capture_output=True,
+        ).returncode != 0:
+            _logger.info("install_agent_deps: pip missing, bootstrapping via ensurepip")
+            subprocess.run(
+                [sys.executable, "-m", "ensurepip", "--upgrade"],
+                check=True, timeout=120,
+            )
+
+        _logger.info("install_agent_deps: %s (from %s)", deps, toml_path)
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--quiet", *deps],
+            check=True, timeout=120,
+        )
+        _logger.info("install_agent_deps: done")
 
     # ──────── methods (lifecycle uses these) ────────
 

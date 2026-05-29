@@ -18,12 +18,15 @@ IMAGE = Image(
     work_dir_base="/home/user/.ale",
     task_data_root="/media/user/data/ale-data",
     node="/usr/local/bin/node",
-    # Image-baked dedicated venv (Python 3.12 + pydantic + requests).
-    # Counterpart on windows: ``C:\ale-run\.venv\Scripts\python.exe``.
-    # Same version across images so deployer behaviour matches.
+    # Dedicated venv (Python 3.12 + framework deps like pydantic).
+    # Must be user-writable so install_agent_deps() can add agent-
+    # specific packages (e.g. pyyaml for hermes) at runtime.
     python="/opt/ale-run/.venv/bin/python",
     mcp_server_dir="/home/user/cua_mcp_server",
 
     # provisioning defaults
     default_machine_type="e2-standard-4",
+
+    # cua-server port on GCE-backed images
+    cua_server_port=5000,
 )

@@ -63,14 +63,23 @@ class Image:
     default_machine_type: str
     gpu: str | None = None
 
-    def sandbox_paths(self) -> dict[str, str]:
+    # ─── cua-server port (image-specific; consumed by Providers + Executors) ───
+    cua_server_port: int = 5000
+    """Port the cua-server listens on inside this image. ``ale-kasm`` runs the
+    cua-computer-server on its package default 8000; the GCE-backed families run
+    it on 5000. The cua MCP bridge must be told this (it otherwise defaults to
+    5000), so it is splatted into :class:`SandboxHandle` and used by Providers
+    to build the cua-server URL + map ports."""
+
+    def sandbox_paths(self) -> dict[str, object]:
         """Field dict for ``SandboxHandle(**image.sandbox_paths(), ...)``."""
         return {
-            "work_dir_base":  self.work_dir_base,
-            "task_data_root": self.task_data_root,
-            "node":           self.node,
-            "python":         self.python,
-            "mcp_server_dir": self.mcp_server_dir,
+            "work_dir_base":   self.work_dir_base,
+            "task_data_root":  self.task_data_root,
+            "node":            self.node,
+            "python":          self.python,
+            "mcp_server_dir":  self.mcp_server_dir,
+            "cua_server_port": self.cua_server_port,
         }
 
 

@@ -48,6 +48,26 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT_S = 7200
 
+
+def _inject_data_root(task_meta: dict[str, Any], data_root: str) -> None:
+    """Replace the ``_UNSET_DATA_ROOT`` sentinel in task metadata with the
+    real ``task_data_root`` from the image spec.  Mutates *task_meta* in place.
+    """
+    from tasks.common_config import _UNSET_DATA_ROOT
+    sentinel = _UNSET_DATA_ROOT
+
+    def _replace(v: Any) -> Any:
+        if isinstance(v, str) and sentinel in v:
+            return v.replace(sentinel, data_root)
+        return v
+
+    task_meta["description"] = _replace(task_meta.get("description", ""))
+    meta = task_meta.get("metadata")
+    if isinstance(meta, dict):
+        for k, v in meta.items():
+            meta[k] = _replace(v)
+
+
 # Mount-fallback: how many provision attempts before we give up. Matches
 # simprun's single retry — the original env + one alternate profile.
 
@@ -196,6 +216,8 @@ async def run_one_unit(
                 machine_type=env.sandbox.metadata.get("machine_type"),
             )
 
+            _inject_data_root(task_meta, env.sandbox.task_data_root)
+
             builder = TrajectoryBuilder(
                 agent_name=getattr(config, "name", unit.agent_spec.class_),
                 agent_version=None,
@@ -222,6 +244,7 @@ async def run_one_unit(
                 variant=unit.variant_index,
                 os_type=env.sandbox.os,
                 session_rebuilder=env.reset_session,
+                data_root=env.sandbox.task_data_root,
             )
             await task_driver.setup()
 

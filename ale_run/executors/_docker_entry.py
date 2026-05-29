@@ -34,15 +34,25 @@ RESULT_PATH = Path("/work/_result.json")
 async def _run() -> dict:
     spec = json.loads(SPEC_PATH.read_text())
 
-    # Inject framework-supplied env vars (api keys etc.)
-    for k, v in (spec.get("env") or {}).items():
-        os.environ[k] = v
+    # Read the read-once secrets sidecar (api keys etc.) from the bind
+    # mount and delete it immediately so it never persists in the host
+    # log dir (work_dir is bind-mounted = host log dir for docker runs).
+    # Fall back to a legacy in-spec env if present (older host writers).
+    from ale_run.executors._secrets import read_and_delete_secrets
+    env = read_and_delete_secrets(SPEC_PATH.parent) or (spec.get("env") or {})
+    for k, v in env.items():
+        os.environ[str(k)] = str(v)
 
     # Make scp'd ale_run importable (DockerExecutor mounts ale_run at /ale_run
     # via -v <host_repo>/ale_run:/ale_run/ale_run — convention below).
     src = spec["ale_src_root"]
     if src not in sys.path:
         sys.path.insert(0, src)
+
+    # Install agent-declared Python deps before importing the deployer
+    # so top-level imports (e.g. `import yaml`) don't crash.
+    from ale_run.base_interface import BaseExecutor
+    BaseExecutor.install_agent_deps(spec["deployer_module"])
 
     from ale_run.base_interface import SandboxHandle
     from ale_run.executors.local import LocalExecutor
@@ -58,7 +68,7 @@ async def _run() -> dict:
         config=cfg,
         work_dir=spec["work_dir"],
         sandbox=sandbox,
-        env=spec.get("env") or {},
+        env=env,
     )
     deployer = dep_cls(executor)
 

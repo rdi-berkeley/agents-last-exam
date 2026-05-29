@@ -36,6 +36,11 @@ _AGENT_FQNS: dict[str, str] = {
     "cursor_cli": "ale_run.agents.cursor_cli.deployer.CursorCliDeployer",
     "droid": "ale_run.agents.droid.deployer.DroidDeployer",
     "openclaw_cli": "ale_run.agents.openclaw_cli.deployer.OpenClawCliDeployer",
+    "forgecode": "ale_run.agents.forgecode.deployer.ForgecodeDeployer",
+    "codex": "ale_run.agents.codex.deployer.CodexDeployer",
+    "openhands_cli": "ale_run.agents.openhands_cli.deployer.OpenHandsCliDeployer",
+    "hermes": "ale_run.agents.hermes.deployer.HermesDeployer",
+    "terminus_2": "ale_run.agents.terminus_2.deployer.Terminus2Deployer",
 }
 
 

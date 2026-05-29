@@ -10,7 +10,11 @@ Per-unit ``docker run --rm`` with:
 * ``--network host``                 — so the deployer can reach the
                                        sandbox VM's cua-server endpoint
 * ``--env-file <api_keys>``          — keeps api keys off the cmdline +
-                                       out of ``docker inspect``
+                                       out of ``docker inspect``. Written
+                                       to a private tempdir OUTSIDE the
+                                       bind mount so it never lands in the
+                                       gathered host log dir; removed after
+                                       the run.
 
 Entrypoint is ``python -m ale_run.executors._docker_entry`` —
 :mod:`_docker_entry` reads ``/work/_spec.json`` and reconstructs the
@@ -27,7 +31,9 @@ import json
 import logging
 import os
 import shutil
+import stat
 import subprocess
+import tempfile
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -40,6 +46,7 @@ from ..base_interface import (
     RangeResult,
     SandboxHandle,
 )
+from ._secrets import SECRET_GATHER_EXCLUDES, SECRETS_FILE, write_secrets
 
 if TYPE_CHECKING:
     from ..base_interface import AgentRunResult, BaseAgentDeployer
@@ -112,7 +119,11 @@ class DockerExecutor(BaseExecutor):
         host_work = Path(self.work_dir)
         host_work.mkdir(parents=True, exist_ok=True)
 
-        # 1. Write spec.json into the bind mount
+        # 1. Write spec.json into the bind mount.
+        #    Secrets (api keys etc.) are deliberately KEPT OUT of the spec —
+        #    work_dir IS the host log dir for docker runs, so _spec.json is a
+        #    host log file and must stay keyless. The env goes in a separate
+        #    _secrets.json that the entry reads once and deletes.
         spec = {
             "ale_src_root": "/ale_src",  # container view
             "deployer_module": deployer_cls.__module__,
@@ -122,20 +133,59 @@ class DockerExecutor(BaseExecutor):
             "config_kwargs": _config_to_kwargs(self.config),
             "sandbox_kwargs": _sandbox_to_kwargs(self.sandbox),
             "work_dir": "/work",
-            "env": dict(self.env),
+            "secrets_file": SECRETS_FILE,
             "prompt": prompt,
             "timeout_s": float(timeout_s),
         }
         (host_work / "_spec.json").write_text(json.dumps(spec, indent=2))
 
-        # 2. Write env-file (keeps api keys off cmdline + docker inspect)
+        # 1b. Write the read-once secrets sidecar into the bind mount. The
+        #     in-container entry reads it then deletes it, so it does not
+        #     persist in the host log dir. chmod 600 while it lives.
+        write_secrets(host_work, dict(self.env or {}))
+
+        # 2. Write env-file (keeps api keys off cmdline + docker inspect).
+        #    Lives in a private tempdir OUTSIDE the bind-mounted work_dir so
+        #    it is never part of the host log dir; removed after the run.
         env_lines = []
         for k in _ENV_PASSTHROUGH_KEYS:
             v = os.environ.get(k) or (self.env or {}).get(k)
             if v:
                 env_lines.append(f"{k}={v}")
-        env_file = host_work / "_env"
+        env_tmp_dir = Path(tempfile.mkdtemp(prefix="ale-env-"))
+        env_file = env_tmp_dir / "env"
         env_file.write_text("\n".join(env_lines) + ("\n" if env_lines else ""))
+        try:
+            env_file.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0600
+        except OSError:
+            pass
+
+        try:
+            return await self._run_container(
+                deployer_cls=deployer_cls,
+                host_work=host_work,
+                env_file=env_file,
+                timeout_s=timeout_s,
+            )
+        finally:
+            # Remove the env-file tempdir and, defensively, the bind-mounted
+            # secrets sidecar in case the container died before the entry
+            # could read+delete it (so no key reaches the host log dir).
+            shutil.rmtree(env_tmp_dir, ignore_errors=True)
+            try:
+                (host_work / SECRETS_FILE).unlink()
+            except OSError:
+                pass
+
+    async def _run_container(
+        self,
+        *,
+        deployer_cls: type["BaseAgentDeployer"],
+        host_work: Path,
+        env_file: Path,
+        timeout_s: float,
+    ) -> "AgentRunResult":
+        from ..base_interface import AgentRunResult
 
         # 3. docker run argv
         container_name = f"ale-{deployer_cls.__name__.lower()}-{uuid.uuid4().hex[:8]}"
@@ -253,6 +303,8 @@ class DockerExecutor(BaseExecutor):
                 dst.mkdir(parents=True, exist_ok=True)
                 for entry in src_path.rglob("*"):
                     if entry.is_dir():
+                        continue
+                    if entry.name in SECRET_GATHER_EXCLUDES:
                         continue
                     rel = entry.relative_to(src_path)
                     target = dst / rel

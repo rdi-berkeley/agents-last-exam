@@ -26,4 +26,7 @@ IMAGE = Image(
 
     # no GCE machine type — Docker containers are sized by the host
     default_machine_type="",
+
+    # cua-computer-server's package default port on this image (vs 5000 on GCE)
+    cua_server_port=8000,
 )
