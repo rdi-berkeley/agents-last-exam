@@ -57,6 +57,7 @@ _TOP_LEVEL_KEYS = frozenset({
     "output", "artifacts_path",
     "concurrency",
     "cleanup_mode",
+    "prompt_suffix",
 })
 
 
@@ -212,6 +213,7 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
     artifacts = _build_artifacts(effective.get("artifacts_path") or {})
     concurrency = _build_concurrency(effective)
     cleanup_mode = _build_cleanup_mode(effective)
+    prompt_suffix = str(effective.get("prompt_suffix") or "")
 
     if "agent" in raw and "agents" in raw:
         raise ValueError("set either `agent:` (single) or `agents:` (list), not both")
@@ -242,6 +244,7 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
         artifacts=artifacts,
         concurrency=concurrency,
         cleanup_mode=cleanup_mode,
+        prompt_suffix=prompt_suffix,
     )
 
 

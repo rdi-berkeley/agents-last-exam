@@ -68,6 +68,20 @@ def _inject_data_root(task_meta: dict[str, Any], data_root: str) -> None:
             meta[k] = _replace(v)
 
 
+def _append_prompt_suffix(task_meta: dict[str, Any], prompt_suffix: str) -> None:
+    """Append the experiment-wide ``prompt_suffix`` to the task description.
+
+    No-op when the suffix is empty/whitespace. The suffix is added as its
+    own paragraph (blank-line separator) after the task prompt, mutating
+    *task_meta* in place so every downstream consumer — the recorded
+    trajectory and the prompt handed to the agent — sees the same text.
+    """
+    if not prompt_suffix or not prompt_suffix.strip():
+        return
+    description = task_meta.get("description", "") or ""
+    task_meta["description"] = f"{description.rstrip()}\n\n{prompt_suffix.strip()}"
+
+
 # Mount-fallback: how many provision attempts before we give up. Matches
 # simprun's single retry — the original env + one alternate profile.
 
@@ -128,6 +142,7 @@ async def run_one_unit(
     artifacts: ArtifactsSpec | None = None,
     sem: asyncio.Semaphore | None = None,
     cleanup_mode: str = "delete",
+    prompt_suffix: str = "",
 ) -> UnitResult:
     started = time.monotonic()
     effective_cleanup_mode = cleanup_mode
@@ -217,6 +232,7 @@ async def run_one_unit(
             )
 
             _inject_data_root(task_meta, env.sandbox.task_data_root)
+            _append_prompt_suffix(task_meta, prompt_suffix)
 
             builder = TrajectoryBuilder(
                 agent_name=getattr(config, "name", unit.agent_spec.class_),

@@ -115,6 +115,14 @@ class ExperimentSpec:
     - ``"keep"``: leave the VM running (debug / reproducer use).
     """
 
+    prompt_suffix: str = ""
+    """Text appended to *every* task's prompt before it is handed to the
+    agent. Empty (default) ⇒ no change. The suffix is appended after the
+    task description with a blank-line separator so it reads as its own
+    paragraph; it also lands in the recorded trajectory so the run reflects
+    exactly what the agent saw. Set via the top-level ``prompt_suffix:``
+    yaml key — a yaml ``|`` block scalar is convenient for multi-line text."""
+
 
 # =============================================================================
 # Derived run units (one per agent × task × variant combination)

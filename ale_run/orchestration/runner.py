@@ -94,6 +94,7 @@ class Runner:
                 artifacts=self._spec.artifacts,
                 sem=sem,
                 cleanup_mode=self._spec.cleanup_mode,
+                prompt_suffix=self._spec.prompt_suffix,
             )
             logger.info("[%s] done: status=%s score=%s duration=%.1fs",
                         u.slug, result.status, result.score, result.duration_s or 0)

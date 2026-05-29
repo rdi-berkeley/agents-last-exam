@@ -30,3 +30,9 @@ environment:
 tasks: selected_tasks/helloworld.txt
 
 run_profile: configs/runs/default.yaml            # Default run-level profile (output dir, concurrency, artifacts).
+
+# Appended verbatim (as its own paragraph) to EVERY task's prompt before it
+# reaches the agent. Empty/unset ⇒ no change. Use a `|` block for multi-line.
+prompt_suffix: |
+  Complete the task fully autonomously. You have no opportunity to interact with the user; the user will directly evaluate the output you produce.
+  Do not get stuck in a failure loop — if you conclude the task genuinely cannot be completed (for example, the input data is incomplete, the task itself is unreasonable, or the environment has an anomaly you cannot resolve), write an `infeasible.md` to the output directory explaining the specific reason in detail.
