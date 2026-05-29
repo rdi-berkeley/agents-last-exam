@@ -66,23 +66,25 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
     # =========================================================================
 
     async def _auto_install_cli(self) -> None:
-        """Install claude CLI via npm if node is available."""
+        """Install claude CLI via npm; bootstrap node+npm if missing."""
+        cfg: ClaudeCodeConfig = self.config  # type: ignore[assignment]
         npm = shutil.which("npm")
         if not npm:
-            raise RuntimeError(
-                "ClaudeCodeDeployer: 'claude' not found and 'npm' not on PATH — "
-                "cannot auto-install. Bake node+npm into the image."
-            )
+            from ale_run.agents._bootstrap import ensure_npm
+            npm = await ensure_npm()
         home = os.path.expanduser("~")
         env = {**os.environ, "npm_config_cache": f"{home}/.npm-ale"}
+        # cfg.cli_version is the full npm spec, e.g.
+        # "@anthropic-ai/claude-code@2.1.85".
+        pkg = cfg.cli_version or "@anthropic-ai/claude-code"
         proc = await asyncio.to_thread(
             subprocess.run,
-            [npm, "install", "-g", "--prefix", f"{home}/.local", "@anthropic-ai/claude-code"],
+            [npm, "install", "-g", "--prefix", f"{home}/.local", pkg],
             capture_output=True, text=True, timeout=300, env=env,
         )
         if proc.returncode != 0:
             raise RuntimeError(
-                f"npm install -g @anthropic-ai/claude-code failed "
+                f"npm install -g {pkg} failed "
                 f"(rc={proc.returncode}): {(proc.stderr or '')[:500]}"
             )
         bin_dir = f"{home}/.local/bin"
@@ -129,16 +131,23 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
         wd = Path(self.executor.work_dir)
         wd.mkdir(parents=True, exist_ok=True)
 
-        # 4. MCP config. Paths reference the sandbox's baked node +
+        # 4. Ensure the cua MCP bridge is installed at sandbox.mcp_server_dir
+        # (idempotent: no-op when prebaked, install when missing).
+        from ale_run.agents._bootstrap import cua_bridge_env, ensure_cua_mcp_server
+        await ensure_cua_mcp_server(sandbox)
+
+        # 5. MCP config. Paths reference the sandbox's baked node +
         # mcp_server_dir — these are valid because the deployer runs INSIDE
         # the sandbox (SandboxExecutor) and the cua MCP server is on the
-        # same machine.
+        # same machine. CUA_SERVER_URL points the bridge at the image's
+        # cua-server port (the bridge otherwise defaults to 5000).
         mcp_config = {
             "mcpServers": {
                 "cua": {
                     "command": sandbox.node,
                     "args": [self._join(sandbox.mcp_server_dir, "src", "index.js",
                                         is_linux=is_linux)],
+                    "env": cua_bridge_env(self.executor),
                 },
             },
         }
@@ -295,13 +304,30 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
         for k, v in (self.executor.env or {}).items():
             env[k] = v
 
-        base_url_default = cfg.base_url or "https://openrouter.ai/api"
-        if not env.get("ANTHROPIC_API_KEY") and env.get("OPENROUTER_API_KEY"):
-            env["ANTHROPIC_BASE_URL"] = base_url_default
-            env["ANTHROPIC_AUTH_TOKEN"] = env["OPENROUTER_API_KEY"]
+        # Provider-driven routing (explicit, not key-presence heuristic).
+        if cfg.provider == "openrouter":
+            or_key = env.get("OPENROUTER_API_KEY")
+            if not or_key:
+                raise RuntimeError(
+                    "claude_code: provider=openrouter but OPENROUTER_API_KEY "
+                    "is not set"
+                )
+            env["ANTHROPIC_BASE_URL"] = cfg.base_url or "https://openrouter.ai/api"
+            env["ANTHROPIC_AUTH_TOKEN"] = or_key
             env["ANTHROPIC_API_KEY"] = ""
-        if cfg.base_url:
-            env["ANTHROPIC_BASE_URL"] = cfg.base_url
+        elif cfg.provider == "direct":
+            if not env.get("ANTHROPIC_API_KEY"):
+                raise RuntimeError(
+                    "claude_code: provider=direct but ANTHROPIC_API_KEY is "
+                    "not set"
+                )
+            if cfg.base_url:
+                env["ANTHROPIC_BASE_URL"] = cfg.base_url
+        else:
+            raise RuntimeError(
+                f"claude_code: unknown provider {cfg.provider!r} "
+                "(expected 'openrouter' or 'direct')"
+            )
         return env
 
     def _diagnose_failure(
