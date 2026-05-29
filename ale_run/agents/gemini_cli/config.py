@@ -1,16 +1,26 @@
 """GeminiCliConfig: per-episode knobs for the Gemini CLI deployer.
 
-API keys live in the operator's shell env.  The deployer reads
-``GEMINI_API_KEY`` (direct Google) or ``OPENROUTER_API_KEY``
-(routed via OpenRouter fork).
+Routing is provider-driven via :attr:`GeminiCliConfig.provider`:
+
+- ``"openrouter"`` (default): the deployer sets ``OPENROUTER_API_KEY`` and
+  ``OPENROUTER_COMPRESSION_MODEL`` and keeps the bare model id. The
+  ``cua-verse/gemini-cli#agenthle`` fork maps ``gemini-*`` model names to
+  ``google/gemini-*`` on the OpenRouter request and forwards tool-result
+  content correctly (functionResponse.id linkage + streaming tool-call
+  accumulation), so native file tools work over OpenRouter.
+- ``"google"``: direct Google API. The deployer reads ``GEMINI_API_KEY``
+  (or ``GOOGLE_API_KEY``) and uses the bare model id.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import ClassVar
 
 from ale_run.base_interface import BaseAgentConfig
 
+# Native filesystem tools are kept enabled. The agenthle fork forwards their
+# tool-result content correctly over OpenRouter, so the agent can read/write
+# files directly rather than routing everything through run_shell_command.
 _ALLOWED_TOOLS = (
     "run_shell_command",
     "write_file",
@@ -24,6 +34,9 @@ _ALLOWED_TOOLS = (
     "read_background_output",
 )
 
+# Only web / persistent-state / interactive / tracker tools are disabled —
+# they don't fit headless benchmark runs. Matches agenthle's
+# GEMINI_DEFAULT_DISABLED_TOOLS.
 _DISABLED_TOOLS = (
     "google_web_search",
     "web_fetch",
@@ -52,7 +65,9 @@ class GeminiCliConfig(BaseAgentConfig):
     name: ClassVar[str] = "gemini-cli"
 
     model: str = "gemini-3.1-pro-preview"
+    provider: str = "openrouter"
     approval_mode: str = "yolo"
     allowed_tools: tuple[str, ...] = _ALLOWED_TOOLS
     disabled_tools: tuple[str, ...] = _DISABLED_TOOLS
-    npm_package: str = "@google/gemini-cli"
+    npm_package: str = "https://github.com/cua-verse/gemini-cli/releases/download/v0.38.1-agenthle/google-gemini-cli-0.38.1.tgz"
+    compression_model: str = "google/gemini-3-flash-preview"

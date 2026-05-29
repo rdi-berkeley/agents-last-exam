@@ -68,16 +68,18 @@ class GeminiCliDeployer(BaseAgentDeployer):
     # =========================================================================
 
     async def _auto_install_cli(self, package: str) -> None:
-        npm = shutil.which("npm")
+        from ale_run.agents._bootstrap import ensure_npm
+        npm = shutil.which("npm") or shutil.which("npm.cmd")
         if not npm:
-            raise RuntimeError(
-                "GeminiCliDeployer: 'gemini' not found and 'npm' not on PATH"
-            )
+            npm = await ensure_npm()
         home = os.path.expanduser("~")
-        env = {**os.environ, "npm_config_cache": f"{home}/.npm-ale"}
+        prefix = os.path.join(home, ".local")
+        env = {**os.environ, "npm_config_cache": os.path.join(home, ".npm-ale")}
+        # --force so a stale baked tarball (old converter) is overwritten by the
+        # configured fork tarball even when npm thinks the version is unchanged.
         proc = await asyncio.to_thread(
             subprocess.run,
-            [npm, "install", "-g", "--prefix", f"{home}/.local", package],
+            [npm, "install", "-g", "--force", "--prefix", prefix, package],
             capture_output=True, text=True, timeout=300, env=env,
         )
         if proc.returncode != 0:
@@ -85,18 +87,38 @@ class GeminiCliDeployer(BaseAgentDeployer):
                 f"npm install -g {package} failed "
                 f"(rc={proc.returncode}): {(proc.stderr or '')[:500]}"
             )
-        bin_dir = f"{home}/.local/bin"
-        if bin_dir not in os.environ.get("PATH", ""):
-            os.environ["PATH"] = f"{bin_dir}:{os.environ.get('PATH', '')}"
+        # npm drops the gemini shim in <prefix>/bin on Linux and directly in
+        # <prefix> on Windows. Put both on PATH (prepended) so our freshly
+        # installed copy wins over any pre-baked system gemini.
+        for bin_dir in (prefix, os.path.join(prefix, "bin")):
+            if bin_dir not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
         logger.info("gemini_cli: installed via npm — %s", (proc.stdout or "").strip()[-200:])
 
     async def install(self) -> None:
         cfg: GeminiCliConfig = self.config  # type: ignore[assignment]
         sandbox = self.executor.sandbox
 
+        # Ensure node/npm reachable (on Windows node ships off PATH).
+        from ale_run.agents._bootstrap import ensure_npm
+        await ensure_npm()
+
+        home = os.path.expanduser("~")
+        local_prefix = os.path.join(home, ".local")
         gemini_path = shutil.which("gemini")
-        if not gemini_path:
-            logger.info("gemini_cli: 'gemini' not on PATH, installing via npm …")
+        # Force-correct a pre-baked gemini that wasn't installed by us this run:
+        # the win/linux images may carry an old tarball with the buggy
+        # OpenRouter converter, and --version can't distinguish it. Reinstall
+        # the configured fork tarball into ~/.local and prefer it.
+        baked = bool(gemini_path) and not gemini_path.startswith(local_prefix)
+        if not gemini_path or baked:
+            if baked:
+                logger.info(
+                    "gemini_cli: pre-baked gemini at %s — reinstalling configured "
+                    "fork tarball to override (converter fix)", gemini_path,
+                )
+            else:
+                logger.info("gemini_cli: 'gemini' not on PATH, installing via npm …")
             await self._auto_install_cli(cfg.npm_package)
             gemini_path = shutil.which("gemini")
             if not gemini_path:
@@ -122,6 +144,11 @@ class GeminiCliDeployer(BaseAgentDeployer):
         gemini_home = Path(home) / ".gemini"
         gemini_home.mkdir(parents=True, exist_ok=True)
 
+        # Ensure the cua MCP bridge is installed at sandbox.mcp_server_dir
+        # (idempotent: no-op when prebaked, install when missing).
+        from ale_run.agents._bootstrap import cua_bridge_env, ensure_cua_mcp_server
+        await ensure_cua_mcp_server(sandbox)
+
         # MCP + settings
         settings = {
             "mcpServers": {
@@ -129,6 +156,7 @@ class GeminiCliDeployer(BaseAgentDeployer):
                     "command": sandbox.node,
                     "args": [self._join(sandbox.mcp_server_dir, "src", "index.js",
                                         is_linux=sandbox.is_linux)],
+                    "env": cua_bridge_env(self.executor),
                 },
             },
             "tools": {
@@ -171,6 +199,7 @@ class GeminiCliDeployer(BaseAgentDeployer):
 
         argv = self._build_argv(cfg)
         env = self._build_env(cfg)
+        logger.info("gemini_cli: argv=%s", argv)
 
         t0 = time.monotonic()
         with open(prompt_file, "rb") as pin, \
@@ -246,14 +275,29 @@ class GeminiCliDeployer(BaseAgentDeployer):
         tail = sep.join(p.strip("/\\") for p in parts[1:])
         return f"{head}{sep}{tail}" if tail else head
 
+    def _resolve_model(self, cfg: GeminiCliConfig) -> str:
+        # Both routes take the bare model id: the agenthle fork maps
+        # "gemini-*" to "google/gemini-*" on the OpenRouter request itself,
+        # and Google's native API also expects bare ids. Strip any "google/"
+        # prefix so one config value works for either provider.
+        if cfg.model.startswith("google/"):
+            return cfg.model[len("google/"):]
+        return cfg.model
+
     def _build_argv(self, cfg: GeminiCliConfig) -> list[str]:
         argv = [
             self._gemini_path,
             "-p", "-",
-            "--model", cfg.model,
+            "--model", self._resolve_model(cfg),
             "--output-format", "stream-json",
             "--approval-mode", cfg.approval_mode,
         ]
+        # Tasks read/write under task_data_root, which is outside the launch
+        # cwd. Gemini's file tools reject paths outside the workspace, so add
+        # the task data root as an extra workspace directory.
+        task_data_root = getattr(self.executor.sandbox, "task_data_root", "")
+        if task_data_root:
+            argv.append(f"--include-directories={task_data_root}")
         if cfg.allowed_tools:
             argv.append(f"--allowed-tools={','.join(cfg.allowed_tools)}")
         return argv
@@ -264,6 +308,34 @@ class GeminiCliDeployer(BaseAgentDeployer):
             env[k] = v
         env["NO_COLOR"] = "1"
         env["NO_BROWSER"] = "1"
+
+        provider = (cfg.provider or "openrouter").lower()
+        if provider == "openrouter":
+            # The agenthle fork auto-selects OpenRouter auth from
+            # OPENROUTER_API_KEY and forwards tool-result content correctly,
+            # so native file tools work. GEMINI_API_KEY must be cleared or the
+            # CLI would prefer Google's native API over OpenRouter.
+            if not env.get("OPENROUTER_API_KEY"):
+                raise RuntimeError(
+                    "gemini_cli provider=openrouter requires OPENROUTER_API_KEY"
+                )
+            env.setdefault("OPENROUTER_COMPRESSION_MODEL", cfg.compression_model)
+            env.pop("GEMINI_API_KEY", None)
+            env.pop("GOOGLE_API_KEY", None)
+        elif provider == "google":
+            # Direct Google API. The CLI reads GEMINI_API_KEY; mirror
+            # GOOGLE_API_KEY into it when only the latter is set.
+            if not (env.get("GEMINI_API_KEY") or env.get("GOOGLE_API_KEY")):
+                raise RuntimeError(
+                    "gemini_cli provider=google requires GEMINI_API_KEY or GOOGLE_API_KEY"
+                )
+            env.setdefault("GEMINI_API_KEY", env.get("GOOGLE_API_KEY", ""))
+            env.pop("OPENROUTER_API_KEY", None)
+        else:
+            raise RuntimeError(
+                f"gemini_cli: unknown provider {cfg.provider!r} "
+                "(expected 'openrouter' or 'google')"
+            )
         return env
 
     def _diagnose_failure(
@@ -374,7 +446,8 @@ class GeminiCliDeployer(BaseAgentDeployer):
     def _consume_tool_result(event: dict, builder: TrajectoryBuilder) -> None:
         output = event.get("output", "")
         error = event.get("error")
-        text = error if error else (output if isinstance(output, str) else json.dumps(output))
+        raw = error if error else output
+        text = raw if isinstance(raw, str) else json.dumps(raw)
         builder.add_step(
             source="environment",
             observation=Observation(results=[
