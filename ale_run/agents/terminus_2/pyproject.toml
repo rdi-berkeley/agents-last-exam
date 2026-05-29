@@ -1,0 +1,15 @@
+[project]
+name = "ale-terminus2"
+version = "0.1.0"
+description = "harbor terminus_2 (cua-verse fork) in-sandbox deployer for ALE."
+requires-python = ">=3.12,<3.14"
+dependencies = ["pyyaml"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = []
+sources = {}
+bypass-selection = true
