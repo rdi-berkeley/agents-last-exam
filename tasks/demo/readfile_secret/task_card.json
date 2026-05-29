@@ -1,0 +1,13 @@
+{
+  "taskId": "demo/readfile_secret",
+  "title": "Read an unguessable secret from a file and echo it back",
+  "summary": "Setup writes a fresh random unguessable token into input/secret.txt. The agent must read it (only the read_file native tool is available, not the shell) and write the EXACT token to output/answer.txt. Because the token is random per run, a passing score proves read_file content actually reached the model rather than being hallucinated.",
+  "category": "demo",
+  "vm": {
+    "snapshot": "cpu-free-ubuntu",
+    "vcpus": 4,
+    "memory_gb": 16,
+    "disk_gb": 200,
+    "timeout_s": 1800
+  }
+}
