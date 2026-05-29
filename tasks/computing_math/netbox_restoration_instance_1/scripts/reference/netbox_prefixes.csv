@@ -1,0 +1,6 @@
+Prefix,Status,Children,VRF,Utilization,Tenant,Scope,VLAN,Role,Description
+10.10.10.0/24,Active,0,Global,0.0%,,,Users (10),,
+10.10.20.0/24,Active,0,Global,0.0%,,,Voice (20),,
+10.10.30.0/24,Active,0,Global,0.0%,,,CorpWiFi (30),,
+10.10.40.0/24,Active,0,Global,0.0%,,,GuestWiFi (40),,
+10.10.99.0/24,Active,0,Global,3.543307086614173%,,,Mgmt (99),,

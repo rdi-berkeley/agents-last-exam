@@ -22,10 +22,11 @@ register in ``_REGISTRY``. SandboxHandle / Providers / deployers never
 hard-code an image-family literal — they consult :func:`get` /
 :func:`registered`.
 
-Currently two families:
+Currently three families:
 
-  ``ale-ubuntu22``  — linux
-  ``ale-win10``     — windows
+  ``ale-kasm``       — linux (Docker, trycua/cua-ubuntu)
+  ``ale-ubuntu22``         — linux (GCE VM)
+  ``ale-win10``            — windows (GCE VM)
 """
 from __future__ import annotations
 
@@ -62,24 +63,35 @@ class Image:
     default_machine_type: str
     gpu: str | None = None
 
-    def sandbox_paths(self) -> dict[str, str]:
+    # ─── cua-server port (image-specific; consumed by Providers + Executors) ───
+    cua_server_port: int = 5000
+    """Port the cua-server listens on inside this image. ``ale-kasm`` runs the
+    cua-computer-server on its package default 8000; the GCE-backed families run
+    it on 5000. The cua MCP bridge must be told this (it otherwise defaults to
+    5000), so it is splatted into :class:`SandboxHandle` and used by Providers
+    to build the cua-server URL + map ports."""
+
+    def sandbox_paths(self) -> dict[str, object]:
         """Field dict for ``SandboxHandle(**image.sandbox_paths(), ...)``."""
         return {
-            "work_dir_base":  self.work_dir_base,
-            "task_data_root": self.task_data_root,
-            "node":           self.node,
-            "python":         self.python,
-            "mcp_server_dir": self.mcp_server_dir,
+            "work_dir_base":   self.work_dir_base,
+            "task_data_root":  self.task_data_root,
+            "node":            self.node,
+            "python":          self.python,
+            "mcp_server_dir":  self.mcp_server_dir,
+            "cua_server_port": self.cua_server_port,
         }
 
 
 # Registry — late imports avoid circular if a family module wants to
 # reference Image (which it does via from-import).
+from .ale_kasm import IMAGE as _ALE_KASM
 from .ale_ubuntu22 import IMAGE as _ALE_UBUNTU22
 from .ale_win10 import IMAGE as _ALE_WIN10
 
 
 _REGISTRY: dict[str, Image] = {
+    _ALE_KASM.name: _ALE_KASM,
     _ALE_UBUNTU22.name: _ALE_UBUNTU22,
     _ALE_WIN10.name: _ALE_WIN10,
 }

@@ -1,0 +1,13 @@
+{
+  "taskId": "demo/apply_patch_win",
+  "title": "Codex apply_patch proof (Windows: cmd-toxic chars exercise the apply_patch.exe fix)",
+  "summary": "Forces the codex agent to create a file via the apply_patch tool whose body contains cmd-toxic characters (< > & | ( ) ^ %). The patched codex.exe ships apply_patch as a real .exe (CreateProcessW, no cmd.exe re-tokenization); the stock .bat shim corrupts these characters and the byte-exact reference will not match. Pass (1.0) proves the patched binary is in place; corruption (<1.0) proves the stock fallback.",
+  "category": "demo",
+  "vm": {
+    "snapshot": "cpu-free",
+    "vcpus": 4,
+    "memory_gb": 16,
+    "disk_gb": 200,
+    "timeout_s": 1800
+  }
+}

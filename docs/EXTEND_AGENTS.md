@@ -27,7 +27,7 @@ host, or in a container.
 
 ## Pre-installed agents
 
-Registered in [`ale_run/orchastration/factory.py`](../ale_run/orchastration/factory.py)
+Registered in [`ale_run/orchestration/factory.py`](../ale_run/orchestration/factory.py)
 under `_AGENT_FQNS`:
 
 | Shortcut | Deployer | Executor | Notes |
@@ -133,7 +133,7 @@ image.
 
 ## Registering a new agent
 
-Add an entry to [`ale_run/orchastration/factory.py`](../ale_run/orchastration/factory.py)
+Add an entry to [`ale_run/orchestration/factory.py`](../ale_run/orchestration/factory.py)
 `_AGENT_FQNS`:
 
 ```python

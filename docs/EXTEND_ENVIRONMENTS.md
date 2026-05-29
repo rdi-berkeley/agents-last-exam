@@ -110,7 +110,7 @@ bare-metal, dev laptops with cua-server running locally).
 ## Registering a new provider
 
 Add an entry to the provider factory in
-[`ale_run/orchastration/factory.py`](../ale_run/orchastration/factory.py)
+[`ale_run/orchestration/factory.py`](../ale_run/orchestration/factory.py)
 (the `build_provider` dispatch). Once registered, reference it from
 yaml:
 
@@ -188,7 +188,7 @@ host). PRs welcome to flesh this out.
      harness: ale_claw          # host-side agent — easy to debug
    ```
 3. Verify the run completes through Phase 0 → 6 (see
-   [`ale_run/orchastration/lifecycle.py`](../ale_run/orchastration/lifecycle.py)).
+   [`ale_run/orchestration/lifecycle.py`](../ale_run/orchestration/lifecycle.py)).
 4. Add an integration test under `tests/integration/` and document the
    credentials it needs in the test docstring.
 

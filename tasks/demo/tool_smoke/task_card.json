@@ -1,0 +1,19 @@
+{
+  "taskId": "demo/tool_smoke",
+  "title": "Agent Tool Smoke Test (Linux)",
+  "summary": "Exercise every safely testable available tool with the simplest concrete scenario that yields an observable result, verify the returned content, and report passed/failed/untested tools. Validates agent tool wiring (native, external, or MCP-bridged) before running real tasks.",
+  "category": "demo",
+  "evaluation": "Score = passed / total available tools identified, from the agent's self-report in output/tool_report.json. A tool counts as passed only if the agent actually invoked it AND observed/verified its return content. Untested tools are reported separately. Missing or malformed report => 0.",
+  "agentMustDo": [
+    "Identify every tool actually available (native, external, MCP); do not invent tools",
+    "For each tool, construct the simplest concrete scenario that produces an observable result, invoke it, read the returned content, and verify it matches expectation before marking passed",
+    "Write tool_report.json to the output directory with tools_tested, tools_passed, tools_failed, tools_untested, total, tested, passed, failed, untested fields"
+  ],
+  "vm": {
+    "snapshot": "cpu-free-ubuntu",
+    "vcpus": 4,
+    "memory_gb": 16,
+    "disk_gb": 200,
+    "timeout_s": 1800
+  }
+}

@@ -1,4 +1,4 @@
-"""``task_data_path: gs://<bucket>`` — pull task data from a GCS bucket.
+"""``task_data_source: gs://<bucket>`` — pull task data from a GCS bucket.
 
 Behavior:
 

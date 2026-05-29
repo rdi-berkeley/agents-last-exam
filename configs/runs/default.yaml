@@ -26,8 +26,12 @@ artifacts_path:
   #                         input/software pull if image already has them
   #                         (image-baked detection). Always re-pulls
   #                         reference/ fresh.
+  #                         Open-to-all bucket: gs://ale-data-public
+  #                         (readable by the agenthle-vm-service@agenthle-488519
+  #                         SA baked into our images; external runs can grant
+  #                         their own SA `roles/storage.objectViewer` on it).
   #   "hf://<dataset>"    — HuggingFace Hub (stub, not yet implemented).
-  task_data_path: baked_in_sandbox
+  task_data_source: gs://ale-data-public
 
   # What to do with the agent's output dir after the run:
   #   null              — skip; output stays on the sandbox and is lost on teardown.

@@ -112,7 +112,9 @@ gcloud iam service-accounts create "${GCP_SA_NAME}" \
 for role in \
     roles/compute.instanceAdmin.v1 \
     roles/compute.networkUser \
-    roles/iam.serviceAccountUser ; do
+    roles/iam.serviceAccountUser \
+    roles/storage.objectViewer \
+    roles/serviceusage.serviceUsageConsumer ; do
   gcloud projects add-iam-policy-binding "${GCP_PROJECT}" \
     --member="serviceAccount:${GCP_SA_EMAIL}" \
     --role="${role}" --condition=None

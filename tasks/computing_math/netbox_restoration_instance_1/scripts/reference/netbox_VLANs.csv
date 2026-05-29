@@ -1,0 +1,6 @@
+VID,Name,Site,Group,Prefixes,Tenant,Status,Role,Description
+10,Users,,ATL-Branch-VLANs,10.10.10.0/24,,Active,,
+20,Voice,,ATL-Branch-VLANs,10.10.20.0/24,,Active,,
+30,CorpWiFi,,ATL-Branch-VLANs,10.10.30.0/24,,Active,,
+40,GuestWiFi,,ATL-Branch-VLANs,10.10.40.0/24,,Active,,
+99,Mgmt,,ATL-Branch-VLANs,10.10.99.0/24,,Active,,

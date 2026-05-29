@@ -4,7 +4,7 @@ The benchmark drives the tested agent natively inside the environment, not via
 (action, observation) pairs from the orchestrator. ``step()`` / ``step_async()``
 intentionally raise ``NotImplementedError``: the wrapper exists so the
 configured env can be handed to OpenEnv-compatible consumers in a standard
-shape; orchastration accesses ``.session`` / ``.handle`` / ``.current_phase``
+shape; orchestration accesses ``.session`` / ``.handle`` / ``.current_phase``
 directly.
 
 Lifecycle::
@@ -143,7 +143,7 @@ class ALEEnv(Environment[Action, Observation, State]):
         raise NotImplementedError(
             "ALEEnv.state() is intentionally absent: this benchmark does not "
             "expose an OpenEnv-style mid-run State snapshot. Use env.sandbox / "
-            "env.session / env.current_phase from the orchastration layer."
+            "env.session / env.current_phase from the orchestration layer."
         )
 
 

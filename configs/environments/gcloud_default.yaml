@@ -4,229 +4,52 @@
 #       provider: gcloud
 #       profile: configs/environments/gcloud_default.yaml
 #
-# `project` and `service_account_key` come from .env via ${env:...} — that
-# way the same profile is reusable across users. Override either by setting
-# them directly in the main yaml's environment block (main wins over profile).
+# Only deployment-specific knobs live here. The snapshot→image mapping,
+# machine-type fallback (c* → n2), and boot-disk-type selection are
+# framework facts hardcoded in the gcloud provider.
 #
-# Schema (mirrors simprun/images.json + simprun/capacity_pools.json):
+#   project / service_account_key   GCP creds (from .env via ${env:...})
+#   instance_prefix                 VM-name prefix
+#   network / subnet                VPC the VMs attach to. MUST expose port
+#                                   5000 (cua-server).
+#   snapshots:                      logical snapshot tag (task_card
+#                                   vm.snapshot) → image + optional gpu + zones.
+#     <tag>:
+#       image:  GCE image name (= framework Image-registry family name)
+#       gpu:    optional accelerator type (e.g. nvidia-l4-vws)
+#       zones:  zones to try in order on capacity errors. GPU snapshots
+#               list only GPU-capable zones.
 #
-#   defaults:        Fallback values for any field unset under `images.<snapshot>`.
-#   images:          Per-snapshot full image config. Key is the `vm.snapshot`
-#                    string from each task's task_card.json. Each entry is a
-#                    dict; shorthand `cpu-free: <image_name>` is also accepted
-#                    and inherits everything else from `defaults`.
-#   capacity_pools:  Per-snapshot ordered list of machine-family fallbacks. The
-#                    provider tries each profile in priority order (lower
-#                    priority first), multi-zone within each profile. When the
-#                    data disk fails to mount on the chosen profile (common on
-#                    c4-/hyperdisk lanes), the lifecycle deletes the VM and
-#                    asks the provider to acquire again excluding the failed
-#                    profile name — until either staging succeeds or the pool
-#                    is exhausted.
-#
-# External users: the published `ale-unified-v1` image lives in the
-# public project `agenthle-488519`. If you run VMs in that project the
-# defaults below work as-is. Otherwise replicate the image + the VPC named
-# `ale-vpc` (firewall rules expose port 5000 for the CUA server).
+# NOT here (hardcoded in the provider): machine-type selection — task_card
+# vm.machineType wins, else a default, with C→N2 fallback; boot disk type
+# is derived from the machine family.
 
 project: ${env:GCP_PROJECT}
 service_account_key: ${env:GCP_SA_KEY}
-instance_prefix: ale                  # VM names: `ale-<task-slug>-<hash8>`
+instance_prefix: ale
 
-defaults:
-  machine_type: e2-highmem-8          # used when capacity_pools is empty for a snapshot
-  network: ale-vpc               # VPC must expose port 5000 (CUA server)
-  subnet: ale-vpc                # subnet within the network (same name OK)
-  data_disk_gb: 200                   # extra data disk (E:\ on Win, /media/user/data on Linux)
-  data_disk_type: auto                # `auto` → pd-ssd, except c4-/m4-/x4- → hyperdisk-balanced
-  zone: us-central1-a
-  fallback_zones: [us-east1-b, us-west1-a]
-  os: linux
+network: agenthle-vpc
+subnet: agenthle-vpc
 
-# ==========================================================================
-# Per-snapshot image config
-# ==========================================================================
-# Snapshot keys are the `vm.snapshot` values declared in task_card.json. The
-# orchestrator passes the snapshot through; the provider resolves it to the
-# image_name below and applies the rest of the per-snapshot config.
-
-images:
-  cpu-free:
-    image_name: agenthle-unified-v1               # published in agenthle-488519
-    os: windows
-    gpu: null
-    boot_disk_gb: 250                             # matches the unified image
-    fallback_zones: [us-central1-b, us-east1-b, us-west1-a]
-
+snapshots:
   cpu-free-ubuntu:
-    image_name: agenthle-ubuntu-0505
-    os: linux
-    gpu: null
-    boot_disk_gb: 600
-    fallback_zones: [us-east1-b, us-west1-a]
+    image: ale-ubuntu22
+    zones: [us-central1-a, us-east1-b, us-west1-a]
+
+  cpu-free:
+    image: ale-win10
+    zones: [us-central1-a, us-central1-b, us-east1-b]
 
   cpu-license:
-    image_name: agenthle-dev-cpu-licensed-0505
-    os: windows
-    gpu: null
-    boot_disk_gb: 400
-    zone: us-east1-b
-    fallback_zones: [us-central1-a, us-east1-c, us-west1-a]
+    image: ale-win10
+    zones: [us-east1-b, us-central1-a]
 
   gpu-free:
-    image_name: agenthle-dev-gpu-free-0505
-    os: windows
+    image: ale-win10
     gpu: nvidia-l4-vws
-    boot_disk_gb: 750
-    network: ale-vpc
-    subnet: ale-vpc
-    fallback_zones: [us-central1-b]
+    zones: [us-central1-a, us-central1-b]
 
   gpu-license:
-    image_name: agenthle-dev-gpu-licensed-0505
-    os: windows
+    image: ale-win10
     gpu: nvidia-l4-vws
-    boot_disk_gb: 750
-    network: ale-vpc
-    subnet: ale-vpc
-    fallback_zones: [us-central1-b]
-
-# ==========================================================================
-# Per-snapshot capacity-pool fallback
-# ==========================================================================
-# `priority` orders the entries (lower = tried first). `default_vcpus` is the
-# size used when the task has no `vm.machineType` override; `max_vcpus` caps
-# the override. `zones` is multi-zone fallback within a single profile (the
-# next zone is tried only on capacity errors — quota / stockout / "does not
-# have enough resources"). On non-capacity errors we fail fast.
-
-capacity_pools:
-  cpu-free:
-    - name: c4-standard-hyperdisk
-      priority: 10
-      machine_family: c4-standard
-      default_vcpus: 8
-      max_vcpus: 192
-      boot_disk_type: hyperdisk-balanced
-      data_disk_type: hyperdisk-balanced
-      zones: [us-central1-a, us-central1-b, us-east1-b, us-west1-a]
-    - name: n2-highmem-standard
-      priority: 20
-      machine_family: n2-highmem
-      default_vcpus: 8
-      max_vcpus: 128
-      boot_disk_type: pd-standard
-      data_disk_type: pd-standard
-      zones: [us-central1-a, us-central1-b, us-east1-b, us-west1-a]
-    - name: e2-highmem-standard
-      priority: 30
-      machine_family: e2-highmem
-      default_vcpus: 8
-      max_vcpus: 16
-      boot_disk_type: pd-standard
-      data_disk_type: pd-standard
-      zones: [us-central1-a, us-central1-b, us-east1-b, us-west1-a]
-
-  cpu-free-ubuntu:
-    - name: c4-standard-hyperdisk
-      priority: 10
-      machine_family: c4-standard
-      default_vcpus: 8
-      max_vcpus: 192
-      boot_disk_type: hyperdisk-balanced
-      data_disk_type: hyperdisk-balanced
-      zones: [us-central1-a, us-east1-b, us-west1-a]
-    - name: n2-highmem-standard
-      priority: 20
-      machine_family: n2-highmem
-      default_vcpus: 8
-      max_vcpus: 128
-      boot_disk_type: pd-standard
-      data_disk_type: pd-standard
-      zones: [us-central1-a, us-east1-b, us-west1-a]
-    - name: e2-highmem-standard
-      priority: 30
-      machine_family: e2-highmem
-      default_vcpus: 8
-      max_vcpus: 16
-      boot_disk_type: pd-standard
-      data_disk_type: pd-standard
-      zones: [us-central1-a, us-east1-b, us-west1-a]
-
-  cpu-license:
-    - name: c4-standard-hyperdisk
-      priority: 10
-      machine_family: c4-standard
-      default_vcpus: 8
-      max_vcpus: 192
-      boot_disk_type: hyperdisk-balanced
-      data_disk_type: hyperdisk-balanced
-      zones: [us-east1-b, us-central1-a, us-east1-c, us-west1-a]
-    - name: n2-highmem-standard
-      priority: 20
-      machine_family: n2-highmem
-      default_vcpus: 8
-      max_vcpus: 128
-      boot_disk_type: pd-standard
-      data_disk_type: pd-standard
-      zones: [us-east1-b, us-central1-a, us-east1-c, us-west1-a]
-    - name: e2-highmem-standard
-      priority: 30
-      machine_family: e2-highmem
-      default_vcpus: 8
-      max_vcpus: 16
-      boot_disk_type: pd-standard
-      data_disk_type: pd-standard
-      zones: [us-east1-b, us-central1-a, us-east1-c, us-west1-a]
-
-  gpu-free:
-    - name: g2-standard-l4-ssd
-      priority: 10
-      machine_family: g2-standard
-      default_vcpus: 8
-      max_vcpus: 96
-      boot_disk_type: pd-ssd
-      data_disk_type: pd-ssd
-      zones: [us-central1-a, us-central1-b]
-    - name: g2-standard-l4-fallback-1
-      priority: 20
-      machine_family: g2-standard
-      default_vcpus: 8
-      max_vcpus: 96
-      boot_disk_type: pd-ssd
-      data_disk_type: pd-ssd
-      zones: [us-central1-c, us-east1-b, us-east1-c, us-east1-d]
-    - name: g2-standard-l4-fallback-2
-      priority: 30
-      machine_family: g2-standard
-      default_vcpus: 8
-      max_vcpus: 96
-      boot_disk_type: pd-ssd
-      data_disk_type: pd-ssd
-      zones: [us-west1-a, us-west1-b, us-east4-a, us-west4-a]
-
-  gpu-license:
-    - name: g2-standard-l4-ssd
-      priority: 10
-      machine_family: g2-standard
-      default_vcpus: 8
-      max_vcpus: 96
-      boot_disk_type: pd-ssd
-      data_disk_type: pd-ssd
-      zones: [us-central1-a, us-central1-b]
-    - name: g2-standard-l4-fallback-1
-      priority: 20
-      machine_family: g2-standard
-      default_vcpus: 8
-      max_vcpus: 96
-      boot_disk_type: pd-ssd
-      data_disk_type: pd-ssd
-      zones: [us-central1-c, us-east1-b, us-east1-c, us-east1-d]
-    - name: g2-standard-l4-fallback-2
-      priority: 30
-      machine_family: g2-standard
-      default_vcpus: 8
-      max_vcpus: 96
-      boot_disk_type: pd-ssd
-      data_disk_type: pd-ssd
-      zones: [us-west1-a, us-west1-b, us-east4-a, us-west4-a]
+    zones: [us-central1-a, us-central1-b]

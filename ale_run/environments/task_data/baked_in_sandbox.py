@@ -1,4 +1,4 @@
-"""``task_data_path: baked_in_sandbox`` — task data ships with the image.
+"""``task_data_source: baked_in_sandbox`` — task data ships with the image.
 
 Convention on the sandbox image:
 
@@ -43,7 +43,7 @@ async def stage_input(
     input_dir = join(sandbox, base, "input")
     if not await sandbox.exists(input_dir):
         raise RuntimeError(
-            f"task_data_path=baked_in_sandbox: expected baked input at "
+            f"task_data_source=baked_in_sandbox: expected baked input at "
             f"{input_dir!r}, not found on sandbox. Re-bake the image."
         )
     await sandbox.mkdir(join(sandbox, base, "output"))

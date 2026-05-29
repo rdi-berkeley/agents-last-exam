@@ -1,4 +1,4 @@
-"""``task_data_path: hf://<dataset>`` — pull task data from HuggingFace Hub.
+"""``task_data_source: hf://<dataset>`` — pull task data from HuggingFace Hub.
 
 STUB. Implement alongside the first task family that uses HF as source.
 """

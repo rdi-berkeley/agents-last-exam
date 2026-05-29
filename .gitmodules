@@ -1,0 +1,19 @@
+[submodule "ale_run/agents/gemini_cli/upstream"]
+	path = ale_run/agents/gemini_cli/upstream
+	url = https://github.com/cua-verse/gemini-cli.git
+	branch = agenthle
+[submodule "ale_run/agents/grok_cli/upstream"]
+	path = ale_run/agents/grok_cli/upstream
+	url = https://github.com/cua-verse/grok-cli.git
+[submodule "ale_run/agents/openclaw_cli/upstream"]
+	path = ale_run/agents/openclaw_cli/upstream
+	url = https://github.com/cua-verse/openclaw.git
+	branch = agenthle
+[submodule "ale_run/agents/hermes/upstream"]
+	path = ale_run/agents/hermes/upstream
+	url = https://github.com/cua-verse/hermes-agent.git
+	branch = agenthle
+[submodule "ale_run/agents/codex/upstream"]
+	path = ale_run/agents/codex/upstream
+	url = https://github.com/cua-verse/codex.git
+	branch = agenthle

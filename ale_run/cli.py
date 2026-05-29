@@ -8,9 +8,9 @@ import sys
 from pathlib import Path
 
 import ale_run as ale
-from .orchastration import Runner
-from .orchastration.config_loader import load_experiment
-from .orchastration.experiment_spec import RunUnit
+from .orchestration import Runner
+from .orchestration.config_loader import load_experiment
+from .orchestration.experiment_spec import RunUnit
 
 
 def main(argv: list[str] | None = None) -> int:

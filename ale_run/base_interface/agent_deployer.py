@@ -112,11 +112,12 @@ class BaseAgentDeployer(abc.ABC):
     """
 
     default_executor: ClassVar[str] = ""
-    """The executor kind used when yaml's ``agent.executor`` is omitted.
+    """The executor type used when yaml's ``agent.executor`` is omitted.
     Empty = error at resolve time. Concrete deployer subclass declares."""
 
     supported_executors: ClassVar[frozenset[str]] = frozenset()
-    """Subclass overrides — strings match yaml ``executor: <kind>`` values.
+    """Subclass overrides — strings match yaml ``executor: <type>`` values
+    (and :attr:`BaseExecutor.type` class attribute on the concrete impl).
     Empty set is a programmer error caught at ``resolve_agent`` time."""
 
     hot_artifacts: ClassVar[tuple[str, ...]] = ()

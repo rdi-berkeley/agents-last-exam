@@ -1,14 +1,12 @@
 """Task definition loader.
 
-Ported from simprun/task_loader.py. Reads ``main.py`` + ``task_card.json``
-under each task dir and produces normalised task metadata. ``TaskDataSpec``
-itself lives in :mod:`ale_run.base_interface`.
+Reads ``main.py`` + ``task_card.json`` under each task dir and produces
+normalised task metadata. ``TaskDataSpec`` lives in
+:mod:`ale_run.base_interface`.
 
-Known coupling: this module imports ``parse_gce_machine_type`` from
-``environments/machine_types`` to convert the GCE machine type string
-from ``task_card.json`` into vCPU/memory ints. That's a helper crossing
-the tasks→environments boundary; a future refactor should let the
-orchestrator parse that string instead, but for now the leak stays.
+Validates ``vm.machineType`` (if set) via the gcloud provider's
+``_parse_gce_machine_type``; the raw string is passed through to the
+provider, which prefers it over its yaml fallback list.
 """
 
 from __future__ import annotations
@@ -216,24 +214,28 @@ class TaskLoader:
                 "timeout": card.get("timeout"),
             }
         if vm_cfg:
+            # Snapshot tag is the *logical* identifier the task asks for
+            # (e.g. ``cpu-free``, ``gpu-free``). The gcloud Provider's yaml
+            # maps it to a concrete image + machine_type fallback list.
+            # Validation against the provider's map happens at acquire time
+            # — TaskLoader doesn't know which provider will be used.
             task_info["image_category"] = vm_cfg.get("snapshot")
             task_info["snapshot_name"] = vm_cfg.get("snapshot")
             if "timeout" in vm_cfg:
                 task_info["timeout_s"] = self._parse_task_timeout(vm_cfg["timeout"])
+            # task_card may pin a machine: validate it parses as a real GCE
+            # type, then pass the raw string through. The provider prefers it
+            # over its yaml fallback list (see GcloudProvider.acquire).
             raw_mt = vm_cfg.get("machineType")
             task_info["machine_type"] = raw_mt
             if raw_mt is not None:
                 from ..environments.providers.gcloud import _parse_gce_machine_type
-                shape = _parse_gce_machine_type(raw_mt)
-                if shape is None:
+                if _parse_gce_machine_type(raw_mt) is None:
                     raise ValueError(
                         f"task_card.json for {self.task_path} has unparseable "
                         f"vm.machineType={raw_mt!r}; expected a standard GCE "
-                        "machine type like 'n2-highmem-16' or "
-                        "'n2-custom-8-16384'"
+                        "machine type like 'n2-highmem-16' or 'n2-custom-8-16384'"
                     )
-                task_info["vcpus"] = shape.vcpus
-                task_info["memory_gb"] = shape.memory_gb
         return task_info
 
     def _parse_task_timeout(self, raw_timeout: Any) -> int:

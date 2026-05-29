@@ -8,7 +8,7 @@ tasks: selected_tasks/unlicensed/near-term.txt
 ```
 
 The framework loads the list at config-parse time
-([`ale_run/orchastration/config_loader.py`](../ale_run/orchastration/config_loader.py)),
+([`ale_run/orchestration/config_loader.py`](../ale_run/orchestration/config_loader.py)),
 expands each entry into one `RunUnit` per variant, then enumerates the
 Cartesian product `agents × tasks × variants` for the runner.
 

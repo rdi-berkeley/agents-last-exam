@@ -3,8 +3,11 @@
 import os
 from dataclasses import dataclass
 
-from tasks.common_config import GeneralTaskConfig
+from tasks.common_config import GeneralTaskConfig, _UNSET_DATA_ROOT
 
+# Back-compat module constant: several task main.py files still
+# `from tasks.linux_runtime import DATA_ROOT`. LinuxTaskConfig itself uses the
+# _UNSET_DATA_ROOT sentinel (resolved at runtime from REMOTE_ROOT_DIR).
 DATA_ROOT = os.environ.get("REMOTE_ROOT_DIR", "/media/user/data/agenthle")
 
 
@@ -16,10 +19,11 @@ class LinuxTaskConfig(GeneralTaskConfig):
     DOMAIN_NAME: str = ""
     OS_TYPE: str = "linux"
     VARIANT_NAME: str = "base"
+    REMOTE_ROOT_DIR: str = _UNSET_DATA_ROOT
 
     @property
     def task_dir(self) -> str:
-        return f"{DATA_ROOT}/{self.DOMAIN_NAME}/{self.TASK_NAME}/{self.VARIANT_NAME}"
+        return f"{self.REMOTE_ROOT_DIR}/{self.DOMAIN_NAME}/{self.TASK_NAME}/{self.VARIANT_NAME}"
 
     @property
     def data_task_dir(self) -> str:

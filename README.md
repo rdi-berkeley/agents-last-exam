@@ -245,7 +245,7 @@ agents-last-exam/
 │   ├── base_interface/         Provider / Executor / Deployer / Trajectory ABCs
 │   ├── environments/           Providers (gcloud, static) + image registry
 │   ├── executors/              sandbox / local / docker(stub) substrates
-│   ├── orchastration/          Run lifecycle, config loader, factories
+│   ├── orchestration/          Run lifecycle, config loader, factories
 │   └── tasks/                  Task discovery + driver
 ├── tasks/                    151 task packages, grouped by domain
 │   └── demo/                   `hello` (Linux) + `hello_win` (Windows) templates

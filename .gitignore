@@ -1,6 +1,11 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# Node deps — installed on the substrate / in the image, never checked in
+# (e.g. the cua MCP bridge's node_modules under ale_run/agents/_assets/).
+node_modules/
+
 .venv/
 .uv/
 uv.lock

@@ -10,7 +10,7 @@
   ``mkdir`` / ``rm`` / ``list_dir`` / ``upload_local_file`` /
   ``download_to_local`` / ``download_range`` / ``check_reachable``).
 
-It replaces what used to be split between :class:`SandboxHandle` (data
+It replaces what used to be split between :class:`EnvHandle` (data
 dataclass) and :mod:`environments.remote` (free functions taking that
 dataclass). One class, one place.
 
@@ -62,9 +62,9 @@ class SandboxSpec:
 
     snapshot: str
     os: OS = "linux"
-    vcpus: int = 4
-    memory_gb: int = 16
-    disk_gb: int = 200
+    machine_type: str | None = None
+    """Task-card ``vm.machineType`` override. None → provider uses its yaml
+    fallback list. Boot disk size always comes from the image (no override)."""
     gpu: str | None = None
     task_id: str = ""
     harness: str = ""
@@ -82,7 +82,7 @@ class RangeResult:
 
     Cleanly distinguishes "remote file shrank" / "got data" / "no new
     bytes" / "error" for the caller (see
-    :class:`ale_run.orchastration.incremental_puller`).
+    :func:`ale_run.executors.sandbox.tail_hot_artifacts`).
     """
 
     success: bool
@@ -134,6 +134,11 @@ class SandboxHandle:
     mcp_server_dir: str
     """Where the cua MCP server is installed on this image."""
 
+    cua_server_port: int = 5000
+    """Port the cua-server listens on inside the sandbox (image-specific:
+    8000 on ale-kasm, 5000 on GCE families). The cua MCP bridge is told this
+    via ``CUA_SERVER_URL`` so it doesn't fall back to its built-in default."""
+
     # ─── provider extras (rarely-used, free-form) ───
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -161,9 +166,13 @@ class SandboxHandle:
             await asyncio.to_thread(_write_text_sync, self, path, content)
 
     async def read_file(self, path: str) -> bytes:
+        """Read ``path`` as bytes. Raises :class:`FileNotFoundError` if the
+        path does not exist; :class:`RuntimeError` on a transport-level
+        failure (cua-server unreachable, decode error). Empty file → ``b""``."""
         return await asyncio.to_thread(_read_bytes_sync, self, path)
 
     async def read_text(self, path: str) -> str:
+        """UTF-8 decode of :meth:`read_file`. Raises the same exceptions."""
         return (await self.read_file(path)).decode("utf-8", errors="replace")
 
     async def exists(self, path: str) -> bool:
@@ -359,12 +368,19 @@ def _write_binary_sync(sandbox: SandboxHandle, remote_path: str, content: bytes)
 
 
 def _read_bytes_sync(sandbox: SandboxHandle, remote_path: str) -> bytes:
+    # Pre-check existence so callers get a clean FileNotFoundError instead of
+    # a vague transport failure. One extra RPC, but the distinction matters
+    # for diagnose paths where the file may legitimately be absent.
+    if not _exists_sync(sandbox, remote_path):
+        raise FileNotFoundError(remote_path)
     fd, tmp = tempfile.mkstemp(prefix="ale_dl_")
     os.close(fd)
     try:
         ok = _download_to_local_sync(sandbox, remote_path, tmp, 60)
         if not ok:
-            return b""
+            raise RuntimeError(
+                f"sandbox read_file: transport failure for {remote_path}"
+            )
         with open(tmp, "rb") as f:
             return f.read()
     finally:
@@ -375,12 +391,19 @@ def _read_bytes_sync(sandbox: SandboxHandle, remote_path: str) -> bytes:
 
 
 def _exists_sync(sandbox: SandboxHandle, path: str) -> bool:
-    data = _post_cmd(
-        sandbox,
-        {"command": "file_exists", "params": {"path": path}},
-        timeout=15,
-    )
-    return bool(data and data.get("exists"))
+    # cua-server's ``file_exists`` returns ``false`` for *directories* (it
+    # tests regular files only), so we use a shell test that handles both.
+    if sandbox.is_linux:
+        cmd = f"test -e {shlex.quote(path)}"
+    else:
+        safe = path.replace("'", "''")
+        cmd = (
+            'powershell -NoProfile -Command "'
+            f"if (Test-Path -LiteralPath '{safe}') {{ exit 0 }} else {{ exit 1 }}"
+            '"'
+        )
+    r = _run_remote_sync(sandbox, cmd, timeout=15)
+    return r.returncode == 0
 
 
 def _mkdir_sync(sandbox: SandboxHandle, path: str) -> None:

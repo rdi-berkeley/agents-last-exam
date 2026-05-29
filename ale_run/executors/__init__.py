@@ -30,11 +30,11 @@ from .docker import DockerExecutor
 from .local import LocalExecutor
 from .sandbox import SandboxExecutor
 
-# yaml ``executor: <kind>`` → concrete Executor class.
+# yaml ``executor: <type>`` → concrete Executor class.
 EXECUTOR_REGISTRY: dict[str, type[BaseExecutor]] = {
-    SandboxExecutor.kind: SandboxExecutor,
-    LocalExecutor.kind: LocalExecutor,
-    DockerExecutor.kind: DockerExecutor,
+    SandboxExecutor.type: SandboxExecutor,
+    LocalExecutor.type: LocalExecutor,
+    DockerExecutor.type: DockerExecutor,
 }
 
 __all__ = [

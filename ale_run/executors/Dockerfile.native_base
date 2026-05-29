@@ -1,0 +1,25 @@
+# ale/native-base:0.1.0 — base image for the DockerExecutor.
+#
+# Contains Python 3.12 + the Python deps both claude_code and ale_claw need
+# in-container. Plus pydantic + requests for our base_interface imports.
+#
+# Build:
+#   docker build -t ale/native-base:0.1.0 \
+#     -f ale_run/executors/Dockerfile.native_base ale_run/executors/
+FROM python:3.12-slim
+
+# Combined dep set spanning all in-repo agents that may run via DockerExecutor.
+# Per-agent extras (LLM provider SDKs etc.) can be layered in agent-specific
+# images deriving from this one.
+RUN pip install --no-cache-dir \
+    pydantic>=2.0 \
+    "requests>=2.30" \
+    "cua-agent==0.7.38" \
+    "cua-computer==0.5.17" \
+    "cua-core==0.1.18" \
+    "cua-bench==0.2.7" \
+    "litellm>=1.80" \
+    "Pillow>=10.0"
+
+# Sanity: deps importable at build time
+RUN python -c "import pydantic, requests, agent, computer, litellm, PIL; print('deps ok')"

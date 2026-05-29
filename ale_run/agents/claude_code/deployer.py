@@ -1,26 +1,29 @@
 """ClaudeCodeDeployer — drives the @anthropic-ai/claude-code CLI.
 
-Inherits :class:`BaseAgentDeployer` directly. All substrate I/O goes
-through ``self.executor`` (vm / local / docker — see
-:mod:`ale_run.executors`); this file holds **only** what's claude-code
-specific:
+This deployer is **pure Python stdlib** — it uses ``subprocess`` /
+``pathlib`` / ``os`` / ``asyncio`` directly. Whatever substrate the
+framework's :class:`BaseExecutor` places the deployer in (sandbox VM /
+docker container / host process), the agent code is identical: it just
+spawns the local ``claude`` CLI and waits.
 
-* Verify the binary is present at the image-baked path.
-* Write the MCP server config the CLI reads via ``--mcp-config``.
-* Compose the OpenRouter env-var remap + the CLI argv per OS.
-* Wrap stdin / stdout / stderr / done-marker around the CLI run.
-* Parse the stream-json transcript into ATIF Steps.
+Responsibilities (claude-code-specific only):
 
-The spawn-detached + done-marker poll + TERM+KILL mechanics live on
-:class:`BaseExecutor`; the deployer just calls
-``executor.spawn_detached`` / ``executor.wait_marker`` /
-``executor.kill_process``.
+* probe the ``claude`` binary is on PATH
+* write the cua MCP config the CLI reads via ``--mcp-config``
+* compose the OpenRouter-vs-Anthropic env var dance
+* spawn the CLI with stdin from ``prompt.txt``, stdout to
+  ``transcript.jsonl``, stderr to ``stderr.log``
+* poll the process, time-bound it, surface failure diagnostics
+* :meth:`parse_artifacts` — host-side, reads gathered transcript.jsonl
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-import shlex
+import os
+import shutil
+import subprocess
 import time
 from pathlib import Path
 from typing import ClassVar
@@ -42,8 +45,12 @@ from .config import ClaudeCodeConfig
 logger = logging.getLogger(__name__)
 
 
+_POLL_INTERVAL_S = 2.0
+_TERM_GRACE_S = 2.0
+
+
 class ClaudeCodeDeployer(BaseAgentDeployer):
-    """Host-side deployer for the @anthropic-ai/claude-code CLI."""
+    """Stdlib-only deployer for the @anthropic-ai/claude-code CLI."""
 
     default_executor: ClassVar[str] = "sandbox"
     supported_executors: ClassVar[frozenset[str]] = frozenset({"sandbox"})
@@ -55,239 +62,222 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
         return cfg.cli_version
 
     # =========================================================================
-    # install — probe the binary, write MCP config, make work_dir
+    # install
     # =========================================================================
 
-    async def install(self) -> None:
-        executor = self.executor
-        sandbox = executor.sandbox
-
-        # 1. Discover the claude binary on the sandbox. We don't bake the
-        # path into the framework — different images can keep claude
-        # wherever, as long as it's on PATH.
-        claude_cmd = await self._discover_claude(sandbox)
-        self._claude_cmd_cache = claude_cmd
-
-        # 2. Verify it runs.
-        if sandbox.is_linux:
-            probe_cmd = f"{shlex.quote(claude_cmd)} --version"
-        else:
-            probe_cmd = (
-                'powershell -NoProfile -Command "'
-                f"& '{claude_cmd}' --version"
-                '"'
-            )
-        result = await executor.run_command(probe_cmd, timeout=30)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"ClaudeCodeDeployer: claude CLI at {claude_cmd!r} failed "
-                f"version probe: stderr={(result.stderr or '').strip()[:300]}"
-            )
-        logger.info(
-            "claude_code: claude CLI ok — %s", (result.stdout or "").strip(),
+    async def _auto_install_cli(self) -> None:
+        """Install claude CLI via npm; bootstrap node+npm if missing."""
+        cfg: ClaudeCodeConfig = self.config  # type: ignore[assignment]
+        npm = shutil.which("npm")
+        if not npm:
+            from ale_run.agents._bootstrap import ensure_npm
+            npm = await ensure_npm()
+        home = os.path.expanduser("~")
+        env = {**os.environ, "npm_config_cache": f"{home}/.npm-ale"}
+        # cfg.cli_version is the full npm spec, e.g.
+        # "@anthropic-ai/claude-code@2.1.85".
+        pkg = cfg.cli_version or "@anthropic-ai/claude-code"
+        proc = await asyncio.to_thread(
+            subprocess.run,
+            [npm, "install", "-g", "--prefix", f"{home}/.local", pkg],
+            capture_output=True, text=True, timeout=300, env=env,
         )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"npm install -g {pkg} failed "
+                f"(rc={proc.returncode}): {(proc.stderr or '')[:500]}"
+            )
+        bin_dir = f"{home}/.local/bin"
+        if bin_dir not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{bin_dir}:{os.environ.get('PATH', '')}"
+        logger.info("claude_code: auto-installed via npm — %s", (proc.stdout or "").strip()[-200:])
+
+    async def install(self) -> None:
+        sandbox = self.executor.sandbox
+        is_linux = sandbox.is_linux
+
+        # 1. Discover — or install — the claude binary.
+        claude_path = shutil.which("claude")
+        if not claude_path:
+            logger.info("claude_code: 'claude' not on PATH, installing via npm …")
+            await self._auto_install_cli()
+            claude_path = shutil.which("claude")
+            if not claude_path:
+                raise RuntimeError(
+                    "ClaudeCodeDeployer: 'claude' still not found after "
+                    "npm install -g @anthropic-ai/claude-code"
+                )
+        self._claude_path = claude_path
+
+        # 2. Version probe.
+        try:
+            probe = await asyncio.to_thread(
+                subprocess.run,
+                [claude_path, "--version"],
+                capture_output=True, text=True, timeout=30,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(
+                f"ClaudeCodeDeployer: claude --version timed out: {e}"
+            )
+        if probe.returncode != 0:
+            raise RuntimeError(
+                f"ClaudeCodeDeployer: claude --version rc={probe.returncode} "
+                f"stderr={(probe.stderr or '').strip()[:300]}"
+            )
+        logger.info("claude_code: claude CLI ok — %s", (probe.stdout or "").strip())
 
         # 3. Make work_dir.
-        await executor.mkdir(executor.work_dir)
+        wd = Path(self.executor.work_dir)
+        wd.mkdir(parents=True, exist_ok=True)
 
-        # 4. Write MCP config using the sandbox's baked node + mcp paths.
+        # 4. Ensure the cua MCP bridge is installed at sandbox.mcp_server_dir
+        # (idempotent: no-op when prebaked, install when missing).
+        from ale_run.agents._bootstrap import cua_bridge_env, ensure_cua_mcp_server
+        await ensure_cua_mcp_server(sandbox)
+
+        # 5. MCP config. Paths reference the sandbox's baked node +
+        # mcp_server_dir — these are valid because the deployer runs INSIDE
+        # the sandbox (SandboxExecutor) and the cua MCP server is on the
+        # same machine. CUA_SERVER_URL points the bridge at the image's
+        # cua-server port (the bridge otherwise defaults to 5000).
         mcp_config = {
             "mcpServers": {
                 "cua": {
                     "command": sandbox.node,
-                    "args": [f"{sandbox.mcp_server_dir}/src/index.js"],
+                    "args": [self._join(sandbox.mcp_server_dir, "src", "index.js",
+                                        is_linux=is_linux)],
+                    "env": cua_bridge_env(self.executor),
                 },
             },
         }
-        mcp_path = self._join(executor.work_dir, "mcp_config.json")
-        await executor.write_file(mcp_path, json.dumps(mcp_config, indent=2))
+        mcp_path = wd / "mcp_config.json"
+        mcp_path.write_text(json.dumps(mcp_config, indent=2), encoding="utf-8")
         logger.info("claude_code: mcp_config staged at %s", mcp_path)
 
-    async def _discover_claude(self, sandbox) -> str:
-        """Resolve the claude binary's absolute path on the sandbox.
-
-        Linux:   ``command -v claude``.
-        Windows: ``(Get-Command claude).Source``.
-        """
-        if sandbox.is_linux:
-            cmd = "command -v claude"
-        else:
-            cmd = (
-                'powershell -NoProfile -Command "'
-                "(Get-Command claude -ErrorAction Stop).Source"
-                '"'
-            )
-        result = await self.executor.run_command(cmd, timeout=15)
-        path = (result.stdout or "").strip()
-        if result.returncode != 0 or not path:
-            raise RuntimeError(
-                f"ClaudeCodeDeployer: 'claude' not found on sandbox PATH. "
-                f"Bake it into the image or install at provisioning time. "
-                f"stderr={(result.stderr or '').strip()[:200]}"
-            )
-        return path
-
     # =========================================================================
-    # launch — stage prompt, spawn detached, poll done.marker
+    # launch
     # =========================================================================
 
     async def launch(self, prompt: str) -> AgentRunResult:
-        executor = self.executor
         cfg: ClaudeCodeConfig = self.config  # type: ignore[assignment]
-        wd = executor.work_dir
-        claude_cmd = getattr(self, "_claude_cmd_cache", None) or "claude"
+        wd = Path(self.executor.work_dir)
+        wd.mkdir(parents=True, exist_ok=True)
 
-        prompt_file = self._join(wd, "prompt.txt")
-        transcript_file = self._join(wd, "transcript.jsonl")
-        stderr_log = self._join(wd, "stderr.log")
-        pid_file = self._join(wd, "claude.pid")
-        done_marker = self._join(wd, "done.marker")
-        mcp_config = self._join(wd, "mcp_config.json")
+        prompt_file = wd / "prompt.txt"
+        transcript_file = wd / "transcript.jsonl"
+        stderr_log = wd / "stderr.log"
+        pid_file = wd / "claude.pid"
+        mcp_config = wd / "mcp_config.json"
 
-        await executor.write_file(prompt_file, prompt)
+        # Reset prior-run files so the puller's "rotation detected" logic
+        # sees a clean slate.
+        for f in (transcript_file, stderr_log, pid_file):
+            if f.exists():
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
 
-        if executor.sandbox.is_linux:
-            script_body = self._linux_runner(
-                cfg=cfg, wd=wd, claude_cmd=claude_cmd,
-                prompt_file=prompt_file, transcript_file=transcript_file,
-                stderr_log=stderr_log, done_marker=done_marker,
-                mcp_config=mcp_config,
-            )
-            script_path = self._join(wd, "run_claude.sh")
-        else:
-            script_body = self._windows_runner(
-                cfg=cfg, wd=wd, claude_cmd=claude_cmd,
-                prompt_file=prompt_file, transcript_file=transcript_file,
-                stderr_log=stderr_log, done_marker=done_marker,
-                mcp_config=mcp_config,
-            )
-            script_path = self._join(wd, "run_claude.ps1")
+        prompt_file.write_text(prompt, encoding="utf-8")
+
+        argv = self._build_argv(
+            claude_path=self._claude_path,
+            cfg=cfg,
+            mcp_config=str(mcp_config),
+        )
+        env = self._build_env(cfg)
 
         t0 = time.monotonic()
-        pid = await executor.spawn_detached(
-            script_body=script_body,
-            script_path=script_path,
-            pid_file=pid_file,
-            reset_files=[done_marker, pid_file, stderr_log, transcript_file],
-        )
-        status, exit_code = await executor.wait_marker(
-            done_marker, pid=pid, timeout=cfg.timeout_s,
-        )
+        # Open output files; subprocess inherits the descriptors and the
+        # parent's references can close after spawn (the child keeps them).
+        with open(prompt_file, "rb") as pin, \
+             open(transcript_file, "wb") as tout, \
+             open(stderr_log, "wb") as terr:
+            proc = await asyncio.to_thread(
+                subprocess.Popen,
+                argv,
+                stdin=pin,
+                stdout=tout,
+                stderr=terr,
+                env=env,
+                cwd=str(wd),
+                # Detach: child outlives any incidental signal sent to us.
+                start_new_session=True if hasattr(os, "setsid") else False,
+            )
+        pid_file.write_text(str(proc.pid), encoding="ascii")
+        logger.info("claude_code: spawned pid=%s argv0=%s", proc.pid, argv[0])
+
+        # Poll until done or timeout.
+        deadline = t0 + cfg.timeout_s
+        while proc.poll() is None:
+            if time.monotonic() > deadline:
+                # TERM then KILL — give it a moment to flush.
+                try:
+                    proc.terminate()
+                except ProcessLookupError:
+                    pass
+                try:
+                    await asyncio.wait_for(
+                        asyncio.to_thread(proc.wait), timeout=_TERM_GRACE_S,
+                    )
+                except asyncio.TimeoutError:
+                    try:
+                        proc.kill()
+                    except ProcessLookupError:
+                        pass
+                duration_s = time.monotonic() - t0
+                return AgentRunResult(
+                    status="timeout",
+                    pid=proc.pid,
+                    transcript_path=str(transcript_file),
+                    stderr_path=str(stderr_log),
+                    duration_s=duration_s,
+                    error=f"wall budget {cfg.timeout_s}s exceeded",
+                )
+            await asyncio.sleep(_POLL_INTERVAL_S)
+
         duration_s = time.monotonic() - t0
-
-        if status == "timeout":
-            await executor.kill_process(pid)
-            return AgentRunResult(
-                status="timeout",
-                pid=pid,
-                transcript_path=transcript_file,
-                stderr_path=stderr_log,
-                duration_s=duration_s,
-                error=f"wall budget {cfg.timeout_s}s exceeded",
-            )
-
-        if status == "crashed":
-            return AgentRunResult(
-                status="failed",
-                pid=pid,
-                transcript_path=transcript_file,
-                stderr_path=stderr_log,
-                duration_s=duration_s,
-                error="process disappeared before writing done.marker; see stderr",
-            )
-
+        exit_code = proc.returncode
+        status = "completed" if exit_code == 0 else "failed"
         error: str | None = None
         if status == "failed":
-            error = await self._diagnose_failure(
+            error = self._diagnose_failure(
                 stderr_log=stderr_log,
                 transcript=transcript_file,
                 exit_code=exit_code,
             )
         return AgentRunResult(
             status=status,
-            pid=pid,
+            pid=proc.pid,
             exit_code=exit_code,
-            transcript_path=transcript_file,
-            stderr_path=stderr_log,
+            transcript_path=str(transcript_file),
+            stderr_path=str(stderr_log),
             duration_s=duration_s,
             error=error,
         )
 
     # =========================================================================
-    # OS-aware path join (substrate convention, not host's os.path)
+    # internals
     # =========================================================================
 
-    def _join(self, *parts: str) -> str:
-        sep = "/" if self.executor.sandbox.is_linux else "\\"
+    @staticmethod
+    def _join(*parts: str, is_linux: bool) -> str:
+        """OS-aware path join in the substrate convention."""
+        sep = "/" if is_linux else "\\"
         head = parts[0].rstrip("/\\")
         tail = sep.join(p.strip("/\\") for p in parts[1:])
         return f"{head}{sep}{tail}" if tail else head
 
-    # =========================================================================
-    # per-OS runner bodies
-    # =========================================================================
-
     @staticmethod
-    def _build_argv_linux(
-        *, claude_cmd: str, cfg: ClaudeCodeConfig, mcp_config: str,
-    ) -> str:
+    def _build_argv(
+        *, claude_path: str, cfg: ClaudeCodeConfig, mcp_config: str,
+    ) -> list[str]:
         argv = [
-            shlex.quote(claude_cmd), "-p", "-",
+            claude_path,
+            "-p", "-",
             "--output-format", "stream-json", "--verbose",
-            "--mcp-config", shlex.quote(mcp_config),
-            "--model", shlex.quote(cfg.model),
-        ]
-        if cfg.max_turns is not None and cfg.max_turns >= 0:
-            argv += ["--max-turns", str(cfg.max_turns)]
-        if cfg.max_budget_usd is not None:
-            argv += ["--max-budget-usd", str(cfg.max_budget_usd)]
-        if cfg.dangerously_skip_permissions:
-            argv += ["--dangerously-skip-permissions"]
-        for tool in cfg.disabled_tools:
-            argv += ["--disallowedTools", shlex.quote(tool)]
-        return " ".join(argv)
-
-    def _linux_runner(
-        self, *, cfg, wd, claude_cmd, prompt_file, transcript_file,
-        stderr_log, done_marker, mcp_config,
-    ) -> str:
-        env = dict(self.executor.env)
-        base_url_default = cfg.base_url or "https://openrouter.ai/api"
-        env_lines: list[str] = []
-        if not env.get("ANTHROPIC_API_KEY") and env.get("OPENROUTER_API_KEY"):
-            env_lines += [
-                f"export ANTHROPIC_BASE_URL={shlex.quote(base_url_default)}",
-                f'export ANTHROPIC_AUTH_TOKEN={shlex.quote(env["OPENROUTER_API_KEY"])}',
-                'export ANTHROPIC_API_KEY=""',
-            ]
-        elif env.get("ANTHROPIC_API_KEY"):
-            env_lines.append(
-                f'export ANTHROPIC_API_KEY={shlex.quote(env["ANTHROPIC_API_KEY"])}'
-            )
-        if cfg.base_url:
-            env_lines.append(f"export ANTHROPIC_BASE_URL={shlex.quote(cfg.base_url)}")
-
-        cmd_line = self._build_argv_linux(
-            claude_cmd=claude_cmd, cfg=cfg, mcp_config=mcp_config,
-        )
-        return (
-            "#!/bin/bash\nset -u\n"
-            + "\n".join(env_lines) + ("\n" if env_lines else "")
-            + f"cd {shlex.quote(wd)}\n"
-            + f"prompt=$(cat {shlex.quote(prompt_file)})\n"
-            + f"echo \"$prompt\" | {cmd_line} "
-            + f"2>{shlex.quote(stderr_log)} >{shlex.quote(transcript_file)}\n"
-            + f"echo $? > {shlex.quote(done_marker)}\n"
-        )
-
-    @staticmethod
-    def _build_argv_windows(
-        *, claude_cmd: str, cfg: ClaudeCodeConfig, mcp_config: str,
-    ) -> str:
-        argv = [
-            f"& '{claude_cmd}'", "-p", "-",
-            "--output-format", "stream-json", "--verbose",
-            "--mcp-config", f"'{mcp_config}'",
+            "--mcp-config", mcp_config,
             "--model", cfg.model,
         ]
         if cfg.max_turns is not None and cfg.max_turns >= 0:
@@ -297,55 +287,56 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
         if cfg.dangerously_skip_permissions:
             argv += ["--dangerously-skip-permissions"]
         for tool in cfg.disabled_tools:
-            argv += ["--disallowedTools", f"'{tool}'"]
-        return " ".join(argv)
+            argv += ["--disallowedTools", tool]
+        return argv
 
-    def _windows_runner(
-        self, *, cfg, wd, claude_cmd, prompt_file, transcript_file,
-        stderr_log, done_marker, mcp_config,
-    ) -> str:
-        env = dict(self.executor.env)
-        base_url_default = cfg.base_url or "https://openrouter.ai/api"
-        env_lines: list[str] = []
-        if not env.get("ANTHROPIC_API_KEY") and env.get("OPENROUTER_API_KEY"):
-            env_lines += [
-                f"$env:ANTHROPIC_BASE_URL = '{base_url_default}'",
-                f"$env:ANTHROPIC_AUTH_TOKEN = '{env['OPENROUTER_API_KEY']}'",
-                "$env:ANTHROPIC_API_KEY = ''",
-            ]
-        elif env.get("ANTHROPIC_API_KEY"):
-            env_lines.append(
-                f"$env:ANTHROPIC_API_KEY = '{env['ANTHROPIC_API_KEY']}'"
+    def _build_env(self, cfg: ClaudeCodeConfig) -> dict[str, str]:
+        """Compose the env dict subprocess will see.
+
+        OpenRouter remap mirrors the previous shell-script logic, just in
+        Python so it works identically on linux + windows.
+        """
+        env = os.environ.copy()
+        # Inject framework-supplied env (api keys, base URLs) on top —
+        # _sandbox_entry already merged these into os.environ when
+        # running in sandbox; this is a belt-and-braces overwrite for
+        # the local executor case where install() may not have triggered it.
+        for k, v in (self.executor.env or {}).items():
+            env[k] = v
+
+        # Provider-driven routing (explicit, not key-presence heuristic).
+        if cfg.provider == "openrouter":
+            or_key = env.get("OPENROUTER_API_KEY")
+            if not or_key:
+                raise RuntimeError(
+                    "claude_code: provider=openrouter but OPENROUTER_API_KEY "
+                    "is not set"
+                )
+            env["ANTHROPIC_BASE_URL"] = cfg.base_url or "https://openrouter.ai/api"
+            env["ANTHROPIC_AUTH_TOKEN"] = or_key
+            env["ANTHROPIC_API_KEY"] = ""
+        elif cfg.provider == "direct":
+            if not env.get("ANTHROPIC_API_KEY"):
+                raise RuntimeError(
+                    "claude_code: provider=direct but ANTHROPIC_API_KEY is "
+                    "not set"
+                )
+            if cfg.base_url:
+                env["ANTHROPIC_BASE_URL"] = cfg.base_url
+        else:
+            raise RuntimeError(
+                f"claude_code: unknown provider {cfg.provider!r} "
+                "(expected 'openrouter' or 'direct')"
             )
-        if cfg.base_url:
-            env_lines.append(f"$env:ANTHROPIC_BASE_URL = '{cfg.base_url}'")
+        return env
 
-        cmd_line = self._build_argv_windows(
-            claude_cmd=claude_cmd, cfg=cfg, mcp_config=mcp_config,
-        )
-        return (
-            "$ErrorActionPreference = 'Continue'\n"
-            "$utf8 = New-Object System.Text.UTF8Encoding($false)\n"
-            "[Console]::InputEncoding = $utf8\n"
-            "[Console]::OutputEncoding = $utf8\n"
-            "$OutputEncoding = $utf8\n"
-            + "\n".join(env_lines) + ("\n" if env_lines else "")
-            + f"Set-Location -LiteralPath '{wd}'\n"
-            + f"$prompt = Get-Content -LiteralPath '{prompt_file}' -Encoding UTF8 -Raw\n"
-            + f"$prompt | {cmd_line} 2>'{stderr_log}' | Out-File -FilePath '{transcript_file}' -Encoding utf8\n"
-            + f"$LASTEXITCODE | Out-File -FilePath '{done_marker}' -Encoding ascii -NoNewline\n"
-        )
-
-    # =========================================================================
-    # failure diagnosis
-    # =========================================================================
-
-    async def _diagnose_failure(
-        self, *, stderr_log: str, transcript: str, exit_code: int | None,
+    def _diagnose_failure(
+        self, *, stderr_log: Path, transcript: Path, exit_code: int | None,
     ) -> str:
+        """Build a diagnostic string from log files (best-effort reads)."""
         parts = [f"agent failed (rc={exit_code})"]
-        stderr_text = await self.executor.read_text(stderr_log)
-        tx_text = await self.executor.read_text(transcript)
+        stderr_text = _read_text_tolerant(stderr_log)
+        tx_text = _read_text_tolerant(transcript)
         parts.append(f"stderr={len(stderr_text)}B transcript={len(tx_text)}B")
         if stderr_text.strip():
             parts.append(f"stderr tail: ...{stderr_text[-800:]}")
@@ -362,7 +353,7 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
         return " | ".join(parts)
 
     # =========================================================================
-    # parse_artifacts — host-side, reads gathered transcript.jsonl
+    # parse_artifacts — host-side, runs on gathered transcript.jsonl
     # =========================================================================
 
     @classmethod
@@ -383,7 +374,7 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
             )
             return
 
-        raw = transcript_file.read_text()
+        raw = transcript_file.read_text(encoding="utf-8", errors="replace")
         for line in raw.splitlines():
             line = line.strip()
             if not line:
@@ -472,3 +463,11 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
             message="\n".join(p for p in text_parts if p) or None,
             observation=Observation(results=results),
         )
+
+
+def _read_text_tolerant(path: Path) -> str:
+    """Best-effort text read; never raises."""
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except (FileNotFoundError, OSError):
+        return ""

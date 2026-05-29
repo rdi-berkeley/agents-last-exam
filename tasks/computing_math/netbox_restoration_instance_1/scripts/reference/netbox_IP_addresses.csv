@@ -1,0 +1,12 @@
+IP Address,VRF,Status,Role,Tenant,Assigned,DNS name,Description
+10.10.99.1/24,Global,Active,,,7,,
+10.10.99.11/24,Global,Active,,,1,,
+10.10.99.12/24,Global,Active,,,8,,
+10.10.99.21/24,Global,Active,,,40,,
+10.10.99.22/24,Global,Active,,,67,,
+10.10.99.31/24,Global,Active,,,68,,
+10.10.99.41/24,Global,Active,,,78,,
+10.10.99.42/24,Global,Active,,,80,,
+10.10.99.43/24,Global,Active,,,82,,
+172.16.0.1/30,Global,Active,,,1,,
+172.16.0.2/30,Global,Active,,,8,,

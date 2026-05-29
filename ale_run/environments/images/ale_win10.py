@@ -16,9 +16,14 @@ IMAGE = Image(
     work_dir_base=r"C:\Users\User\.ale",
     task_data_root=r"E:\ale-data",
     node=r"C:\Users\User\node-v24.12.0-win-x64\node.exe",
-    python=r"C:\Python313\python.exe",
+    # Image-baked dedicated venv (Python 3.12 + pydantic + requests).
+    # Counterpart on linux: ``/opt/ale-run/.venv/bin/python``. Same version.
+    python=r"C:\ale-run\.venv\Scripts\python.exe",
     mcp_server_dir=r"C:\Users\User\cua_mcp_server",
 
     # provisioning defaults
     default_machine_type="n2-standard-4",
+
+    # cua-server port on GCE-backed images
+    cua_server_port=5000,
 )

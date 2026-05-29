@@ -2,7 +2,7 @@
 
 This package has **zero internal dependencies**: it imports only stdlib,
 pydantic, openenv, and requests. Every other top-level layer
-(``agents/``, ``environments/``, ``tasks/``, ``orchastration/``,
+(``agents/``, ``environments/``, ``tasks/``, ``orchestration/``,
 ``executors/``) depends on it; nothing in those layers cross-references
 each other's internals.
 
@@ -32,7 +32,7 @@ from .agent_deployer import (
     BaseAgentDeployer,
     EpisodeResult,
 )
-from .executor import BaseExecutor
+from .executor import BaseExecutor, GatherReport
 from .sandbox import (
     OS,
     Provider,
@@ -67,6 +67,7 @@ __all__ = [
     "EpisodeResult",
     # executor.py
     "BaseExecutor",
+    "GatherReport",
     # sandbox.py
     "OS",
     "Provider",

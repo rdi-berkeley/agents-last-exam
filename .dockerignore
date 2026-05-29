@@ -1,0 +1,32 @@
+# Build context is this project root (the ale-kasm Dockerfile is built with
+# `docker build -f ale_run/environments/images/ale_kasm/Dockerfile . ` from
+# here so it can COPY ale_run/agents/_assets/cua_mcp_server/). Everything the
+# image needs is COPYd by explicit path; this file keeps the context lean by
+# excluding the large dirs the daemon would otherwise tar up and send.
+#
+# Patterns are relative to the context root. The cua MCP bridge source lives at
+# ale_run/agents/_assets/cua_mcp_server/{src,package*.json} — none of the
+# patterns below match it (it is not under upstream/ or node_modules/), so it
+# is preserved for the COPY at Dockerfile line 96.
+
+# Virtualenvs / VCS / logs — never needed in an image.
+**/.venv/
+.venv/
+**/.git/
+.git/
+**/.logs/
+.logs/
+
+# Vendored upstream agent source trees (forks cloned at runtime, not baked).
+**/upstream/
+
+# Node + Python build artifacts (node_modules is rebuilt on-substrate by
+# ensure_cua_mcp_server; never ship it into the context).
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+
+# Editor / OS cruft.
+**/.DS_Store
+**/.idea/
+**/.vscode/

@@ -118,13 +118,13 @@ class AleClawDeployer(BaseAgentDeployer):
                 f"{type(self).__name__}: no LLM API key in env — set one of "
                 f"{', '.join(self._api_key_alternatives)}"
             )
-        await self.executor.mkdir(self.executor.work_dir)
+        Path(self.executor.work_dir).mkdir(parents=True, exist_ok=True)
         logger.info(
             "%s: install ok (model=%s, work_dir=%s, executor=%s)",
             type(self).__name__,
             getattr(self.config, "model", "?"),
             self.executor.work_dir,
-            self.executor.kind,
+            self.executor.type,
         )
 
     # =========================================================================
