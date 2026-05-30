@@ -109,12 +109,16 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
                 )
         self._claude_path = claude_path
 
-        # 2. Version probe.
+        # 2. Version probe. Pass stdin=DEVNULL so the probe never blocks waiting
+        # on a TTY/stdin (on Windows the freshly-uploaded claude.EXE could hang
+        # the 30s probe on first exec — Defender scan + stdin check); 60s gives
+        # cold-image first-exec headroom.
         try:
             probe = await asyncio.to_thread(
                 subprocess.run,
                 [claude_path, "--version"],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, text=True, timeout=60,
+                stdin=subprocess.DEVNULL,
             )
         except subprocess.TimeoutExpired as e:
             raise RuntimeError(
