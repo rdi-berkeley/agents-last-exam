@@ -6,7 +6,7 @@
   "software": [
     "Microsoft PowerPoint"
   ],
-  "taskPrompt": "You are editing a SaaS one-pager on a Windows VM.\n\n## Variant\n`base`: NorthstarOS one-pager brand refresh\n\n## Runtime Entry Point\n- Open PowerPoint from: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\software\\OpenPowerPoint.bat`\n\n## Visible Inputs\n- Source one-pager PNG: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\original_onepager.png`\n- Edit brief: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\edit_request.txt`\n- Brand guide PDF: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\brand_guide.pdf`\n- KPI data CSV: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\metrics.csv`\n- Chart data CSV: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\chart_data.csv`\n- Replacement assets directory: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\assets`\n- Task brief: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\task_brief.md`\n- Output contract: `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\input\\output_contract.json`\n\n## What You Must Do\n1. Read the staged brief and input files.\n2. Rebuild the one-pager as a meaningfully editable single-slide PowerPoint.\n3. Apply the requested NorthstarOS brand refresh while preserving the overall composition.\n4. Save the editable PowerPoint exactly to `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\output\\edited_onepager.pptx`.\n5. Export the final slide exactly to `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\output\\edited_onepager.png`.\n\n## Output Requirements\n- The `.pptx` must remain meaningfully editable.\n- Save only the final required deliverables inside `E:\\agenthle\\business_finance\\saas_onepager_brand_refresh_instance_1\\base\\output`.\n- Do not modify files under `input/`.\n",
+  "taskPrompt": "You are editing a SaaS one-pager on a Windows VM.\n\n## Variant\n`base`: NorthstarOS one-pager brand refresh\n\n## Runtime Entry Point\n- Open PowerPoint from: `base\\software\\OpenPowerPoint.bat`\n\n## Visible Inputs\n- Source one-pager PNG: `base\\input\\original_onepager.png`\n- Edit brief: `base\\input\\edit_request.txt`\n- Brand guide PDF: `base\\input\\brand_guide.pdf`\n- KPI data CSV: `base\\input\\metrics.csv`\n- Chart data CSV: `base\\input\\chart_data.csv`\n- Replacement assets directory: `base\\input\\assets`\n- Task brief: `base\\input\\task_brief.md`\n- Output contract: `base\\input\\output_contract.json`\n\n## What You Must Do\n1. Read the staged brief and input files.\n2. Rebuild the one-pager as a meaningfully editable single-slide PowerPoint.\n3. Apply the requested NorthstarOS brand refresh while preserving the overall composition.\n4. Save the editable PowerPoint exactly to `base\\output\\edited_onepager.pptx`.\n5. Export the final slide exactly to `base\\output\\edited_onepager.png`.\n\n## Output Requirements\n- The `.pptx` must remain meaningfully editable.\n- Save only the final required deliverables inside `base\\output`.\n- Do not modify files under `input/`.\n",
   "agentMustDo": [
     "Read the staged source one-pager, edit brief, brand guide, KPI CSV, chart CSV, and asset bundle from `input/`.",
     "Rebuild the page as a meaningfully editable single-slide PowerPoint on Windows.",
@@ -84,26 +84,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "6",
-    "domain_code": "business_finance",
-    "subdomain_id": "6.6",
-    "subdomain_code": "sales_marketing",
-    "subdomain_name": "Sales & Marketing",
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.2",
+    "subdomain_code": "graphic_design",
+    "subdomain_name": "Graphic, Visual & Product Design",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:08:20.285872Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/business_finance/saas_onepager_brand_refresh_instance_1/task_card.json"
-      },
-      "rationale": "The task involves editing a marketing document for a SaaS product."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "6",
+        "domain_code": "business_finance",
+        "subdomain_id": "6.6",
+        "subdomain_code": "sales_marketing",
+        "subdomain_name": "Sales & Marketing"
+      }
     }
   }
 }

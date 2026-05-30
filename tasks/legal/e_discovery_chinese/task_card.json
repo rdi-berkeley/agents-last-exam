@@ -1,0 +1,76 @@
+{
+  "taskId": "legal/e_discovery_chinese",
+  "title": "Chinese E-Discovery Evidence Index",
+  "summary": "Review a Chinese client statement and evidence images for a synthetic work-injury dispute, then produce a structured evidence-index workbook.",
+  "category": "legal",
+  "software": [
+    "LibreOffice",
+    "Tesseract OCR",
+    "Python"
+  ],
+  "taskPrompt": "You are working on a Linux VM.\n\n## Task Directory\n`base`\n\n## Visible Inputs\n- Client statement: `base/input/Input.docx`\n- Evidence images: `base/input/Evidence/`\n- File manifest: `base/input/manifest.json`\n- Detailed task instructions: `base/input/task_instructions.md`\n\n## Optional Local Software\n- LibreOffice entry point: `base/software/libreoffice`\n- Tesseract OCR entry point: `base/software/tesseract`\n- Python entry point: `base/software/python`\n\n## Your Task\nReview the Chinese client statement and the 16 Chinese evidence images, then create a Chinese evidence index workbook.\n\nUse the input facts only. Do not use external legal databases, commercial Chinese-law platforms, or online OCR services.\n\nSave your final workbook as:\n`base/output/证据目录.xlsx`\n\nThe workbook must contain an evidence-index table with columns for grouping, serial number, evidence name, evidence form/type, evidence source, page number, proof purpose, and remarks.\n\nDo not write outputs outside `base/output`.",
+  "agentMustDo": [
+    "Read the Chinese client statement.",
+    "Inspect all 16 evidence images.",
+    "Extract relevant evidence facts and compare them against the client statement.",
+    "Create `output/证据目录.xlsx` with grouped evidence-index rows and proof purposes."
+  ],
+  "inputFiles": [
+    {
+      "name": "Input.docx",
+      "format": "docx",
+      "path": "input/Input.docx",
+      "description": "Chinese client narrative statement."
+    },
+    {
+      "name": "Evidence/",
+      "format": "image directory",
+      "path": "input/Evidence/",
+      "description": "Sixteen Chinese evidence images named `证据1` through `证据16`."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "证据目录.xlsx",
+      "format": "xlsx",
+      "path": "output/证据目录.xlsx",
+      "description": "Required evidence-index workbook."
+    }
+  ],
+  "evaluation": "Rubric-based numeric score. The evaluator parses the submitted workbook and checks grouping, required columns, core-evidence coverage, proof-purpose keywords for labor relationship, accident/work-injury, medical/fees/disability, procedure, payment/negotiation, and appropriate handling of weak evidence. The positive fixture scores `1.0`; a shallow partial table scores `0.3`.",
+  "evaluatorCredentials": [
+    {
+      "type": "openai_api_key",
+      "file": "openai.env",
+      "purpose": "OpenAI vision/LLM judge scores the deliverable during evaluate(); sourced from secret/eval_time/openai.env"
+    }
+  ],
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "7",
+    "domain_code": "legal",
+    "subdomain_id": "7.1",
+    "subdomain_code": "litigation",
+    "subdomain_name": "Litigation Support & Discovery",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:29:51.881375Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/legal/e_discovery_chinese/task_card.json"
+      },
+      "rationale": "The task involves e-discovery and evidence indexing related to a legal case."
+    }
+  }
+}

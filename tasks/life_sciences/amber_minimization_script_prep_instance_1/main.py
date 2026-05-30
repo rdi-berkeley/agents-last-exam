@@ -60,7 +60,6 @@ Requirements:
 - Write a SLURM submission script for one GPU using Amber 22 and CUDA 11.6.2 module loads
 - Do not write extra files
 
-Do not modify `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.
 """
 
     def to_metadata(self) -> dict:

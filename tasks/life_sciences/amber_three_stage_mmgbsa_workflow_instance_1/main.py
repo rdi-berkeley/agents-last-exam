@@ -108,7 +108,6 @@ Requirements:
 - The graded MMGBSA result must use the provided `input/prod.mdcrd` as trajectory input.
 - Do not write extra deliverable files.
 
-Do not modify `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.
 """
 
     def to_metadata(self) -> dict:

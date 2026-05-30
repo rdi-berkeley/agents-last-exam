@@ -9,7 +9,7 @@
     "sbt 1.9+ with Chisel 6.5.0",
     "Python 3.10"
   ],
-  "taskPrompt": "Goal: Identify the exact set of Chisel source locations (Fifo.scala:line:col) that the sub-expression 'stateReg == 2'h2' in the optimized SystemVerilog corresponds to.\n\nInput:\n- TASK.md \u2014 query and rules\n- src/main/scala/Fifo.scala \u2014 original Chisel source (DoubleBuffer FIFO, 87 lines)\n- generated/optimized.sv \u2014 firtool emission (target: line 21, columns 23-39)\n- generated/DoubleBufferFifo.fir \u2014 FIRRTL intermediate\n\nSteps:\n1. Read TASK.md for the detailed query and constraints.\n2. Examine the Chisel source and optimized Verilog.\n3. Perform semantic analysis, formal equivalence checking (Yosys), or simulation to determine which Chisel locations correspond to stateReg == 2'h2.\n4. Write output/answer.json with target_signal, target_location_in_optimized_sv, and chisel_sources fields.\n\nRules:\n- Do NOT edit any file under src/, generated/, or TASK.md.\n- Writes are only allowed under output/.\n- No internet access on the VM.",
+  "taskPrompt": "You are a hardware design engineer specializing in Chisel and SystemVerilog.\n\n## Your Task\n\nGiven a Chisel hardware design (Fifo.scala) and its firtool-optimized SystemVerilog output, identify the exact set of Chisel source locations (Fifo.scala:line:col) that a specific sub-expression of the optimized Verilog semantically corresponds to.\n\nThe optimized Verilog's @[...] source-location comment is both noisy (lists unrelated locations) and incomplete (misses real locations), so answering requires genuine analysis — not comment-reading.\n\n## Working Directory\n\nAll materials are under: `base/input/workdir/`\n\n- `TASK.md` — detailed instructions and rules\n- `src/main/scala/Fifo.scala` — original Chisel source (DoubleBuffer FIFO, 87 lines)\n- `generated/optimized.sv` — firtool emission (target: line 21, sub-expression `stateReg == 2'h2`)\n- `generated/DoubleBufferFifo.fir` — FIRRTL intermediate (you may regenerate alternative emissions)\n\n## Tools Available\n\nUse the canonical task-local CLI entry points under `base/software/`:\n\n- `base/software/yosys` — Yosys 0.33+\n- `base/software/firtool` — CIRCT firtool 1.138.0\n- `base/software/sbt` — sbt 1.9.9 with Chisel 6.5.0 dependencies prewarmed\n- `base/software/python` — Python 3.10\n- `base/software/jq` — jq 1.x\n\nThe VM has no internet access during solve time.\n\n## Rules\n\n1. Do NOT edit any file under `src/`, `generated/`, or `TASK.md`. Writes are only allowed under `output/`.\n2. Focus on the sub-expression `stateReg == 2'h2` at line 21, columns 23-39 of optimized.sv.\n3. Approach is unconstrained (formal verification, simulation, semantic analysis — whatever works).\n\n## Output\n\nWrite a single file: `base/input/workdir/output/answer.json`\n\n```json\n{\n  \"target_signal\": \"stateReg == 2'h2\",\n  \"target_location_in_optimized_sv\": \"21.23-39\",\n  \"chisel_sources\": [\"Fifo.scala:<L1>:<C1>\", ...]\n}\n```\n",
   "agentMustDo": [
     "Read TASK.md for the detailed query",
     "Examine Fifo.scala and optimized.sv",
@@ -27,7 +27,7 @@
       "name": "Chisel source",
       "format": "scala",
       "path": "input/workdir/src/main/scala/Fifo.scala",
-      "description": "Original Chisel source \u2014 DoubleBuffer FIFO with 3-state enum"
+      "description": "Original Chisel source — DoubleBuffer FIFO with 3-state enum"
     },
     {
       "name": "Optimized SystemVerilog",

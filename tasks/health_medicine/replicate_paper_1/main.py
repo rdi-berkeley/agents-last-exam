@@ -153,7 +153,6 @@ Required outputs:
 Software guidance:
 - Use the provisioned R entry point `{self.software_dir}/Rscript`.
 - You may write temporary simulation files inside `{self.remote_output_dir}`.
-- Do not modify files under `input/` or `reference/`. During normal solving, write only under `output/` and do not modify evaluator fixture directories.
 """
 
     def to_metadata(self) -> dict[str, Any]:

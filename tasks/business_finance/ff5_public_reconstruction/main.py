@@ -168,7 +168,6 @@ Constraints:
 1. Follow the allowlist and workflow restrictions in `agent_prompt.md` and `manifest.json`.
 2. If you install Python dependencies, use the staged runtime manifest rather than modifying benchmark-owned evaluator state.
 3. Write only your task output under `{self.remote_output_dir}`.
-4. Do not modify evaluator-owned directories such as `reference/`, `output_test_pos/`, or `output_test_neg/`.
 """
 
     def to_metadata(self) -> dict[str, Any]:

@@ -286,7 +286,6 @@ Requirements:
 1. Use the bundled longitudinal DGP, the local `lmtp-bootstrap` source tree, the variance paper, and the public benchmark materials under `input/public_benchmark/`.
 2. Cover the two public benchmark scenarios from `study_plan_public.json` and generate your own `summary.csv` plus `report.pdf` from a working pipeline.
 3. The public benchmark summary is visible for orientation, but do not treat it as a file to relocate or copy into `output/`.
-4. Do not modify files under `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.
 5. Write solver-created files only under `{self.task_dir}/output`.
 """
 

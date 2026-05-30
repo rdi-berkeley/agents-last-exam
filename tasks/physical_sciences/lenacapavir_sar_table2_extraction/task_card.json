@@ -8,7 +8,7 @@
     "Visual Studio Code",
     "Python"
   ],
-  "taskPrompt": "You are a medicinal chemistry researcher extracting one SAR table from a staged paper PDF.\n\n## Your Task\nUse the provided manuscript PDF to extract every compound in **Table 2** and reconstruct a full-molecule SMILES string for each row.\n\n## Input Files\n- Manuscript PDF: `C:\\Users\\User\\Desktop\\physical_sciences\\lenacapavir_sar_table2_extraction\\table2\\input\\source_paper.pdf`\n\n## Software\n- PDF/browser shortcut: `C:\\Users\\User\\Desktop\\physical_sciences\\lenacapavir_sar_table2_extraction\\table2\\software\\Microsoft Edge.lnk`\n- Editor shortcut: `C:\\Users\\User\\Desktop\\physical_sciences\\lenacapavir_sar_table2_extraction\\table2\\software\\Visual Studio Code.lnk`\n- Python helper: `C:\\Users\\User\\Desktop\\physical_sciences\\lenacapavir_sar_table2_extraction\\table2\\software\\python.bat`\n\n## What You Must Do\n1. Open `C:\\Users\\User\\Desktop\\physical_sciences\\lenacapavir_sar_table2_extraction\\table2\\input\\source_paper.pdf`\n2. Go to Table 2, titled `SAR for R1 Analogs`\n3. Use the scaffold shown above the table together with each row's R1 drawing\n4. Reconstruct the full molecule for every compound row in Table 2\n5. Save one CSV exactly to:\n   `C:\\Users\\User\\Desktop\\physical_sciences\\lenacapavir_sar_table2_extraction\\table2\\output\\submission.csv`\n\n## Output Requirements\n- The file must be CSV\n- The columns must be exactly:\n  `Ligand_ID,SMILES,EC50_MT4`\n- Include one row for every compound listed in Table 2\n- `SMILES` must describe the full molecule, not only the R1 fragment\n- `EC50_MT4` should be the nM value reported in the table\n- Do not save extra files\n\n## Important Constraints\n- Use the staged paper PDF as your source of truth\n- Do not rely on web search or external answer sources",
+  "taskPrompt": "You are a medicinal chemistry researcher extracting one SAR table from a staged paper PDF.\n\n## Your Task\nUse the provided manuscript PDF to extract every compound in **Table 2** and reconstruct a full-molecule SMILES string for each row.\n\n## Input Files\n- Manuscript PDF: `table2\\input\\source_paper.pdf`\n\n## Software\n- PDF/browser shortcut: `table2\\software\\Microsoft Edge.lnk`\n- Editor shortcut: `table2\\software\\Visual Studio Code.lnk`\n- Python helper: `table2\\software\\python.bat`\n\n## What You Must Do\n1. Open `table2\\input\\source_paper.pdf`\n2. Go to Table 2, titled `SAR for R1 Analogs`\n3. Use the scaffold shown above the table together with each row's R1 drawing\n4. Reconstruct the full molecule for every compound row in Table 2\n5. Save one CSV exactly to:\n   `table2\\output\\submission.csv`\n\n## Output Requirements\n- The file must be CSV\n- The columns must be exactly:\n  `Ligand_ID,SMILES,EC50_MT4`\n- Include one row for every compound listed in Table 2\n- `SMILES` must describe the full molecule, not only the R1 fragment\n- `EC50_MT4` should be the nM value reported in the table\n- Do not save extra files\n\n## Important Constraints\n- Use the staged paper PDF as your source of truth\n- Do not rely on web search or external answer sources",
   "agentMustDo": [
     "Open the manuscript PDF from `input/source_paper.pdf`.",
     "Locate Table 2, titled `SAR for R1 Analogs`, on page 8 of the paper and use the scaffold drawn immediately above that table together with the per-row R1 substituent drawings.",
@@ -38,26 +38,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "2",
-    "domain_code": "physical_sciences",
-    "subdomain_id": "2.2",
-    "subdomain_code": "chemistry_materials",
-    "subdomain_name": "Chemistry & Materials Computation",
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.1",
+    "subdomain_code": "biomolecular",
+    "subdomain_name": "Biomolecular Structure & Design",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:05:14.963036Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/physical_sciences/lenacapavir_sar_table2_extraction/task_card.json"
-      },
-      "rationale": "The task involves extracting and reconstructing chemical structures from a scientific paper."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "2",
+        "domain_code": "physical_sciences",
+        "subdomain_id": "2.2",
+        "subdomain_code": "chemistry_materials",
+        "subdomain_name": "Chemistry & Materials Computation"
+      }
     }
   }
 }

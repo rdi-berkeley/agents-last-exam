@@ -11,7 +11,7 @@
     "ggplot2",
     "jsonlite"
   ],
-  "taskPrompt": "You are a bioinformatics analyst performing a TCGA-LUAD KRAS survival analysis on Linux.\n\nTask directory:\n- `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base`\n\nVisible files and directories:\n- Task specification: `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base/input/task_spec.json`\n- Detailed instructions: `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base/input/task_description.txt`\n- Output contract: `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base/input/output_requirements.txt`\n- Runtime notes: `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base/input/runtime_notes.txt`\n- Software notes: `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base/software/README.txt`\n\nWhat you need to do:\n1. Use public TCGA-LUAD data from the GDC Data Portal.\n2. Download the clinical data and STAR-count expression data for the LUAD cohort.\n3. Extract KRAS (`ENSG00000133703`) expression, merge it with survival and clinical covariates, and stratify patients into high/low KRAS groups using the cohort median.\n4. Fit a Kaplan-Meier analysis, a log-rank test, and a Cox proportional hazards model with KRAS group, age, and stage grouping.\n5. Save every required output under `/media/user/data/agenthle/health_medicine/healthcare_tcga_luad_survival_kras/base/output`.\n\nRequired output files:\n- `cohort.csv`\n- `km_plot.png`\n- `cox_results.json`\n- `analysis.R`\n\nDo not modify staged inputs or evaluator-only directories.\nDo not ask for confirmation. Execute directly.\n",
+  "taskPrompt": "You are a bioinformatics analyst performing a TCGA-LUAD KRAS survival analysis on Linux.\n\nTask directory:\n- `base`\n\nVisible files and directories:\n- Task specification: `base/input/task_spec.json`\n- Detailed instructions: `base/input/task_description.txt`\n- Output contract: `base/input/output_requirements.txt`\n- Runtime notes: `base/input/runtime_notes.txt`\n- Software notes: `base/software/README.txt`\n\nWhat you need to do:\n1. Use public TCGA-LUAD data from the GDC Data Portal.\n2. Download the clinical data and STAR-count expression data for the LUAD cohort.\n3. Extract KRAS (`ENSG00000133703`) expression, merge it with survival and clinical covariates, and stratify patients into high/low KRAS groups using the cohort median.\n4. Fit a Kaplan-Meier analysis, a log-rank test, and a Cox proportional hazards model with KRAS group, age, and stage grouping.\n5. Save every required output under `base/output`.\n\nRequired output files:\n- `cohort.csv`\n- `km_plot.png`\n- `cox_results.json`\n- `analysis.R`\n\nDo not modify staged inputs or evaluator-only directories.\nDo not ask for confirmation. Execute directly.\n",
   "agentMustDo": [
     "Read the staged task specification and output contract.",
     "Download public TCGA-LUAD clinical and STAR-count expression data from GDC.",
@@ -89,24 +89,19 @@
   "taxonomy": {
     "domain_id": "4",
     "domain_code": "health_medicine",
-    "subdomain_id": "4.2",
-    "subdomain_code": "therapeutic_oncology",
-    "subdomain_name": "Therapeutic & Oncology Services",
+    "subdomain_id": "4.4",
+    "subdomain_code": "public_health",
+    "subdomain_name": "Public Health & Epidemiology",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:03:06.441323Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/health_medicine/healthcare_tcga_luad_survival_kras/task_card.json"
-      },
-      "rationale": "The task involves survival analysis related to cancer (LUAD) and KRAS, which falls under therapeutic oncology."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "4",
+        "domain_code": "health_medicine",
+        "subdomain_id": "4.2",
+        "subdomain_code": "therapeutic_oncology",
+        "subdomain_name": "Therapeutic & Oncology Services"
+      }
     }
   }
 }

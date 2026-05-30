@@ -16,7 +16,7 @@ Typical usage::
 
     # In shell:
     #   export OPENROUTER_API_KEY=...
-    #   source ~/.config/agenthle/eval.env
+    #   for f in secret/eval_time/*.env; do source "$f"; done
 
     cfg = AleClawConfig(
         model="openrouter/anthropic/claude-sonnet-4-20250514",

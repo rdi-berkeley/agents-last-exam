@@ -1,0 +1,70 @@
+{
+  "taskId": "visual_media/high_to_low_modeling",
+  "title": "High To Low Modeling",
+  "summary": "Convert a high-poly source asset into a clean low-poly model that satisfies the staged submission contract.",
+  "category": "visual_media",
+  "software": [
+    "Blender",
+    "Python"
+  ],
+  "taskPrompt": "You are a 3D artist using Blender.\n\n            Your task is to convert a high-poly source object into a clean low-poly model.\n\n            Asset:\n            - Display name: `Nintendo Game Boy High To Low`\n- Source package: `course_nintendo_game_boy`\n- Source object: `nintendo_game_boy`\n- Source triangle count: `172850`\n\n            Official input:\n            - High-poly OBJ: `high_to_low_nintendo_game_boy\\input\\nintendo_game_boy.obj`\n\nOptional provenance/context:\n- Source high-poly Blender file: `high_to_low_nintendo_game_boy\\software\\Blender.blend`\n\n            Required submission:\n            - Export a low-poly OBJ named `nintendo_game_boy.obj`\n            - Save it to `high_to_low_nintendo_game_boy\\output\\submission\\nintendo_game_boy.obj`\n            - Keep the model aligned to the original world space\n\n            Evaluation:\n            - Hard eval runs remotely with Blender and geometry/image metrics\n            - Soft eval runs locally on a small set of evidence sheets\n            - Final score combines hard and soft scores",
+  "agentMustDo": [
+    "Open Blender and load the variant-specific high-poly OBJ from `input/`",
+    "Optionally reference a source Blender file from `software/` when the package includes one",
+    "Convert the high-poly model to a clean low-poly model while preserving shape and silhouette",
+    "Export the result as the variant-specific target OBJ name to `output/submission/`",
+    "Keep the model aligned to the original world space"
+  ],
+  "inputFiles": [
+    {
+      "name": "<variant>.obj",
+      "format": "OBJ",
+      "path": "input/<variant>.obj",
+      "description": "High-poly mesh"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "<variant>.obj",
+      "format": "OBJ",
+      "path": "output/submission/<variant>.obj",
+      "description": "Low-poly submission"
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- Output OBJ file does not exist\n\n**Scoring method:**\n- Remote hard evaluation via Blender: geometry metrics are computed first, then each hard component is thresholded to `0/1` before being combined into `geometry_score`\n- Local soft evaluation via VLM asks four binary `YES` / `NO` questions covering shape fidelity, silhouette preservation, effective lowpoly reduction, and visible artifacts; `soft_score` is the yes-ratio across those questions\n- Final score: `(1 - judge_weight) * hard_score + judge_weight * soft_score`; when local judge is unavailable, runtime falls back to hard-only\n\n**What does a PERFECT output look like?**\nA low-poly OBJ that preserves the high-poly silhouette and shape with significantly fewer triangles, with no visible artifacts.\n\n**What does a WRONG/empty output look like?**\nMissing OBJ file, or a mesh that doesn't resemble the original character.",
+  "evaluatorCredentials": [
+    {
+      "type": "openai_api_key",
+      "file": "openai.env",
+      "purpose": "OpenAI vision/LLM judge scores the deliverable during evaluate(); sourced from secret/eval_time/openai.env"
+    }
+  ],
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:26:16.129344Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/high_to_low_modeling/task_card.json"
+      },
+      "rationale": "The task involves 3D modeling, which fits under 3D, Animation & Interactive Media."
+    }
+  }
+}

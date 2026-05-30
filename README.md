@@ -92,6 +92,22 @@ uv run python -m ale_run run example_exp.yaml --dry-run   # validate config
 uv run python -m ale_run run example_exp.yaml             # real run
 ```
 
+> **Evaluator credentials (`secret/eval_time/`).** Some tasks score their output
+> with an LLM/VLM judge (OpenAI or Gemini). Those judge keys live in **per-service**
+> files under `secret/eval_time/`, shipped as redacted `*.env.example` templates.
+> Copy each one you need to its real filename and fill in the key — the judges
+> load them automatically at scoring time (no manual `source` needed):
+>
+> ```bash
+> cp secret/eval_time/openai.env.example secret/eval_time/openai.env   # OpenAI vision/LLM judges
+> cp secret/eval_time/gemini.env.example secret/eval_time/gemini.env   # Gemini video judge
+> # then edit each file and fill in the API key(s)
+> ```
+>
+> Real `secret/eval_time/*.env` files are gitignored; only the `.example`
+> templates are committed. A task's `task_card.json` `evaluatorCredentials` field
+> names which file that task's judge needs.
+
 [`example_exp.yaml`](example_exp.yaml) is intentionally minimal: only four
 blocks (`name`, `agent`, `environment`, `tasks`). It runs the
 [`demo/hello_win`](tasks/demo/hello_win/) task on a GCP Windows VM with
@@ -235,7 +251,7 @@ agents-last-exam/
 │   └── demo/                   `hello` (Linux) + `hello_win` (Windows) templates
 ├── configs/                  Reusable agent / environment / run profiles
 ├── selected_tasks/           Curated task lists (cli, full, unlicensed)
-├── secret/                   `.env.example` + GCP keys (gitignored)
+├── secret/                   `.env.example` + GCP keys; `eval_time/*.env.example` judge keys (real values gitignored)
 ├── docs/                     Setup, task-running, and extension guides
 ├── sample_run/               A recorded run's output (events, trajectory, eval)
 ├── example_exp.yaml          The minimal experiment; start here

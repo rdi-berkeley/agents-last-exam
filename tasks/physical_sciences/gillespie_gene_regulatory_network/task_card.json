@@ -7,7 +7,7 @@
     "Python",
     "NumPy"
   ],
-  "taskPrompt": "You are implementing a NumPy-only stochastic simulation workflow for a three-gene mutual-inhibition regulatory network. Read `input/problem_spec.md`, set up the runtime with `uv sync --frozen --project input/runtime_env`, implement exact SSA for Tier 1 and Tier 2, implement tau-leaping for Tier 3, and write `tier1_results.json`, `tier2_results.json`, `tier3_results.json`, and `gillespie_solver.py` under `output/`. Use `numpy.random.default_rng(seed)`, follow the schemas and parameter grids in the specification, do not use SciPy or dedicated stochastic simulation libraries, do not modify `input/`, and write only under `output/`.",
+  "taskPrompt": "You are implementing a NumPy-only stochastic simulation workflow for a\nthree-gene mutual-inhibition regulatory network. The full scientific\nspecification is in `base/input/problem_spec.md`.\n\n## Your Task\n1. Read `base/input/problem_spec.md` end to end. It defines:\n   - Tier 1: exact Gillespie SSA for a birth-death process.\n   - Tier 2: exact Gillespie SSA for a three-gene mutual-inhibition network.\n   - Tier 3: bifurcation scan plus tau-leaping comparison.\n   - Required JSON schemas, seeds, event counts, parameters, and runtime budget.\n\n2. Set up the Python runtime with:\n   ```\n   uv sync --frozen --project base/input/runtime_env\n   ```\n   Then run your code with `base/input/runtime_env/.venv/bin/python` or activate\n   that environment. It provides NumPy only; use the standard library for JSON,\n   time, and math utilities.\n\n3. Implement the simulations from scratch in Python/NumPy:\n   - Use `numpy.random.default_rng(seed)` for all random number generation.\n   - Use exact SSA for Tier 1 and Tier 2.\n   - Implement tau-leaping for Tier 3 with the leap condition and non-negative\n     population handling described in the spec.\n   - Do not use SciPy, GillesPy2, BioSimulator, StochPy, COPASI, StochKit, or\n     any dedicated stochastic simulation package.\n\n4. Save all final artifacts under `base/output`:\n   - `base/output/tier1_results.json`\n   - `base/output/tier2_results.json`\n   - `base/output/tier3_results.json`\n   - `base/output/gillespie_solver.py`\n\n   `gillespie_solver.py` should be your reusable implementation, not a notebook\n   transcript, so the simulation can be reproduced from source.\n\n## Output Contract\n- Follow the JSON schemas in `problem_spec.md` for all three result files.\n- Probabilities and basin fractions must be finite values in `[0, 1]` and should\n  sum to one where the spec defines a partition.\n- Use the exact Tier 3 alpha grid and comparison points from the spec.\n- Overwrite stale files in `base/output` if they already exist.\n\n## Boundaries\n- Do not modify anything under `base/input`.\n- Write only under `base/output`.\n",
   "agentMustDo": [
     "Read `input/problem_spec.md` for the birth-death validation, three-gene mutual-inhibition model, bifurcation scan, tau-leaping requirements, seeds, event counts, and JSON schemas.",
     "Provision the Python runtime via `uv sync --frozen --project input/runtime_env` and run with the resulting NumPy environment.",
@@ -69,26 +69,21 @@
     "timeout": 28800
   },
   "taxonomy": {
-    "domain_id": "2",
-    "domain_code": "physical_sciences",
-    "subdomain_id": "2.2",
-    "subdomain_code": "chemistry_materials",
-    "subdomain_name": "Chemistry & Materials Computation",
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.4",
+    "subdomain_code": "systems_microbial",
+    "subdomain_name": "Systems & Microbial Biology",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:09:23.983777Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/physical_sciences/gillespie_gene_regulatory_network/task_card.json"
-      },
-      "rationale": "The task involves implementing a stochastic simulation for a gene regulatory network, which falls under computational chemistry."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "2",
+        "domain_code": "physical_sciences",
+        "subdomain_id": "2.2",
+        "subdomain_code": "chemistry_materials",
+        "subdomain_name": "Chemistry & Materials Computation"
+      }
     }
   }
 }

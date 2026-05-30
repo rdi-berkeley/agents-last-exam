@@ -131,7 +131,6 @@ Output requirements:
 Constraints:
 1. Use only the staged packet.
 2. Do not use web search.
-3. Do not modify files under `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.
 4. Write only your final memo under `{self.remote_output_dir}`.
 """
 

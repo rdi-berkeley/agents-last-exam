@@ -24,6 +24,7 @@ build/
 .logs/
 .final_logs/
 .temp_repos/
+sample_run/
 
 # Per-developer experiment configs (workflow notes, model-swap probes).
 # Templates for users live at the top-level example_exp.yaml; anything
@@ -33,6 +34,10 @@ experiments/
 # Per-session working notes / planning docs — not part of the public repo.
 docs/sessions/
 docs/dev
+docs/.deprecated-opus4-7/
+
+# Local-only scratchpad
+/context.md
 
 # Secrets — checked-in template lives at secret/.env.example.
 # `.env` matches at any depth, so it also covers `secret/.env`.
@@ -42,3 +47,6 @@ hf_token
 
 # claude code
 .claude/
+# Per-task secret store (real values ignored; .example templates tracked)
+secret/eval_time/gemini.env
+secret/eval_time/openai.env

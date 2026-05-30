@@ -177,7 +177,6 @@ Your job is to rebuild the analytic cohort and export exactly these files under 
 Requirements:
 1. Follow the exact cohort construction, variable derivations, and model definitions in `task_spec.txt`.
 2. Use `output_contract.json` for the exact output filenames, column order, formulas, and metadata fields.
-3. Do not modify `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.
 4. Write only the required task outputs under `{self.remote_output_dir}`.
 """
 

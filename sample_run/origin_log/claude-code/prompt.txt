@@ -1,0 +1,17 @@
+Goal: Create a note in a text editor from staged task data.
+
+Steps:
+1. Open a text editor. A task-local launcher is available at:
+   /media/user/data/agenthle/demo/demo_desktop_note_linux/base/software/open_text_editor.sh
+2. Read the visible task input file:
+   /media/user/data/agenthle/demo/demo_desktop_note_linux/base/input/note_request.txt
+3. Type exactly these two lines:
+   AgentHLE Desktop Plugin Demo
+   This note was created through the desktop UI.
+4. Save the file to:
+   /media/user/data/agenthle/demo/demo_desktop_note_linux/base/output/agenthle_desktop_plugin_demo.txt
+
+Verification:
+- The file must exist exactly at /media/user/data/agenthle/demo/demo_desktop_note_linux/base/output/agenthle_desktop_plugin_demo.txt.
+- The file content must match the two required lines exactly, ignoring Windows vs Unix newlines.
+- Use the staged input, software, and output directories during solving.

@@ -1,0 +1,95 @@
+{
+  "taskId": "psychology_neuro/neuroscience_pub_figure_reproduce_2",
+  "title": "Neuroscience Experimental Schematic Reproduction In Adobe Illustrator",
+  "summary": "Recreate a publication-quality neuroscience experimental schematic in Adobe Illustrator matching a reference figure and technical caption, producing both an editable .ai file and an exported PDF.",
+  "category": "psychology_neuro",
+  "software": [
+    "Adobe Illustrator 2026"
+  ],
+  "taskPrompt": "You are a neuroscience researcher who needs to recreate a publication-quality experimental schematic in Adobe Illustrator.\n\n## Your Task\n\n1. Launch Adobe Illustrator via: `base\\software\\launch_illustrator.bat`\n2. Examine the reference schematic at `base\\input\\reference_schematic.pdf` and the technical caption at `base\\input\\caption.txt`.\n3. Open the template mouse component at `base\\input\\template_mouse.ai` as a starting element.\n4. Recreate the schematic as a genuine Illustrator vector drawing depicting a freely-moving electrophysiology recording setup with: mouse in arena, head implant with tether, overhead commutator on support frame, elevated arena, and beneath-arena camera.\n5. Apply consistent styling: line weights, colors, and fonts.\n6. Save the editable file to `base\\output\\schematic_reproduce.ai`.\n7. Export the final PDF to `base\\output\\schematic_reproduce.pdf`.\n\n## Important Notes\n- Do NOT simply copy or paste the reference PDF into the output.\n- The output must be a genuine vector Illustrator drawing, not a raster paste.\n- Match the reference in scientific content, visual clarity, and layout.",
+  "agentMustDo": [
+    "Launch Adobe Illustrator via the staged software launcher on the Windows VM.",
+    "Examine the reference schematic PDF and technical caption to understand required content.",
+    "Open and use the template mouse component as a starting element.",
+    "Recreate the publication-quality experimental schematic as a genuine Illustrator vector drawing.",
+    "Include all key scientific elements: mouse in arena, head implant with tether, commutator on support frame, elevated arena, camera below arena.",
+    "Save the editable Illustrator file to output/schematic_reproduce.ai.",
+    "Export the final figure as a high-resolution PDF to output/schematic_reproduce.pdf."
+  ],
+  "inputFiles": [
+    {
+      "name": "Reference schematic",
+      "format": "PDF",
+      "path": "input/reference_schematic.pdf",
+      "description": "Visual reference of the freely-moving electrophysiology recording setup. Directly copying it to output is a scored failure."
+    },
+    {
+      "name": "Technical caption",
+      "format": "TXT",
+      "path": "input/caption.txt",
+      "description": "Scientific caption describing the required image content and experimental setup details."
+    },
+    {
+      "name": "Template mouse component",
+      "format": "AI",
+      "path": "input/template_mouse.ai",
+      "description": "Reusable Adobe Illustrator mouse component to use as a starting element for the reproduction."
+    },
+    {
+      "name": "Task brief",
+      "format": "MD",
+      "path": "input/task_brief.md",
+      "description": "Runtime instructions with output filenames and requirements."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Reproduced schematic (AI)",
+      "format": "AI",
+      "path": "output/schematic_reproduce.ai",
+      "description": "Editable Adobe Illustrator file containing the reproduced schematic."
+    },
+    {
+      "name": "Reproduced schematic (PDF)",
+      "format": "PDF",
+      "path": "output/schematic_reproduce.pdf",
+      "description": "Exported high-resolution PDF of the reproduced schematic."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (auto score = 0.0):\n- Missing output/schematic_reproduce.pdf or output/schematic_reproduce.ai\n- Either output file is too small to be a meaningful artifact\n- Output PDF hash matches the input reference PDF (direct copy)\n- Output AI hash matches the input template AI (unchanged template)\n- Output AI hash matches the output PDF hash (just renamed)\n- AI file lacks genuine Illustrator PDF-backing markers\n- Output PDF cannot be rasterized\n- Visual copy check detects output is identical to the visible input reference\n\n**Scoring method (after gates pass):**\n- Structural/visual similarity checklist (40%): layout, scale, labels, line style, publication quality\n- Scientific content checklist (40%): mouse in arena, head implant, commutator, elevated arena, camera, correct connections\n- Overall scientific equivalence (20%): binary MLLM check\n\n**Score range:** continuous 0.0 to 1.0\n\n**What does a PERFECT output look like?**\nA genuine Illustrator reproduction with matching scientific structure, all required elements, correct labels, and publication-quality styling. Scores near 1.0.\n\n**What does a WRONG output look like?**\nMissing files, unchanged template, direct copy of the visible reference PDF, raster-only paste without vector work, or a schematic missing essential scientific elements. Scores 0.0.",
+  "evaluatorCredentials": [
+    {
+      "type": "openai_api_key",
+      "file": "openai.env",
+      "purpose": "OpenAI vision/LLM judge scores the deliverable during evaluate(); sourced from secret/eval_time/openai.env"
+    }
+  ],
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "5",
+    "domain_code": "psychology_neuro",
+    "subdomain_id": "5.1",
+    "subdomain_code": "comp_neuro",
+    "subdomain_name": "Computational Neuroscience",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:39:52.907472Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/psychology_neuro/neuroscience_pub_figure_reproduce_2/task_card.json"
+      },
+      "rationale": "The task involves recreating a neuroscience experimental schematic, which aligns with computational neuroscience."
+    }
+  }
+}

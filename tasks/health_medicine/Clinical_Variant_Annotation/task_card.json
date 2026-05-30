@@ -4,7 +4,7 @@
   "summary": "Analyze a staged clinical VCF, identify the pathogenic BRCA1-like candidate, and document the supporting evidence in the required output tables.",
   "category": "health_medicine",
   "software": [],
-  "taskPrompt": "You are given a small clinical VCF containing 200 candidate variants from a breast-cancer case.\n\nYour task is to identify the single pathogenic BRCA1-like candidate and document the evidence in the required output files.\n\nTask directory:\n- `/home/user/Desktop/health_medicine/Clinical_Variant_Annotation/base`\n\nInput:\n- `/home/user/Desktop/health_medicine/Clinical_Variant_Annotation/base/input/patient_variants.vcf`\n\nAvailable tools:\n- a Linux terminal is open at `/home/user/Desktop/health_medicine/Clinical_Variant_Annotation/base`\n- `python3`\n- `curl`\n- `jq`\n\nExternal resources:\n1. gnomAD GraphQL API\n2. Ensembl VEP REST API\n3. NCBI ClinVar / E-utilities\n\nRequired outputs under `/home/user/Desktop/health_medicine/Clinical_Variant_Annotation/base/output`:\n- `variant_count.txt` with a single integer\n- `vep_results.csv`\n- `gnomad_results.csv`\n- `clinvar_results.csv`\n- `final_candidates.csv`\n\nRules:\n- Append rows to the pre-created CSV files without changing headers.\n- It is acceptable to use `NA` for unavailable fields.\n- The final candidate file must include the pathogenic evidence in the justification column.\n- Do not ask for confirmation. Execute directly.",
+  "taskPrompt": "You are given a small clinical VCF containing 200 candidate variants from a breast-cancer case.\n\nYour task is to identify the single pathogenic BRCA1-like candidate and document the evidence in the required output files.\n\nTask directory:\n- `base`\n\nInput:\n- `base/input/patient_variants.vcf`\n\nAvailable tools:\n- a Linux terminal is open at `base`\n- `python3`\n- `curl`\n- `jq`\n\nExternal resources:\n1. gnomAD GraphQL API\n2. Ensembl VEP REST API\n3. NCBI ClinVar / E-utilities\n\nRequired outputs under `base/output`:\n- `variant_count.txt` with a single integer\n- `vep_results.csv`\n- `gnomad_results.csv`\n- `clinvar_results.csv`\n- `final_candidates.csv`\n\nRules:\n- Append rows to the pre-created CSV files without changing headers.\n- It is acceptable to use `NA` for unavailable fields.\n- The final candidate file must include the pathogenic evidence in the justification column.\n- Do not ask for confirmation. Execute directly.",
   "agentMustDo": [
     "Read a small patient VCF, count variants, annotate candidates against public knowledge bases, and write a final pathogenic BRCA1-like candidate.",
     "Write outputs only under `output/` while keeping committed fixtures untouched.",
@@ -57,25 +57,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "4",
-    "domain_code": "health_medicine",
-    "subdomain_id": "4.2",
-    "subdomain_code": "therapeutic_oncology",
-    "subdomain_name": "Therapeutic & Oncology Services",
+    "domain_id": "3",
+    "domain_code": "life_sciences",
+    "subdomain_id": "3.2",
+    "subdomain_code": "genomics",
+    "subdomain_name": "Genomics & Sequence Analysis",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:02:01.453228Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/health_medicine/Clinical_Variant_Annotation/task_card.json"
-      },
-      "rationale": "The task involves clinical variant annotation related to breast cancer."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "4",
+        "domain_code": "health_medicine",
+        "subdomain_id": "4.2",
+        "subdomain_code": "therapeutic_oncology",
+        "subdomain_name": "Therapeutic & Oncology Services"
+      }
     }
   }
 }

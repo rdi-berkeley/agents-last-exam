@@ -7,7 +7,7 @@
     "UCSC Genome Browser",
     "Python"
   ],
-  "taskPrompt": "Create a genome-browser SVG view for the specified hg19 gene locus. Load the provided K562 structural variant VCF track and K562 H3K27ac BigWig signal track together, then save exactly one valid SVG file as output/output.svg.",
+  "taskPrompt": "You are a bioinformatics analyst working on a K562 regulatory genomics visualization task.\n\nTask directory:\n- `base`\n\nGoal:\n- Create a genome-browser SVG view for the hg19 TP53 locus: `chr17:7571651-7590910`.\n- The view must include both the provided K562 structural variant VCF track and the K562 H3K27ac BigWig signal track at the same time.\n\nInput files:\n- Variant calls: `base/input/ENCFF960SSF.vcf.gz`\n- H3K27ac signal: `base/input/wgEncodeBroadHistoneK562H3k27acStdSig.bigWig`\n- Machine-readable task config: `base/input/task_config.json`\n\nAvailable software:\n- You may use the UCSC Genome Browser, IGV, WashU Epigenome Browser, or another browser/tool capable of loading VCF and BigWig tracks on hg19 and exporting SVG.\n- A helper that opens the UCSC hg19 locus page is available with:\n  `bash base/software/open_ucsc_browser.sh`\n\nOutput:\n- Save exactly one SVG file to `base/output/output.svg`.\n- The SVG must be valid XML with an `<svg>` root.\n- The SVG should visibly show the hg19 locus labels, the VCF/variant track, and the K562 H3K27ac signal track.\n- Do not save the final answer under any other filename.\n",
   "agentMustDo": [
     "Open the specified hg19 locus for the assigned variant.",
     "Load or display the provided VCF and H3K27ac BigWig tracks together.",

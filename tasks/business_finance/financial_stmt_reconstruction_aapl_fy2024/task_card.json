@@ -8,7 +8,7 @@
     "pdftotext",
     "grep"
   ],
-  "taskPrompt": "You are working on a Linux VM as a financial statement extraction analyst. Read Apple's FY2024 Form 10-K PDF or SEC HTML filing, reconstruct the fiscal 2024 Consolidated Balance Sheet, and write `output/balance_sheet.json` using the required schema and exact USD-million values.",
+  "taskPrompt": "You are working on a Linux VM as a financial statement extraction analyst.\n\n## Task Directory\n`base`\n\n## Visible Inputs\n- Task prompt: `base/input/TASK_PROMPT.md`\n- Apple FY2024 10-K PDF: `base/input/aapl-2024-10k.pdf`\n- SEC EDGAR HTML: `base/input/aapl-20240928.htm`\n- Task metadata: `base/input/task.json`\n- Output schema: `base/input/output_schema.json`\n- Source notes: `base/input/material_sources.md`\n- Tool wrappers: `base/software/python`, `base/software/pdftotext`, `base/software/grep`\n\n## Your Task\nReconstruct Apple Inc.'s Consolidated Balance Sheet for fiscal year 2024\n(period ended September 28, 2024) as structured JSON.\n\nWrite the final JSON to `base/output/balance_sheet.json`. Follow the schema in\n`base/input/output_schema.json`, use USD millions exactly as reported, and\ndo not modify files under `base/input`.\n",
   "agentMustDo": [
     "Locate the Consolidated Balance Sheets in the staged Apple FY2024 Form 10-K materials.",
     "Extract the September 28, 2024 value for every required field in the schema.",

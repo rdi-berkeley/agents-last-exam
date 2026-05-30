@@ -232,7 +232,6 @@ Rules:
 - The controller must expose either `build_controller()` or `SubmissionController`.
 - Use only the staged task files as your source of truth.
 - If you need Python dependencies for solving, install them yourself from `{self.runtime_env_dir}`.
-- Do not modify files under `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.
 """
 
     def to_metadata(self) -> dict[str, Any]:

@@ -179,7 +179,6 @@ Runtime guidance:
 - The staged `input/runtime_env/` folder is the agent-facing dependency manifest.
 - If you need `numpy`, `pandas`, or `pyarrow`, install them from the staged UV project rather than relying on global packages.
 - You may materialize the task-local runtime by running the canonical entry point `{self.software_dir}/bootstrap_runtime.sh`, which invokes `uv sync --project input/runtime_env` and writes the venv under `input/runtime_env/.venv`.
-- Do not modify files under `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.
 """
 
     def to_metadata(self) -> dict[str, Any]:

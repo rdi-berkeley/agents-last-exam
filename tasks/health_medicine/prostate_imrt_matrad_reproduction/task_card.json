@@ -25,21 +25,21 @@
     "matRad",
     "DVH"
   ],
-  "taskPrompt": "You are a senior medical physicist performing an independent research replanning benchmark on a fixed-field prostate IMRT reference plan using matRad (open-source treatment planning) and GNU Octave on Linux.\n\nTask directory:\n- `/media/user/data/agenthle/health_medicine/prostate_imrt_matrad_reproduction/base`\n\nVisible inputs (do not modify):\n- CT DICOM series: `input/dicom/CT`\n- Corrupted RTSTRUCT (contains 3 planted defects): `input/dicom/RTSTRUCT.dcm`\n- Prescription: `input/prescription.json`\n- Institutional DVH constraints and margin recipe: `input/institutional_constraints.md`\n- Beam geometry (7 gantry angles): `input/beam_geometry.json`\n- matRad beam model: `input/machine/benchmark_6MV.mat`\n- matRad plan template: `input/pln_template.mat`\n- Agent-facing README: `input/README_AGENT.md`\n- Repair recipe notes: `input/repair_recipes.md`\n- Submission output template: `input/submission_template`\n- File hashes: `input/manifest.json`\n- matRad/Octave launcher (preinstalled): `software/run_matrad.sh`\n\nYour task (six phases):\n1. Structure QA \u2014 identify and fix three defects planted in the supplied RTSTRUCT (clinical-rule corrections described in `input/repair_recipes.md`).\n2. Import into matRad using the shipped `input/pln_template.mat` and `input/machine/benchmark_6MV.mat` (7 coplanar 6 MV beams at {0, 51, 102, 153, 204, 255, 306}\u00b0, Engel sequencing 7 levels, RNG seed 42).\n3. Fluence optimization with Engel leaf sequencing. Naive weights violate the rectum V70Gy constraint; expect 3\u20136 weight-tuning iterations.\n4. Deterministic pencil-beam (SVDPB) dose calculation at 3 mm grid.\n5. DICOM-RT export of `RTPLAN.dcm`, `RTDOSE.dcm`, and corrected RTSTRUCT, all sharing a consistent `FrameOfReferenceUID` with the CT.\n6. Independent QA in Python \u2014 recompute DVH from the submitted RTDOSE + RTSTRUCT, render axial/sagittal/coronal isodose PNGs, and produce `report.md`, `plan_metrics.json`, `beam_summary.csv`, `decisions.md`.\n\nRequired outputs, written only under `output/`:\n- `RTPLAN.dcm`, `RTDOSE.dcm`, `RTSTRUCT_corrected.dcm`\n- `replay_state.mat` (numeric-only matRad state for independent replay)\n- `dvh_metrics.csv`, `plan_metrics.json`, `beam_summary.csv`\n- `figures/axial.png`, `figures/sagittal.png`, `figures/coronal.png` (each \u2265 800\u00d7800)\n- `report.md`, `decisions.md`\n\nRuntime guidance:\n- Invoke matRad / Octave via `software/run_matrad.sh`; the wrapper activates the pinned `rtplan-matrad` environment (GNU Octave 6.4.0, matRad commit `c014dc82`, Python 3.10 with pydicom / pymedphys / numba / numpy / scipy / matplotlib / scikit-image).\n- No network access is required after the environment is installed.\n- Do not modify files under `input/`. Write the final bundle only under `output/`.\n",
+  "taskPrompt": "You are a senior medical physicist performing an independent research replanning benchmark on a fixed-field prostate IMRT reference plan using matRad (open-source treatment planning) and GNU Octave on Linux.\n\nTask directory:\n- `base`\n\nVisible inputs (do not modify):\n- CT DICOM series: `base/input/dicom/CT`\n- Corrupted RTSTRUCT (contains 3 planted defects): `base/input/dicom/RTSTRUCT.dcm`\n- Prescription: `base/input/prescription.json`\n- Institutional DVH constraints and margin recipe: `base/input/institutional_constraints.md`\n- Beam geometry (7 gantry angles): `base/input/beam_geometry.json`\n- matRad beam model: `base/input/machine/benchmark_6MV.mat`\n- matRad plan template: `base/input/pln_template.mat`\n- Agent-facing README: `base/input/README_AGENT.md`\n- Repair recipe notes: `base/input/repair_recipes.md`\n- Submission output template: `base/input/submission_template`\n- File hashes: `base/input/manifest.json`\n- matRad/Octave launcher (preinstalled): `base/software/run_matrad.sh`\n\nYour task (six phases):\n1. Structure QA: identify and fix three defects planted in the supplied RTSTRUCT (clinical-rule corrections described in `base/input/repair_recipes.md`).\n2. Import into matRad using the shipped `base/input/pln_template.mat` and `base/input/machine/benchmark_6MV.mat` (7 coplanar 6 MV beams, Engel sequencing 7 levels, RNG seed 42).\n3. Fluence optimization with Engel leaf sequencing. Naive weights violate the rectum V70Gy constraint; expect 3-6 weight-tuning iterations.\n4. Deterministic pencil-beam (SVDPB) dose calculation at 3 mm grid.\n5. DICOM-RT export of RTPLAN.dcm, RTDOSE.dcm, and corrected RTSTRUCT, all sharing a consistent FrameOfReferenceUID.\n6. Independent QA in Python: recompute DVH from the submitted RTDOSE + RTSTRUCT, render axial/sagittal/coronal isodose PNGs, and produce `report.md`, `plan_metrics.json`, `beam_summary.csv`, `decisions.md`.\n\nRequired outputs, written only under `base/output`:\n- `RTPLAN.dcm`, `RTDOSE.dcm`, `RTSTRUCT_corrected.dcm`\n- `replay_state.mat` (numeric-only matRad state for independent replay)\n- `dvh_metrics.csv`, `plan_metrics.json`, `beam_summary.csv`\n- `figures/axial.png`, `figures/sagittal.png`, `figures/coronal.png` (each >= 800x800)\n- `report.md`, `decisions.md`\n\nRuntime guidance:\n- Invoke matRad / Octave via `base/software/run_matrad.sh`; the wrapper activates the pinned `rtplan-matrad` environment (GNU Octave 6.4.0, matRad commit `c014dc82`, Python 3.10 with pydicom / pymedphys / numba / numpy / scipy / matplotlib / scikit-image).\n- No network access is required after the environment is installed.\n- Do not modify files under `input/`. Write the final bundle only under `base/output`.\n",
   "agentMustDo": [
     "Repair the three planted RTSTRUCT defects (Rectum `RTROIInterpretedType = ORGAN`; derive `PTV_7800` by expanding the `PTV_placeholder` CTV with the institutional margin recipe; re-derive the clipped External contour from CT).",
     "Import the clinical geometry into matRad using the shipped `pln_template.mat` + `benchmark_6MV.mat` with the 7 coplanar 6 MV beams, RNG seed 42, and Engel sequencing (7 levels).",
-    "Tune fluence weights (3\u20136 iterations) so rectum V70Gy \u2264 20% and the other institutional DVH constraints are met.",
+    "Tune fluence weights (3–6 iterations) so rectum V70Gy ≤ 20% and the other institutional DVH constraints are met.",
     "Run deterministic pencil-beam (SVDPB) dose calculation at the 3 mm grid.",
     "Export `RTPLAN.dcm`, `RTDOSE.dcm`, and the corrected RTSTRUCT with consistent `FrameOfReferenceUID`, CT-aligned origin/spacing, and contour z-planes on CT slices.",
-    "Produce the independent Python QA bundle (`dvh_metrics.csv`, `plan_metrics.json`, `beam_summary.csv`, three \u2265800\u00d7800 isodose PNGs, `report.md`, `decisions.md`) plus the numeric-only `replay_state.mat` in `output/`."
+    "Produce the independent Python QA bundle (`dvh_metrics.csv`, `plan_metrics.json`, `beam_summary.csv`, three ≥800×800 isodose PNGs, `report.md`, `decisions.md`) plus the numeric-only `replay_state.mat` in `output/`."
   ],
   "inputFiles": [
     {
       "name": "dicom/CT",
       "format": "DICOM image series",
       "path": "input/dicom/CT",
-      "description": "Planning CT \u2014 90 axial slices, 3 mm spacing, 183\u00d7183 matrix."
+      "description": "Planning CT — 90 axial slices, 3 mm spacing, 183×183 matrix."
     },
     {
       "name": "dicom/RTSTRUCT.dcm",
@@ -131,7 +131,7 @@
       "name": "replay_state.mat",
       "format": "MAT-file",
       "path": "output/replay_state.mat",
-      "description": "Numeric-only matRad state so the evaluator can replay dose from saved bixel weights \u00d7 dij."
+      "description": "Numeric-only matRad state so the evaluator can replay dose from saved bixel weights × dij."
     },
     {
       "name": "dvh_metrics.csv",
@@ -155,19 +155,19 @@
       "name": "figures/axial.png",
       "format": "PNG",
       "path": "output/figures/axial.png",
-      "description": "\u2265800\u00d7800 axial isodose screenshot through isocenter."
+      "description": "≥800×800 axial isodose screenshot through isocenter."
     },
     {
       "name": "figures/sagittal.png",
       "format": "PNG",
       "path": "output/figures/sagittal.png",
-      "description": "\u2265800\u00d7800 sagittal isodose screenshot through isocenter."
+      "description": "≥800×800 sagittal isodose screenshot through isocenter."
     },
     {
       "name": "figures/coronal.png",
       "format": "PNG",
       "path": "output/figures/coronal.png",
-      "description": "\u2265800\u00d7800 coronal isodose screenshot through isocenter."
+      "description": "≥800×800 coronal isodose screenshot through isocenter."
     },
     {
       "name": "report.md",
@@ -179,10 +179,10 @@
       "name": "decisions.md",
       "format": "Markdown",
       "path": "output/decisions.md",
-      "description": "\u2264500 words documenting the three defect fixes, margin recipe, weight adjustments, and MU normalization with label-number adjacency for \u22654 numeric values."
+      "description": "≤500 words documenting the three defect fixes, margin recipe, weight adjustments, and MU normalization with label-number adjacency for ≥4 numeric values."
     }
   ],
-  "evaluation": "**Hard gate (G0, zeros the score if violated)**\n- All 10 required files present and non-empty.\n- DICOM parses; `FrameOfReferenceUID` consistent across CT/RTSTRUCT/RTDOSE/RTPLAN.\n- CT \u2194 RTDOSE origin/spacing/direction agree; contour z-planes align with CT slice planes.\n\n**Scored gates (sum to 100)**\n- **G1 \u2014 Beam geometry (6 pts):** exactly 7 beams, 6 MV, gantry angles within \u00b10.5\u00b0 of the spec.\n- **G2 \u2014 Deliverability (6 pts):** positive MU per beam, no zero-area apertures, total MU within \u00b15% of gold envelope, per-beam MU share within \u00b110%.\n- **G3 \u2014 Structure defects resolved (16 pts):** Rectum `RTROIInterpretedType = ORGAN`; derived `PTV_7800` Hausdorff \u22641 mm vs gold with volume ratio 0.85\u20131.4; External contour covers \u226595% of gold body volume.\n- **G4 \u2014 PTV coverage (14 pts):** evaluator-recomputed V95% \u226595%, V107% \u22642%, Dmax \u226483 Gy with partial credit bands.\n- **G5 \u2014 OAR sparing (26 pts):** rectum / bladder / femoral heads / bowel / penile bulb DVH limits from the institutional table, partial credit per constraint.\n- **G6 \u2014 Hidden-reference gamma (12 pts):** pymedphys 3D 3%/3 mm global gamma at 10% dose threshold against the hidden reference RTDOSE.\n- **G7 \u2014 DVH CSV honesty (4 pts):** agent CSV must match the evaluator's independent DVH recomputation within \u00b10.5 pp.\n- **G8 \u2014 Report structure (4 pts):** `report.md` sections, PNG resolutions, `beam_summary.csv` rows, `plan_metrics.json` keys.\n- **G9 \u2014 decisions.md (2 pts):** \u2264500 words, names the three defects, cites \u22654 numeric values from the submission.\n- **G10 \u2014 Replay reproducibility (10 pts):** evaluator loads `replay_state.mat` in a clean pinned Octave container, recomputes dose from saved bixel weights \u00d7 dij, and matches the submitted RTDOSE within max-dose \u00b12 Gy / mean-dose \u00b10.5 Gy.\n\n**Pass threshold:** \u226570/100 with G0 satisfied. The task-side wrapper returns `1.0` for pass and `0.0` otherwise. Measured discrimination on the staged fixtures: gold-equivalent positive scores ~85/100 (`pass=true`, returns `1.0`); realistic weak plan scores ~40/100 (`pass=false`, returns `0.0`).",
+  "evaluation": "**Hard gate (G0, zeros the score if violated)**\n- All 10 required files present and non-empty.\n- DICOM parses; `FrameOfReferenceUID` consistent across CT/RTSTRUCT/RTDOSE/RTPLAN.\n- CT ↔ RTDOSE origin/spacing/direction agree; contour z-planes align with CT slice planes.\n\n**Scored gates (sum to 100)**\n- **G1 — Beam geometry (6 pts):** exactly 7 beams, 6 MV, gantry angles within ±0.5° of the spec.\n- **G2 — Deliverability (6 pts):** positive MU per beam, no zero-area apertures, total MU within ±5% of gold envelope, per-beam MU share within ±10%.\n- **G3 — Structure defects resolved (16 pts):** Rectum `RTROIInterpretedType = ORGAN`; derived `PTV_7800` Hausdorff ≤1 mm vs gold with volume ratio 0.85–1.4; External contour covers ≥95% of gold body volume.\n- **G4 — PTV coverage (14 pts):** evaluator-recomputed V95% ≥95%, V107% ≤2%, Dmax ≤83 Gy with partial credit bands.\n- **G5 — OAR sparing (26 pts):** rectum / bladder / femoral heads / bowel / penile bulb DVH limits from the institutional table, partial credit per constraint.\n- **G6 — Hidden-reference gamma (12 pts):** pymedphys 3D 3%/3 mm global gamma at 10% dose threshold against the hidden reference RTDOSE.\n- **G7 — DVH CSV honesty (4 pts):** agent CSV must match the evaluator's independent DVH recomputation within ±0.5 pp.\n- **G8 — Report structure (4 pts):** `report.md` sections, PNG resolutions, `beam_summary.csv` rows, `plan_metrics.json` keys.\n- **G9 — decisions.md (2 pts):** ≤500 words, names the three defects, cites ≥4 numeric values from the submission.\n- **G10 — Replay reproducibility (10 pts):** evaluator loads `replay_state.mat` in a clean pinned Octave container, recomputes dose from saved bixel weights × dij, and matches the submitted RTDOSE within max-dose ±2 Gy / mean-dose ±0.5 Gy.\n\n**Pass threshold:** ≥70/100 with G0 satisfied. The task-side wrapper returns `1.0` for pass and `0.0` otherwise. Measured discrimination on the staged fixtures: gold-equivalent positive scores ~85/100 (`pass=true`, returns `1.0`); realistic weak plan scores ~40/100 (`pass=false`, returns `0.0`).",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",

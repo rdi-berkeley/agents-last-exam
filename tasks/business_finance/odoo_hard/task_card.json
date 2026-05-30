@@ -1,0 +1,81 @@
+{
+  "taskId": "business_finance/odoo_hard",
+  "title": "Odoo End-to-End Verifiable Supply-Chain Workflow (Hard Variant)",
+  "summary": "Execute a full end-to-end Odoo workflow — Sales, Purchase, Inventory, 2-level Manufacturing, Subcontracting, Landed Cost, Invoicing / Accounting, Expenses, and a mandatory return / credit note — inside a fresh `odoo_hard` database, leaving the final business state verifiable in PostgreSQL with all key documents tagged `odoo_hard`.",
+  "category": "business_finance",
+  "software": [
+    "Odoo",
+    "PostgreSQL"
+  ],
+  "taskPrompt": "\nGoal:\nComplete an end-to-end Odoo workflow that spans Sales, Purchase, Inventory, Manufacturing (2-level), Subcontracting,\nLanded Costs, Invoicing/Accounting, and Expenses. All documents must be traceable and verifiable.\n\nInputs / Environment:\n- Odoo Web URL will be opened automatically.\n- A fresh database named \"odoo_hard\" will be created at task start\".\n- You must work ONLY inside database \"odoo_hard\".\n- Use the run tag \"odoo_hard\" in a searchable field (Reference / Notes / Customer Ref / Vendor Ref) for EVERY key document.\n- Use the existing warehouses:\n  - Inbound warehouse: code \"WH\"  (stock location tree rooted at \"WH/Stock\")\n  - Production & Shipping warehouse: code \"My Co\" (rooted at \"My Co/Stock\")\n\nRequired workflow (must be completed in order):\n1) Global config (in \"odoo_hard\"):\n   - Company currency USD; enable EUR and CNY; lock FX rates:\n       1 EUR = 1.20 USD; 1 CNY = 0.125 USD\n   - Inventory valuation for stockable items: FIFO + Automated valuation\n   - Warehouse routes/steps:\n       - \"WH\": 2-step receipts (Vendors -> Input -> Stock)\n       - \"My Co\": 3-step delivery (Pick -> Pack -> Ship)\n\n2) Master data (exact codes):\n   Partners:\n     - Customer: CUST-EU01 Berlin Robotics GmbH (EUR)\n     - Vendors: V-CN01 Shenzhen Metals (CNY), V-US01 ChipWorld (USD),\n               V-US02 SensorCore (USD), V-SUB01 CalibrateLab (USD subcontractor),\n               V-DS01 DropShipHub (USD dropship)\n   Products:\n     - FP-1000 Smart Sensor Kit (Stockable; MTO+Manufacture; Serial)\n     - SA-200 Control Board (Stockable; Manufacture)\n     - SC-300 Calibrated Sensor (Stockable; Subcontract; Serial)\n     - RM-010 Aluminum Case (Buy; 96 CNY)\n     - RM-020 PCB Blank (Buy; 64 CNY)\n     - RM-030 Microcontroller (Buy; 20 USD)\n     - RM-040 Sensor Core (Buy; 7 USD; supplied to subcontractor)\n     - ACC-900 Power Adapter (Stockable; Dropship; Sale 30 EUR; Buy 10 USD)\n     - FREIGHT-100 International Freight (Service; used as Landed Cost line; 100 USD)\n   BoMs + operations:\n     - FP-1000 BoM: SA-200×1, SC-300×1, RM-010×2; Assembly 15min @ 40 USD/hour\n     - SA-200 BoM: RM-020×1, RM-030×1; SMT 30min @ 60 USD/hour\n     - SC-300 Subcontract BoM: RM-040×1 supplied; subcontract fee 25 USD/unit\n\n3) Sales:\n   - Create an EUR pricelist: FP-1000=200 EUR, ACC-900=30 EUR\n   - Create SO for FP-1000×3 and ACC-900×3; include tag \"odoo_hard\" in SO reference/notes; Confirm.\n   - Confirm must trigger: FP-1000 via MTO->Manufacture, ACC-900 via Dropship.\n\n4) Purchases:\n   Create & confirm these POs (all must include tag \"odoo_hard\" in a searchable field):\n   - PO-CN-001 (CNY): RM-010×10 @96; RM-020×10 @64\n   - PO-US-001 (USD): RM-030×3 @20   (intentionally short; needed for later shortage)\n   - PO-US-002 (USD): RM-040×5 @7\n   - PO-SUB-001 (USD): SC-300×3 @25 (subcontract fee)\n   - PO-DS-001 (USD): ACC-900×3 @10 (Dropship)\n\n5) Inbound receiving + Landed Cost (must include tag \"odoo_hard\" in Landed Cost name/description):\n   - Receive PO-CN-001 into warehouse \"WH\" using 2-step receipts.\n   - Create one Landed Cost record for the PO-CN receipt:\n       Cost line: FREIGHT-100 = 100 USD\n       Split method: By Current Cost\n   - Validate Landed Cost.\n   - Complete WH/Input -> WH/Stock transfer.\n   - Transfer RM-010 and RM-020 from WH warehouse to \"My Co\" warehouse (internal transfer done).\n\n6) Subcontracting:\n   - Ensure RM-040 is received and transferred to \"My Co\" warehouse.\n   - Resupply subcontractor with RM-040×3 (done).\n   - Receive SC-300×3; assign serials: CS-0001, CS-0002, CS-0003.\n\n7) Manufacturing (2-level) + mandatory shortage recovery:\n   - Produce SA-200×3 in \"My Co\" warehouse using SMT operation.\n   - During SA production, scrap RM-030 qty 1 (done) causing shortage.\n   - Resolve shortage by creating an extra PO for RM-030×1 (must include tag \"odoo_hard\"), receive it and transfer to \"My Co\",\n     then finish SA-200×3.\n   - Produce FP-1000×3 using Assembly operation; assign serials: SSK-0001, SSK-0002, SSK-0003.\n\n8) Delivery (from \"My Co\" using 3-step delivery):\n   - Partially deliver FP-1000: ship 2 units first (SSK-0001, SSK-0002), generate backorder for 1.\n   - Deliver the backorder 1 unit (SSK-0003).\n   - ACC-900 must be delivered via Dropship (vendor -> customer).\n\n9) Invoicing & payments (EUR, invoice on delivered quantities):\n   - After first delivery: create/post invoice #1 total 460 EUR; register payment to Paid.\n   - After second delivery: create/post invoice #2 total 230 EUR; register payment to Paid.\n\n10) Vendor bills:\n   - Create/post vendor bills for all POs + freight; pay/reconcile.\n\n11) Expenses:\n   - Create analytic account: AN-odoo_hard\n   - Create expense: \"Travel to Berlin\" 123.45 USD, linked to AN-odoo_hard\n   - Submit -> Approve -> Post -> Pay\n\n12) Mandatory return/refund:\n- Return serial SSK-0002 back into STOCK of warehouse \"My Co\".\n- Create/post a credit note for 200 EUR (FP only) and mark it paid.\n\nOutput (what to submit for full credit):\nSave these files into: base\\output\n1) lc_split.png       - Screenshot showing Landed Cost allocation\n2) invoices.png       - Screenshot showing two PAID customer invoices\n3) return_credit.png  - Screenshot showing return of SSK-0002 AND paid credit note\n4) stock_wh.png       - Screenshot showing warehouse on-hand distribution:\n                        WH: RM-010=0 and RM-020=0\n                        My Co: RM-010=4 and RM-020=7\n5) submission.txt     - A short text file listing the key document numbers you created (SO/POs/MOs/Invoices/Credit Note/Landed Cost)\n                        and confirming you used tag \"odoo_hard\" everywhere.\n\nVerification:\nThe task is considered successful if the workflow is completed exactly as specified and the required output files are present and consistent with the final expected business state. The odoo_hard database must contain all the expected documents with the run tag \"odoo_hard\" in searchable fields, and the screenshots must match the expected states.\n",
+  "agentMustDo": [
+    "Work exclusively inside the fresh `odoo_hard` database; stamp the run tag `odoo_hard` into Reference / Notes / Customer Ref / Vendor Ref on every key document.",
+    "Execute the full ordered workflow: global config, master data, EUR sale, tagged POs, landed cost, subcontracting, 2-level manufacturing with shortage recovery, 3-step delivery + dropship, EUR invoicing, vendor bill reconciliation, analytic expense, and the `SSK-0002` return + `200 EUR` credit note.",
+    "Leave the business state exactly as required: landed-cost split `60 / 40`, paid invoices `460 EUR` + `230 EUR`, posted `200 EUR` credit note, serials `SSK-0001..0003` and `CS-0001..0003`, `SSK-0002` returned into `My Co`, warehouse balances `WH: RM-010=0, RM-020=0` / `My Co: RM-010=4, RM-020=7`.",
+    "Save `lc_split.png`, `invoices.png`, `return_credit.png`, `stock_wh.png`, and `submission.txt` into `output/`."
+  ],
+  "inputFiles": [],
+  "referenceFiles": [
+    {
+      "name": "lc_split.png",
+      "format": "png",
+      "path": "output/lc_split.png",
+      "description": "Landed-cost allocation screen showing `RM-010 = 60.00` and `RM-020 = 40.00`."
+    },
+    {
+      "name": "invoices.png",
+      "format": "png",
+      "path": "output/invoices.png",
+      "description": "Paid customer invoices totalling `460 EUR` and `230 EUR`."
+    },
+    {
+      "name": "return_credit.png",
+      "format": "png",
+      "path": "output/return_credit.png",
+      "description": "Return of serial `SSK-0002` back into `My Co` plus the posted and paid `200 EUR` credit note."
+    },
+    {
+      "name": "stock_wh.png",
+      "format": "png",
+      "path": "output/stock_wh.png",
+      "description": "Warehouse inventory page showing `WH: RM-010=0, RM-020=0` and `My Co: RM-010=4, RM-020=7`."
+    },
+    {
+      "name": "submission.txt",
+      "format": "txt",
+      "path": "output/submission.txt",
+      "description": "Short operator note listing the key document numbers (SO / POs / MOs / Invoices / Credit Note / Landed Cost) and confirming the run tag."
+    }
+  ],
+  "evaluation": "Evaluator inspects the `odoo_hard` PostgreSQL database directly. Hard gates (force score 0.0): variant DB unreachable via `psql`; required Odoo tables missing; no run-tagged business evidence on SO / MO / stock-move / landed-cost records. Once gates pass, the score is the fraction of weighted SQL checks satisfied: landed-cost split `60 / 40`, paid vendor bill for freight, tagged SO for `FP-1000 × 3 + ACC-900 × 3` in `sale`, dropship delivery for `ACC-900`, completed MOs for `SA-200` and `FP-1000`, paid customer invoices `460 EUR` + `230 EUR`, paid credit note `200 EUR`, ≥ 6 paid vendor bills, serial cohorts `SSK-0001..3` / `CS-0001..3`, final balances `My Co RM-010=4 / RM-020=7 / FP-1000=1`, scrap + extra tagged PO for `RM-030`, and one tagged analytic-expense line. Final score = passed_checks / total_checks; full credit additionally requires the five evidence files in `output/`.",
+  "evaluatorCredentials": [
+    {
+      "type": "openai_api_key",
+      "file": "openai.env",
+      "purpose": "OpenAI vision/LLM judge scores the deliverable during evaluate(); sourced from secret/eval_time/openai.env"
+    }
+  ],
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-license",
+    "timeout": 10800
+  },
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.8",
+    "subdomain_code": "supply_chain",
+    "subdomain_name": "Supply Chain & Logistics",
+    "classifier": {
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "6",
+        "domain_code": "business_finance",
+        "subdomain_id": "6.1",
+        "subdomain_code": "accounting",
+        "subdomain_name": "Accounting & Finance"
+      }
+    }
+  }
+}

@@ -8,7 +8,7 @@
     "uv",
     "SimGlucose 0.2.11"
   ],
-  "taskPrompt": "You are working on a Linux VM to implement a meal-unannounced basal-only glucose controller in SimGlucose. Read the staged public task package under input/public/ to learn the observation/action contract and required submission format. Install the staged task runtime from input/runtime_env/ if needed. Write submission/controller.py and submission/metadata.json under the runtime output/ directory.",
+  "taskPrompt": "You are working on a Linux VM to implement a meal-unannounced basal-only glucose controller in SimGlucose.\n\nVisible task files:\n- Task brief: `base/input/public/task.md`\n- Controller API: `base/input/public/task_api.py`\n- Submission format: `base/input/public/submission_format.md`\n- Public evaluator: `base/input/public/evaluate_public.py`\n- Agent runtime manifest: `base/input/runtime_env/pyproject.toml`\n- Agent runtime lockfile: `base/input/runtime_env/uv.lock`\n\nWrite your submission under `base/output/submission`.\nRequired files:\n- `base/output/submission/controller.py`\n- `base/output/submission/metadata.json`\n\nOptional supporting files:\n- `base/output/submission/report.md`\n- `base/output/submission/assets/...`\n- `base/output/submission/training_code/...`\n\nRules:\n- Follow the public observation/action contract exactly.\n- The controller must expose either `build_controller()` or `SubmissionController`.\n- Use only the staged task files as your source of truth.\n- If you need Python dependencies for solving, install them yourself from `base/input/runtime_env`.\n",
   "agentMustDo": [
     "Read the staged public task package under input/public/ including the observation/action contract and submission format",
     "Implement submission/controller.py exposing build_controller() or SubmissionController",
@@ -64,24 +64,19 @@
   "taxonomy": {
     "domain_id": "4",
     "domain_code": "health_medicine",
-    "subdomain_id": "4.3",
-    "subdomain_code": "clinical_informatics",
-    "subdomain_name": "Clinical Informatics & Care Operations",
+    "subdomain_id": "4.2",
+    "subdomain_code": "therapeutic_oncology",
+    "subdomain_name": "Therapeutic & Oncology Services",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:43:34.325991Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/health_medicine/simglucose_safe_basal_control_instance_1/task_card.json"
-      },
-      "rationale": "The task involves implementing a glucose controller, which relates to clinical informatics in health and medicine."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "4",
+        "domain_code": "health_medicine",
+        "subdomain_id": "4.3",
+        "subdomain_code": "clinical_informatics",
+        "subdomain_name": "Clinical Informatics & Care Operations"
+      }
     }
   }
 }

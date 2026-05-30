@@ -1,5 +1,4 @@
 visual_media/uv_reproduction
-visual_media/video_reconstruction
 business_finance/ar_full_1500
 visual_media/project_migration
 life_sciences/zdock_hiv_dimer_interface_scoring_v1

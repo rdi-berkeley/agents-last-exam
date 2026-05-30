@@ -6,7 +6,7 @@
   "software": [
     "Inkscape"
   ],
-  "taskPrompt": "You are using Inkscape on Windows to design a cultural exhibition poster.\n\nRead:\n- `E:\\agenthle\\visual_media\\inkscape_cultural_poster_design\\base\\input\\design_brief.txt`\n- `E:\\agenthle\\visual_media\\inkscape_cultural_poster_design\\base\\input\\instance_spec.txt` (GBK/GB18030 encoded Chinese)\n- `E:\\agenthle\\visual_media\\inkscape_cultural_poster_design\\base\\input\\installation_photo_01.jpg`\n\nCreate the poster in Inkscape and save the final SVG exactly to:\n- `E:\\agenthle\\visual_media\\inkscape_cultural_poster_design\\base\\output\\poster.svg`\n\nNotes:\n- Use Inkscape rather than generic image-generation tools.\n- Preserve the source photo's aspect ratio when you place it.\n- The current evaluator only checks a stable automated subset of the full rubric.\n",
+  "taskPrompt": "You are using Inkscape on Windows to design a cultural exhibition poster.\n\nRead:\n- `base\\input\\design_brief.txt`\n- `base\\input\\instance_spec.txt` (GBK/GB18030 encoded Chinese)\n- `base\\input\\installation_photo_01.jpg`\n\nCreate the poster in Inkscape and save the final SVG exactly to:\n- `base\\output\\poster.svg`\n\nNotes:\n- Use Inkscape rather than generic image-generation tools.\n- Preserve the source photo's aspect ratio when you place it.\n- The current evaluator only checks a stable automated subset of the full rubric.\n",
   "agentMustDo": [
     "Read the staged design brief, instance specification, and installation photo from `input/`.",
     "Use Inkscape on Windows to design a single-page cultural exhibition poster.",

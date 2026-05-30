@@ -151,7 +151,6 @@ Task constraints:
 - `disagreement_type` must be `box_disagreement`
 - `final_finding_label` must be `Atelectasis`
 - `final_impression_label` must be `positive_for_atelectasis`
-- Do not modify `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`
 """
 
     def to_metadata(self) -> dict[str, Any]:

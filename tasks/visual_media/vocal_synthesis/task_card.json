@@ -1,0 +1,75 @@
+{
+  "taskId": "visual_media/vocal_synthesis",
+  "title": "vocal_synthesis",
+  "summary": "Synthesize a new vocal performance that matches the reference melody, lyrics, rhythm, and timbre profile.",
+  "category": "visual_media",
+  "software": [],
+  "taskPrompt": "Goal: Act as a human vocal tuner in ACE Studio. You will reproduce the dry vocal from a source audio by manually selecting voice presets, entering notes and lyrics, and adjusting synthesis parameters (pitch bend, vibrato, breath, dynamics, tension, gender, etc.).\n\nThis is NOT voice cloning — you must tune the synthesizer by hand, the same way a human vocal tuner would. The source audio may include effects (reverb, delay, EQ, etc.); you must listen through the effects and reproduce only the underlying dry vocal. Do NOT add any effects to your output.\n\n## Instructions\n\n1. Listen to the source vocal at: hbc\\input\\source_vocal.wav\n   Identify the melody, lyrics, rhythm, and vocal timbre characteristics. Note: the source audio may contain multiple vocals (e.g., main vocal and harmonies, or different singers), and even a single singer may use different timbres across sections (e.g., soft/falsetto vs. powerful/chest voice). You must identify all distinct voices and timbre variations, using separate tracks with appropriate voice presets as needed to reproduce them all.\n2. Open ACE Studio and create a new blank project.\n3. Select an appropriate voice preset from the built-in voice library that best matches the source vocal's timbre.\n4. Enter the melody as MIDI notes in the piano roll, matching pitch and timing from the source.\n5. Input the lyrics aligned to the corresponding notes.\n6. Adjust vocal parameters — pitch bend curves, vibrato, breath, dynamics, tension, gender, etc. — to match the nuances of the source vocal.\n7. Render/export the project as dry vocal (no effects) to: hbc\\output\\reproduced_vocal.wav\n8. Take a screenshot of the ACE Studio project window showing the piano roll with notes and lyrics visible, and save it as: hbc\\output\\overview.png\n\n## Output files (saved to hbc\\output):\n- reproduced_vocal.wav: Your render — the reproduced dry vocal (no effects).\n- overview.png: Screenshot of the ACE Studio project with piano roll and notes visible.\n\nExport as WAV at 44100 Hz or 48000 Hz sample rate for best evaluation accuracy.\n\n## Evaluation:\n- Scored by comparing reproduced_vocal.wav against a ground-truth render (Mel-Spectrogram MSE).\n- The WAV file must exist, be >= 50 KB, and be non-silent.\n- overview.png must show the ACE Studio project with piano roll and notes visible.",
+  "agentMustDo": [
+    "Listen to `source_vocal.wav` to identify the melody, lyrics, rhythm, and vocal timbre characteristics.",
+    "Open ACE Studio on the VM and create a new blank project.",
+    "Select an appropriate voice preset from the built-in voice library that best matches the source vocal's timbre.",
+    "Enter the melody as MIDI notes in the piano roll, matching pitch and timing from the source.",
+    "Input the lyrics aligned to the corresponding notes.",
+    "Adjust vocal parameters — pitch bend curves, vibrato, breath, dynamics, tension, gender, etc. — to match the nuances of the source vocal.",
+    "Render/export the project as dry vocal (no effects) to `output/reproduced_vocal.wav`.",
+    "Take a screenshot of the ACE Studio project window showing the piano roll with notes and lyrics visible, and save it as `output/overview.png`."
+  ],
+  "inputFiles": [
+    {
+      "name": "Source vocal",
+      "format": "`.wav`",
+      "path": "input/source_vocal.wav",
+      "description": "Vocal audio of a virtual singer, potentially with effects (reverb, delay, EQ, etc.). The agent must listen through the effects and reproduce the underlying dry vocal by tuning ACE Studio."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Reproduced vocal",
+      "format": "`.wav`",
+      "path": "output/reproduced_vocal.wav",
+      "description": "Agent's dry vocal render, no effects (gate: must exist, >= 50 KB, non-silent)"
+    },
+    {
+      "name": "Screenshot",
+      "format": "`.png`",
+      "path": "output/overview.png",
+      "description": "ACE Studio project with piano roll and notes visible (gate: VLM check)"
+    }
+  ],
+  "evaluation": "### Hard gate conditions (auto score=0 if triggered):\n\n- Gate 1: `reproduced_vocal.wav` missing, < 50 KB, or silent (RMS <= -60 dB) → score = 0\n- Gate 2: `overview.png` missing or does not show ACE Studio project with piano roll and notes (VLM judge, YES/NO) → score = 0\n\n### Scoring method (gate passes → Mel-Spectrogram MSE):\n\n| Metric | Method | Comparison |\n|---|---|---|\n| Reproduction quality | Mel-Spectrogram MSE → [0, 1] | `output/reproduced_vocal.wav` vs. `reference/reproduced_vocal_ground_truth.wav` |\n\n**MSE-to-score mapping:** `score = 1 / (1 + alpha * mse²)` where `alpha = 0.002105`. This inverse quadratic mapping is tolerant of small tuning differences (high scores) while penalizing large divergences like effects or wrong songs (low scores).\n\n**What does a PERFECT output look like?**\n- Rendered vocal closely matches the ground truth — same melody, timing, timbre, and expressive details (vibrato, breath, dynamics) → Mel MSE near 0 → score ~ 1.0\n\n**What does a WRONG/empty output look like?**\n- Missing WAV file → gate failure → score = 0.0\n- Wrong voice preset, incorrect melody, flat/robotic delivery → high Mel MSE → score < 0.1",
+  "evaluatorCredentials": [
+    {
+      "type": "openai_api_key",
+      "file": "openai.env",
+      "purpose": "OpenAI vision/LLM judge scores the deliverable during evaluate(); sourced from secret/eval_time/openai.env"
+    }
+  ],
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.4",
+    "subdomain_code": "audio_music",
+    "subdomain_name": "Audio, Music & Post-Production Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:01:23.844291Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/vocal_synthesis/task_card.json"
+      },
+      "rationale": "The task involves synthesizing vocal performances, which fits within audio and music production."
+    }
+  }
+}

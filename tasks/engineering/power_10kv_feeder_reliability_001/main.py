@@ -162,7 +162,6 @@ Compute the feeder reliability indices and the section-level contribution tables
   `feeder, N_T, SAIFI_F, SAIDI_F_h, SAIDI_F_min, SAIFI_D, SAIDI_D_h, SAIDI_D_min, SAIFI_S, SAIDI_S_h, SAIDI_S_min, SAIFI, SAIDI_h, SAIDI_min, CAIDI_h, CAIDI_min, ASAI, fault_rows, device_fault_rows, scheduled_rows`
 - Keep the section tables in the JSON output.
 - Do not write any extra files into `{self.remote_output_dir}`.
-- Do not modify `reference/`, `output_test_pos/`, or `output_test_neg/`.
 
 ## Practical Note
 The task is designed for Python-based network analysis and data processing. If you need additional Python packages, install them from the staged manifests under `input/` using `uv`.

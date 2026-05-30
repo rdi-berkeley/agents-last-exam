@@ -26,14 +26,16 @@ class TaskConfig(GeneralTaskConfig):
     @property
     def task_description(self) -> str:
         return f"""
-Goal: Launch Magic Tower and navigate to the 3rd floor.
-1. Open `{self.game_url}` in Ruffle yourself — e.g. double-click the file in Explorer, or run `Start-Process '{self.game_url}'` in PowerShell.
-2. Wait for the game to load and enter the game.
-3. Navigate to the 3rd floor.
+Context: A small game studio plans to re-implement the legacy Flash dungeon-crawler Magic Tower (mota-24) on a modern stack. Before any port code is written, the porting workflow needs a clean set of per-floor reference screenshots from the original build — these will be the visual ground truth downstream engineers diff against while re-creating tile maps, HUD, and per-floor enemy/item placement.
 
-Verification:
-1. When you reach each new floor, take a screenshot and save it to "{self.remote_output_dir}\\$FLOOR_NUMBER$.png", where $FLOOR_NUMBER$ is the floor number you reached.
-2. The task is successful if the screenshot files exist and demonstrate the floor you reached.
+You are doing the reference-capture pass for floors 1–3.
+
+Steps:
+1. Open `{self.game_url}` in Ruffle yourself — e.g. double-click the file in Explorer, or run `Start-Process '{self.game_url}'` in PowerShell. Wait for the title / loading screens and enter the actual game world.
+2. Play forward through floors 1 → 3 using normal movement and interaction. No cheats and no save-state hacks — this is what a porting engineer would do to surface each floor honestly.
+3. On arrival at each new floor, capture a full-window screenshot of the game and save it to "{self.remote_output_dir}\\$FLOOR_NUMBER$.png", where $FLOOR_NUMBER$ is the integer floor index (1.png, 2.png, 3.png).
+
+Acceptance: one PNG per floor reached, named by floor number, depicting the correct floor — each capture will be diffed against a held-out reference frame of the same floor from the original build.
 """
 
     def to_metadata(self) -> dict:

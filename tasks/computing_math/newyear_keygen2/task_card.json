@@ -6,7 +6,7 @@
   "software": [
     "Python"
   ],
-  "taskPrompt": "Provided UID:\n- `20252025`\n\nGoal:\nReverse the bundled Windows crackme and compute the correct password for the provided UID.\n\nInputs:\n- Executable to analyze: C:\\Users\\User\\Desktop\\computing_math\\newyear_keygen2\\base\\input\\crackme.exe\n\nOutput:\n- Save EXACTLY one UTF-8 text file to: C:\\Users\\User\\Desktop\\computing_math\\newyear_keygen2\\base\\output\\key.txt\n- The file must contain exactly one line in the form `flag{...}`\n- Do not add commentary, labels, or extra blank lines\n\nImportant:\n- The valid password depends on the current UTC time.\n- Use the most recent UTC half-hour boundary, i.e. the current UTC timestamp rounded down to a multiple of 1800 seconds.\n\nVerification:\n- Score is 1.0 only if the output matches the password for this UID using the evaluation-time UTC half-hour slot.",
+  "taskPrompt": "Provided UID:\n- `20252025`\n\nGoal:\nReverse the bundled Windows crackme and compute the correct password for the provided UID.\n\nInputs:\n- Executable to analyze: base\\input\\crackme.exe\n\nOutput:\n- Save EXACTLY one UTF-8 text file to: base\\output\\key.txt\n- The file must contain exactly one line in the form `flag{...}`\n- Do not add commentary, labels, or extra blank lines\n\nImportant:\n- The valid password depends on the current UTC time.\n- Use the most recent UTC half-hour boundary, i.e. the current UTC timestamp rounded down to a multiple of 1800 seconds.\n\nVerification:\n- Score is 1.0 only if the output matches the password for this UID using the evaluation-time UTC half-hour slot.",
   "agentMustDo": [
     "Reverse the bundled crackme.",
     "Use the provided UID `20252025`.",

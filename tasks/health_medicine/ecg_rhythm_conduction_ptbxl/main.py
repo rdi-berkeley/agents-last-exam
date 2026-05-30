@@ -131,7 +131,6 @@ Build a multilabel classifier for rhythm and conduction findings from the staged
 ## Important Constraints
 - Treat this as a multilabel problem; labels are not guaranteed to be mutually exclusive
 - Use the staged task files as the source of truth for row set and schema
-- Do not modify evaluator-owned directories such as `reference/`, `output_test_pos/`, or `output_test_neg/`
 """
 
     def to_metadata(self) -> dict[str, Any]:

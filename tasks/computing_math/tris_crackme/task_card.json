@@ -6,7 +6,7 @@
   "software": [
     "Python"
   ],
-  "taskPrompt": "Goal:\nSolve the registration crackme and make the bundled Windows program appear registered.\n\nTarget program:\n- Executable: C:\\Users\\User\\Desktop\\computing_math\\tris_crackme\\base\\input\\tris.exe\n\nRequirements:\n1. Launch and analyze the program if needed.\n2. Make the registration succeed. You can use any method to achieve this, such as reverse engineering, patching, or registry manipulation. Make sure that after restarting the program, it still shows as registered.\n\nVerification:\n- Score is 1.0 only if the program shows as registered when launched.",
+  "taskPrompt": "Goal:\nSolve the registration crackme and make the bundled Windows program appear registered.\n\nTarget program:\n- Executable: base\\input\\tris.exe\n\nRequirements:\n1. Launch and analyze the program if needed.\n2. Make the registration succeed. You can use any method to achieve this, such as reverse engineering, patching, or registry manipulation. Make sure that after restarting the program, it still shows as registered.\n\nVerification:\n- Score is 1.0 only if the program shows as registered when launched.",
   "agentMustDo": [
     "Reverse the bundled registration crackme.",
     "Make the program appear registered, typically by writing the correct registry values.",

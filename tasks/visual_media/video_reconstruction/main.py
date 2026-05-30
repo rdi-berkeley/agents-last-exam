@@ -28,7 +28,9 @@ TASK_NAME_CONST = "video_reconstruction"
 REMOTE_ROOT_DIR = os.environ.get("IF_REMOTE_ROOT_DIR", r"E:\agenthle")
 PROJECT_FILE_NAME = "blank.drp"
 OUTPUT_VIDEO_NAME = os.environ.get("TARGET_VIDEO_NAME", "output-test.mp4")
-EVAL_MODEL = os.environ.get("GEMINI_EVAL_MODEL", "gemini-3-pro-preview")
+# Do not pin a preview build that Google will retire: `gemini-3-pro-preview`
+# started returning 404 NOT_FOUND and silently zeroed every run. Override via env.
+EVAL_MODEL = os.environ.get("GEMINI_EVAL_MODEL", "gemini-3.1-pro-preview")
 EVAL_THRESHOLD = 0.75
 EVAL_AUTH_MODE = os.environ.get("GEMINI_AUTH_MODE", "auto")
 EVAL_REPEATS = int(os.environ.get("GEMINI_EVAL_REPEATS", "3"))
@@ -424,13 +426,18 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             auth_mode=eval_auth_mode,
         )
         parsed = result.get("parsed") if isinstance(result, dict) else None
+        gemini_ok = bool(result.get("ok")) if isinstance(result, dict) else False
         score = float(parsed.get("final_score", 0.0) or 0.0) if isinstance(parsed, dict) else 0.0
         score = max(0.0, min(1.0, score))
-        scores.append(score)
+        # Only count attempts where the judge actually returned a parsed verdict.
+        # A failed judge call (retired model / auth / truncated JSON) must NOT be
+        # averaged in as a 0 — that silently turns a judge outage into a fake low score.
+        if gemini_ok and isinstance(parsed, dict):
+            scores.append(score)
         attempts.append(
             {
                 "attempt_index": idx,
-                "gemini_ok": result.get("ok") if isinstance(result, dict) else False,
+                "gemini_ok": gemini_ok,
                 "gemini_error": (
                     result.get("error") if isinstance(result, dict) else "unknown_error"
                 ),
@@ -444,7 +451,30 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             }
         )
 
-    final_score = sum(scores) / len(scores) if scores else 0.0
+    # Hard-fail (do NOT record 0.0) when the judge itself never succeeded. A
+    # retired model, missing credential, or truncated/invalid JSON must surface
+    # as an evaluation error so the run is retried/flagged — not silently scored
+    # 0 for every submission (which masked both a broken judge and an answer leak).
+    if not scores:
+        gemini_errors = [a.get("gemini_error") for a in attempts]
+        _save_report(
+            {
+                "variant_name": task_tag,
+                "error": "gemini_judge_failed_all_attempts",
+                "gemini_errors": gemini_errors,
+                "output_video": output_video,
+                "eval_video_path": eval_video_path,
+                "duration_sec": duration_sec,
+                "final_score": None,
+                "pass": False,
+            }
+        )
+        raise RuntimeError(
+            f"Gemini judge failed on all {len(attempts)} attempt(s); refusing to "
+            f"score as 0.0. Errors: {gemini_errors}"
+        )
+
+    final_score = sum(scores) / len(scores)
     final_score = max(0.0, min(1.0, final_score))
 
     passed = bool(final_score >= eval_threshold)

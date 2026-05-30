@@ -1,0 +1,50 @@
+{
+  "timestamp_utc": "2026-05-18T22:24:52Z",
+  "agent": {
+    "id": "cc_sonnet",
+    "class": "claude_code",
+    "name": "claude-code",
+    "version": "@anthropic-ai/claude-code@2.1.85",
+    "model": "anthropic/claude-sonnet-4-6",
+    "runtime": "vm",
+    "config_repr": {
+      "model": "anthropic/claude-sonnet-4-6",
+      "max_turns": 20,
+      "timeout_s": 900,
+      "dangerously_skip_permissions": true
+    }
+  },
+  "task": {
+    "slug": "demo__demo_desktop_note_linux",
+    "path": "tasks/demo/demo_desktop_note_linux",
+    "variant_index": 0
+  },
+  "status": "failed",
+  "score": 0.0,
+  "termination": {
+    "reason": "failed",
+    "phase": "agent_run",
+    "category": null,
+    "error": {
+      "type": "Exception",
+      "message": "agent failed (rc=1) | LLM auth failed (check api keys)",
+      "traceback": "agent failed (rc=1) | LLM auth failed (check api keys)"
+    }
+  },
+  "timings": {
+    "duration_s": 425.63
+  },
+  "usage": {
+    "total_steps": 2,
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "total_cache_read_tokens": 0,
+    "total_cache_creation_tokens": 0,
+    "total_cost_usd": 0.0,
+    "total_duration_ms": 425631,
+    "reward": 0.0,
+    "status": "failed"
+  },
+  "schema_version": 2,
+  "run_id": "cc_sonnet__anthropic-claude-sonnet-4-6__demo__demo_desktop_note_linux__v0__20260518_221746"
+}

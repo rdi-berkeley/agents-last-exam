@@ -1,0 +1,88 @@
+{
+  "taskId": "visual_media/poster",
+  "title": "Poster",
+  "summary": "Rebuild the staged poster faithfully from the source image and deliver the required editable design output.",
+  "category": "visual_media",
+  "software": [
+    "PowerPoint"
+  ],
+  "taskPrompt": "You are a graphic designer.\n\n## Your Task\n1. Inspect the poster image at `text_only\\input\\original_poster.png`.\n2. Read the edit request at `text_only\\input\\edit_request.txt`.\n3. Recreate the poster as faithfully as possible.\n4. Apply the requested edits while preserving unrelated content.\n5. Export the final PNG to `text_only\\output\\edited_poster.png`.\n\n## Input Files\n- Reference poster: `text_only\\input\\original_poster.png`\n- Edit request: `text_only\\input\\edit_request.txt`\n- Optional assets directory: `text_only\\input\\assets`\n\n## Output\n- Save the final image exactly to `text_only\\output\\edited_poster.png`\n\n## Notes\n- Use any suitable tool available on the VM.\n- Keep the output resolution comparable to the original poster.\n- Preserve content that is not mentioned in the edit request.",
+  "agentMustDo": [
+    "Inspect the poster image at `E:\\agenthle\\visual_media\\poster\\text_only\\input\\original_poster.png`.",
+    "Read the edit request at `E:\\agenthle\\visual_media\\poster\\text_only\\input\\edit_request.txt`.",
+    "Recreate the poster as faithfully as possible.",
+    "Apply the requested edits while preserving unrelated content.",
+    "Export the final PNG to `E:\\agenthle\\visual_media\\poster\\text_only\\output\\edited_poster.png`.",
+    "Reference poster: `E:\\agenthle\\visual_media\\poster\\text_only\\input\\original_poster.png`",
+    "Edit request: `E:\\agenthle\\visual_media\\poster\\text_only\\input\\edit_request.txt`",
+    "Optional assets directory: `E:\\agenthle\\visual_media\\poster\\text_only\\input\\assets`",
+    "Save the final image exactly to `E:\\agenthle\\visual_media\\poster\\text_only\\output\\edited_poster.png`",
+    "Use any suitable tool available on the VM.",
+    "Keep the output resolution comparable to the original poster.",
+    "Preserve content that is not mentioned in the edit request."
+  ],
+  "inputFiles": [
+    {
+      "name": "original_poster.png",
+      "format": "PNG",
+      "path": "input/original_poster.png",
+      "description": "Agent-visible reference poster"
+    },
+    {
+      "name": "edit_request.txt",
+      "format": "TXT",
+      "path": "input/edit_request.txt",
+      "description": "Agent-visible natural-language edit request"
+    },
+    {
+      "name": "assets\\*",
+      "format": "PNG / JPG / WebP",
+      "path": "input/assets/",
+      "description": "Optional replacement assets referenced by the edit request"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "edited_poster.png",
+      "format": "PNG",
+      "path": "output/edited_poster.png",
+      "description": "Final edited poster produced by the agent"
+    }
+  ],
+  "evaluation": "### Hard Gate Conditions\n\n- `output/edited_poster.png` is missing or unreadable\n- the output is blank, nearly solid-color, or obviously corrupted\n- the output resolution is below 50% of the hidden reference in either dimension\n\n### Scoring Method\n\n| Dimension | Weight | Method |\n|---|---|---|\n| `auto_score = min(SSIM, OCR)` | required component | A VM-side verifier computes grayscale SSIM against the hidden reference and EasyOCR-based text similarity. The minimum is used so both layout fidelity and text fidelity must be good. |\n| `vlm_score = edited-region YES ratio` | required component | A VM-side script detects changed regions by diffing `original_poster.png` against the hidden `reference/edited_poster.png`. The evaluator then compares agent and reference crops region by region with a YES/NO vision judge. |\n\n### Perfect Output\n\nThe edited poster is visually very close to the hidden ground truth: layout preserved, requested edits applied in the correct places, and unchanged content preserved.\n\n### Wrong / Empty Output\n\nBlank output, severely distorted layout, unchanged original poster, or missing requested edits should score near `0.0`.\n\n### Final Score Rule\n\n`final_score = min(auto_score, vlm_score)`\n\nThis is intentionally strict: a poster only scores well when both the overall reconstruction and the edited regions are correct.",
+  "evaluatorCredentials": [
+    {
+      "type": "openai_api_key",
+      "file": "openai.env",
+      "purpose": "OpenAI vision/LLM judge scores the deliverable during evaluate(); sourced from secret/eval_time/openai.env"
+    }
+  ],
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.2",
+    "subdomain_code": "graphic_design",
+    "subdomain_name": "Graphic, Visual & Product Design",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:18:46.461892Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/poster/task_card.json"
+      },
+      "rationale": "The task involves graphic design work related to poster creation and editing."
+    }
+  }
+}

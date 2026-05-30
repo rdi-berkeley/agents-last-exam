@@ -144,11 +144,6 @@ Write exactly these outputs under `{self.remote_output_dir}`:
    `historical_metrics.csv`), a clear **Recommendation** section
    containing the word "ship" or "hold", and the observed absolute
    lift on the primary metric.
-
-Rules:
-- Treat the staged `input/runtime_env/` directory as the agent-facing dependency manifest.
-- If you need pandas, scipy, statsmodels, pyyaml, or growthbook, install them yourself from that staged UV project.
-- Do not modify files under `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`.
 """
 
     def to_metadata(self) -> dict[str, Any]:

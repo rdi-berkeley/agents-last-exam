@@ -6,7 +6,7 @@
   "software": [
     "Chrome"
   ],
-  "taskPrompt": "You are an equity research analyst preparing a one-page Tesla workbook in LibreOffice Calc.\n\n## Variant\n`tsla_fy2023`: Single Tesla equity-research workbook using live Yahoo pages plus fixed FY2023 SEC values.\n\n## Runtime Entry Points\n- Read the staged instructions: `C:\\Users\\User\\Desktop\\business_finance\\equity_research_summary\\tsla_fy2023\\input\\instruction.md`\n- Read the allowed public source URLs: `C:\\Users\\User\\Desktop\\business_finance\\equity_research_summary\\tsla_fy2023\\input\\source_urls.txt`\n- Launch LibreOffice Calc from: `C:\\Users\\User\\Desktop\\business_finance\\equity_research_summary\\tsla_fy2023\\software\\launch_calc.bat`\n\n## Your Task\nCreate a single worksheet named for a Tesla financial summary workbook.\n\nUse Yahoo Finance for the live market-data / valuation fields and SEC EDGAR for the fixed\nFY2023 annual financial-statement sections.\n\nThe workbook must include these sections:\n- Market Data\n- Valuation Metrics\n- Income Statement (FY2023, $mm)\n- Balance Sheet (FY2023, $mm)\n- Cash Flow (FY2023, $mm)\n- Key Metrics Dashboard\n\n## Output Requirements\n- Save exactly one workbook to: `C:\\Users\\User\\Desktop\\business_finance\\equity_research_summary\\tsla_fy2023\\output\\TSLA_Financial_Summary.xlsx`\n- The filename must be exactly `TSLA_Financial_Summary.xlsx`\n- Use spreadsheet formulas, not hardcoded values, for derived cells such as margins,\n  free cash flow, equity, and dashboard metrics\n- Keep the live Yahoo Finance cells populated in the final workbook",
+  "taskPrompt": "You are an equity research analyst preparing a one-page Tesla workbook in LibreOffice Calc.\n\n## Variant\n`tsla_fy2023`: Single Tesla equity-research workbook using live Yahoo pages plus fixed FY2023 SEC values.\n\n## Runtime Entry Points\n- Read the staged instructions: `tsla_fy2023\\input\\instruction.md`\n- Read the allowed public source URLs: `tsla_fy2023\\input\\source_urls.txt`\n- Launch LibreOffice Calc from: `tsla_fy2023\\software\\launch_calc.bat`\n\n## Your Task\nCreate a single worksheet named for a Tesla financial summary workbook.\n\nUse Yahoo Finance for the live market-data / valuation fields and SEC EDGAR for the fixed\nFY2023 annual financial-statement sections.\n\nThe workbook must include these sections:\n- Market Data\n- Valuation Metrics\n- Income Statement (FY2023, $mm)\n- Balance Sheet (FY2023, $mm)\n- Cash Flow (FY2023, $mm)\n- Key Metrics Dashboard\n\n## Output Requirements\n- Save exactly one workbook to: `tsla_fy2023\\output\\TSLA_Financial_Summary.xlsx`\n- The filename must be exactly `TSLA_Financial_Summary.xlsx`\n- Use spreadsheet formulas, not hardcoded values, for derived cells such as margins,\n  free cash flow, equity, and dashboard metrics\n- Keep the live Yahoo Finance cells populated in the final workbook",
   "agentMustDo": [
     "Open Yahoo Finance for Tesla (`TSLA`), visit the quote page and the Statistics page, and collect the live market-data and valuation fields listed in `input/instruction.md`.",
     "Open SEC EDGAR for Tesla and locate the Tesla FY2023 annual 10-K financial statements needed for the workbook.",
@@ -45,24 +45,19 @@
   "taxonomy": {
     "domain_id": "6",
     "domain_code": "business_finance",
-    "subdomain_id": "6.1",
-    "subdomain_code": "accounting",
-    "subdomain_name": "Accounting & Finance",
+    "subdomain_id": "6.3",
+    "subdomain_code": "enterprise_analytics",
+    "subdomain_name": "Enterprise Analytics & Planning",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:23:57.256358Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/business_finance/equity_research_summary/task_card.json"
-      },
-      "rationale": "The task involves creating an equity research workbook, which falls under accounting and finance."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "6",
+        "domain_code": "business_finance",
+        "subdomain_id": "6.1",
+        "subdomain_code": "accounting",
+        "subdomain_name": "Accounting & Finance"
+      }
     }
   }
 }

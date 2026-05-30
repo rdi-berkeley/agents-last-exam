@@ -6,7 +6,7 @@
   "software": [
     "Python"
   ],
-  "taskPrompt": "You are calculating arbitration fees under the staged Beijing Arbitration Commission (BAC) materials.\n\n## Closed-Book Rule\n\n- Use only the staged materials under `/media/user/data/agenthle/legal/legal_dr_fees_01/base/input`.\n- Do not use outside web search or external regulatory knowledge.\n\n## Inputs\n\n- Task brief: `/media/user/data/agenthle/legal/legal_dr_fees_01/base/input/task_brief.md`\n- Case facts: `/media/user/data/agenthle/legal/legal_dr_fees_01/base/input/cases.json`\n- Output contract: `/media/user/data/agenthle/legal/legal_dr_fees_01/base/input/output_contract.json`\n- Document manifest: `/media/user/data/agenthle/legal/legal_dr_fees_01/base/input/document_manifest.json`\n- BAC PDF documents: `/media/user/data/agenthle/legal/legal_dr_fees_01/base/input/documents`\n- Optional Python runtime manifest: `/media/user/data/agenthle/legal/legal_dr_fees_01/base/input/runtime_env/pyproject.toml`\n- Python 3.12 entry point: `/media/user/data/agenthle/legal/legal_dr_fees_01/base/software/python3.12`\n\n## Your Task\n\nCalculate, for each of the five listed cases:\n\n- institution fee in RMB;\n- arbitrator remuneration in RMB;\n- total fee in RMB.\n\nAll values must be accurate to two decimal places. Case 4 has a special condition: the parties reached a settlement agreement regarding the dispute before applying for arbitration.\n\nIf you want Python PDF tooling, install/use the package manifest under `input/runtime_env/`; do not modify files under `input/`.\n\n## Deliverable\n\nWrite exactly one JSON file here:\n\n`/media/user/data/agenthle/legal/legal_dr_fees_01/base/output/arbitration_fee_results.json`\n\nFollow the schema in `/media/user/data/agenthle/legal/legal_dr_fees_01/base/input/output_contract.json`. The evaluated numeric fields for each case are:\n\n- `institution_fee_rmb`\n- `arbitrator_remuneration_rmb`\n- `total_fee_rmb`\n",
+  "taskPrompt": "You are calculating arbitration fees under the staged Beijing Arbitration Commission (BAC) materials.\n\n## Closed-Book Rule\n\n- Use only the staged materials under `base/input`.\n- Do not use outside web search or external regulatory knowledge.\n\n## Inputs\n\n- Task brief: `base/input/task_brief.md`\n- Case facts: `base/input/cases.json`\n- Output contract: `base/input/output_contract.json`\n- Document manifest: `base/input/document_manifest.json`\n- BAC PDF documents: `base/input/documents`\n- Optional Python runtime manifest: `base/input/runtime_env/pyproject.toml`\n- Python 3.12 entry point: `base/software/python3.12`\n\n## Your Task\n\nCalculate, for each of the five listed cases:\n\n- institution fee in RMB;\n- arbitrator remuneration in RMB;\n- total fee in RMB.\n\nAll values must be accurate to two decimal places. Case 4 has a special condition: the parties reached a settlement agreement regarding the dispute before applying for arbitration.\n\nIf you want Python PDF tooling, install/use the package manifest under `input/runtime_env/`; do not modify files under `input/`.\n\n## Deliverable\n\nWrite exactly one JSON file here:\n\n`base/output/arbitration_fee_results.json`\n\nFollow the schema in `base/input/output_contract.json`. The evaluated numeric fields for each case are:\n\n- `institution_fee_rmb`\n- `arbitrator_remuneration_rmb`\n- `total_fee_rmb`\n",
   "agentMustDo": [
     "Use only the staged BAC source PDFs, case facts, and schema under `input/`.",
     "Calculate the institution fee, arbitrator remuneration, and total fee for all five cases.",
@@ -75,24 +75,19 @@
   "taxonomy": {
     "domain_id": "7",
     "domain_code": "legal",
-    "subdomain_id": "7.1",
-    "subdomain_code": "litigation",
-    "subdomain_name": "Litigation Support & Discovery",
+    "subdomain_id": "7.2",
+    "subdomain_code": "legal_research",
+    "subdomain_name": "Doctrinal Legal Research",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:30:02.475249Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/legal/legal_dr_fees_01/task_card.json"
-      },
-      "rationale": "The task involves calculating arbitration fees, which falls under legal services."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "7",
+        "domain_code": "legal",
+        "subdomain_id": "7.1",
+        "subdomain_code": "litigation",
+        "subdomain_name": "Litigation Support & Discovery"
+      }
     }
   }
 }

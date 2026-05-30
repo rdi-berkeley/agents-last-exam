@@ -8,7 +8,7 @@
     "Diffusers",
     "PyTorch"
   ],
-  "taskPrompt": "You are repairing a standalone Diffusers-based DiT pipeline on a Linux VM.\n\nTask directory:\n- `/media/user/data/agenthle/computing_math/dit_pipeline_cfg_alignment_fid_256_001/base`\n\nVisible files:\n- Buggy starter pipeline: `/media/user/data/agenthle/computing_math/dit_pipeline_cfg_alignment_fid_256_001/base/input/pipeline_dit.py`\n- Raw sampling harness context: `/media/user/data/agenthle/computing_math/dit_pipeline_cfg_alignment_fid_256_001/base/input/sample.py`\n- Raw run script context: `/media/user/data/agenthle/computing_math/dit_pipeline_cfg_alignment_fid_256_001/base/input/run_sample.sh`\n- Benchmark-owned prompt: `/media/user/data/agenthle/computing_math/dit_pipeline_cfg_alignment_fid_256_001/base/input/task_prompt.md`\n\nYour task:\n1. Read `/media/user/data/agenthle/computing_math/dit_pipeline_cfg_alignment_fid_256_001/base/input/task_prompt.md` first.\n2. Repair the standalone starter file at `/media/user/data/agenthle/computing_math/dit_pipeline_cfg_alignment_fid_256_001/base/input/pipeline_dit.py`.\n3. Keep the fix localized to the pipeline file.\n4. Save exactly one final file to:\n   `/media/user/data/agenthle/computing_math/dit_pipeline_cfg_alignment_fid_256_001/base/output/pipeline_dit.py`\n\nDo not modify files under `input/`.\nDo not rely on hidden evaluator files while solving.\n",
+  "taskPrompt": "You are repairing a standalone Diffusers-based DiT pipeline on a Linux VM.\n\nTask directory:\n- `base`\n\nVisible files:\n- Buggy starter pipeline: `base/input/pipeline_dit.py`\n- Raw sampling harness context: `base/input/sample.py`\n- Raw run script context: `base/input/run_sample.sh`\n- Benchmark-owned prompt: `base/input/task_prompt.md`\n\nYour task:\n1. Read `base/input/task_prompt.md` first.\n2. Repair the standalone starter file at `base/input/pipeline_dit.py`.\n3. Keep the fix localized to the pipeline file.\n4. Save exactly one final file to:\n   `base/output/pipeline_dit.py`\n\nDo not modify files under `input/`.\nDo not rely on hidden evaluator files while solving.\n",
   "agentMustDo": [
     "Read the benchmark-owned task prompt and inspect the buggy standalone `pipeline_dit.py` plus the raw context files `sample.py` and `run_sample.sh`.",
     "Repair the standalone DiT pipeline so the guidance behavior matches the intended reference behavior.",
@@ -58,24 +58,19 @@
   "taxonomy": {
     "domain_id": "9",
     "domain_code": "computing_math",
-    "subdomain_id": "9.1",
-    "subdomain_code": "software_eng",
-    "subdomain_name": "Software Engineering",
+    "subdomain_id": "9.3",
+    "subdomain_code": "ai_cs_research",
+    "subdomain_name": "AI Engineering, Safety & CS Research",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:31:20.374948Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/computing_math/dit_pipeline_cfg_alignment_fid_256_001/task_card.json"
-      },
-      "rationale": "The task involves repairing a software pipeline related to machine learning."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "9",
+        "domain_code": "computing_math",
+        "subdomain_id": "9.1",
+        "subdomain_code": "software_eng",
+        "subdomain_name": "Software Engineering"
+      }
     }
   }
 }

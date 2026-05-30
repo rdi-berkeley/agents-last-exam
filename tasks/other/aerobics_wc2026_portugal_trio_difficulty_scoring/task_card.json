@@ -9,7 +9,7 @@
     "Python",
     "xdg-open"
   ],
-  "taskPrompt": "You are working on Ubuntu.\n\n## Your Task\nInspect the routine video and the FIG Aerobic Gymnastics Code of Points, then\nproduce a difficulty-element spreadsheet for the routine.\n\n## Visible Inputs\n- Video: `/media/user/data/agenthle/other/aerobics_wc2026_portugal_trio_difficulty_scoring/variant_1/input/trio.mov`\n- Rulebook PDF: `/media/user/data/agenthle/other/aerobics_wc2026_portugal_trio_difficulty_scoring/variant_1/input/FIG Aerobic Gymnastics Code of Points (2025-2028).pdf`\n\n## Output\nWrite exactly one spreadsheet to `/media/user/data/agenthle/other/aerobics_wc2026_portugal_trio_difficulty_scoring/variant_1/output/difficulty_element_log.xlsx`.\n\nThe spreadsheet must contain exactly these four columns:\n- `element_name`\n- `FIG_code`\n- `credited_value`\n- `meets_minimum_standard`\n\nUse one row per detected difficulty element, in chronological order.\nThe total D-score implied by the `credited_value` column should fall between\n`7.0` and `7.2`.\n",
+  "taskPrompt": "You are working on Ubuntu.\n\n## Your Task\nInspect the routine video and the FIG Aerobic Gymnastics Code of Points, then\nproduce a difficulty-element spreadsheet for the routine.\n\n## Visible Inputs\n- Video: `variant_1/input/trio.mov`\n- Rulebook PDF: `variant_1/input/FIG Aerobic Gymnastics Code of Points (2025-2028).pdf`\n\n## Output\nWrite exactly one spreadsheet to `variant_1/output/difficulty_element_log.xlsx`.\n\nThe spreadsheet must contain exactly these four columns:\n- `element_name`\n- `FIG_code`\n- `credited_value`\n- `meets_minimum_standard`\n\nUse one row per detected difficulty element, in chronological order.\nThe total D-score implied by the `credited_value` column should fall between\n`7.0` and `7.2`.\n",
   "agentMustDo": [
     "Open the staged routine video at `input/trio.mov`.",
     "Read the staged FIG Code of Points PDF at `input/FIG Aerobic Gymnastics Code of Points (2025-2028).pdf`.",
@@ -47,24 +47,19 @@
   "taxonomy": {
     "domain_id": "14",
     "domain_code": "other",
-    "subdomain_id": null,
-    "subdomain_code": null,
-    "subdomain_name": null,
+    "subdomain_id": "14.1",
+    "subdomain_code": "sports",
+    "subdomain_name": "Sports",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:46:13.649933Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/other/aerobics_wc2026_portugal_trio_difficulty_scoring/task_card.json"
-      },
-      "rationale": "The task relates to sports scoring and does not fit into the provided subdomains."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "14",
+        "domain_code": "other",
+        "subdomain_id": null,
+        "subdomain_code": null,
+        "subdomain_name": null
+      }
     }
   }
 }

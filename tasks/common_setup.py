@@ -6,8 +6,12 @@ import os
 from pathlib import Path
 from typing import Any
 
+# Per-repo secret store (see <repo>/secret/README.md): agent-side credentials
+# live in <repo>/secret/agent_time, one file per service. This module is at
+# <repo>/tasks/common_setup.py, so parents[1] is the repo root.
+# Override with AGENTHLE_CREDENTIALS_DIR.
 DEFAULT_CREDENTIALS_LOCAL_DIR = (
-    Path.home() / ".config" / "agenthle" / "credentials"
+    Path(__file__).resolve().parents[1] / "secret" / "agent_time"
 )
 
 

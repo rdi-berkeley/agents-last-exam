@@ -9,7 +9,7 @@
     "PyVRP",
     "VRPLIB"
   ],
-  "taskPrompt": "You are working on a Linux VM.\n\n## Your Task\nBuild a reproducible CVRP-solving workflow and generate VRPLIB-format solutions for exactly three selected instances.\n\n## Visible Inputs\n- Problem specification: `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/input/problem_spec.md`\n- Instance directory: `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/input/instances/`\n- Runtime manifest: `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/input/runtime_env/pyproject.toml`\n- Runtime lockfile: `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/input/runtime_env/uv.lock`\n- Python wrapper: `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/software/python_cvrp_env.sh`\n\n## What You Must Produce\nWrite these required files:\n- `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/output/solutions/M-n101-k10.sol`\n- `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/output/solutions/X-n101-k25.sol`\n- `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/output/solutions/X-n106-k14.sol`\n\nYou may also write helper scripts and logs anywhere under `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/output`.\n\n## Rules\n- Read `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/input/problem_spec.md` first.\n- Do not modify files under `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/input`.\n- Do not write outside `/media/user/data/agenthle/transport_safety/capacitated_vehicle_routing_problems/base/output`.\n- Use only the staged local inputs and software already available on this VM.\n",
+  "taskPrompt": "You are working on a Linux VM.\n\n## Your Task\nBuild a reproducible CVRP-solving workflow and generate VRPLIB-format solutions for exactly three selected instances.\n\n## Visible Inputs\n- Problem specification: `base/input/problem_spec.md`\n- Instance directory: `base/input/instances/`\n- Runtime manifest: `base/input/runtime_env/pyproject.toml`\n- Runtime lockfile: `base/input/runtime_env/uv.lock`\n- Python wrapper: `base/software/python_cvrp_env.sh`\n\n## What You Must Produce\nWrite these required files:\n- `base/output/solutions/M-n101-k10.sol`\n- `base/output/solutions/X-n101-k25.sol`\n- `base/output/solutions/X-n106-k14.sol`\n\nYou may also write helper scripts and logs anywhere under `base/output`.\n\n## Rules\n- Read `base/input/problem_spec.md` first.\n- Do not modify files under `base/input`.\n- Do not write outside `base/output`.\n- Use only the staged local inputs and software already available on this VM.\n",
   "agentMustDo": [
     "Inspect the three staged `.vrp` files and implement a CVRP-solving workflow.",
     "Use the staged wrapper if needed to run Python with the pinned task runtime.",
@@ -56,26 +56,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "10",
-    "domain_code": "transport_safety",
-    "subdomain_id": "10.1",
-    "subdomain_code": "aviation",
-    "subdomain_name": "Aviation & Airspace Operations",
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.4",
+    "subdomain_code": "math_ops_research",
+    "subdomain_name": "Mathematical & Operations Research",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:46:24.387875Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/transport_safety/capacitated_vehicle_routing_problems/task_card.json"
-      },
-      "rationale": "The task involves solving vehicle routing problems, which is a key aspect of transportation engineering."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "10",
+        "domain_code": "transport_safety",
+        "subdomain_id": "10.1",
+        "subdomain_code": "aviation",
+        "subdomain_name": "Aviation & Airspace Operations"
+      }
     }
   }
 }

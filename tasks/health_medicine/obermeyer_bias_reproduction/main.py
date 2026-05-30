@@ -181,7 +181,6 @@ Your job is to:
 `full_predictions.csv` must have exactly these columns:
 `patient_id,baseline_score,revised_score`
 
-Do not modify the staged `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/` directories. Write only to `{self.remote_output_dir}`.
 """
 
     def to_metadata(self) -> dict[str, Any]:

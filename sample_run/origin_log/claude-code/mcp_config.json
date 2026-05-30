@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "cua": {
+      "command": "/usr/local/bin/node",
+      "args": [
+        "/home/user/cua_mcp_server/src/index.js"
+      ]
+    }
+  }
+}

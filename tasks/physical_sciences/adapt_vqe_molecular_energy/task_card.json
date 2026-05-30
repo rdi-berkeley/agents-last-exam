@@ -8,7 +8,7 @@
     "NumPy",
     "SciPy"
   ],
-  "taskPrompt": "You are solving a molecular ground-state energy benchmark using only NumPy and SciPy on Ubuntu. Read `/media/user/data/agenthle/physical_sciences/adapt_vqe_molecular_energy/base/input/problem_spec.md`, then use the visible Hamiltonians at `/media/user/data/agenthle/physical_sciences/adapt_vqe_molecular_energy/base/input/{h2_hamiltonian.json,lih_hamiltonian.json,beh2_hamiltonian.json}`. Set up the staged runtime with `uv sync --frozen --project /media/user/data/agenthle/physical_sciences/adapt_vqe_molecular_energy/base/input/runtime_env`. Implement dense-matrix VQE / ADAPT-VQE logic using only NumPy and SciPy, and write exactly one file, `/media/user/data/agenthle/physical_sciences/adapt_vqe_molecular_energy/base/output/results.json`, following the schema in the prompt.",
+  "taskPrompt": "You are solving a molecular ground-state energy benchmark using only NumPy and\nSciPy. The visible inputs are a task statement and three Jordan-Wigner\nHamiltonians:\n\n- `base/input/h2_hamiltonian.json`\n- `base/input/lih_hamiltonian.json`\n- `base/input/beh2_hamiltonian.json`\n\nRead `base/input/problem_spec.md` first. It describes the VQE / ADAPT-VQE task,\nthe tier structure, the visible output schema, and the library constraints.\n\n## Your Task\n1. Set up the provided runtime environment:\n   ```\n   uv sync --frozen --project base/input/runtime_env\n   ```\n   Then use `base/input/runtime_env/.venv/bin/python` (or activate the venv).\n\n2. Implement dense-matrix VQE / ADAPT-VQE logic using only NumPy and SciPy.\n   You may use `scipy.linalg.expm` and `scipy.optimize.minimize`.\n\n3. Use the visible Hamiltonian JSON files as the source of truth for:\n   - molecule identity\n   - qubit count\n   - electron count\n   - active-space note\n   - Pauli-string Hamiltonian terms\n\n4. Produce exactly one file under `base/output`:\n   - `results.json`\n\n5. `results.json` must follow the schema in `base/input/problem_spec.md` and\n   include:\n   - Tier 1 (`H2`): `molecule`, `energy_ha`, `method`, `n_parameters`\n   - Tier 2 / 3: `molecule`, `energy_ha`, `method`, `adapt_iterations`,\n     `n_parameters`, `operator_sequence`\n\n## Constraints\n- Allowed libraries: NumPy and SciPy only.\n- Banned: Qiskit, Cirq, PennyLane, OpenFermion, tequila, or any other\n  quantum-computing library.\n- Write only under `base/output`.\n- Do not modify anything under `base/input`.\n",
   "agentMustDo": [
     "Read the staged prompt and three visible Hamiltonian JSON files under `input/`.",
     "Prepare the staged NumPy / SciPy runtime manifest under `input/runtime_env/`.",
@@ -50,26 +50,21 @@
     "timeout": 7200
   },
   "taxonomy": {
-    "domain_id": "2",
-    "domain_code": "physical_sciences",
-    "subdomain_id": "2.2",
-    "subdomain_code": "chemistry_materials",
-    "subdomain_name": "Chemistry & Materials Computation",
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.7",
+    "subdomain_code": "quantum",
+    "subdomain_name": "Quantum Computing",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:08:52.957233Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/physical_sciences/adapt_vqe_molecular_energy/task_card.json"
-      },
-      "rationale": "The task involves computational chemistry techniques to solve molecular energy problems."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "2",
+        "domain_code": "physical_sciences",
+        "subdomain_id": "2.2",
+        "subdomain_code": "chemistry_materials",
+        "subdomain_name": "Chemistry & Materials Computation"
+      }
     }
   }
 }

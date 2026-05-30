@@ -11,16 +11,70 @@ from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 from openai import AsyncOpenAI, OpenAI
 from dotenv import load_dotenv
 
-load_dotenv(override=False)
-
 if TYPE_CHECKING:
     from cua_bench.computers.base import DesktopSession
 
 logger = logging.getLogger(__name__)
+
+
+def eval_credentials_dir() -> Path:
+    """Directory of evaluator-side per-service env files (`<repo>/secret/eval_time`).
+    Override with ``AGENTHLE_EVAL_CREDENTIALS_DIR``. This module lives at
+    ``<repo>/tasks/utils/evaluation.py`` so ``parents[2]`` is the repo root."""
+    env = os.environ.get("AGENTHLE_EVAL_CREDENTIALS_DIR")
+    if env:
+        return Path(env).expanduser().resolve()
+    return Path(__file__).resolve().parents[2] / "secret" / "eval_time"
+
+
+def load_eval_env(*, override: bool = False) -> list[str]:
+    """Export every ``secret/eval_time/*.env`` (one file per service) into
+    ``os.environ`` so evaluator judges/scorers find their keys no matter which
+    runner launched the eval — no fragile manual ``source`` step. Shell env wins
+    unless ``override=True``. Only real ``*.env`` files are read (``.example``
+    templates are skipped). Idempotent; returns the variable names it set."""
+    d = eval_credentials_dir()
+    if not d.is_dir():
+        return []
+    loaded: list[str] = []
+    for f in sorted(d.glob("*.env")):
+        try:
+            text = f.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[len("export "):]
+            key, sep, val = line.partition("=")
+            if not sep:
+                continue
+            key, val = key.strip(), val.strip()
+            if len(val) >= 2 and val[0] == val[-1] and val[0] in {'"', "'"}:
+                val = val[1:-1]
+            if key and (override or key not in os.environ):
+                os.environ[key] = val
+                loaded.append(key)
+    if loaded:
+        logger.info("load_eval_env: set %d var(s) from %s", len(loaded), d)
+    return loaded
+
+
+# Make evaluator credentials available regardless of entrypoint (simprun / ale_run
+# / tests / ad-hoc): load the lumped dev .env (back-compat) then every per-service
+# secret/eval_time/*.env. Runs once at import, before the DEFAULT_* reads below.
+load_dotenv(override=False)
+load_eval_env()
+
 DEFAULT_LLM_JUDGE_MODEL = os.environ.get("LLM_JUDGE_MODEL", "gpt-5.4")
 DEFAULT_GEMINI_VIDEO_JUDGE_MODEL = os.environ.get(
     "GEMINI_EVAL_MODEL",
-    os.environ.get("GEMINI_MODEL", "gemini-3-pro-preview"),
+    # NOTE: do not pin a soon-to-be-retired preview build. `gemini-3-pro-preview`
+    # was retired by Google and started returning 404 NOT_FOUND, which silently
+    # zeroed every run. Track the current pro tier and override via env if needed.
+    os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview"),
 )
 
 
@@ -43,6 +97,7 @@ def resolve_llm_judge_model(*, env_var: str | None = None, default: str | None =
 
 
 def _resolve_client_kwargs(api_key: str | None = None) -> dict[str, str]:
+    load_eval_env()  # ensure secret/eval_time/*.env is loaded at the point creds are read
     resolved_key = api_key or os.environ.get("OPENAI_API_KEY")
     if not resolved_key:
         raise RuntimeError("OPENAI_API_KEY is not set")
@@ -140,6 +195,7 @@ def _resolve_gemini_auth(
     api_key: str | None = None,
     auth_mode: str | None = None,
 ) -> dict[str, Any]:
+    load_eval_env()  # ensure secret/eval_time/*.env is loaded at the point creds are read
     raw_mode = (auth_mode or os.environ.get("GEMINI_AUTH_MODE") or "auto").strip().lower()
     key = api_key or os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
     project = (
@@ -537,15 +593,23 @@ async def gemini_video_json_judge(
     api_key: str | None = None,
     auth_mode: str | None = None,
     temperature: float = 0,
-    max_tokens: int = 2048,
+    # gemini-3.x spends "thinking" tokens before the JSON body; 2048 truncated
+    # the response mid-object and broke JSON parsing (→ ok=False → score 0).
+    max_tokens: int = 8192,
     video_mime_type: str = "video/mp4",
 ) -> dict[str, Any]:
     """JSON-returning Gemini video judge using google-genai.
 
     The return shape mirrors the historical task contract used by
     media/video_reconstruction: successful calls include ``parsed`` and
-    ``raw_text``; failures return a structured payload with ``ok=False`` so
-    task evaluators can score the run as zero without crashing imports.
+    ``raw_text``; failures return a structured payload with ``ok=False`` (and an
+    ``error`` string) instead of raising, so imports never crash.
+
+    IMPORTANT: ``ok=False`` means the judge itself failed (retired model, auth,
+    truncated/invalid JSON, network) — it does NOT mean the video scored zero.
+    Callers must distinguish the two: treat ``ok=False`` as an evaluation error
+    (fail/retry the run), not as a legitimate 0.0 score, or a broken judge will
+    silently zero every submission including a correct answer.
     """
     resolved_model = model or DEFAULT_GEMINI_VIDEO_JUDGE_MODEL
     resolved_auth_mode: str | None = None

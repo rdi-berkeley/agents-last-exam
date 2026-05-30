@@ -1,0 +1,93 @@
+{
+  "taskId": "engineering/robotics_blender_tabletop_reconstruction",
+  "title": "Blender Tabletop Workspace Reconstruction",
+  "summary": "Reconstruct a tabletop robotic-manipulation workspace in Blender from a floor plan, a reference render, and staged mesh assets, then save the scene, render a verification image, and export the required OBJ files.",
+  "category": "engineering",
+  "software": [
+    "Blender"
+  ],
+  "taskPrompt": "You are a robotics-focused 3D scene artist using Blender.\n\nYour task is to reconstruct a tabletop robotic-manipulation workspace from staged assets.\n\nAgent-visible inputs:\n- Export contract: `base\\input\\export_spec.json`\n- Floor plan: `base\\input\\floor_plan.png`\n- Reference render: `base\\input\\reference_render.png`\n- Mesh assets: `base\\input\\meshes`\n\nSoftware:\n- Launch Blender through the staged task-local wrapper: `base\\software\\run_blender_portable.ps1`\n\nRequired outputs under `base\\output`:\n- `scene.blend`\n- `verification_render.png`\n- `mustard_bottle.obj`\n- `mug.obj`\n- `potted_meat_can.obj`\n- `full_scene.obj`\n\nRequirements:\n- Use the floor plan for explicit spatial values and camera setup\n- Infer rotations, materials, and lighting from the reference render\n- Keep the coordinate system z-up and 1 Blender unit = 1 meter\n- Save the rendered image as `verification_render.png`\n",
+  "agentMustDo": [
+    "Reconstruct the tabletop manipulation scene in Blender using the floor plan, reference render, and staged mesh assets.",
+    "Place the table and three YCB objects at the positions specified by the visible floor plan.",
+    "Infer rotations, materials, and lighting from the reference render.",
+    "Save `scene.blend`, render `verification_render.png`, and export `mustard_bottle.obj`, `mug.obj`, `potted_meat_can.obj`, and `full_scene.obj`."
+  ],
+  "inputFiles": [
+    {
+      "name": "export_spec.json",
+      "format": "JSON",
+      "path": "input/export_spec.json",
+      "description": "Defines the required render and export filenames."
+    },
+    {
+      "name": "floor_plan.png",
+      "format": "PNG image",
+      "path": "input/floor_plan.png",
+      "description": "Provides explicit spatial values for object placement, table dimensions, and camera setup."
+    },
+    {
+      "name": "reference_render.png",
+      "format": "PNG image",
+      "path": "input/reference_render.png",
+      "description": "Visible visual target used to infer rotations, materials, and lighting."
+    },
+    {
+      "name": "meshes/",
+      "format": "OBJ assets",
+      "path": "input/meshes/",
+      "description": "Source geometry for the table and three YCB objects."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "scene.blend",
+      "format": "Blender scene",
+      "path": "output/scene.blend",
+      "description": "Saved Blender scene containing the reconstructed tabletop workspace."
+    },
+    {
+      "name": "verification_render.png",
+      "format": "PNG image",
+      "path": "output/verification_render.png",
+      "description": "Rendered verification image of the reconstructed scene."
+    },
+    {
+      "name": "OBJ exports",
+      "format": "OBJ",
+      "path": "output/",
+      "description": "The required per-object exports and one full-scene export."
+    }
+  ],
+  "evaluation": "**Hard gate behavior**\n- Missing `output/scene.blend` yields `0.0`.\n- Missing hidden benchmark reference facts yields `0.0`.\n- Failure to extract Blender-side metrics yields `0.0`.\n\n**Scoring method**\n- The evaluator opens the submitted `scene.blend` through the staged Blender runtime.\n- It extracts object transforms, material values, light placements, and required-output presence.\n- It compares those metrics against hidden benchmark reference facts for the target scene.\n- The normalized score combines spatial accuracy (`25%`), rotation accuracy (`15%`), material accuracy (`20%`), export completeness (`15%`), and lighting plausibility (`25%`).\n- Current reviewed pass threshold: `0.70`.\n\n**Reviewed fixture behavior**\n- Positive fixture: `0.8441666666666667`\n- Negative fixture: `0.4368055555555556`\n- Empty/default output: `0.0`",
+  "evaluatorCredentials": [
+    {
+      "type": "openai_api_key",
+      "file": "openai.env",
+      "purpose": "OpenAI vision/LLM judge scores the deliverable during evaluate(); sourced from secret/eval_time/openai.env"
+    }
+  ],
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "1",
+        "domain_code": "engineering",
+        "subdomain_id": "1.11",
+        "subdomain_code": "robotics",
+        "subdomain_name": "Robotics & Autonomous Systems"
+      }
+    }
+  }
+}

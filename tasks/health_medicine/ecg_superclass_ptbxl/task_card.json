@@ -7,7 +7,7 @@
     "pandas",
     "Python"
   ],
-  "taskPrompt": "You are a computational precision health researcher working on staged ECG waveform data.\n\n## Variant\n`ptbxl_1386`: Single PTB-XL-derived diagnostic superclass benchmark slice with 1,386 anonymized ECG records.\n\n## Your Task\nProduce multilabel diagnostic superclass predictions for the staged WFDB ECG records.\n\n## Input Files\n- WFDB records directory: `C:\\Users\\User\\Desktop\\health_medicine\\ecg_superclass_ptbxl\\ptbxl_1386\\input\\records`\n- Required ECG ID list: `C:\\Users\\User\\Desktop\\health_medicine\\ecg_superclass_ptbxl\\ptbxl_1386\\input\\record_ids.csv`\n- Label glossary: `C:\\Users\\User\\Desktop\\health_medicine\\ecg_superclass_ptbxl\\ptbxl_1386\\input\\label_codebook.csv`\n- Output template: `C:\\Users\\User\\Desktop\\health_medicine\\ecg_superclass_ptbxl\\ptbxl_1386\\input\\template_output.csv`\n\n## Software\n- Task-local command prompt helper: `C:\\Users\\User\\Desktop\\health_medicine\\ecg_superclass_ptbxl\\ptbxl_1386\\software\\open_input_cmd.bat`\n- Baseline package installer: `C:\\Users\\User\\Desktop\\health_medicine\\ecg_superclass_ptbxl\\ptbxl_1386\\software\\install_baseline_python_packages.bat`\n- You may use the system `python` on the VM, install additional open-source Python packages, and use publicly available pretrained open-source ECG models if needed\n\n## What You Must Do\n1. Read the staged ECG records from `C:\\Users\\User\\Desktop\\health_medicine\\ecg_superclass_ptbxl\\ptbxl_1386\\input\\records`.\n2. Use `C:\\Users\\User\\Desktop\\health_medicine\\ecg_superclass_ptbxl\\ptbxl_1386\\input\\record_ids.csv` as the exact required output row set.\n3. Use any CPU-feasible multilabel workflow you judge appropriate, including signal interpretation, feature engineering, classical ML, or pretrained open-source ECG models.\n4. Write one CSV exactly to:\n   `C:\\Users\\User\\Desktop\\health_medicine\\ecg_superclass_ptbxl\\ptbxl_1386\\output\\predictions.csv`\n\n## Output Requirements\n- The file must be named exactly `predictions.csv`\n- The columns must be exactly:\n  `ecg_id, NORM, MI, STTC, CD, HYP`\n- Include exactly the ECG IDs from `C:\\Users\\User\\Desktop\\health_medicine\\ecg_superclass_ptbxl\\ptbxl_1386\\input\\record_ids.csv`\n- Every label value must be binary: `0` or `1`\n- Do not save extra files into `C:\\Users\\User\\Desktop\\health_medicine\\ecg_superclass_ptbxl\\ptbxl_1386\\output`\n\n## Important Constraints\n- Treat this as a multilabel problem; labels are not guaranteed to be mutually exclusive\n- Use the staged task files as the source of truth for row set and schema\n- Do not modify evaluator-owned directories such as `reference/`, `output_test_pos/`, or `output_test_neg/`",
+  "taskPrompt": "You are a computational precision health researcher working on staged ECG waveform data.\n\n## Variant\n`ptbxl_1386`: Single PTB-XL-derived diagnostic superclass benchmark slice with 1,386 anonymized ECG records.\n\n## Your Task\nProduce multilabel diagnostic superclass predictions for the staged WFDB ECG records.\n\n## Input Files\n- WFDB records directory: `ptbxl_1386\\input\\records`\n- Required ECG ID list: `ptbxl_1386\\input\\record_ids.csv`\n- Label glossary: `ptbxl_1386\\input\\label_codebook.csv`\n- Output template: `ptbxl_1386\\input\\template_output.csv`\n\n## Software\n- Task-local command prompt helper: `ptbxl_1386\\software\\open_input_cmd.bat`\n- Baseline package installer: `ptbxl_1386\\software\\install_baseline_python_packages.bat`\n- You may use the system `python` on the VM, install additional open-source Python packages, and use publicly available pretrained open-source ECG models if needed\n\n## What You Must Do\n1. Read the staged ECG records from `ptbxl_1386\\input\\records`.\n2. Use `ptbxl_1386\\input\\record_ids.csv` as the exact required output row set.\n3. Use any CPU-feasible multilabel workflow you judge appropriate, including signal interpretation, feature engineering, classical ML, or pretrained open-source ECG models.\n4. Write one CSV exactly to:\n   `ptbxl_1386\\output\\predictions.csv`\n\n## Output Requirements\n- The file must be named exactly `predictions.csv`\n- The columns must be exactly:\n  `ecg_id, NORM, MI, STTC, CD, HYP`\n- Include exactly the ECG IDs from `ptbxl_1386\\input\\record_ids.csv`\n- Every label value must be binary: `0` or `1`\n- Do not save extra files into `ptbxl_1386\\output`\n\n## Important Constraints\n- Treat this as a multilabel problem; labels are not guaranteed to be mutually exclusive\n- Use the staged task files as the source of truth for row set and schema",
   "agentMustDo": [
     "Open the staged task directory on the Windows VM and inspect the ECG bundle under `input/`.",
     "Load all 1,386 WFDB records from `input/records/` and build a multi-label classifier for the five superclass labels `NORM`, `MI`, `STTC`, `CD`, and `HYP`.",
@@ -57,24 +57,19 @@
   "taxonomy": {
     "domain_id": "4",
     "domain_code": "health_medicine",
-    "subdomain_id": "4.1",
-    "subdomain_code": "clinical_diagnostics",
-    "subdomain_name": "Clinical Diagnostics & Imaging",
+    "subdomain_id": "4.2",
+    "subdomain_code": "therapeutic_oncology",
+    "subdomain_name": "Therapeutic & Oncology Services",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:41:01.651007Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/health_medicine/ecg_superclass_ptbxl/task_card.json"
-      },
-      "rationale": "The task involves multilabel diagnostic predictions from ECG data, fitting within clinical diagnostics."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "4",
+        "domain_code": "health_medicine",
+        "subdomain_id": "4.1",
+        "subdomain_code": "clinical_diagnostics",
+        "subdomain_name": "Clinical Diagnostics & Imaging"
+      }
     }
   }
 }

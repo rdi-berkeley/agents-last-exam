@@ -239,7 +239,6 @@ Launch the PLAXIS 3D 2023.2 executables yourself — e.g. via PowerShell:
 - `answer.json` must use the exact schema from `{self.answer_template_file}`
 - Report settlement and displacement as positive magnitudes in millimeters
 - Keep all work products inside `{self.remote_output_dir}`
-- Do not modify files under `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/`
 """
 
     def to_metadata(self) -> dict[str, Any]:

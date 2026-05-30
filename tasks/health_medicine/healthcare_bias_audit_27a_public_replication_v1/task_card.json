@@ -12,7 +12,7 @@
     "scikit-learn",
     "statsmodels"
   ],
-  "taskPrompt": "You are working on a Linux VM to reproduce a public synthetic healthcare bias audit.\n\nRead these staged task materials first:\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/task_note.txt`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/bias.yml`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/audit_answers.json`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/audit_memo.md`\n\nUse the preprovisioned task-local runtimes under `software/`:\n- `software/task_python` for Python steps\n- `software/task_rscript` for R steps\n\n`bias.yml` is provided as provenance for the original public bundle. You do not need to solve or install the legacy conda environment yourself.\n\nInspect the provided workflow scripts before you run anything:\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/code/model/main.py`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/code/table2.py`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/code/figure1/figure1b.R`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/code/table3.R`\n\nVisible data files:\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/data/data_new.csv`\n- `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/input/data/data_dictionary.md`\n\nYour job is to:\n1. Create a writable working copy of the staged bundle under `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/output` (or another writable subdirectory inside it) so the supplied scripts can write `results/` without mutating the staged `input/` tree.\n2. Run the provided Python and R scripts in the dependency order needed to generate the five required CSV outputs, using `software/task_python` and `software/task_rscript`.\n3. Fill in `audit_answers.json` using only the public synthetic replication outputs from this run.\n4. Write `audit_memo.md` for a clinical analytics lead, grounding it in this run's outputs and clearly distinguishing the public synthetic replication from the paper's private-data values.\n5. Save exactly these deliverables under `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/output`:\n   - `results/model_lasso_predictors.csv`\n   - `results/model_r2.csv`\n   - `results/table2_concentration_metric.csv`\n   - `results/figure1b.csv`\n   - `results/table3.csv`\n   - `audit_answers.json`\n   - `audit_memo.md`\n\nRules:\n- Do not modify the staged dataset.\n- Do not add race as a model feature.\n- Do not replace the supplied workflow with a different analytical pipeline.\n- Do not use the original paper's `17.7% -> 46.5%` value or the later `59%` correction as the graded answer.\n- Treat the staged solve-time files as read-only and do not rely on any hidden evaluator-only data.\n- If you create scratch files under `/media/user/data/agenthle/health_medicine/healthcare_bias_audit_27a_public_replication_v1/base/output`, clean them up before finishing so only the required deliverables remain.\n",
+  "taskPrompt": "You are working on a Linux VM to reproduce a public synthetic healthcare bias audit.\n\nRead these staged task materials first:\n- `base/input/task_note.txt`\n- `base/input/bias.yml`\n- `base/input/audit_answers.json`\n- `base/input/audit_memo.md`\n\nUse the preprovisioned task-local runtimes under `software/`:\n- `software/task_python` for Python steps\n- `software/task_rscript` for R steps\n\n`bias.yml` is provided as provenance for the original public bundle. You do not need to solve or install the legacy conda environment yourself.\n\nInspect the provided workflow scripts before you run anything:\n- `base/input/code/model/main.py`\n- `base/input/code/table2.py`\n- `base/input/code/figure1/figure1b.R`\n- `base/input/code/table3.R`\n\nVisible data files:\n- `base/input/data/data_new.csv`\n- `base/input/data/data_dictionary.md`\n\nYour job is to:\n1. Create a writable working copy of the staged bundle under `base/output` (or another writable subdirectory inside it) so the supplied scripts can write `results/` without mutating the staged `input/` tree.\n2. Run the provided Python and R scripts in the dependency order needed to generate the five required CSV outputs, using `software/task_python` and `software/task_rscript`.\n3. Fill in `audit_answers.json` using only the public synthetic replication outputs from this run.\n4. Write `audit_memo.md` for a clinical analytics lead, grounding it in this run's outputs and clearly distinguishing the public synthetic replication from the paper's private-data values.\n5. Save exactly these deliverables under `base/output`:\n   - `results/model_lasso_predictors.csv`\n   - `results/model_r2.csv`\n   - `results/table2_concentration_metric.csv`\n   - `results/figure1b.csv`\n   - `results/table3.csv`\n   - `audit_answers.json`\n   - `audit_memo.md`\n\nRules:\n- Do not modify the staged dataset.\n- Do not add race as a model feature.\n- Do not replace the supplied workflow with a different analytical pipeline.\n- Do not use the original paper's `17.7% -> 46.5%` value or the later `59%` correction as the graded answer.\n- Treat the staged solve-time files as read-only and do not rely on any hidden evaluator-only data.\n- If you create scratch files under `base/output`, clean them up before finishing so only the required deliverables remain.\n",
   "agentMustDo": [
     "Read the staged task note, environment spec, starter JSON, starter memo, dataset, and data dictionary under `input/`.",
     "Use the preprovisioned `software/task_python` and `software/task_rscript` runtimes rather than installing the legacy conda environment during solve time.",
@@ -117,24 +117,19 @@
   "taxonomy": {
     "domain_id": "4",
     "domain_code": "health_medicine",
-    "subdomain_id": "4.4",
-    "subdomain_code": "public_health",
-    "subdomain_name": "Public Health & Epidemiology",
+    "subdomain_id": "4.3",
+    "subdomain_code": "clinical_informatics",
+    "subdomain_name": "Clinical Informatics & Care Operations",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:41:22.204563Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/health_medicine/healthcare_bias_audit_27a_public_replication_v1/task_card.json"
-      },
-      "rationale": "The task involves auditing healthcare bias, which falls under public health."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "4",
+        "domain_code": "health_medicine",
+        "subdomain_id": "4.4",
+        "subdomain_code": "public_health",
+        "subdomain_name": "Public Health & Epidemiology"
+      }
     }
   }
 }

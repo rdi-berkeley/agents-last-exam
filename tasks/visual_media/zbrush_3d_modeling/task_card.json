@@ -1,0 +1,81 @@
+{
+  "taskId": "visual_media/zbrush_3d_modeling",
+  "title": "Reconstruct Missing ZBrush Scene Geometry",
+  "summary": "Sculpt and complete the staged ZBrush model to match the provided reference target and submission requirements.",
+  "category": "visual_media",
+  "software": [
+    "ZBrush"
+  ],
+  "taskPrompt": "You are a 3D artist working in ZBrush on a constrained partial-completion task.\n\n## Task\nReconstruct the missing parts of **Japanese Samurai Full Body**.\n\nCanonical variant root:\n- `japanese_samurai_full_body`\n\nBenchmark inputs:\n- part reference images: `japanese_samurai_full_body\\input`\n- partial ZBrush project: `japanese_samurai_full_body\\input\\Samurai-Armor-partial.zpr`\n\n## Inputs\n- Per-part reference images in `japanese_samurai_full_body\\input`\n- Partial ZBrush project in:\n  `japanese_samurai_full_body\\input\\Samurai-Armor-partial.zpr`\n## What You Must Do\n1. Open the partial ZBrush project at `japanese_samurai_full_body\\input\\Samurai-Armor-partial.zpr`\n2. Use the reference images in `japanese_samurai_full_body\\input` to reconstruct or refine the missing parts\n3. Keep the model in the same global coordinate system as the provided partial project\n4. Export the full object set as individual OBJ files to:\n   `japanese_samurai_full_body\\output\\output-test\\objects`\n5. Use the exact part names for OBJ filenames\n6. Save your working ZBrush project to `japanese_samurai_full_body\\output\\Samurai-Armor-partial.zpr`\n",
+  "agentMustDo": [
+    "Open the partial ZBrush project (`.zpr`) from `input/`",
+    "Use the part-level reference renders in `input/` to reconstruct or refine missing geometry",
+    "Preserve the original world coordinate system and part naming scheme",
+    "Export the completed result as individual OBJ files to `output/output-test/objects`",
+    "Save the working ZBrush project into `output/`"
+  ],
+  "inputFiles": [
+    {
+      "name": "Part reference renders",
+      "format": "PNG folders",
+      "path": "input/",
+      "description": "Per-part detail/context views used by the agent"
+    },
+    {
+      "name": "Partial ZBrush project",
+      "format": "`.zpr`",
+      "path": "input/<project>.zpr",
+      "description": "Source project opened by the agent"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Candidate object set",
+      "format": "`.obj` files",
+      "path": "output/output-test/objects/",
+      "description": "Final exported part meshes"
+    },
+    {
+      "name": "Working ZBrush project",
+      "format": "`.zpr`",
+      "path": "output/<project>.zpr",
+      "description": "Working project saved by the agent"
+    }
+  ],
+  "evaluation": "### Hard evaluation\nRuns on the remote VM using uploaded local scripts.\n\nMain stages:\n- render candidate objects under fixed camera protocol\n- compare candidate against reference package\n- produce `evaluation_report.json`\n\nPrimary hard metrics:\n- completeness\n- geometry\n- render fidelity\n- mesh health\n\n### Soft evaluation\nRuns locally.\n\nProcess:\n- fetch only a sampled subset of candidate and reference `detail/context` images\n- compare them with a local OpenAI vision model using multiple binary `YES` / `NO` questions\n- compute `soft_score` as the yes-ratio across those questions\n\n### Final score\nThe final score uses the remote report's `judge_score` weight as the weight for local soft evaluation:\n\n```text\nfinal_score = (1 - judge_weight) * hard_score + judge_weight * soft_score\n```",
+  "evaluatorCredentials": [
+    {
+      "type": "openai_api_key",
+      "file": "openai.env",
+      "purpose": "OpenAI vision/LLM judge scores the deliverable during evaluate(); sourced from secret/eval_time/openai.env"
+    }
+  ],
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:26:45.041015Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/zbrush_3d_modeling/task_card.json"
+      },
+      "rationale": "The task involves 3D modeling in ZBrush, which fits under 3D and animation."
+    }
+  }
+}

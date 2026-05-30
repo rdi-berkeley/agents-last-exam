@@ -9,7 +9,7 @@
     "anndata",
     "harmonypy"
   ],
-  "taskPrompt": "You are given an unlabeled Smart-seq2 mouse bone marrow single-cell dataset and must annotate every cell with one label from a fixed 21-class ontology.\n\nTask directory:\n- `/media/user/data/agenthle/life_sciences/tms_marrow_cell_type_annotation_instance_1/base`\n\nVisible inputs:\n- AnnData matrix: `/media/user/data/agenthle/life_sciences/tms_marrow_cell_type_annotation_instance_1/base/input/tms_marrow_unlabeled.h5ad`\n- Allowed labels: `/media/user/data/agenthle/life_sciences/tms_marrow_cell_type_annotation_instance_1/base/input/allowed_labels.txt`\n- Agent-facing runtime manifest: `/media/user/data/agenthle/life_sciences/tms_marrow_cell_type_annotation_instance_1/base/input/runtime_env/pyproject.toml`\n- Agent-facing runtime lockfile: `/media/user/data/agenthle/life_sciences/tms_marrow_cell_type_annotation_instance_1/base/input/runtime_env/uv.lock`\n- Task note: `/media/user/data/agenthle/life_sciences/tms_marrow_cell_type_annotation_instance_1/base/input/input.txt`\n\nRecommended setup:\n- Work on Linux in `/media/user/data/agenthle/life_sciences/tms_marrow_cell_type_annotation_instance_1/base`\n- If you need Scanpy / AnnData tooling, install from the staged runtime with:\n  `uv sync --frozen --project \"/media/user/data/agenthle/life_sciences/tms_marrow_cell_type_annotation_instance_1/base/input/runtime_env\"`\n\nRequired output:\n- Write exactly one UTF-8 CSV to `/media/user/data/agenthle/life_sciences/tms_marrow_cell_type_annotation_instance_1/base/output/predictions.csv`\n- Keep the header exactly `cell_id,predicted_cell_type`\n- Emit exactly one row for every input cell\n- Use only labels from `/media/user/data/agenthle/life_sciences/tms_marrow_cell_type_annotation_instance_1/base/input/allowed_labels.txt`\n\nRelevant metadata available in the AnnData object includes:\n- `age`\n- `mouse.id`\n- `sex`\n- `n_genes`\n- `n_counts`\n\nThis task is graded against hidden reference labels. A submission counts as successful only if it is format-valid and achieves both:\n- macro F1 >= 0.75\n- overall accuracy >= 0.85\n\nDo not ask for confirmation. Execute directly.\n",
+  "taskPrompt": "You are given an unlabeled Smart-seq2 mouse bone marrow single-cell dataset and must annotate every cell with one label from a fixed 21-class ontology.\n\nTask directory:\n- `base`\n\nVisible inputs:\n- AnnData matrix: `base/input/tms_marrow_unlabeled.h5ad`\n- Allowed labels: `base/input/allowed_labels.txt`\n- Agent-facing runtime manifest: `base/input/runtime_env/pyproject.toml`\n- Agent-facing runtime lockfile: `base/input/runtime_env/uv.lock`\n- Task note: `base/input/input.txt`\n\nRecommended setup:\n- Work on Linux in `base`\n- If you need Scanpy / AnnData tooling, install from the staged runtime with:\n  `uv sync --frozen --project \"base/input/runtime_env\"`\n\nRequired output:\n- Write exactly one UTF-8 CSV to `base/output/predictions.csv`\n- Keep the header exactly `cell_id,predicted_cell_type`\n- Emit exactly one row for every input cell\n- Use only labels from `base/input/allowed_labels.txt`\n\nRelevant metadata available in the AnnData object includes:\n- `age`\n- `mouse.id`\n- `sex`\n- `n_genes`\n- `n_counts`\n\nThis task is graded against hidden reference labels. A submission counts as successful only if it is format-valid and achieves both:\n- macro F1 >= 0.75\n- overall accuracy >= 0.85\n\nDo not ask for confirmation. Execute directly.\n",
   "agentMustDo": [
     "Load the staged Smart-seq2 marrow AnnData object on Linux and, if needed, install the staged Python runtime from `input/runtime_env/` with `uv`.",
     "Run a biologically reasonable batch-aware single-cell annotation workflow across the fixed 21-label ontology.",
@@ -64,24 +64,19 @@
   "taxonomy": {
     "domain_id": "3",
     "domain_code": "life_sciences",
-    "subdomain_id": "3.2",
-    "subdomain_code": "genomics",
-    "subdomain_name": "Genomics & Sequence Analysis",
+    "subdomain_id": "3.3",
+    "subdomain_code": "cell_imaging",
+    "subdomain_name": "Cell & Imaging Biology",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:03:39.861643Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/life_sciences/tms_marrow_cell_type_annotation_instance_1/task_card.json"
-      },
-      "rationale": "The task involves annotating single-cell data related to mouse bone marrow, which falls under genomics."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "3",
+        "domain_code": "life_sciences",
+        "subdomain_id": "3.2",
+        "subdomain_code": "genomics",
+        "subdomain_name": "Genomics & Sequence Analysis"
+      }
     }
   }
 }

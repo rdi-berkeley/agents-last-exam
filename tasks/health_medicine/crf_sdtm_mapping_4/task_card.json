@@ -10,7 +10,7 @@
     "pypdf",
     "lxml"
   ],
-  "taskPrompt": "You are preparing a field-level CRF-to-SDTM mapping specification on Linux. Create the requested study C4591001 domain mapping from the visible task brief, output contract, sample CRF, annotated CRF, SDTM define.xml, and supplemental define.xml files. Save exactly one CSV file in the required output directory with the specified columns, and keep all generated files inside the output directory.",
+  "taskPrompt": "You are preparing a field-level CRF-to-SDTM mapping specification on Linux.\n\n## Your Task\nCreate the Adverse Events mapping for study C4591001.\n\n## Visible Inputs\n- Task brief: `base/input/task_brief.md`\n- Output contract: `base/input/output_contract.json`\n- Source documents directory: `base/input/source_documents`\n- Optional Python runtime manifest: `base/input/runtime_env`\n\nThe source documents include the sample CRF PDF, annotated CRF PDF, SDTM define.xml,\nand supplemental define.xml material. Use those files to identify form fields and\ntheir target SDTM variables for `AE` and, where applicable,\n`SUPPAE` supplemental qualifiers.\n\n## Required Output\nSave exactly one CSV file:\n\n```text\nbase/output/ae_mapping.csv\n```\n\nThe CSV must follow the column order and constraints in `base/input/output_contract.json`.\n`goes_to_suppqual` must mark AE rows as NO and SUPPAE rows as YES.\n\n## Constraints\n- Produce a mapping specification only, not subject-level records or XPT datasets.\n- Keep all generated files inside `base/output`.\n- Do not modify files under `base/input`.\n- Use the visible task files only; do not use external web sources.\n",
   "agentMustDo": [
     "Read the variant's task brief and output contract.",
     "Inspect the sample CRF, annotated CRF, SDTM define.xml, and supplemental define.xml source documents.",
@@ -66,24 +66,19 @@
   "taxonomy": {
     "domain_id": "4",
     "domain_code": "health_medicine",
-    "subdomain_id": "4.3",
-    "subdomain_code": "clinical_informatics",
-    "subdomain_name": "Clinical Informatics & Care Operations",
+    "subdomain_id": "4.5",
+    "subdomain_code": "clinical_trials",
+    "subdomain_name": "Clinical Research & Trial Operations",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:06:21.132673Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/health_medicine/crf_sdtm_mapping_4/task_card.json"
-      },
-      "rationale": "The task involves creating a mapping specification related to clinical data standards."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "4",
+        "domain_code": "health_medicine",
+        "subdomain_id": "4.3",
+        "subdomain_code": "clinical_informatics",
+        "subdomain_name": "Clinical Informatics & Care Operations"
+      }
     }
   }
 }

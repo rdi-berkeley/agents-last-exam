@@ -18,7 +18,7 @@
     "pandas",
     "NumPy"
   ],
-  "taskPrompt": "You are building an Aerts-2014-style radiomic prognostic risk model for non-small-cell lung cancer. Use the data under the task input directory: `images/`, `masks/`, `clinical/train_clinical.csv`, `prediction_ids.csv`, `split.json`, and `runtime_env/pyproject.toml`. Extract features from CT/mask pairs, fit a Cox-style or other survival-risk model using the labeled training patients, and generate risk scores for the held-out patients. Write `risk_scores.csv` under the configured output directory with columns `PatientID` and `risk_score`; higher risk must mean higher predicted hazard / shorter survival.",
+  "taskPrompt": "You are building an Aerts-2014-style radiomic prognostic risk model for non-small-cell lung cancer.\n\n## Input\n\nUse the data under `base/input`:\n\n- `images/` contains 422 lung CT NIfTI volumes (`.nii.gz`).\n- `masks/` contains matched GTV-1 tumor segmentation masks for the usable cohort.\n- `clinical/train_clinical.csv` contains survival labels for the training patients only.\n- `prediction_ids.csv` lists held-out patients that need risk scores.\n- `split.json` documents the fixed train/test split and the one excluded missing-mask case.\n- `runtime_env/pyproject.toml` pins a Python 3.10-compatible scientific stack for this task.\n\n## Task\n\nBuild any CPU-only radiomics survival pipeline you choose. You may use PyRadiomics, SimpleITK, lifelines, scikit-learn, pandas, and NumPy. Extract features from the CT/mask pairs, fit a Cox-style or other survival-risk model using the labeled training patients, and generate risk scores for the held-out patients in `prediction_ids.csv`.\n\n## Required Output\n\nWrite exactly these files under `base/output`:\n\n1. `risk_scores.csv` with one row for each held-out patient and columns:\n   - `PatientID`\n   - `risk_score`\n\nHigher `risk_score` must mean higher predicted hazard / shorter survival. Do not use hidden test labels or modify input files. CPU time budget is 2 hours.\n",
   "agentMustDo": [
     "Read CT images and tumor masks from `input/images/` and `input/masks/`.",
     "Use only `input/clinical/train_clinical.csv` as labeled survival training data.",
@@ -99,24 +99,19 @@
   "taxonomy": {
     "domain_id": "4",
     "domain_code": "health_medicine",
-    "subdomain_id": "4.2",
-    "subdomain_code": "therapeutic_oncology",
-    "subdomain_name": "Therapeutic & Oncology Services",
+    "subdomain_id": "4.1",
+    "subdomain_code": "clinical_diagnostics",
+    "subdomain_name": "Clinical Diagnostics & Imaging",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:39:28.195925Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt",
-          "title",
-          "summary",
-          "software"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/health_medicine/nsclc_radiomics_cox_signature_v1/task_card.json"
-      },
-      "rationale": "The task involves building a prognostic model for non-small-cell lung cancer, which falls under therapeutic oncology."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "4",
+        "domain_code": "health_medicine",
+        "subdomain_id": "4.2",
+        "subdomain_code": "therapeutic_oncology",
+        "subdomain_name": "Therapeutic & Oncology Services"
+      }
     }
   }
 }

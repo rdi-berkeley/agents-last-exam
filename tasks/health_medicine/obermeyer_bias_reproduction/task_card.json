@@ -1,6 +1,7 @@
 {
   "taskId": "health_medicine/obermeyer_bias_reproduction",
   "taskName": "Obermeyer Bias Reproduction",
+  "summary": "Audit an Obermeyer-style healthcare risk-score bias using `risk_score_t` as the baseline, build a counterfactual revised ranking from medical need, and emit `full_predictions.csv` plus baseline and revised analysis reports.",
   "category": "health_medicine",
   "tags": [
     "healthcare",
@@ -8,7 +9,7 @@
     "pandas",
     "bias audit"
   ],
-  "taskPrompt": "You are working on a Linux VM to reproduce an Obermeyer-style healthcare algorithmic bias audit.\n\nRead the task instructions and cohort data staged under:\n- `/media/user/data/agenthle/health_medicine/obermeyer_bias_reproduction/base/input/task_instructions.md`\n- `/media/user/data/agenthle/health_medicine/obermeyer_bias_reproduction/base/input/analysis_data.csv`\n- `/media/user/data/agenthle/health_medicine/obermeyer_bias_reproduction/base/input/dummy_test.csv`\n\nThe helper `/media/user/data/agenthle/health_medicine/obermeyer_bias_reproduction/base/software/python_with_task_deps.sh` runs Python from the staged UV runtime environment if you want pandas and numpy available; it writes dependency state under the writable output directory.\n\nYour job is to audit the observed risk score using `risk_score_t` directly as the baseline, build a reproducible counterfactual revised ranking based on medical need, explain the disparity mechanism, and save `full_predictions.csv`, `baseline_analysis_report.md`, and `revised_analysis_report.md` under `/media/user/data/agenthle/health_medicine/obermeyer_bias_reproduction/base/output`.\n\n`full_predictions.csv` must have exactly these columns: `patient_id,baseline_score,revised_score`.\n\nDo not modify the staged `input/`, `reference/`, `output_test_pos/`, or `output_test_neg/` directories.",
+  "taskPrompt": "You are working on a Linux VM to reproduce an Obermeyer-style healthcare algorithmic bias audit.\n\nRead the task instructions and cohort data staged under:\n- `base/input/task_instructions.md`\n- `base/input/analysis_data.csv`\n- `base/input/dummy_test.csv`\n\nThe helper `base/software/python_with_task_deps.sh` runs Python from the staged UV runtime environment if you want pandas and numpy available; it writes dependency state under the writable output directory.\n\nYour job is to audit the observed risk score using `risk_score_t` directly as the baseline, build a reproducible counterfactual revised ranking based on medical need, explain the disparity mechanism, and save `full_predictions.csv`, `baseline_analysis_report.md`, and `revised_analysis_report.md` under `base/output`.\n\n`full_predictions.csv` must have exactly these columns: `patient_id,baseline_score,revised_score`.\n",
   "evaluation": "Hard gates return score 0.0 when `full_predictions.csv` is missing or malformed, columns differ from `patient_id,baseline_score,revised_score`, patient IDs are missing/duplicated/extra, scores are nonnumeric, `baseline_score` differs from observed `risk_score_t`, help rate drops below baseline, high-risk Black fraction is implausibly far above the hidden reference range, or revised top-set overlap with the hidden reference is too low. Passing solutions are scored from 0.0 to 1.0 using revised top-3-percent Black representation improvement, help-rate preservation, mechanism-report evidence, revised ranking integrity, and hidden reference top-set agreement. Positive fixtures score 1.0; baseline-correct direct-race-bonus negative fixtures score 0.0.",
   "vm": {
     "snapshot": "cpu-free-ubuntu",
@@ -26,21 +27,19 @@
   "taxonomy": {
     "domain_id": "4",
     "domain_code": "health_medicine",
-    "subdomain_id": "4.3",
-    "subdomain_code": "clinical_informatics",
-    "subdomain_name": "Clinical Informatics & Care Operations",
+    "subdomain_id": "4.4",
+    "subdomain_code": "public_health",
+    "subdomain_name": "Public Health & Epidemiology",
     "classifier": {
-      "model": "gpt-4o-mini",
-      "classified_at": "2026-05-13T09:41:48.942448Z",
-      "source": {
-        "submission_id": "(backfill: no submission lookup)",
-        "fields": [
-          "taskPrompt"
-        ],
-        "mode": "backfill",
-        "task_card_path": "tasks/health_medicine/obermeyer_bias_reproduction/task_card.json"
-      },
-      "rationale": "The task involves auditing a healthcare algorithm for bias, which falls under clinical informatics."
+      "source": "task_all_workflows.csv",
+      "applied_at": "2026-05-28T20:12:46Z",
+      "previous": {
+        "domain_id": "4",
+        "domain_code": "health_medicine",
+        "subdomain_id": "4.3",
+        "subdomain_code": "clinical_informatics",
+        "subdomain_name": "Clinical Informatics & Care Operations"
+      }
     }
   }
 }
