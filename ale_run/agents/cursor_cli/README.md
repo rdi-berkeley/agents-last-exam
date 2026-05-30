@@ -122,7 +122,7 @@ Usage fields are camelCase (unlike Anthropic's snake_case).
 ```
 ale_run/agents/cursor_cli/
 ├── __init__.py     — re-exports CursorCliConfig, CursorCliDeployer
-├── config.py       — CursorCliConfig (BaseAgentConfig dataclass)
+├── config.py       — CursorCliConfig (standalone dataclass)
 ├── deployer.py     — CursorCliDeployer (install/launch/parse_artifacts)
 ├── README.md       — this file
 └── AGENTS.md       — integration notes, tool classification, known issues

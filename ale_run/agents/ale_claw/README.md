@@ -26,7 +26,7 @@ inheritance + 8 hook overrides.
 ```
 ale_run/agents/ale_claw/
 ├── __init__.py                 — re-exports AleClawConfig, AleClawDeployer
-├── config.py                   — dataclass extending BaseAgentConfig
+├── config.py                   — standalone dataclass
 ├── deployer.py                 — AleClawDeployer (work_dir_on_vm=False)
 ├── transcript_to_trajectory.py — on-disk transcripts → ATIF Steps
 ├── README.md                   — this file

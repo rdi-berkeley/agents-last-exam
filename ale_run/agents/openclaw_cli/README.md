@@ -124,7 +124,7 @@ results, and usage metrics.
 ```
 ale_run/agents/openclaw_cli/
 ├── __init__.py     — re-exports OpenClawCliConfig, OpenClawCliDeployer
-├── config.py       — OpenClawCliConfig (BaseAgentConfig dataclass)
+├── config.py       — OpenClawCliConfig (standalone dataclass)
 ├── deployer.py     — OpenClawCliDeployer (BaseAgentDeployer: install/launch/parse_artifacts)
 ├── README.md       — this file
 └── AGENTS.md       — integration notes, tool classification, install details

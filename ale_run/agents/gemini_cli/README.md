@@ -78,7 +78,7 @@ model id; no compression-model routing.
 
 ```python
 @dataclass
-class GeminiCliConfig(BaseAgentConfig):
+class GeminiCliConfig:
     model: str = "gemini-3.1-pro-preview"
     provider: str = "openrouter"  # "openrouter" | "google"
     approval_mode: str = "yolo"

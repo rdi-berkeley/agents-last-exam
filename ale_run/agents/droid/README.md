@@ -122,7 +122,7 @@ the environment.
 ```
 ale_run/agents/droid/
 ├── __init__.py     — re-exports DroidConfig, DroidDeployer
-├── config.py       — DroidConfig (BaseAgentConfig dataclass)
+├── config.py       — DroidConfig (standalone dataclass)
 ├── deployer.py     — DroidDeployer (install/launch/parse_artifacts)
 ├── README.md       — this file
 └── AGENTS.md       — integration notes, tool classification, known issues

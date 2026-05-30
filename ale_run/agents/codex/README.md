@@ -63,7 +63,7 @@ args = ["/home/user/cua_mcp_server/src/index.js"]
 
 ## Config
 
-Agent-specific fields beyond `BaseAgentConfig`:
+Config fields (standalone dataclass):
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
