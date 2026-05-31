@@ -152,11 +152,27 @@ class ForgecodeDeployer(BaseAgentDeployer):
         # ----------------------------------------------------------
         # 1. Ensure forge binary is available
         # ----------------------------------------------------------
+        # IMPORTANT: prefer a PRE-BAKED forge before downloading. The sandbox
+        # entry runs WITHOUT a login shell, so ~/.local/bin is not on PATH and
+        # shutil.which("forge") misses an image-baked binary — which would make
+        # us re-download forge `latest`. Newer forge (>=2.13.3) DROPPED reading
+        # API keys from env vars and hangs on "Migrating credentials" headless,
+        # so re-downloading silently breaks the agent. Check the baked location
+        # explicitly first.
         forge_path = shutil.which("forge")
         if not forge_path:
-            logger.info("forgecode: 'forge' not on PATH, installing ...")
+            baked = os.path.join(os.path.expanduser("~"), ".local", "bin", "forge")
+            if os.path.isfile(baked) and os.access(baked, os.X_OK):
+                forge_path = baked
+                logger.info("forgecode: using pre-baked forge at %s", baked)
+        if not forge_path:
+            logger.info("forgecode: 'forge' not on PATH or baked dir, installing ...")
             await self._auto_install_cli()
-            forge_path = shutil.which("forge")
+            forge_path = shutil.which("forge") or (
+                os.path.join(os.path.expanduser("~"), ".local", "bin", "forge")
+                if os.path.isfile(os.path.join(os.path.expanduser("~"), ".local", "bin", "forge"))
+                else None
+            )
             if not forge_path:
                 raise RuntimeError(
                     "ForgecodeDeployer: 'forge' still not found after install"
