@@ -111,6 +111,7 @@ async def run_one_unit(
     artifacts: ArtifactsSpec | None = None,
     sem: asyncio.Semaphore | None = None,
     cleanup_mode: str = "delete",
+    prompt_suffix: str | None = None,
 ) -> UnitResult:
     started = time.monotonic()
     effective_cleanup_mode = cleanup_mode
@@ -212,15 +213,22 @@ async def run_one_unit(
             data_root_token = set_data_root(env.sandbox.task_data_root)
             task_meta = task_loader.load(unit.variant_index)
 
+            # The agent's actual prompt = task description + optional batch-wide
+            # suffix (e.g. an inspection/audit overlay). Both the trajectory
+            # record and the deployer must see the SAME text, so compute it once.
+            agent_prompt = task_meta["description"]
+            if prompt_suffix:
+                agent_prompt = f"{agent_prompt}\n\n{prompt_suffix}"
+
             builder = TrajectoryBuilder(
                 agent_name=getattr(config, "name", unit.agent_spec.class_),
                 agent_version=None,
                 model=config.model,
                 task_path=unit.task_path,
                 variant_index=unit.variant_index,
-                instruction=task_meta["description"],
+                instruction=agent_prompt,
             )
-            builder.add_step(source="user", message=task_meta["description"])
+            builder.add_step(source="user", message=agent_prompt)
 
             # ============================================================
             # Phase 1 — task-specific setup (single-shot, no retry).
@@ -300,7 +308,7 @@ async def run_one_unit(
                 run_result = await asyncio.wait_for(
                     executor.run_deployer(
                         deployer_cls=deployer_cls,
-                        prompt=task_meta["description"],
+                        prompt=agent_prompt,
                         timeout_s=float(timeout_s),
                     ),
                     timeout=timeout_s,

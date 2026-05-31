@@ -115,6 +115,18 @@ class ExperimentSpec:
     - ``"keep"``: leave the VM running (debug / reproducer use).
     """
 
+    prompt_suffix: str | None = None
+    """Optional text appended to EVERY task's prompt (after the task's own
+    description + the framework Input/Output contract). ``None`` = no-op.
+
+    Used to overlay a cross-cutting instruction on a whole batch without
+    editing per-task code — e.g. an environment-inspection / audit pass that
+    tells the agent to assess the task instead of solving it. The suffix is
+    appended verbatim with a blank-line separator; it cannot reference a
+    per-task path literally, so it must speak in terms of "the output
+    directory named above" (every task description already states its
+    concrete input/output paths)."""
+
 
 # =============================================================================
 # Derived run units (one per agent × task × variant combination)

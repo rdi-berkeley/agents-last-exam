@@ -57,6 +57,7 @@ _TOP_LEVEL_KEYS = frozenset({
     "output", "artifacts_path",
     "concurrency",
     "cleanup_mode",
+    "prompt_suffix",
 })
 
 
@@ -212,6 +213,7 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
     artifacts = _build_artifacts(effective.get("artifacts_path") or {})
     concurrency = _build_concurrency(effective)
     cleanup_mode = _build_cleanup_mode(effective)
+    prompt_suffix = _build_prompt_suffix(effective)
 
     if "agent" in raw and "agents" in raw:
         raise ValueError("set either `agent:` (single) or `agents:` (list), not both")
@@ -242,6 +244,7 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
         artifacts=artifacts,
         concurrency=concurrency,
         cleanup_mode=cleanup_mode,
+        prompt_suffix=prompt_suffix,
     )
 
 
@@ -270,6 +273,18 @@ def _build_cleanup_mode(eff: dict[str, Any]) -> str:
             f"cleanup_mode must be one of {sorted(_VALID_CLEANUP_MODES)}, got {raw!r}"
         )
     return raw
+
+
+def _build_prompt_suffix(eff: dict[str, Any]) -> str | None:
+    """Optional batch-wide prompt suffix. Empty / whitespace-only → None."""
+    val = eff.get("prompt_suffix")
+    if val is None:
+        return None
+    if not isinstance(val, str):
+        raise TypeError(
+            f"prompt_suffix must be a string, got {type(val).__name__}"
+        )
+    return val if val.strip() else None
 
 
 _VALID_OUTPUT_PATH_LITERALS = frozenset({"local"})
