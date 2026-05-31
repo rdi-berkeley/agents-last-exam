@@ -359,8 +359,22 @@ class OpenClawCliDeployer(BaseAgentDeployer):
             },
         }
         if cfg.vision_model:
+            # openclaw schema (v2026.4.26): tools.media.image.models is an
+            # ARRAY of {provider, model} entries (ordered preference list),
+            # not a map. For openrouter routing the model id stays vendor-
+            # prefixed ("openai/gpt-5.4"); for direct routing we split the
+            # vendor head off and route through it.
+            vm = cfg.vision_model
+            if provider == "openrouter":
+                vision_entry = {"provider": "openrouter", "model": vm}
+            else:
+                head, _, tail = vm.partition("/")
+                if tail:
+                    vision_entry = {"provider": head, "model": tail}
+                else:
+                    vision_entry = {"provider": provider, "model": vm}
             oc_config["tools"]["media"] = {
-                "image": {"models": {"default": self._route_model(cfg.vision_model, provider)}},
+                "image": {"models": [vision_entry]},
             }
         (oc_home / "openclaw.json").write_text(
             json.dumps(oc_config, indent=2), encoding="utf-8",
@@ -867,11 +881,15 @@ class OpenClawCliDeployer(BaseAgentDeployer):
             content_blocks = []
 
         usage = message.get("usage", {})
+        # openclaw reports per-message cost under usage.cost.total (it prices the
+        # call itself); extract it so the trajectory's total_cost_usd is real.
+        _cost = (usage.get("cost") or {}).get("total") if isinstance(usage, dict) else None
         metrics = StepMetrics(
             input_tokens=usage.get("input"),
             output_tokens=usage.get("output"),
             cache_read_tokens=usage.get("cacheRead"),
             cache_creation_tokens=usage.get("cacheWrite"),
+            cost_usd=_cost,
         ) if usage else None
 
         if role == "assistant":
