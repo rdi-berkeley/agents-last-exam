@@ -190,11 +190,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
     meta = task_cfg.metadata
     output_file = meta["output_file"]
-    if not await session.exists(output_file):
+    if not (await session.file_exists(output_file) or await session.directory_exists(output_file)):
         logger.warning("missing output workbook at %s", output_file)
         return [0.0]
 
-    if not await session.exists(meta["reference_xlsx"]):
+    if not (await session.file_exists(meta["reference_xlsx"]) or await session.directory_exists(meta["reference_xlsx"])):
         raise RuntimeError(
             f"evaluator-controlled reference workbook missing: {meta['reference_xlsx']}"
         )

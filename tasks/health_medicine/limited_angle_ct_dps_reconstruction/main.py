@@ -137,7 +137,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     output_npy = meta["output_npy"]
     reference_npy = meta["reference_npy"]
     try:
-        if not await session.exists(output_npy):
+        if not (await session.file_exists(output_npy) or await session.directory_exists(output_npy)):
             logger.warning("Missing output file: %s", output_npy)
             return [0.0]
         output_bytes = await session.read_bytes(output_npy)

@@ -353,7 +353,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 
 
 async def _upload_scripts(session: cb.DesktopSession, remote_scripts_dir: str) -> None:
-    await session.makedirs(remote_scripts_dir)
+    await session.interface.create_dir(remote_scripts_dir)
     for name in ["remote_render_eval.py", "blender_render_submission.py"]:
         await session.write_file(
             _remote_child(remote_scripts_dir, name),
@@ -393,7 +393,7 @@ async def _wait_for_file(
     deadline = asyncio.get_event_loop().time() + timeout_sec
     while asyncio.get_event_loop().time() < deadline:
         try:
-            if await session.exists(path):
+            if (await session.file_exists(path) or await session.directory_exists(path)):
                 return True
         except Exception:
             pass
@@ -447,9 +447,9 @@ async def _download_reference_package(
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    if not await session.exists(meta["output_blend"]):
+    if not (await session.file_exists(meta["output_blend"]) or await session.directory_exists(meta["output_blend"])):
         return [0.0]
-    if not await session.exists(meta["output_preview_video"]):
+    if not (await session.file_exists(meta["output_preview_video"]) or await session.directory_exists(meta["output_preview_video"])):
         return [0.0]
     with TemporaryDirectory(prefix=f"skeletal_eval_{meta['task_tag']}_") as tmp_dir:
         local_tmp = Path(tmp_dir)
@@ -485,7 +485,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         remote_results_dir = _remote_child(remote_eval_dir, "results")
         remote_report = _remote_child(remote_results_dir, "render_report.json")
         remote_runtime_config = _remote_child(remote_eval_dir, "runtime_evaluation_config.json")
-        await session.makedirs(remote_eval_dir)
+        await session.interface.create_dir(remote_eval_dir)
         await _upload_scripts(session, remote_scripts_dir)
         await session.write_file(
             remote_runtime_config, json.dumps(runtime_config, ensure_ascii=False, indent=2)

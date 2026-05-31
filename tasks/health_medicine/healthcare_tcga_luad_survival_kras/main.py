@@ -166,7 +166,7 @@ async def _read_required_output_files(session: cb.DesktopSession, output_files: 
     payloads: dict[str, bytes] = {}
     missing: list[str] = []
     for name, path in output_files.items():
-        if not await session.exists(path):
+        if not (await session.file_exists(path) or await session.directory_exists(path)):
             missing.append(name)
             continue
         payloads[name] = await session.read_bytes(path)
@@ -183,7 +183,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
     for ref_key in ("reference_cohort_file", "reference_cox_file", "evaluation_contract_file"):
         ref_path = meta[ref_key]
-        if not await session.exists(ref_path):
+        if not (await session.file_exists(ref_path) or await session.directory_exists(ref_path)):
             raise RuntimeError(f"evaluator-controlled reference missing: {ref_key}={ref_path}")
 
     reference_cohort = await session.read_bytes(meta["reference_cohort_file"])

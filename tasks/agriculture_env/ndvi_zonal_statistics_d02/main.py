@@ -206,16 +206,16 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         rf"{meta['reference_dir']}\polygon_ndvi_stats.csv",
     ]
     for path in reference_files:
-        if not await session.exists(path):
+        if not (await session.file_exists(path) or await session.directory_exists(path)):
             raise RuntimeError(
                 f"evaluator-controlled reference missing: {path}"
             )
-    if not await session.exists(meta["evaluator_python"]):
+    if not (await session.file_exists(meta["evaluator_python"]) or await session.directory_exists(meta["evaluator_python"])):
         raise RuntimeError(
             f"evaluator Python interpreter missing: {meta['evaluator_python']}"
         )
 
-    await session.makedirs(REMOTE_EVAL_TMP_DIR)
+    await session.interface.create_dir(REMOTE_EVAL_TMP_DIR)
     verify_script_path = rf"{REMOTE_EVAL_TMP_DIR}\verify_outputs.py"
     await session.write_file(verify_script_path, _read_script("verify_outputs.py"))
 

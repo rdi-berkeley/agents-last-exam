@@ -436,7 +436,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         vowels: list[str] = list(meta["vowels"])
         n_expected_tg = len(wav_stems)
 
-        if not await session.exists(output_dir):
+        if not (await session.file_exists(output_dir) or await session.directory_exists(output_dir)):
             logger.warning(f"Output directory not found: {output_dir}")
             return [0.0]
 
@@ -522,9 +522,9 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
                 agent_tg_path = rf"{output_dir}\{tg_name}"
                 ref_tg_path = rf"{ref_textgrid_dir}\{tg_name}"
 
-                if await session.exists(agent_tg_path):
+                if (await session.file_exists(agent_tg_path) or await session.directory_exists(agent_tg_path)):
                     agent_tg[stem] = _decode_textgrid_bytes(await session.read_bytes(agent_tg_path))
-                if await session.exists(ref_tg_path):
+                if (await session.file_exists(ref_tg_path) or await session.directory_exists(ref_tg_path)):
                     ref_tg[stem] = _decode_textgrid_bytes(await session.read_bytes(ref_tg_path))
 
             ckpt1_raw = _score_textgrids(agent_tg, ref_tg, wav_stems)

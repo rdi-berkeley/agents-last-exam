@@ -167,7 +167,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 
 async def _find_output_pcb(meta: dict, session: cb.DesktopSession) -> str | None:
     expected = meta["output_pcb_path"]
-    if await session.exists(expected):
+    if (await session.file_exists(expected) or await session.directory_exists(expected)):
         return expected
 
     result = await session.run_command(
@@ -182,7 +182,7 @@ async def _find_output_pcb(meta: dict, session: cb.DesktopSession) -> str | None
 
 
 async def _run_kicad_drc(meta: dict, pcb_path: str, session: cb.DesktopSession) -> tuple[str | None, str | None]:
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     drc_json_path = rf"{EVAL_TMP_DIR}\drc_report.json"
     candidates = [
         meta.get("kicad_cli_path") or "",

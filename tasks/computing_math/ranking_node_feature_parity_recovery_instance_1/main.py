@@ -214,11 +214,11 @@ class _RankingNodeSetup(BaseTaskSetup):
             _remote_join(meta["runtime_env_dir"], "pyproject.toml"),
             _remote_join(meta["runtime_env_dir"], "uv.lock"),
         ]
-        missing = [path for path in required_paths if not await session.exists(path)]
+        missing = [path for path in required_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
         if missing:
             raise RuntimeError("missing staged paths: " + "; ".join(missing))
 
-        await session.makedirs(meta["output_dir"])
+        await session.interface.create_dir(meta["output_dir"])
 
         tool_check = await _run_command(
             session,
@@ -233,7 +233,7 @@ class _RankingNodeSetup(BaseTaskSetup):
             raise RuntimeError("benchmark user needs passwordless sudo to stage /workspace")
 
         prepare_script_path = f"{EVAL_TMP_DIR}/prepare_workspace.py"
-        await session.makedirs(EVAL_TMP_DIR)
+        await session.interface.create_dir(EVAL_TMP_DIR)
         await session.write_file(prepare_script_path, _read_script("prepare_workspace.py"))
         prep_command = " ".join(
             [
@@ -266,7 +266,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     verify_script_path = f"{EVAL_TMP_DIR}/verify_safe_recover.py"
     await session.write_file(verify_script_path, _read_script("verify_safe_recover.py"))
 

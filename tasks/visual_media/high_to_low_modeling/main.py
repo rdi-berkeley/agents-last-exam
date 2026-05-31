@@ -196,7 +196,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 
 
 async def _upload_scripts(session: cb.DesktopSession, remote_scripts_dir: str) -> None:
-    await session.makedirs(remote_scripts_dir)
+    await session.interface.create_dir(remote_scripts_dir)
     for name in ["run_lowpoly_evaluation.py", "render_parts_dataset.py"]:
         await session.write_file(
             _remote_child(remote_scripts_dir, name),
@@ -234,7 +234,7 @@ async def _wait_for_file(
     deadline = asyncio.get_event_loop().time() + timeout_sec
     while asyncio.get_event_loop().time() < deadline:
         try:
-            if await session.exists(path):
+            if (await session.file_exists(path) or await session.directory_exists(path)):
                 return True
         except Exception:
             pass
@@ -299,7 +299,7 @@ def _run_local_soft_eval(
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    if not await session.exists(meta["output_obj"]):
+    if not (await session.file_exists(meta["output_obj"]) or await session.directory_exists(meta["output_obj"])):
         return [0.0]
 
     task_tag = meta["variant_name"]
@@ -307,10 +307,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     remote_scripts_dir = _remote_child(remote_eval_dir, "scripts")
     remote_results_dir = _remote_child(remote_eval_dir, "results")
     remote_report = _remote_child(remote_results_dir, "final_report.json")
-    await session.makedirs(remote_eval_dir)
-    if await session.exists(remote_results_dir):
-        await session.remove_file(remote_results_dir)
-    await session.makedirs(remote_results_dir)
+    await session.interface.create_dir(remote_eval_dir)
+    if (await session.file_exists(remote_results_dir) or await session.directory_exists(remote_results_dir)):
+        await session.interface.delete_dir(remote_results_dir)
+    await session.interface.create_dir(remote_results_dir)
     await _upload_scripts(session, remote_scripts_dir)
     await _launch_remote_job(
         session,

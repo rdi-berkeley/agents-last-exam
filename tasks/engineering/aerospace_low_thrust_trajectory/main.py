@@ -179,10 +179,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         for filename in REQUIRED_OUTPUT_FILES:
             candidate_path = meta["candidate_files"][filename]
             reference_path = meta["reference_files"][filename]
-            if not await session.exists(candidate_path):
+            if not (await session.file_exists(candidate_path) or await session.directory_exists(candidate_path)):
                 logger.info("Missing output file: %s", candidate_path)
                 return [0.0]
-            if not await session.exists(reference_path):
+            if not (await session.file_exists(reference_path) or await session.directory_exists(reference_path)):
                 logger.info("Missing reference file: %s", reference_path)
                 return [0.0]
             candidate_files[filename] = await session.read_bytes(candidate_path)

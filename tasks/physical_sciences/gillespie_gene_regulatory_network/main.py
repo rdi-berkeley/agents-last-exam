@@ -157,7 +157,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         f'{meta["reference_dir"]}/tier1_results.json',
         f'{meta["reference_dir"]}/tier2_results.json',
     ]
-    missing = [path for path in required if not await session.exists(path)]
+    missing = [path for path in required if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing:
         logger.error("[%s] reference assets missing on VM: %s", tag, missing)
         return [0.0]

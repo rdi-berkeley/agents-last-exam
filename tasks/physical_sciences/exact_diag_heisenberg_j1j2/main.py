@@ -179,7 +179,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         "results.json": meta["output_results"],
     }
 
-    missing = [name for name, path in output_files.items() if not await session.exists(path)]
+    missing = [name for name, path in output_files.items() if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing:
         logger.error("Missing output files: %s", ", ".join(missing))
         return [0.0]
@@ -191,7 +191,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         "results.json": f"{meta['reference_outputs_dir']}/results.json",
     }
     reference_missing = [
-        name for name, path in reference_files.items() if not await session.exists(path)
+        name for name, path in reference_files.items() if not (await session.file_exists(path) or await session.directory_exists(path))
     ]
     if reference_missing:
         logger.error("Missing reference files during evaluation: %s", ", ".join(reference_missing))
@@ -208,7 +208,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
                 await _write_remote_file_to_local(session, remote_path, local_output_dir / name)
             for name, remote_path in reference_files.items():
                 await _write_remote_file_to_local(session, remote_path, local_reference_dir / name)
-            if await session.exists(meta["verification_metadata_file"]):
+            if (await session.file_exists(meta["verification_metadata_file"]) or await session.directory_exists(meta["verification_metadata_file"])):
                 await _write_remote_file_to_local(
                     session,
                     meta["verification_metadata_file"],

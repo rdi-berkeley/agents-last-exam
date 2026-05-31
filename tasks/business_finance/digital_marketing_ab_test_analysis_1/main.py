@@ -183,7 +183,7 @@ def _read_script(name: str) -> str:
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     verify_script_path = f"{EVAL_TMP_DIR}/verify_ab_test_outputs.py"
     await session.write_file(verify_script_path, _read_script("verify_ab_test_outputs.py"))
     cmd = " ".join(

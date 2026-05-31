@@ -149,7 +149,7 @@ def load():
 
 
 async def _missing(session: cb.DesktopSession, path: str) -> bool:
-    return not await session.exists(path)
+    return not (await session.file_exists(path) or await session.directory_exists(path))
 
 
 @cb.setup_task(split="train")
@@ -162,7 +162,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     tag = meta["variant_name"]
 
-    if not await session.exists(meta["output_file"]):
+    if not (await session.file_exists(meta["output_file"]) or await session.directory_exists(meta["output_file"])):
         logger.error("[%s] missing output file: %s", tag, meta["output_file"])
         return [0.0]
 
@@ -171,7 +171,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         ("evaluator documents", "evaluator_documents_file"),
         ("document manifest", "document_manifest_file"),
     ]:
-        if not await session.exists(meta[key]):
+        if not (await session.file_exists(meta[key]) or await session.directory_exists(meta[key])):
             raise RuntimeError(
                 f"[{tag}] evaluator-controlled {label} missing: {meta[key]}"
             )

@@ -147,11 +147,11 @@ def _log_score(result: ColonyScoreResult) -> None:
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     for path in (meta["answer_file"], meta["measurements_file"]):
-        if not await session.exists(path):
+        if not (await session.file_exists(path) or await session.directory_exists(path)):
             logger.error("agent missing output: %s", path)
             return [0.0]
 
-    if not await session.exists(meta["reference_measurements_file"]):
+    if not (await session.file_exists(meta["reference_measurements_file"]) or await session.directory_exists(meta["reference_measurements_file"])):
         raise RuntimeError(
             f"evaluator-controlled reference missing: {meta['reference_measurements_file']}"
         )

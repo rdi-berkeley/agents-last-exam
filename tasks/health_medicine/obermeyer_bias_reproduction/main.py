@@ -254,21 +254,21 @@ def _log_score(variant_name: str, result: ScoreResult) -> None:
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    if not await session.exists(meta["predictions_output"]):
+    if not (await session.file_exists(meta["predictions_output"]) or await session.directory_exists(meta["predictions_output"])):
         logger.error("[%s] missing output: %s", TASK_NAME, meta["predictions_output"])
         return [0.0]
 
     for ref_key in ("analysis_data_file", "reference_metrics_file", "reference_predictions_file"):
-        if not await session.exists(meta[ref_key]):
+        if not (await session.file_exists(meta[ref_key]) or await session.directory_exists(meta[ref_key])):
             raise RuntimeError(
                 f"[{TASK_NAME}] evaluator-controlled {ref_key} missing: {meta[ref_key]}"
             )
 
     baseline_report = ""
     revised_report = ""
-    if await session.exists(meta["baseline_report_output"]):
+    if (await session.file_exists(meta["baseline_report_output"]) or await session.directory_exists(meta["baseline_report_output"])):
         baseline_report = _as_text(await session.read_file(meta["baseline_report_output"]))
-    if await session.exists(meta["revised_report_output"]):
+    if (await session.file_exists(meta["revised_report_output"]) or await session.directory_exists(meta["revised_report_output"])):
         revised_report = _as_text(await session.read_file(meta["revised_report_output"]))
 
     result = score_output_bundle(

@@ -33,7 +33,7 @@ def _read_script(name: str) -> str:
 
 
 async def _missing(session: cb.DesktopSession, path: str, *, label: str) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("Missing %s: %s", label, path)
     return True
@@ -169,11 +169,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         ("reference_evaluator", "hidden evaluator script"),
         ("reference_evaluator_dir", "hidden evaluator directory"),
     ]:
-        if not await session.exists(meta[key]):
+        if not (await session.file_exists(meta[key]) or await session.directory_exists(meta[key])):
             logger.error("Missing %s at %s", label, meta[key])
             return [0.0]
 
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     verifier_path = f"{EVAL_TMP_DIR}/evaluate_submission_safe.py"
     await session.write_file(verifier_path, _read_script("evaluate_submission_safe.py"))
 

@@ -351,7 +351,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["evaluation_contract_file"],
         meta["output_test_pos_dir"],
     ]
-    missing_eval = [path for path in required_eval_paths if not await session.exists(path)]
+    missing_eval = [path for path in required_eval_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing_eval:
         logger.error("missing evaluator paths: %s", missing_eval)
         return [0.0]
@@ -361,7 +361,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["output_report_file"],
         *(f'{meta["output_dir"]}/{name}' for name in meta["required_scripts"]),
     ]
-    missing_candidate = [path for path in required_candidate_paths if not await session.exists(path)]
+    missing_candidate = [path for path in required_candidate_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing_candidate:
         logger.error("missing candidate output paths: %s", missing_candidate)
         return [0.0]
@@ -419,7 +419,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     await session.write_file(verify_script_path, _read_script("verify_hidden_smoke.py"))
 
     rscript_binary = (
-        meta["software_rscript"] if await session.exists(meta["software_rscript"]) else RSCRIPT_BINARY
+        meta["software_rscript"] if (await session.file_exists(meta["software_rscript"]) or await session.directory_exists(meta["software_rscript"])) else RSCRIPT_BINARY
     )
 
     verify_command = _shell_join(

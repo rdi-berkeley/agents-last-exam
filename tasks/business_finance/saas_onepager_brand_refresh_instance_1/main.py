@@ -209,7 +209,7 @@ async def _reset_output_dir(session: cb.DesktopSession, output_dir: str) -> None
             "Failed to reset remote output dir "
             f"{output_dir}: {result.get('stderr') or result.get('stdout')}"
         )
-    await session.makedirs(output_dir)
+    await session.interface.create_dir(output_dir)
 
 
 @cb.tasks_config(split="train")
@@ -234,7 +234,7 @@ async def _read_required_bytes(
 ) -> dict[str, bytes]:
     payload: dict[str, bytes] = {}
     for key, remote_path in paths.items():
-        if not await session.exists(remote_path):
+        if not (await session.file_exists(remote_path) or await session.directory_exists(remote_path)):
             raise FileNotFoundError(remote_path)
         payload[key] = await session.read_bytes(remote_path)
     return payload

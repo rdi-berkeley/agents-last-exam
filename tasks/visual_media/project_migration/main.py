@@ -190,11 +190,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         ref_dir = meta["reference_dir"]
         reference_stems_dir = meta["reference_stems_dir"]
 
-        if not await session.exists(ref_dir):
+        if not (await session.file_exists(ref_dir) or await session.directory_exists(ref_dir)):
             logger.error(f"[{tag}] reference_dir missing: {ref_dir}")
             return [0.0]
 
-        if not await session.exists(output_dir):
+        if not (await session.file_exists(output_dir) or await session.directory_exists(output_dir)):
             logger.warning(f"Output directory not found: {output_dir}")
             return [0.0]
 
@@ -226,7 +226,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             # Gate 2: stems/ directory exists with WAV files
             # -----------------------------------------------------------
             stems_output_dir = os.path.join(output_dir, STEMS_DIR)
-            if not await session.exists(stems_output_dir):
+            if not (await session.file_exists(stems_output_dir) or await session.directory_exists(stems_output_dir)):
                 logger.warning("stems/ directory not found — gate fail")
                 ctx.log_evaluation(
                     identifier="gate_stems",
@@ -291,7 +291,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             # -----------------------------------------------------------
             # Gate: reference stems exist
             # -----------------------------------------------------------
-            if not await session.exists(reference_stems_dir):
+            if not (await session.file_exists(reference_stems_dir) or await session.directory_exists(reference_stems_dir)):
                 logger.error("Reference stems directory not found — cannot score")
                 ctx.finalize(num_output_files=len(output_files))
                 return [0.0]

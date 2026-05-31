@@ -233,11 +233,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         output_path = win_join(output_dir, f"{form_name}_output.json")
 
         logger.info("[%s] Checking reference file %s", meta["variant_name"], reference_path)
-        if not await session.exists(reference_path):
+        if not (await session.file_exists(reference_path) or await session.directory_exists(reference_path)):
             logger.error("[%s] Missing reference file: %s", meta["variant_name"], reference_path)
             return [0.0]
         logger.info("[%s] Checking output file %s", meta["variant_name"], output_path)
-        if not await session.exists(output_path):
+        if not (await session.file_exists(output_path) or await session.directory_exists(output_path)):
             logger.error("[%s] Missing agent output: %s", meta["variant_name"], output_path)
             return [0.0]
 
@@ -246,7 +246,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             reference_payloads[form_name] = await _read_json_remote(session, reference_path)
             logger.info("[%s] Reading output JSON %s", meta["variant_name"], output_path)
             output_payloads[form_name] = await _read_json_remote(session, output_path)
-            if await session.exists(alt_reference_path):
+            if (await session.file_exists(alt_reference_path) or await session.directory_exists(alt_reference_path)):
                 logger.info(
                     "[%s] Reading alt reference JSON %s", meta["variant_name"], alt_reference_path
                 )

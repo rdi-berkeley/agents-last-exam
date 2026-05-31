@@ -154,7 +154,7 @@ def load():
 
 
 async def _missing(session: cb.DesktopSession, path: str) -> bool:
-    return not await session.exists(path)
+    return not (await session.file_exists(path) or await session.directory_exists(path))
 
 
 @cb.setup_task(split="train")

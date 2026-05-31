@@ -249,7 +249,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         # Extract frames on remote, then read the small PNGs back.
         remote_tmp_dir = rf"{task_cfg.metadata['output_dir']}\eval_frames"
         try:
-            await session.makedirs(remote_tmp_dir)
+            await session.interface.create_dir(remote_tmp_dir)
         except Exception:
             pass
 

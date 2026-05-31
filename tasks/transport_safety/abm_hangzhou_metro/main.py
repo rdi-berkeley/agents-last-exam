@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _missing(session: cb.DesktopSession, path: str, *, label: str) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("Missing %s: %s", label, path)
     return True
@@ -234,7 +234,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     agent_keys = (("candidate_csv", "candidate passenger_records.csv"),
                   ("candidate_report", "candidate validation_report.txt"))
     for key, label in agent_keys:
-        if not await session.exists(meta[key]):
+        if not (await session.file_exists(meta[key]) or await session.directory_exists(meta[key])):
             logger.error("Missing %s at %s", label, meta[key])
             return [0.0]
 
@@ -242,7 +242,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
                       ("reference_report", "reference validation_report.txt"),
                       ("afc_csv", "visible afc csv"))
     for key, label in evaluator_keys:
-        if not await session.exists(meta[key]):
+        if not (await session.file_exists(meta[key]) or await session.directory_exists(meta[key])):
             raise RuntimeError(
                 f"evaluator-controlled {label} missing: {meta[key]}"
             )

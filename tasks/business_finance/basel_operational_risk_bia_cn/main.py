@@ -176,14 +176,14 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         f"{meta['reference_dir']}/gold_capital_calculation.json",
     ]
     missing_reference = [
-        path for path in required_reference_paths if not await session.exists(path)
+        path for path in required_reference_paths if not (await session.file_exists(path) or await session.directory_exists(path))
     ]
     if missing_reference:
         logger.error("missing evaluator reference paths: %s", "; ".join(missing_reference))
         return [0.0]
 
     score_script = f"{meta['eval_tmp_dir']}/score_outputs.py"
-    await session.makedirs(meta["eval_tmp_dir"])
+    await session.interface.create_dir(meta["eval_tmp_dir"])
     await session.write_file(score_script, SCORE_SCRIPT)
     result = await session.run_command(
         f'python "{score_script}" '

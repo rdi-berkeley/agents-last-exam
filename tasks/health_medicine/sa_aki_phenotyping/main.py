@@ -230,7 +230,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
 
     for path in [meta["output_file"], meta["reference_file"]]:
-        if not await session.exists(path):
+        if not (await session.file_exists(path) or await session.directory_exists(path)):
             logger.error("Missing required evaluation path: %s", path)
             return [0.0]
 

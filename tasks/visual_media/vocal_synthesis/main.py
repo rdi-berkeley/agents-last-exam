@@ -192,11 +192,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         ref_dir = meta["reference_dir"]
         reproduced_vocal_gt_path = meta["reproduced_vocal_gt_path"]
 
-        if not await session.exists(ref_dir):
+        if not (await session.file_exists(ref_dir) or await session.directory_exists(ref_dir)):
             logger.error(f"[{tag}] reference_dir missing: {ref_dir}")
             return [0.0]
 
-        if not await session.exists(output_dir):
+        if not (await session.file_exists(output_dir) or await session.directory_exists(output_dir)):
             logger.warning(f"Output directory not found: {output_dir}")
             return [0.0]
 
@@ -211,7 +211,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             # Gate: reproduced_vocal.wav exists
             # ---------------------------------------------------------------
             filepath = os.path.join(output_dir, REPRODUCED_VOCAL)
-            if not await session.exists(filepath):
+            if not (await session.file_exists(filepath) or await session.directory_exists(filepath)):
                 logger.warning(f"{REPRODUCED_VOCAL} not found — gate fail")
                 ctx.log_evaluation(
                     identifier="gate_reproduced",
@@ -225,7 +225,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             # Gate: screenshot shows ACE Studio project
             # ---------------------------------------------------------------
             screenshot_path = os.path.join(output_dir, OVERVIEW_SCREENSHOT)
-            if not await session.exists(screenshot_path):
+            if not (await session.file_exists(screenshot_path) or await session.directory_exists(screenshot_path)):
                 logger.warning(f"{OVERVIEW_SCREENSHOT} not found — gate fail")
                 ctx.log_evaluation(
                     identifier="gate_screenshot",
@@ -264,7 +264,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             # ---------------------------------------------------------------
             # Gate: ground truth exists
             # ---------------------------------------------------------------
-            if not await session.exists(reproduced_vocal_gt_path):
+            if not (await session.file_exists(reproduced_vocal_gt_path) or await session.directory_exists(reproduced_vocal_gt_path)):
                 logger.error("Reproduced vocal ground truth not found")
                 ctx.finalize()
                 return [0.0]

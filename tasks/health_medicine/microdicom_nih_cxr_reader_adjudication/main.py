@@ -302,7 +302,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         return [0.0]
 
     boxes_ok = False
-    if await session.exists(meta["adjudicated_boxes_path"]):
+    if (await session.file_exists(meta["adjudicated_boxes_path"]) or await session.directory_exists(meta["adjudicated_boxes_path"])):
         try:
             candidate_boxes = await session.read_file(meta["adjudicated_boxes_path"])
             boxes_ok = _boxes_pass(candidate_boxes, reference_boxes)
@@ -312,7 +312,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         logger.warning("Missing required output file: %s", meta["adjudicated_boxes_path"])
 
     log_ok = False
-    if await session.exists(meta["adjudication_log_path"]):
+    if (await session.file_exists(meta["adjudication_log_path"]) or await session.directory_exists(meta["adjudication_log_path"])):
         try:
             candidate_log = await session.read_file(meta["adjudication_log_path"])
             candidate_log_rows = _parse_tsv(candidate_log, REQUIRED_LOG_HEADERS)
@@ -341,7 +341,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         logger.warning("Missing required output file: %s", meta["adjudication_log_path"])
 
     impressions_ok = False
-    if await session.exists(meta["final_impressions_path"]):
+    if (await session.file_exists(meta["final_impressions_path"]) or await session.directory_exists(meta["final_impressions_path"])):
         try:
             candidate_impressions = await session.read_file(meta["final_impressions_path"])
             candidate_impression_rows = _parse_tsv(candidate_impressions, REQUIRED_IMPRESSION_HEADERS)

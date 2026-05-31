@@ -530,7 +530,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         song_title = brief.get("title", "")
         song_composer = brief.get("composer", "")
 
-        if not await session.exists(output_dir):
+        if not (await session.file_exists(output_dir) or await session.directory_exists(output_dir)):
             logger.warning(f"Output directory not found: {output_dir}")
             return [0.0]
 
@@ -620,7 +620,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             agent_midi_bytes = await session.read_bytes(agent_midi_path)
 
             ref_midi_bytes = None
-            if await session.exists(reference_midi_path):
+            if (await session.file_exists(reference_midi_path) or await session.directory_exists(reference_midi_path)):
                 ref_midi_bytes = await session.read_bytes(reference_midi_path)
 
             pitch_score_raw = 0.0
@@ -711,7 +711,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
             # Score layout quality (0.10) — LLM vision judge
             layout_score = 0.0
-            if await session.exists(reference_score_pdf_path):
+            if (await session.file_exists(reference_score_pdf_path) or await session.directory_exists(reference_score_pdf_path)):
                 ref_pdf_bytes = await session.read_bytes(reference_score_pdf_path)
 
                 prompt_layout = (

@@ -136,10 +136,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
 
     try:
-        if not await session.exists(meta["output_workbook"]):
+        if not (await session.file_exists(meta["output_workbook"]) or await session.directory_exists(meta["output_workbook"])):
             logger.warning("Missing output workbook: %s", meta["output_workbook"])
             return [0.0]
-        if not await session.exists(meta["reference_workbook"]):
+        if not (await session.file_exists(meta["reference_workbook"]) or await session.directory_exists(meta["reference_workbook"])):
             logger.warning("Missing hidden reference workbook: %s", meta["reference_workbook"])
             return [0.0]
 

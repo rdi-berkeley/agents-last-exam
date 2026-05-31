@@ -68,7 +68,7 @@ async def _log_missing_path(
     tag: str,
     label: str,
 ) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("[%s] Missing %s: %s", tag, label, path)
     return True
@@ -342,7 +342,7 @@ print(json.dumps({"page_paths": paths}, separators=(",", ":")))
     page_paths = payload.get("page_paths", []) or []
     page_pngs: list[bytes] = []
     for page_path in page_paths:
-        if not await session.exists(page_path):
+        if not (await session.file_exists(page_path) or await session.directory_exists(page_path)):
             logger.error("Remote rendered page missing: %s", page_path)
             return []
         page_pngs.append(await session.read_bytes(page_path))
@@ -630,7 +630,7 @@ async def _libreoffice_convertible(
     outdir: str,
     expected_pdf: str,
 ) -> tuple[bool, dict]:
-    await session.makedirs(outdir)
+    await session.interface.create_dir(outdir)
     await _run_command(
         session,
         f'powershell -NoProfile -Command "Remove-Item -Force -ErrorAction SilentlyContinue \'{expected_pdf}\'"',
@@ -658,7 +658,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     required_name = "ali emami"
     required_affiliation = "emory university"
 
-    if not await session.exists(output_pptx):
+    if not (await session.file_exists(output_pptx) or await session.directory_exists(output_pptx)):
         logger.error("[%s] Missing agent deck at %s", tag, output_pptx)
         logger.warning(
             "[%s] Current evaluator requires a real authored PPTX deck and will not proceed "
@@ -800,7 +800,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         )
         return [0.0]
 
-    if not await session.exists(libreoffice_exe):
+    if not (await session.file_exists(libreoffice_exe) or await session.directory_exists(libreoffice_exe)):
         logger.error("[%s] LibreOffice executable missing for S10 approximation: %s", tag, libreoffice_exe)
         return [0.0]
 

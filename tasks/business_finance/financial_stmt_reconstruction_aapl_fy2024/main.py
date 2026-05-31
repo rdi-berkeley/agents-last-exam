@@ -157,13 +157,13 @@ async def start(task_cfg, session: cb.DesktopSession):
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     reference_file = f"{meta['reference_dir']}/aapl_fy2024_balance_sheet_reference.json"
-    if not await session.exists(reference_file):
+    if not (await session.file_exists(reference_file) or await session.directory_exists(reference_file)):
         logger.error("missing evaluator reference file: %s", reference_file)
         return [0.0]
 
     score_script = f"{meta['eval_tmp_dir']}/score_outputs.py"
     try:
-        await session.makedirs(meta["eval_tmp_dir"])
+        await session.interface.create_dir(meta["eval_tmp_dir"])
         await session.write_file(score_script, SCORE_SCRIPT)
         result = await session.run_command(
             f'python "{score_script}" '

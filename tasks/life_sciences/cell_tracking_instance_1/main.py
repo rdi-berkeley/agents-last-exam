@@ -168,12 +168,12 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         pred_masks = {}
         for frame in range(FRAME_COUNT):
             mask_path = f'{meta["output_dir"]}/mask{frame:03d}.tif'
-            if not await session.exists(mask_path):
+            if not (await session.file_exists(mask_path) or await session.directory_exists(mask_path)):
                 logger.info("Missing output mask: %s", mask_path)
                 return [0.0]
             pred_masks[frame] = await _read_mask(session, mask_path, expected_shape=expected_shape)
 
-        if not await session.exists(meta["track_output_file"]):
+        if not (await session.file_exists(meta["track_output_file"]) or await session.directory_exists(meta["track_output_file"])):
             logger.info("Missing res_track.txt: %s", meta["track_output_file"])
             return [0.0]
         pred_track_text = await session.read_file(meta["track_output_file"])

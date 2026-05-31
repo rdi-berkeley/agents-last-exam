@@ -176,12 +176,12 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     output_file = meta["output_file"]
     ref_dir = meta["reference_dir"]
 
-    if not await session.exists(output_file):
+    if not (await session.file_exists(output_file) or await session.directory_exists(output_file)):
         logger.error("gen.cpp not found at %s", output_file)
         return [0.0]
 
     wrapper_script = _read_script("run_judge_wrapper.sh")
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     await session.write_file(f"{EVAL_TMP_DIR}/run_judge_wrapper.sh", wrapper_script)
 
     result = await session.run_command(

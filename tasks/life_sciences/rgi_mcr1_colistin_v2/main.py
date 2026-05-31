@@ -231,11 +231,11 @@ async def start(task_cfg, session: cb.DesktopSession):
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
 
-    if not await session.exists(meta["answer_file"]):
+    if not (await session.file_exists(meta["answer_file"]) or await session.directory_exists(meta["answer_file"])):
         logger.error("agent missing output: %s", meta["answer_file"])
         return [0.0]
 
-    if not await session.exists(meta["verification_targets_file"]):
+    if not (await session.file_exists(meta["verification_targets_file"]) or await session.directory_exists(meta["verification_targets_file"])):
         raise RuntimeError(
             f"evaluator-controlled reference missing: {meta['verification_targets_file']}"
         )

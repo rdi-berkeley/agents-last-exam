@@ -37,7 +37,7 @@ SIM_TIMEOUT = 3600
 
 
 async def _missing(session: cb.DesktopSession, path: str, *, label: str, tag: str) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("[%s] Missing %s: %s", tag, label, path)
     return True
@@ -214,12 +214,12 @@ async def _run_full_sim_once(task_cfg, session: cb.DesktopSession, remote_result
     while elapsed < SIM_TIMEOUT:
         await asyncio.sleep(SIM_POLL_INTERVAL)
         elapsed += SIM_POLL_INTERVAL
-        if await session.exists(remote_results):
+        if (await session.file_exists(remote_results) or await session.directory_exists(remote_results)):
             break
         if elapsed % 120 == 0:
             logger.info("Isaac sim still running (%ds elapsed)...", elapsed)
 
-    if not await session.exists(remote_results):
+    if not (await session.file_exists(remote_results) or await session.directory_exists(remote_results)):
         logger.error("full Isaac simulation timed out after %ds", SIM_TIMEOUT)
         return False
     return True
@@ -234,7 +234,7 @@ async def _maybe_run_full_sim(
     if os.environ.get("AGENTHLE_HUMANOID_SKIP_FULL_SIM") == "1":
         return False
 
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     remote_results = rf"{EVAL_TMP_DIR}\results_run_1.json"
     remote_repeat_results = rf"{EVAL_TMP_DIR}\results_run_2.json"
     if not await _run_full_sim_once(task_cfg, session, remote_results):
@@ -257,7 +257,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         ("reference_baseline_policy", "hidden baseline policy.py"),
         ("reference_baseline_checkpoint", "hidden baseline checkpoint.pt"),
     ]:
-        if not await session.exists(meta[key]):
+        if not (await session.file_exists(meta[key]) or await session.directory_exists(meta[key])):
             logger.error("[%s] Missing %s at %s", tag, label, meta[key])
             return [0.0]
 

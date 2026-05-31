@@ -232,13 +232,13 @@ def _log_score(result: ScoreResult) -> None:
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     required_outputs = [meta["answer_output"], *meta["output_csvs"].values()]
-    missing_outputs = [path for path in required_outputs if not await session.exists(path)]
+    missing_outputs = [path for path in required_outputs if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing_outputs:
         logger.error("[%s] missing outputs: %s", TASK_NAME, missing_outputs)
         return [0.0]
 
     evaluator_paths = [meta["answer_reference"], *meta["reference_csvs"].values()]
-    missing_refs = [path for path in evaluator_paths if not await session.exists(path)]
+    missing_refs = [path for path in evaluator_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing_refs:
         raise RuntimeError(
             f"evaluator-controlled references missing: {missing_refs}"

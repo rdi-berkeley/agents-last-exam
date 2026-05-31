@@ -258,7 +258,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         "go_terms.tsv",
         "functional_summary.txt",
     }
-    output_exists = {path: await session.exists(path) for path in required_outputs}
+    output_exists = {path: (await session.file_exists(path) or await session.directory_exists(path)) for path in required_outputs}
     if not all(output_exists.values()):
         missing = [path for path, exists in output_exists.items() if not exists]
         logger.error("missing agent outputs: %s", missing)

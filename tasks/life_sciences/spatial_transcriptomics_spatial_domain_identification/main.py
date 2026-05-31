@@ -255,13 +255,13 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["umap_png"],
         *meta["label_files"].values(),
     ]
-    missing_outputs = [path for path in required_output_paths if not await session.exists(path)]
+    missing_outputs = [path for path in required_output_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing_outputs:
         logger.error("missing output files: %s", missing_outputs)
         return [0.0]
 
     missing_refs = [
-        path for path in meta["annotation_files"].values() if not await session.exists(path)
+        path for path in meta["annotation_files"].values() if not (await session.file_exists(path) or await session.directory_exists(path))
     ]
     if missing_refs:
         raise RuntimeError(

@@ -134,7 +134,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         check=False,
     )
 
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     await session.write_file(
         f"{EVAL_TMP_DIR}/verify_climate.py",
         _read_script("verify_climate.py"),

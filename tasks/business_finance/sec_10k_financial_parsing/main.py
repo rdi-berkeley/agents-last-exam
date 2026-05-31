@@ -234,7 +234,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     tag = meta["variant_name"]
 
-    await session.makedirs(meta["eval_tmp_dir"])
+    await session.interface.create_dir(meta["eval_tmp_dir"])
     required_reference_paths = [
         meta["reference_dir"],
         meta["reference_ground_truth_dir"],
@@ -244,7 +244,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["cross_validation_expectations_file"],
     ]
     missing_reference_paths = [
-        path for path in required_reference_paths if not await session.exists(path)
+        path for path in required_reference_paths if not (await session.file_exists(path) or await session.directory_exists(path))
     ]
     if missing_reference_paths:
         logger.error("[%s] staged evaluator reference missing: %s", tag, missing_reference_paths)

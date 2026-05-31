@@ -311,19 +311,19 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     controller_output = meta["controller_output"]
     metadata_output = meta["metadata_output"]
 
-    if not await session.exists(submission_dir):
+    if not (await session.file_exists(submission_dir) or await session.directory_exists(submission_dir)):
         if meta["output_dir"].endswith("/output"):
             logger.info("submission directory not present yet under default output path: %s", submission_dir)
         else:
             logger.error("submission directory missing: %s", submission_dir)
         return [0.0]
-    if not await session.exists(controller_output):
+    if not (await session.file_exists(controller_output) or await session.directory_exists(controller_output)):
         if meta["output_dir"].endswith("/output"):
             logger.info("controller.py not present yet under default output path: %s", controller_output)
         else:
             logger.error("controller.py missing: %s", controller_output)
         return [0.0]
-    if not await session.exists(metadata_output):
+    if not (await session.file_exists(metadata_output) or await session.directory_exists(metadata_output)):
         if meta["output_dir"].endswith("/output"):
             logger.info("metadata.json not present yet under default output path: %s", metadata_output)
         else:

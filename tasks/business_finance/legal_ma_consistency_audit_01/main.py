@@ -129,7 +129,7 @@ def load():
 
 
 async def _missing(session: cb.DesktopSession, path: str) -> bool:
-    return not await session.exists(path)
+    return not (await session.file_exists(path) or await session.directory_exists(path))
 
 
 @cb.setup_task(split="train")
@@ -149,7 +149,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     missing_eval_paths = [
         f"{label} ({path})"
         for label, path in required_eval_paths.items()
-        if not await session.exists(path)
+        if not (await session.file_exists(path) or await session.directory_exists(path))
     ]
     if missing_eval_paths:
         logger.error("[%s] Missing evaluation assets: %s", tag, ", ".join(missing_eval_paths))

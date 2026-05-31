@@ -181,13 +181,13 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     reference_file = meta["reference_file"]
     contract_file = meta["evaluation_contract_file"]
 
-    if not await session.exists(output_file):
+    if not (await session.file_exists(output_file) or await session.directory_exists(output_file)):
         logger.error("Missing output file: %s", output_file)
         return [0.0]
-    if not await session.exists(reference_file):
+    if not (await session.file_exists(reference_file) or await session.directory_exists(reference_file)):
         logger.error("Missing hidden reference file: %s", reference_file)
         return [0.0]
-    if not await session.exists(contract_file):
+    if not (await session.file_exists(contract_file) or await session.directory_exists(contract_file)):
         logger.error("Missing hidden evaluation contract: %s", contract_file)
         return [0.0]
 

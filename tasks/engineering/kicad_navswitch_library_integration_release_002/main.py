@@ -192,7 +192,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     verifier_path = rf"{EVAL_TMP_DIR}\score_outputs.py"
     await session.write_file(verifier_path, _read_script("score_outputs.py"))
 

@@ -184,7 +184,7 @@ async def _log_missing_path(
     tag: str,
     label: str,
 ) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("[%s] Missing %s: %s", tag, label, path)
     return True
@@ -264,7 +264,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
     # ── 0b. Upload evaluation scripts to VM temp folder ───────────────────────
     tmp_scripts = r"C:\Users\User\AppData\Local\Temp\agenthle_eval\gcode"
-    await session.makedirs(tmp_scripts)
+    await session.interface.create_dir(tmp_scripts)
 
     for script_name in ["simulate_agent.py", "verify_stl.py", "check_collision.py"]:
         script_content = _read_script(script_name)
@@ -276,7 +276,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     # ── Check if agent_sim.stl already exists (test mode) ────────────────────
     # In test mode (output_test_pos / output_test_neg), agent_sim.stl is
     # pre-placed. Skip collision check and simulation — go straight to scoring.
-    agent_stl_exists = await session.exists(agent_stl)
+    agent_stl_exists = (await session.file_exists(agent_stl) or await session.directory_exists(agent_stl))
 
     if not agent_stl_exists:
         # Full evaluation: collision gate + simulation + scoring
@@ -317,7 +317,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             return [0.0]
 
         # Verify agent STL was created
-        if not await session.exists(agent_stl):
+        if not (await session.file_exists(agent_stl) or await session.directory_exists(agent_stl)):
             logger.error(f"[{task_tag}] agent_sim.stl not found at {agent_stl}")
             return [0.0]
     else:

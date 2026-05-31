@@ -496,12 +496,12 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         parts_output_dir = meta["parts_output_dir"]
         ref_midi_dir = meta["reference_midi_dir"]
 
-        if not await session.exists(ref_dir):
+        if not (await session.file_exists(ref_dir) or await session.directory_exists(ref_dir)):
             logger.error(f"[{tag}] reference_dir missing: {ref_dir}")
             return [0.0]
 
         # Discover expected player parts from reference parts
-        if not await session.exists(ref_midi_dir):
+        if not (await session.file_exists(ref_midi_dir) or await session.directory_exists(ref_midi_dir)):
             logger.error(f"[{tag}] Reference parts dir not found: {ref_midi_dir}")
             return [0.0]
 
@@ -515,7 +515,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
         logger.info(f"[{tag}] Found {expected_count} reference parts: {ref_midi_names}")
 
-        if not await session.exists(output_dir):
+        if not (await session.file_exists(output_dir) or await session.directory_exists(output_dir)):
             logger.warning(f"Output directory not found: {output_dir}")
             return [0.0]
 
@@ -529,7 +529,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             # -----------------------------------------------------------
             # Gate 1: parts/ directory exists with .mid files
             # -----------------------------------------------------------
-            if not await session.exists(parts_output_dir):
+            if not (await session.file_exists(parts_output_dir) or await session.directory_exists(parts_output_dir)):
                 logger.warning("parts/ directory not found — gate fail")
                 ctx.log_evaluation(
                     identifier="gate_parts_dir",

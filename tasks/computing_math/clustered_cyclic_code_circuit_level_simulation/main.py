@@ -153,10 +153,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     output_csv = meta["output_csv"]
     reference_csv = meta["reference_csv"]
 
-    if not await session.exists(output_csv):
+    if not (await session.file_exists(output_csv) or await session.directory_exists(output_csv)):
         logger.error("Missing output CSV: %s", output_csv)
         return [0.0]
-    if not await session.exists(reference_csv):
+    if not (await session.file_exists(reference_csv) or await session.directory_exists(reference_csv)):
         logger.error("Missing reference CSV: %s", reference_csv)
         return [0.0]
 

@@ -249,7 +249,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
 
-    await session.makedirs(meta["eval_tmp_dir"])
+    await session.interface.create_dir(meta["eval_tmp_dir"])
     try:
         tag = meta["output_dir_name"]
         score_script = f'{meta["eval_tmp_dir"]}/score_submission_{tag}.py'

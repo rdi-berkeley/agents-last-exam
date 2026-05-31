@@ -59,7 +59,7 @@ def _read_script(name: str) -> str:
 
 
 async def _missing(session: cb.DesktopSession, path: str, *, label: str) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("Missing %s: %s", label, path)
     return True
@@ -311,7 +311,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         ("ground_truth_dir", "hidden evaluator ground truth"),
     ]
     for key, label in required_eval_paths:
-        if not await session.exists(meta[key]):
+        if not (await session.file_exists(meta[key]) or await session.directory_exists(meta[key])):
             raise RuntimeError(f"missing {label} at {meta[key]}")
     # GCS staging strips Unix executable permissions; restore them on evaluator venv binaries
     venv_root = f'{meta["reference_dir"]}/evaluator_env/.venv'
@@ -322,8 +322,8 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     if not await _executable(session, meta["evaluator_python"], label="hidden evaluator python"):
         raise RuntimeError(f"hidden evaluator python is not executable at {meta['evaluator_python']}")
 
-    await session.makedirs(EVAL_TMP_DIR)
-    await session.makedirs(f"{EVAL_TMP_DIR}/tmp")
+    await session.interface.create_dir(EVAL_TMP_DIR)
+    await session.interface.create_dir(f"{EVAL_TMP_DIR}/tmp")
     verifier_path = f"{EVAL_TMP_DIR}/verify_submission.py"
     await session.write_file(verifier_path, _read_script("verify_submission.py"))
 

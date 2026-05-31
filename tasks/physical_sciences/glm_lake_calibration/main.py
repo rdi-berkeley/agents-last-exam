@@ -189,7 +189,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     mode = Path(meta["output_dir"]).name
     hidden_paths = [meta["reference_dir"], f"{meta['reference_dir']}/fixture_metrics.json"]
     for path in hidden_paths:
-        if not await session.exists(path):
+        if not (await session.file_exists(path) or await session.directory_exists(path)):
             logger.error(
                 "[%s] hidden evaluator path missing at evaluate() time: %s",
                 meta["variant_name"],
@@ -197,7 +197,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             )
             return [0.0]
 
-    await session.makedirs(REMOTE_EVAL_TMP_DIR)
+    await session.interface.create_dir(REMOTE_EVAL_TMP_DIR)
     verify_script_path = f"{REMOTE_EVAL_TMP_DIR}/verify_outputs.py"
     await session.write_file(verify_script_path, _read_script("verify_outputs.py"))
 

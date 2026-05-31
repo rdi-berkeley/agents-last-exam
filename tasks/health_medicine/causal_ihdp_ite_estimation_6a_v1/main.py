@@ -341,7 +341,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["hidden_test_file"],
         meta["gold_output_file"],
     ]
-    missing_eval_paths = [path for path in required_eval_paths if not await session.exists(path)]
+    missing_eval_paths = [path for path in required_eval_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing_eval_paths:
         logger.error("[%s] missing evaluation paths: %s", TASK_NAME, "; ".join(missing_eval_paths))
         return [0.0]
@@ -411,7 +411,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             _as_text(invoke_result.get("stderr", "")),
         )
 
-    if not await session.exists(output_csv_path):
+    if not (await session.file_exists(output_csv_path) or await session.directory_exists(output_csv_path)):
         logger.error("[%s] missing scored output after predict.sh: %s", TASK_NAME, output_csv_path)
         return [0.0]
 
@@ -428,22 +428,22 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             reference_gold_csv=_as_text(await session.read_file(meta["gold_output_file"])),
             model_selection_csv=(
                 _as_text(await session.read_file(artifact_paths["model_selection_csv"]))
-                if await session.exists(artifact_paths["model_selection_csv"])
+                if (await session.file_exists(artifact_paths["model_selection_csv"]) or await session.directory_exists(artifact_paths["model_selection_csv"]))
                 else None
             ),
             overlap_csv=(
                 _as_text(await session.read_file(artifact_paths["overlap_csv"]))
-                if await session.exists(artifact_paths["overlap_csv"])
+                if (await session.file_exists(artifact_paths["overlap_csv"]) or await session.directory_exists(artifact_paths["overlap_csv"]))
                 else None
             ),
             subgroup_csv=(
                 _as_text(await session.read_file(artifact_paths["subgroup_csv"]))
-                if await session.exists(artifact_paths["subgroup_csv"])
+                if (await session.file_exists(artifact_paths["subgroup_csv"]) or await session.directory_exists(artifact_paths["subgroup_csv"]))
                 else None
             ),
             run_notes_txt=(
                 _as_text(await session.read_file(artifact_paths["run_notes_txt"]))
-                if await session.exists(artifact_paths["run_notes_txt"])
+                if (await session.file_exists(artifact_paths["run_notes_txt"]) or await session.directory_exists(artifact_paths["run_notes_txt"]))
                 else None
             ),
         )

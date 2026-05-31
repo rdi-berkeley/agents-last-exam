@@ -21,7 +21,7 @@ VARIANTS = [("base", "virtual plume behavioral paradigm schematic")]
 
 
 async def _path_missing(session: cb.DesktopSession, path: str, *, label: str, tag: str) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("[%s] Missing %s: %s", tag, label, path)
     return True
@@ -168,7 +168,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         ("input_reference_pdf", "visible reference PDF"),
         ("input_template_ai", "visible template AI"),
     ]:
-        if not await session.exists(meta[key]):
+        if not (await session.file_exists(meta[key]) or await session.directory_exists(meta[key])):
             logger.error("[%s] Missing %s at %s", tag, label, meta[key])
             return [0.0]
 

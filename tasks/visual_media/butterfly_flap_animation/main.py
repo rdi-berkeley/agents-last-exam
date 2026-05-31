@@ -202,7 +202,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     required_paths = [meta["source_image"], meta["output_video"]]
-    missing = [path for path in required_paths if not await session.exists(path)]
+    missing = [path for path in required_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing:
         logger.error("[%s] missing evaluation paths: %s", TASK_NAME, "; ".join(missing))
         return [0.0]

@@ -241,7 +241,7 @@ def _log_score(result: ScoreResult) -> None:
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     required_outputs = [meta["submission_output"], meta["per_cell_output"]]
-    missing_outputs = [path for path in required_outputs if not await session.exists(path)]
+    missing_outputs = [path for path in required_outputs if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing_outputs:
         logger.error("[%s] missing output files: %s", TASK_NAME, "; ".join(missing_outputs))
         return [0.0]

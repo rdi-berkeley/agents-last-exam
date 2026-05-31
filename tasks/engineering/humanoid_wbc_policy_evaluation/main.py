@@ -26,7 +26,7 @@ VARIANTS = [("base", "8 humanoid whole-body-control policy evaluation cases")]
 
 
 async def _missing(session: cb.DesktopSession, path: str, *, label: str, tag: str) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("[%s] Missing %s: %s", tag, label, path)
     return True
@@ -179,11 +179,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     tag = meta["variant_name"]
 
-    if not await session.exists(meta["reference_expected_verdicts"]):
+    if not (await session.file_exists(meta["reference_expected_verdicts"]) or await session.directory_exists(meta["reference_expected_verdicts"])):
         logger.error("[%s] Missing hidden reference: %s", tag, meta["reference_expected_verdicts"])
         return [0.0]
 
-    if not await session.exists(meta["output_dir"]):
+    if not (await session.file_exists(meta["output_dir"]) or await session.directory_exists(meta["output_dir"])):
         logger.error("[%s] Missing output directory: %s", tag, meta["output_dir"])
         return [0.0]
 
@@ -196,7 +196,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             entries,
         )
         return [0.0]
-    if not await session.exists(meta["output_visual_demos_dir"]):
+    if not (await session.file_exists(meta["output_visual_demos_dir"]) or await session.directory_exists(meta["output_visual_demos_dir"])):
         logger.error("[%s] Missing visual demos directory: %s", tag, meta["output_visual_demos_dir"])
         return [0.0]
 
