@@ -113,9 +113,17 @@ class OdooTaskConfig(GeneralTaskConfig):
 
     @property
     def task_description(self) -> str:
-        prompt_text = (
-            (self.variant_source_dir / "input" / "prompt.txt").read_text(encoding="utf-8").strip()
-        )
+        # Only the published variant (odoo_compact) has its prompt vendored at
+        # variants/<name>/input/prompt.txt. load() eagerly builds every
+        # VariantSpec, so for the unpublished variants fall back to the variant
+        # note rather than hard-failing host-side load()/load_meta.
+        prompt_file = self.variant_source_dir / "input" / "prompt.txt"
+        try:
+            prompt_text = prompt_file.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            prompt_text = (
+                self.VARIANT_NOTE or f"(prompt for variant {self.VARIANT_NAME} not vendored)"
+            )
         out_dir = self.output_dir
         return f"""\
 Goal:

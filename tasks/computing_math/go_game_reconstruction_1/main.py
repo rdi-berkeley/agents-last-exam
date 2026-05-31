@@ -6,6 +6,7 @@ import importlib.util
 import json
 import logging
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
 VERIFY_SCRIPT_PATH = SCRIPTS_DIR / "verify_sgf.py"
+
 
 def _load_verify_module():
     spec = importlib.util.spec_from_file_location(
@@ -67,6 +69,7 @@ def _parse_json_stdout(raw: str) -> Any:
     raise ValueError(f"could not parse JSON from stdout: {text[:400]}")
 
 
+@dataclass
 class GoGameReconstructionConfig(LinuxTaskConfig):
     """Configuration for the Sabaki GUI reconstruction benchmark."""
 
@@ -175,7 +178,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 
 async def _choose_candidate_path(meta: dict[str, Any], session: cb.DesktopSession) -> Optional[str]:
     preferred = meta["preferred_output_path"]
-    if (await session.file_exists(preferred) or await session.directory_exists(preferred)):
+    if await session.file_exists(preferred) or await session.directory_exists(preferred):
         return preferred
 
     result = await _run_command(
