@@ -680,6 +680,23 @@ class CursorCliDeployer(BaseAgentDeployer):
         builder.trajectory.extra.setdefault("cursor_cli", {})["result"] = event
         if usage:
             builder.trajectory.extra["cursor_cli"]["usage"] = usage
+            # cursor-agent reports the CUMULATIVE token usage on the final
+            # `result` event (per-step assistant messages carry none), so add a
+            # step carrying it into StepMetrics — otherwise the trajectory's
+            # final_metrics (summed from per-step metrics) stays 0. cursor-agent
+            # does NOT surface a dollar cost (Cursor's own backend prices it
+            # internally), so cost_usd is left unset.
+            builder.add_step(
+                source="system",
+                message=None,
+                metrics=StepMetrics(
+                    input_tokens=usage.get("inputTokens") or usage.get("input_tokens"),
+                    output_tokens=usage.get("outputTokens") or usage.get("output_tokens"),
+                    cache_read_tokens=usage.get("cacheReadTokens") or usage.get("cache_read_input_tokens"),
+                    cache_creation_tokens=usage.get("cacheWriteTokens") or usage.get("cache_creation_input_tokens"),
+                ),
+                extra={"usage_reconciliation": True},
+            )
 
 
 def _diagnose_failure(stderr_log: Path, transcript: Path, exit_code: int | None) -> str:
