@@ -584,6 +584,23 @@ class ForgecodeDeployer(BaseAgentDeployer):
             usage_summary["total_cost_usd"] = total_cost
         builder.trajectory.extra.setdefault("forgecode", {})["usage"] = usage_summary
 
+        # Route the dump-aggregated usage into a StepMetrics so finalize()
+        # sums it. forge's per-message ``usage.prompt_tokens`` is the full
+        # input (cache_read inclusive), so uncached = prompt - cached. Forge
+        # reports cost via usage.cost.
+        if total_input_tokens or total_output_tokens or cost_seen:
+            builder.add_step(
+                source="system",
+                message=None,
+                metrics=StepMetrics(
+                    input_tokens=max(total_input_tokens - total_cached_tokens, 0),
+                    output_tokens=total_output_tokens,
+                    cache_read_tokens=total_cached_tokens or None,
+                    cost_usd=total_cost if cost_seen else None,
+                ),
+                extra={"usage_dump": True},
+            )
+
     @classmethod
     def _consume_text_message(
         cls, msg: dict[str, Any], builder: TrajectoryBuilder,
