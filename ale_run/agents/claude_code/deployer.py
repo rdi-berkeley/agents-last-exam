@@ -384,6 +384,39 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
                 continue
             cls._consume_event(event, builder)
 
+        # Usage/cost reconciliation. Claude Code reports the AUTHORITATIVE
+        # cumulative usage (`usage`) + `total_cost_usd` on the final `result`
+        # event. Per-message `usage` is frequently all-zero over OpenRouter (the
+        # CLI doesn't get token counts back from a non-Anthropic gateway), so the
+        # per-step sum alone would be 0. Add a reconciliation step carrying the
+        # DELTA between the result-event cumulative and whatever per-step metrics
+        # already summed, plus the full cost — so the trajectory's final_metrics
+        # equal the result-event total on OpenRouter AND don't double-count on a
+        # direct Anthropic run where per-message usage IS populated.
+        result = builder.trajectory.extra.get("result") or {}
+        ru = result.get("usage") or {}
+        if ru or result.get("total_cost_usd") is not None:
+            si = so = scr = scc = 0
+            for s in builder.trajectory.steps:
+                m = s.metrics
+                if m:
+                    si += m.input_tokens or 0
+                    so += m.output_tokens or 0
+                    scr += m.cache_read_tokens or 0
+                    scc += m.cache_creation_tokens or 0
+            builder.add_step(
+                source="system",
+                message=None,
+                metrics=StepMetrics(
+                    input_tokens=max((ru.get("input_tokens") or 0) - si, 0),
+                    output_tokens=max((ru.get("output_tokens") or 0) - so, 0),
+                    cache_read_tokens=max((ru.get("cache_read_input_tokens") or 0) - scr, 0),
+                    cache_creation_tokens=max((ru.get("cache_creation_input_tokens") or 0) - scc, 0),
+                    cost_usd=result.get("total_cost_usd"),
+                ),
+                extra={"usage_reconciliation": True},
+            )
+
         builder.trajectory.extra.setdefault("claude_code", {}).update({
             "exit_code": run_result.exit_code,
             "transcript_path": str(transcript_file),
