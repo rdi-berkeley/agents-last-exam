@@ -527,11 +527,30 @@ class GrokCliDeployer(BaseAgentDeployer):
 
     @staticmethod
     def _consume_step_finish(event: dict, builder: TrajectoryBuilder) -> None:
+        # Grok CLI reports reliable per-step usage on each `step_finish` event:
+        # usage.inputTokens / usage.outputTokens, plus usage.costUsdTicks
+        # (one tick == 1e-6 USD). Populate StepMetrics per step so finalize()
+        # sums tokens AND the grok-priced cost.
         usage = event.get("usage", {})
-        if usage:
-            builder.trajectory.extra.setdefault("grok_cli", {}).setdefault(
-                "usage_steps", [],
-            ).append(usage)
+        if not isinstance(usage, dict) or not usage:
+            return
+        builder.trajectory.extra.setdefault("grok_cli", {}).setdefault(
+            "usage_steps", [],
+        ).append(usage)
+        cost_ticks = usage.get("costUsdTicks")
+        timing = event.get("timing", {})
+        duration_ms = timing.get("durationMs") if isinstance(timing, dict) else None
+        builder.add_step(
+            source="system",
+            message=None,
+            metrics=StepMetrics(
+                input_tokens=usage.get("inputTokens"),
+                output_tokens=usage.get("outputTokens"),
+                cost_usd=(cost_ticks / 1_000_000) if cost_ticks else None,
+                duration_ms=duration_ms,
+            ),
+            extra={"usage_step": True, "finish_reason": event.get("finishReason")},
+        )
 
 
 def _diagnose_failure(stderr_log: Path, transcript: Path, exit_code: int | None) -> str:
