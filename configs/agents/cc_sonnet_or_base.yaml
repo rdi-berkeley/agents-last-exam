@@ -1,0 +1,6 @@
+# Agent preset: cc_sonnet_or_base
+# harness=claude_code model=claude-sonnet-4-6
+# Referenced from an experiment as:  agents: [ ../configs/agents/cc_sonnet_or_base.yaml ]
+
+harness: claude_code
+model: claude-sonnet-4-6

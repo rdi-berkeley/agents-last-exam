@@ -1,0 +1,8 @@
+# Agent preset: openclaw_sonnet_or
+# harness=openclaw_cli model=anthropic/claude-sonnet-4-6
+# Referenced from an experiment as:  agents: [ ../configs/agents/openclaw_sonnet_or.yaml ]
+
+harness: openclaw_cli
+model: anthropic/claude-sonnet-4-6
+config:
+  tarball_url: https://github.com/cua-verse/openclaw/releases/download/v2026.4.26-agenthle/openclaw-2026.4.26.tgz

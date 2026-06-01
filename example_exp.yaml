@@ -4,32 +4,40 @@
 #     uv run python -m ale_run run example_exp.yaml
 #     uv run python -m ale_run run example_exp.yaml --dry-run
 #
-# Only the four blocks below are required (name / agent / environment / tasks).
-# Long-tail knobs live in `configs/` and are pulled in via `profile:` paths.
-# Any field set directly here overrides the profile.
+# An experiment only wires things together. All agent configuration lives in a
+# file under `configs/agents/`; all environment configuration lives in a file
+# under `configs/environments/`. The experiment references them by path and
+# carries only run-level knobs (output / artifacts_path / concurrency / ...).
+#
+#   agents:       one or more paths under configs/agents/. List several to run
+#                 the agent matrix (every agent over every task).
+#   environment:  exactly one path under configs/environments/.
 #
 # Secrets & env vars: copy `secret/.env.example` → `secret/.env` and fill in.
 # The loader reads `secret_file` (relative to this yaml) before parsing, so any
-# $-env reference (UPPER_SNAKE form) below resolves without manual `export`.
-# Shell env still wins, so `export FOO=bar` overrides the file for one-off runs.
+# $-env reference (UPPER_SNAKE form) in a referenced config resolves without a
+# manual `export`. Shell env still wins, so `export FOO=bar` overrides for a
+# one-off run.
 # =============================================================================
 
 name: my_experiment
 
-secret_file: secret/.env                          # KEY=value pairs;
+secret_file: secret/.env                          # KEY=value pairs
 
-agent:
-  harness: claude_code                            # claude_code | ale_claw
-  model: anthropic/claude-sonnet-4-6              # OpenRouter slug
-  profile: configs/agents/cc_sonnet.yaml          # max_turns / timeout / ... (optional)
-
-environment:
-  provider: gcloud                                   # gcloud | static
-  profile: configs/environments/gcloud_default.yaml  # project / SA key / zone / images / ...
+agents:
+  - configs/agents/cc_sonnet_or_t3.yaml           # add more lines to run a matrix
+environment: configs/environments/gcloud_ubuntu.yaml
 
 tasks: selected_tasks/helloworld.txt
 
-run_profile: configs/runs/default.yaml            # Default run-level profile (output dir, concurrency, artifacts).
+# ---- run-level knobs (all optional; defaults shown) ----
+artifacts_path:
+  task_data_source: gs://ale-data-public          # gs://… | hf://… | baked_in_sandbox
+  output_path: local                              # null | local | gs://…
+output:
+  root: .logs/ale
+concurrency: 1                                    # units in flight (caps VMs + LLM RPM)
+cleanup_mode: delete                              # delete | stop | keep
 
 # Appended verbatim (as its own paragraph) to EVERY task's prompt before it
 # reaches the agent. Empty/unset ⇒ no change. Use a `|` block for multi-line.

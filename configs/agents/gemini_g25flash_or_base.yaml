@@ -1,0 +1,6 @@
+# Agent preset: gemini_g25flash_or_base
+# harness=gemini_cli model=google/gemini-2.5-flash
+# Referenced from an experiment as:  agents: [ ../configs/agents/gemini_g25flash_or_base.yaml ]
+
+harness: gemini_cli
+model: google/gemini-2.5-flash

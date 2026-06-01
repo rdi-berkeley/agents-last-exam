@@ -221,20 +221,23 @@ gcloud compute instances delete <name> --zone=<zone>
 
 ### Region / zone
 
-The default profile pins `zone: us-west1-b` (see
-[`configs/environments/gcloud_default.yaml`](../configs/environments/gcloud_default.yaml)).
-If you set `GCP_REGION` to something else in Step 3, also override
-`zone` in your experiment yaml or edit the profile.
+The gcloud env config lists the fallback zones under its `snapshots:`
+block (see
+[`configs/environments/gcloud_ubuntu.yaml`](../configs/environments/gcloud_ubuntu.yaml)).
+If you set `GCP_REGION` to something else in Step 3, also edit the
+`zones:` list in that env config (or copy it to a new
+`configs/environments/*.yaml` and point your experiment's `environment:`
+at it).
 
 ### Image / machine-type compatibility
 
 - `ale-unified-v1` is a **Windows** image. The Linux demo `demo/hello`
-  needs a Linux image (see `cpu-free-ubuntu` snapshot tag in the env
-  profile). Use `demo/hello_win` for now.
+  needs a Linux image (see the `cpu-free-ubuntu` snapshot tag in the env
+  config). Use `demo/hello_win` for now.
 - `c4-*` / `m4-*` / `x4-*` machine families require **all** disks to be
-  `hyperdisk-balanced`. The default profile uses `e2-standard-4` which
+  `hyperdisk-balanced`. The default config uses `e2-standard-4` which
   is fine. If you switch to `c4-standard-4`, also set
-  `data_disk_type: hyperdisk-balanced` in the env profile.
+  `data_disk_type: hyperdisk-balanced` in the env config.
 - For CPU-only demo runs, `e2-*` and `n1-*` are cheapest. `g2-*` adds
   GPU but costs ~10× more.
 

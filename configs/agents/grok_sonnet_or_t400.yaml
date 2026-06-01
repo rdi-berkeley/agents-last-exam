@@ -1,0 +1,9 @@
+# Agent preset: grok_sonnet_or_t400
+# harness=grok_cli model=anthropic/claude-sonnet-4-6
+# Referenced from an experiment as:  agents: [ ../configs/agents/grok_sonnet_or_t400.yaml ]
+
+harness: grok_cli
+model: anthropic/claude-sonnet-4-6
+config:
+  max_tool_rounds: 400
+  bundle_url: https://github.com/cua-verse/grok-cli/releases/download/v0.1.1-agenthle/grok-bundle.js

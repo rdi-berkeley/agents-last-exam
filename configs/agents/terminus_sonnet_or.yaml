@@ -1,0 +1,6 @@
+# Agent preset: terminus_sonnet_or
+# harness=terminus_2 model=anthropic/claude-sonnet-4-6
+# Referenced from an experiment as:  agents: [ ../configs/agents/terminus_sonnet_or.yaml ]
+
+harness: terminus_2
+model: anthropic/claude-sonnet-4-6

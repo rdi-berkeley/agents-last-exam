@@ -1,0 +1,34 @@
+# Agent preset: gemini_g25flash_or_toolrestricted
+# harness=gemini_cli model=google/gemini-2.5-flash
+# Referenced from an experiment as:  agents: [ ../configs/agents/gemini_g25flash_or_toolrestricted.yaml ]
+
+harness: gemini_cli
+model: google/gemini-2.5-flash
+config:
+  allowed_tools:
+  - read_file
+  - write_file
+  - list_directory
+  - glob
+  - grep_search
+  - read_many_files
+  disabled_tools:
+  - run_shell_command
+  - replace
+  - google_web_search
+  - web_fetch
+  - save_memory
+  - activate_skill
+  - get_internal_docs
+  - write_todos
+  - ask_user
+  - enter_plan_mode
+  - exit_plan_mode
+  - update_topic
+  - complete_task
+  - tracker_create_task
+  - tracker_update_task
+  - tracker_get_task
+  - tracker_list_tasks
+  - tracker_add_dependency
+  - tracker_visualize

@@ -1,0 +1,9 @@
+# Agent preset: grok_grok43_or
+# harness=grok_cli model=x-ai/grok-4.3
+# Referenced from an experiment as:  agents: [ ../configs/agents/grok_grok43_or.yaml ]
+
+harness: grok_cli
+model: x-ai/grok-4.3
+config:
+  max_tool_rounds: 400
+  bundle_url: https://github.com/cua-verse/grok-cli/releases/download/v0.1.1-agenthle/grok-bundle.js

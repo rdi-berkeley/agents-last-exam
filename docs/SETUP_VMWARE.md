@@ -25,16 +25,21 @@ with three methods:
 - `open_session(sandbox)` — wrap `cb.RemoteDesktopSession` at the VM's
   IP, same as the other providers.
 
-Expected yaml shape (TODO):
+Expected yaml shape (TODO). An experiment points `environment:` at a
+single env config under `configs/environments/`; the provider and its
+knobs live inside that file:
 
 ```yaml
-environment:
-  provider: vmware
-  profile: configs/environments/vmware_default.yaml   # not yet shipped
-  config:
-    vmrun_path: /usr/bin/vmrun                        # or vmware-workstation
-    base_snapshot: ~/vmware/ale-unified-v1.vmx
-    network: nat
+# experiment.yaml
+environment: configs/environments/vmware_default.yaml   # not yet shipped
+```
+
+```yaml
+# configs/environments/vmware_default.yaml  (not yet shipped)
+provider: vmware
+vmrun_path: /usr/bin/vmrun                              # or vmware-workstation
+base_snapshot: ~/vmware/ale-unified-v1.vmx
+network: nat
 ```
 
 ---
@@ -52,14 +57,20 @@ If you bring up a VMware VM by hand today, you can drive it through the
    curl http://<vm-ip>:5000/status
    # → {"status":"ok", ...}
    ```
-3. **Point the experiment at it** with the `static` provider:
+3. **Point the experiment at it** with the `static` provider. Copy an
+   existing static env config (e.g.
+   [`configs/environments/static_win10.yaml`](../configs/environments/static_win10.yaml))
+   and set its `endpoint:`/`image:` for your VM:
    ```yaml
-   environment:
-     provider: static
-     config:
-       endpoint: http://192.168.1.42:5000
-       image: ale-win10                  # or ale-ubuntu22
-       vm_id: my-vmware-box
+   # configs/environments/static_myvmware.yaml
+   provider: static
+   endpoint: http://192.168.1.42:5000
+   image: ale-win10                      # or ale-ubuntu22
+   vm_id: my-vmware-box
+   ```
+   ```yaml
+   # experiment.yaml
+   environment: configs/environments/static_myvmware.yaml
    ```
 4. **Run the experiment normally.** Because the VM persists across runs,
    set `cleanup_on_release: true` plus a `cleanup_script` if you need

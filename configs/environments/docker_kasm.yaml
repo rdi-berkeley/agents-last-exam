@@ -1,0 +1,5 @@
+# Environment: docker_kasm (provider=docker)
+# Referenced from an experiment as:  environment: ../configs/environments/docker_kasm.yaml
+
+provider: docker
+image: agentslastexam/ale-kasm:latest

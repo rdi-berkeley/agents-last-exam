@@ -1,25 +1,31 @@
 """YAML loader for ExperimentSpec.
 
-The public-facing yaml is minimal — name / agent / environment / tasks — with
-long-tail knobs pulled in via ``profile:`` paths under ``configs/``. This
-loader normalizes that shape into the internal ``ExperimentSpec`` dataclass,
-which the Runner consumes.
+The experiment yaml is deliberately thin: it wires together externalized
+config files and carries only run-level knobs. Agent and environment
+configuration live in their own files under ``configs/``; the experiment
+references them by path.
 
-Three shape conveniences relative to the dataclass:
+Shape:
 
-* ``agent: {...}`` single-dict form (most experiments). Lowered into the
-  internal ``agents: [...]`` matrix as a single entry. Legacy
-  ``agents: [...]`` lists still work for matrix runs.
+* ``agents: [<path>, ...]`` — a list of paths to agent config yamls under
+  ``configs/agents/``. Each referenced file is a full agent preset
+  (``harness`` + ``model`` + ``config``). Listing more than one runs the
+  agent matrix (every agent over every task). ``agent: <path>`` is accepted
+  as the single-agent shorthand. The agent's ``id`` defaults to the preset
+  filename stem so two presets of the same harness don't collide.
+* ``environment: <path>`` — a single path to an environment yaml under
+  ``configs/environments/``. The file carries ``provider:`` plus its
+  provider-specific knobs. Exactly one environment per experiment.
 * ``tasks: <path>`` string form. ``.txt`` → one task path per line
-  (variant 0); ``.yaml`` → list of ``{path, variants}`` entries. The
-  legacy inline list form still works.
-* ``profile: <relative-path>`` on agent / environment, plus top-level
-  ``run_profile: <relative-path>``. Profiles are partial dicts; the main
-  yaml's keys win on conflict (deep-merged one level for ``config:``).
+  (variant 0); ``.yaml`` → list of ``{path, variants}`` entries. An inline
+  list of ``{path, variants}`` is also accepted.
+* Run-level keys live at the experiment top level: ``output``,
+  ``artifacts_path``, ``concurrency``, ``cleanup_mode``, ``prompt_suffix``.
 
 Other behavior:
 
-* ``${env:VAR}`` substitution at parse time (KeyError if VAR unset).
+* ``${env:VAR}`` substitution at parse time (KeyError if VAR unset) — applied
+  to the experiment yaml AND every referenced config file.
 * All relative paths resolve against the main yaml's directory.
 * Unknown / missing keys raise loudly.
 """
@@ -52,8 +58,7 @@ _ENV_RE = re.compile(r"\$\{env:([A-Z_][A-Z0-9_]*)\}")
 # Top-level keys consumed by the loader (anything else → TypeError).
 _TOP_LEVEL_KEYS = frozenset({
     "name", "secret_file", "agent", "agents", "environment", "tasks",
-    "run_profile",
-    # run-level fields (also accepted inline at the top, override run_profile):
+    # run-level fields:
     "output", "artifacts_path",
     "concurrency",
     "cleanup_mode",
@@ -175,19 +180,6 @@ def _resolve_path(p: str | Path, base_dir: Path) -> Path:
     return (base_dir / pp).resolve()
 
 
-def _merge_dict(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
-    """Shallow merge: overlay wins. ``config`` sub-key is deep-merged one
-    level so an agent profile's ``config.timeout_s`` survives even if the
-    main yaml overrides ``config.model``."""
-    out: dict[str, Any] = dict(base)
-    for k, v in overlay.items():
-        if k == "config" and isinstance(v, dict) and isinstance(out.get("config"), dict):
-            out["config"] = {**out["config"], **v}
-        else:
-            out[k] = v
-    return out
-
-
 # =============================================================================
 # Top-level builder
 # =============================================================================
@@ -198,33 +190,27 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
         raise TypeError(f"unknown top-level keys: {sorted(unknown)}")
     _require(raw, "name")
 
-    # Apply optional run_profile under the top-level dict, with main yaml
-    # winning. Result is the effective top-level for output / artifacts /
-    # concurrency.
-    if (rp := raw.get("run_profile")) is not None:
-        prof = _read_yaml(_resolve_path(rp, base_dir))
-        if not isinstance(prof, dict):
-            raise TypeError(f"run_profile {rp!r} must be a mapping")
-        effective = _merge_dict(prof, {k: v for k, v in raw.items() if k != "run_profile"})
-    else:
-        effective = dict(raw)
-
-    output = _build_output(effective.get("output") or {})
-    artifacts = _build_artifacts(effective.get("artifacts_path") or {})
-    concurrency = _build_concurrency(effective)
-    cleanup_mode = _build_cleanup_mode(effective)
-    prompt_suffix = str(effective.get("prompt_suffix") or "")
+    # Run-level knobs live directly at the experiment top level.
+    output = _build_output(raw.get("output") or {})
+    artifacts = _build_artifacts(raw.get("artifacts_path") or {})
+    concurrency = _build_concurrency(raw)
+    cleanup_mode = _build_cleanup_mode(raw)
+    prompt_suffix = str(raw.get("prompt_suffix") or "")
 
     if "agent" in raw and "agents" in raw:
-        raise ValueError("set either `agent:` (single) or `agents:` (list), not both")
+        raise ValueError("set either `agent:` (single path) or `agents:` (list of paths), not both")
     if "agent" in raw:
-        agents = [_build_agent_single(raw["agent"], base_dir=base_dir)]
+        agents = [_build_agent_from_path(raw["agent"], base_dir=base_dir)]
     elif "agents" in raw:
-        agents = [_build_agent_single(a, base_dir=base_dir) for a in raw["agents"]]
+        if not isinstance(raw["agents"], list):
+            raise TypeError(f"agents must be a list of yaml paths, got {type(raw['agents']).__name__}")
+        agents = [_build_agent_from_path(p, base_dir=base_dir) for p in raw["agents"]]
     else:
-        raise KeyError("missing required field: `agent` (or `agents`)")
+        raise KeyError("missing required field: `agents` (list of paths) or `agent` (single path)")
 
-    provider = _build_environment(raw.get("environment") or {}, base_dir=base_dir)
+    if "environment" not in raw:
+        raise KeyError("missing required field: `environment` (path to an environment yaml)")
+    provider = _build_environment_from_path(raw["environment"], base_dir=base_dir)
 
     if "tasks" not in raw:
         raise KeyError("missing required field: `tasks`")
@@ -310,91 +296,80 @@ def _build_artifacts(raw: dict[str, Any]) -> ArtifactsSpec:
 
 # ---- agent ---------------------------------------------------------------
 
-# Shape of an agent block (after profile merge):
+# Shape of an agent config yaml (configs/agents/<preset>.yaml):
 #   harness | class : str          — registry shortcut OR fqdn
 #   model            : str          — sugar → config.model
-#   id               : str | None   — defaults to harness/class short name
+#   id               : str | None   — defaults to the preset filename stem
 #   executor         : str | None   — vm | local | docker (deployer default if None)
-#   profile          : str | None   — consumed by the merger; not in AgentSpec
 #   config           : dict         — passed verbatim to the deployer Config
-_AGENT_TOP_KEYS = frozenset({"harness", "class", "model", "id", "executor", "profile", "config"})
+_AGENT_TOP_KEYS = frozenset({"harness", "class", "model", "id", "executor", "config"})
 
 
-def _build_agent_single(raw: dict[str, Any], *, base_dir: Path) -> AgentSpec:
+def _build_agent_from_path(path: Any, *, base_dir: Path) -> AgentSpec:
+    """Load one agent preset from a ``configs/agents/<preset>.yaml`` path."""
+    if not isinstance(path, str):
+        raise TypeError(
+            f"each agent entry must be a path string to a config yaml, "
+            f"got {type(path).__name__}: {path!r}"
+        )
+    resolved = _resolve_path(path, base_dir)
+    raw = _read_yaml(resolved)
     if not isinstance(raw, dict):
-        raise TypeError(f"agent must be a mapping, got {type(raw).__name__}")
+        raise TypeError(f"agent config {path!r} must be a mapping")
 
-    merged: dict[str, Any] = dict(raw)
-    if (prof_path := merged.pop("profile", None)) is not None:
-        prof = _read_yaml(_resolve_path(prof_path, base_dir))
-        if not isinstance(prof, dict):
-            raise TypeError(f"agent profile {prof_path!r} must be a mapping")
-        prof_unknown = set(prof) - _AGENT_TOP_KEYS
-        if prof_unknown:
-            raise TypeError(
-                f"agent profile {prof_path!r} has unknown keys: {sorted(prof_unknown)}"
-            )
-        merged = _merge_dict(prof, merged)
-
-    unknown = set(merged) - _AGENT_TOP_KEYS
+    unknown = set(raw) - _AGENT_TOP_KEYS
     if unknown:
-        raise TypeError(f"agent has unknown keys: {sorted(unknown)}")
+        raise TypeError(f"agent config {path!r} has unknown keys: {sorted(unknown)}")
 
-    if "harness" in merged and "class" in merged:
-        raise ValueError("set either `harness:` (shortcut) or `class:` (fqdn), not both")
-    cls = merged.get("harness") or merged.get("class")
+    if "harness" in raw and "class" in raw:
+        raise ValueError(
+            f"agent config {path!r}: set either `harness:` (shortcut) or "
+            f"`class:` (fqdn), not both"
+        )
+    cls = raw.get("harness") or raw.get("class")
     if not cls:
-        raise KeyError("agent missing required field: `harness` (or `class`)")
+        raise KeyError(f"agent config {path!r} missing required field: `harness` (or `class`)")
     cls = str(cls)
 
-    config: dict[str, Any] = dict(merged.get("config") or {})
-    # `model:` at the agent level is sugar for `config.model:`. Main-yaml
-    # value wins (this lambda is only ever called after _merge_dict has
-    # already settled the per-level priority).
-    if (m := merged.get("model")) is not None:
+    config: dict[str, Any] = dict(raw.get("config") or {})
+    # `model:` at the agent level is sugar for `config.model:`.
+    if (m := raw.get("model")) is not None:
         config["model"] = m
 
-    agent_id = merged.get("id")
-    if agent_id is None:
-        # Default to the registry shortcut, or the unqualified tail of a fqdn.
-        agent_id = cls if cls in AGENT_REGISTRY else cls.rsplit(".", 1)[-1]
+    # Default the agent id to the preset filename stem so two presets of the
+    # same harness in one `agents:` matrix get distinct, readable ids.
+    agent_id = raw.get("id") or resolved.stem
 
-    executor = merged.get("executor")
+    executor = raw.get("executor")
     if executor is not None and not isinstance(executor, str):
-        raise TypeError(f"agent.executor must be a string, got {type(executor).__name__}")
+        raise TypeError(f"agent config {path!r}: executor must be a string, got {type(executor).__name__}")
 
     return AgentSpec(id=str(agent_id), class_=cls, config=config, executor=executor)
 
 
 # ---- environment ---------------------------------------------------------
 
-# Environment block accepts any flat key besides `provider` / `profile` — those
-# extras become ProviderSpec.config kwargs (passed straight to the
-# provider-specific Config dataclass).
-_ENVIRONMENT_RESERVED = frozenset({"provider", "profile"})
+# Environment yaml accepts any flat key besides `provider` — those extras
+# become ProviderSpec.config kwargs (passed straight to the provider-specific
+# Config dataclass).
+_ENVIRONMENT_RESERVED = frozenset({"provider"})
 
 
-def _build_environment(raw: dict[str, Any], *, base_dir: Path) -> ProviderSpec:
+def _build_environment_from_path(path: Any, *, base_dir: Path) -> ProviderSpec:
+    """Load the single environment from a ``configs/environments/<env>.yaml``."""
+    if not isinstance(path, str):
+        raise TypeError(
+            f"environment must be a single path string to an environment yaml, "
+            f"got {type(path).__name__}: {path!r}"
+        )
+    raw = _read_yaml(_resolve_path(path, base_dir))
     if not isinstance(raw, dict):
-        raise TypeError(f"environment must be a mapping, got {type(raw).__name__}")
+        raise TypeError(f"environment config {path!r} must be a mapping")
 
-    merged: dict[str, Any] = dict(raw)
-    if (prof_path := merged.pop("profile", None)) is not None:
-        prof = _read_yaml(_resolve_path(prof_path, base_dir))
-        if not isinstance(prof, dict):
-            raise TypeError(f"environment profile {prof_path!r} must be a mapping")
-        if "provider" in prof:
-            raise ValueError(
-                f"environment profile {prof_path!r} must not set `provider:` — "
-                f"`provider` lives in the main yaml so swapping profiles can't "
-                f"silently change the backend."
-            )
-        merged = _merge_dict(prof, merged)
-
-    if "provider" not in merged:
-        raise KeyError("environment missing required field: `provider`")
-    provider = str(merged["provider"])
-    cfg = {k: v for k, v in merged.items() if k not in _ENVIRONMENT_RESERVED}
+    if "provider" not in raw:
+        raise KeyError(f"environment config {path!r} missing required field: `provider`")
+    provider = str(raw["provider"])
+    cfg = {k: v for k, v in raw.items() if k not in _ENVIRONMENT_RESERVED}
 
     # `service_account_key` is a user-friendly path field — expand `~`
     # before handing to the Config dataclass.

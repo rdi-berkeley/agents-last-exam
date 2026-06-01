@@ -1,0 +1,6 @@
+# Agent preset: hermes_sonnet_or
+# harness=hermes model=anthropic/claude-sonnet-4-6
+# Referenced from an experiment as:  agents: [ ../configs/agents/hermes_sonnet_or.yaml ]
+
+harness: hermes
+model: anthropic/claude-sonnet-4-6

@@ -1,0 +1,6 @@
+# Environment: static_kasm (provider=static)
+# Referenced from an experiment as:  environment: ../configs/environments/static_kasm.yaml
+
+provider: static
+endpoint: http://localhost:33071
+image: ale-kasm

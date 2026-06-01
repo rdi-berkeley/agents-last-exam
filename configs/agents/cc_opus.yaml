@@ -1,7 +1,0 @@
-# Profile: claude-code CLI, Opus preset (longer leash + budget cap).
-
-config:
-  max_turns: 30
-  timeout_s: 1800
-  max_budget_usd: 10.0
-  dangerously_skip_permissions: true

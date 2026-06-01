@@ -1,0 +1,6 @@
+# Environment: static_ubuntu22 (provider=static)
+# Referenced from an experiment as:  environment: ../configs/environments/static_ubuntu22.yaml
+
+provider: static
+endpoint: http://34.20.252.193:5000
+image: ale-ubuntu22

@@ -1,0 +1,8 @@
+# Agent preset: grok_sonnet_or_t400_nobundle
+# harness=grok_cli model=anthropic/claude-sonnet-4-6
+# Referenced from an experiment as:  agents: [ ../configs/agents/grok_sonnet_or_t400_nobundle.yaml ]
+
+harness: grok_cli
+model: anthropic/claude-sonnet-4-6
+config:
+  max_tool_rounds: 400

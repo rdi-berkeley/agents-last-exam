@@ -87,7 +87,7 @@ timeouts.
 
 - Creates a fresh GCE VM via `gcloud compute instances create`.
 - Walks the capacity-pool fallback ladder
-  ([`configs/environments/gcloud_default.yaml`](../configs/environments/gcloud_default.yaml))
+  ([`configs/environments/gcloud_ubuntu.yaml`](../configs/environments/gcloud_ubuntu.yaml))
   on capacity errors.
 - Waits for `cua-server` to answer `/status` on TCP 5000.
 - `release(mode="delete")` runs `gcloud compute instances delete`.
@@ -111,21 +111,27 @@ bare-metal, dev laptops with cua-server running locally).
 
 Add an entry to the provider factory in
 [`ale_run/orchestration/factory.py`](../ale_run/orchestration/factory.py)
-(the `build_provider` dispatch). Once registered, reference it from
-yaml:
+(the `build_provider` dispatch). Then ship a config file for it under
+`configs/environments/`. The file holds `provider:` PLUS that provider's
+knobs:
 
 ```yaml
-environment:
-  provider: my_provider
-  profile: configs/environments/my_provider_default.yaml   # optional
-  config:
-    region: us-west2
-    ...
+# configs/environments/my_provider_default.yaml
+provider: my_provider
+region: us-west2
+...
 ```
 
-The profile file lets users share defaults across experiments — see
-[`configs/environments/gcloud_default.yaml`](../configs/environments/gcloud_default.yaml)
-for the shape (defaults, per-snapshot image map, capacity pools).
+An experiment wires it in by path (one env config per experiment):
+
+```yaml
+environment: configs/environments/my_provider_default.yaml
+```
+
+The env config lets users share defaults across experiments — see
+[`configs/environments/gcloud_ubuntu.yaml`](../configs/environments/gcloud_ubuntu.yaml)
+for the shape (`provider:`, a `snapshot:`, and the per-snapshot image map
++ capacity pools under `snapshots:`).
 
 ---
 
@@ -150,16 +156,16 @@ family. Otherwise add a new family and reference it from your provider's
 ### For GCP users — swap the image, not the code
 
 If you're staying on GCP but want a different OS, kernel, or pre-installed
-toolset, you don't need a new provider. Just edit
-[`configs/environments/gcloud_default.yaml`](../configs/environments/gcloud_default.yaml):
+toolset, you don't need a new provider. Just edit the `snapshots:` block of
+a gcloud env config such as
+[`configs/environments/gcloud_ubuntu.yaml`](../configs/environments/gcloud_ubuntu.yaml):
 
 ```yaml
-images:
+snapshots:
   cpu-free-ubuntu:
-    image_name: my-custom-ubuntu-image   # ← only this line changes
-    os: linux
-    gpu: null
-    boot_disk_gb: 600
+    image: my-custom-ubuntu-image        # ← only this line changes
+    zones:
+    - us-central1-a
 ```
 
 Tasks with `vm.snapshot: cpu-free-ubuntu` will boot your image instead.
@@ -178,14 +184,14 @@ host). PRs welcome to flesh this out.
 
 1. Implement a minimal `acquire` / `release` that returns a working
    `SandboxHandle`.
-2. Smoke-test with the in-repo demo task on a hello-world experiment:
+2. Smoke-test with the in-repo demo task on a hello-world experiment.
+   Point `environment:` at your new env config (which carries
+   `provider: my_provider`) and pick a simple agent preset:
    ```yaml
-   environment:
-     provider: my_provider
-     config: {...}
+   environment: configs/environments/my_provider_default.yaml
    tasks: selected_tasks/helloworld.txt
-   agent:
-     harness: ale_claw          # host-side agent — easy to debug
+   agents:
+     - configs/agents/openclaw_sonnet_or.yaml   # host-side agent — easy to debug
    ```
 3. Verify the run completes through Phase 0 → 6 (see
    [`ale_run/orchestration/lifecycle.py`](../ale_run/orchestration/lifecycle.py)).

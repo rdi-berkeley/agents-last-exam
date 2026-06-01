@@ -1,0 +1,8 @@
+# Agent preset: cursor_sonnet_or
+# harness=cursor_cli model=claude-4.6-sonnet-medium
+# Referenced from an experiment as:  agents: [ ../configs/agents/cursor_sonnet_or.yaml ]
+
+harness: cursor_cli
+model: claude-4.6-sonnet-medium
+config:
+  provider: openrouter

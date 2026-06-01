@@ -1,0 +1,6 @@
+# Agent preset: gemini_g31pro_or
+# harness=gemini_cli model=gemini-3.1-pro-preview
+# Referenced from an experiment as:  agents: [ ../configs/agents/gemini_g31pro_or.yaml ]
+
+harness: gemini_cli
+model: gemini-3.1-pro-preview

@@ -1,0 +1,5 @@
+# Environment: docker_kasm_noagents (provider=docker)
+# Referenced from an experiment as:  environment: ../configs/environments/docker_kasm_noagents.yaml
+
+provider: docker
+image: agentslastexam/ale-kasm-noagents-nodata:latest

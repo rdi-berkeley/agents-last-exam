@@ -151,19 +151,28 @@ deployer at the same package, named `<DeployerStem>Config`:
 ale_run/agents/my_agent/
 ├── __init__.py
 ├── deployer.py     class MyAgentDeployer(BaseAgentDeployer)
-└── config.py       class MyAgentConfig(BaseAgentConfig)
+└── config.py       class MyAgentConfig          # standalone dataclass
 ```
 
-Then reference it from the experiment yaml:
+Ship your agent's defaults as a preset file under `configs/agents/`. The
+preset is a complete agent definition — `harness:`, `model:`, and a
+`config:` block holding every agent/deployer knob:
 
 ```yaml
-agent:
-  harness: my_agent
-  model: anthropic/claude-sonnet-4-6
-  profile: configs/agents/my_agent.yaml      # optional knob bundle
-  config:
-    max_turns: 30
-    timeout_s: 1800
+# configs/agents/my_agent.yaml
+harness: my_agent
+model: anthropic/claude-sonnet-4-6
+config:
+  max_turns: 30
+```
+
+Then wire it into an experiment by path. `agents:` is a list (list
+several to run the agent matrix); the preset's `id` defaults to its
+filename stem:
+
+```yaml
+agents:
+  - configs/agents/my_agent.yaml
 ```
 
 ---

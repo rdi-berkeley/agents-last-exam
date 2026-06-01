@@ -1,0 +1,6 @@
+# Agent preset: forge_sonnet_or
+# harness=forgecode model=anthropic/claude-sonnet-4-6
+# Referenced from an experiment as:  agents: [ ../configs/agents/forge_sonnet_or.yaml ]
+
+harness: forgecode
+model: anthropic/claude-sonnet-4-6

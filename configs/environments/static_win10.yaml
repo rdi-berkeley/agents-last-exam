@@ -1,0 +1,6 @@
+# Environment: static_win10 (provider=static)
+# Referenced from an experiment as:  environment: ../configs/environments/static_win10.yaml
+
+provider: static
+endpoint: http://34.123.170.221:5000
+image: ale-win10

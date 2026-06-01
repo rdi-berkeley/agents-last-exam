@@ -41,8 +41,9 @@ input / reference / software / output surface in ~250 lines.
 | `vm.timeout_s` | Per-variant wall budget (provisioning + setup + agent + eval) |
 
 The framework reads `vm.snapshot` to pick the image; everything else
-(network, machine family, fallback zones) comes from
-[`configs/environments/gcloud_default.yaml`](../configs/environments/gcloud_default.yaml).
+(network, machine family, fallback zones) comes from the env config your
+experiment points at, e.g.
+[`configs/environments/gcloud_ubuntu.yaml`](../configs/environments/gcloud_ubuntu.yaml).
 
 ---
 
@@ -162,11 +163,10 @@ and place files at:
 `E:\ale-data` on Windows (resolved through the image registry — see
 [`ale_run/environments/images/`](../ale_run/environments/images/)).
 
-Use `task_data_path: baked_in_sandbox` in
-[`configs/runs/default.yaml`](../configs/runs/default.yaml) if you ship
-your own image with these files baked in. Otherwise switch to
-`gs://<bucket>` and `ale_run/environments/data_staging.py` will rsync
-from GCS per run.
+Set `task_data_source: baked_in_sandbox` under the experiment's
+top-level `artifacts_path:` block if you ship your own image with these
+files baked in. Otherwise point `task_data_source` at a `gs://<bucket>`
+and `ale_run/environments/data_staging.py` will rsync from GCS per run.
 
 ---
 

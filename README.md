@@ -136,9 +136,10 @@ claude_code           demo/hello_win                              0  completed  
 **GCloud** is the fully supported path today. Copy the published image
 `ale-unified-v1` into your project (see
 [docs/SETUP_GCP.md](docs/SETUP_GCP.md)); it boots a Windows or Ubuntu
-sandbox with `cua-server` and the agent CLIs pre-installed. Set
-`environment.provider: gcloud` and point
-`configs/environments/gcloud_default.yaml` at your project.
+sandbox with `cua-server` and the agent CLIs pre-installed. Point
+your experiment's `environment:` at a gcloud env config such as
+`configs/environments/gcloud_ubuntu.yaml` (it sets `provider: gcloud`)
+and fill in your project via its `${env:GCP_PROJECT}` references.
 
 **VMWare** and **Local** providers are not yet implemented (see TODO
 notes in the respective docs). As an interim, the `static` provider
@@ -249,7 +250,7 @@ agents-last-exam/
 │   └── tasks/                  Task discovery + driver
 ├── tasks/                    151 task packages, grouped by domain
 │   └── demo/                   `hello` (Linux) + `hello_win` (Windows) templates
-├── configs/                  Reusable agent / environment / run profiles
+├── configs/                  Reusable agent + environment configs (referenced by path)
 ├── selected_tasks/           Curated task lists (cli, full, unlicensed)
 ├── secret/                   `.env.example` + GCP keys; `eval_time/*.env.example` judge keys (real values gitignored)
 ├── docs/                     Setup, task-running, and extension guides

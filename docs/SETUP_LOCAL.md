@@ -30,24 +30,25 @@ while still using a real sandbox VM.
 # my_local_agent_exp.yaml
 name: local_agent_demo
 
-agent:
-  harness: ale_claw
-  model: anthropic/claude-sonnet-4-6
-  profile: configs/agents/ale_claw_local.yaml
+# `agents:` is a list of paths under configs/agents/; each file is a complete
+# agent preset (harness + model + a config: block). The host-side OpenClaw
+# harness ships several presets — pick one, e.g.:
+agents:
+  - configs/agents/openclaw_sonnet_or.yaml         # add more lines to run a matrix
 
-environment:
-  provider: static                                 # or gcloud
-  config:
-    endpoint: http://<your-vm>:5000
-    image: ale-ubuntu22
+# `environment:` is a single path under configs/environments/. The provider
+# lives inside that file (static_kasm.yaml sets `provider: static`).
+environment: configs/environments/static_kasm.yaml
 
 tasks: selected_tasks/helloworld.txt
 ```
 
-See [`configs/agents/ale_claw_local.yaml`](../configs/agents/ale_claw_local.yaml)
-for the supported config knobs (`max_turns`, `timeout_s`,
-`disabled_tools`, `thinking_level`, `summary_model`, `lightweight_model`,
-`image_retention_mode`).
+See the openclaw presets under [`configs/agents/`](../configs/agents/)
+(`openclaw_sonnet_or.yaml`, `openclaw_sonnet_direct.yaml`,
+`openclaw_gpt54_direct.yaml`) for the harness wiring; each one's `config:`
+block carries the supported knobs (`max_turns`, `timeout_s`,
+`disabled_tools`, `thinking_level`, etc.). To target your own VM, copy a
+`configs/environments/*.yaml` and set the provider's `endpoint:`/`image:`.
 
 API keys for `ale_claw` come from your shell env (or `secret/.env`):
 either `OPENROUTER_API_KEY` or `ANTHROPIC_API_KEY`. Optional
