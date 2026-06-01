@@ -3,3 +3,7 @@
 
 provider: docker
 image: agentslastexam/ale-kasm-noagents-nodata:latest
+
+# task data sourcing + output mirroring (substrate-coupled: code lives under environments/)
+task_data_source: gs://ale-data-public
+output_path: local

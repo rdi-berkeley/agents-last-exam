@@ -31,11 +31,11 @@ environment: configs/environments/gcloud_ubuntu.yaml
 tasks: selected_tasks/helloworld.txt
 
 # ---- run-level knobs (all optional; defaults shown) ----
-artifacts_path:
-  task_data_source: gs://ale-data-public          # gs://… | hf://… | baked_in_sandbox
-  output_path: local                              # null | local | gs://…
+# NB: task_data_source + output_path are NOT here — they are substrate-coupled
+# and live in the environment yaml (configs/environments/<env>.yaml), next to
+# the code that consumes them (task_data/ + output_pull.py).
 output:
-  root: .logs/ale
+  root: .logs/ale                                 # host-side run-log dir
 concurrency: 1                                    # units in flight (caps VMs + LLM RPM)
 cleanup_mode: delete                              # delete | stop | keep
 

@@ -247,13 +247,14 @@ Tasks that declare `requires_task_data=True` rsync `input/`,
 `software/`, `reference/` from `gs://ale-data-public`, the shared public
 mirror we maintain. You do not configure this bucket. 
 
-To upload run outputs to GCS (instead of pulling them locally), set in
-your experiment yaml. Step 3 already created the bucket and granted the
-runner service account access:
+To upload run outputs to GCS (instead of pulling them locally), set
+`output_path` in your **environment** yaml (`configs/environments/<env>.yaml`,
+alongside `provider` + `task_data_source`). Step 3 already created the bucket
+and granted the runner service account access:
 
 ```yaml
-artifacts_path:
-  output_path: gs://<GCP_PROJECT>-ale-results    # optional; null = skip, "local" = pull to run dir
+# in configs/environments/gcloud_ubuntu.yaml
+output_path: gs://<GCP_PROJECT>-ale-results    # null = skip, "local" = pull to run dir
 ```
 
 ### Hard cost cap

@@ -4,3 +4,7 @@
 provider: static
 endpoint: http://localhost:33071
 image: ale-kasm
+
+# task data sourcing + output mirroring (substrate-coupled: code lives under environments/)
+task_data_source: gs://ale-data-public
+output_path: local

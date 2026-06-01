@@ -143,7 +143,7 @@ Runs land under `<output_root>/<experiment>/<run_id>/`. Default
     ├── trajectory.json    ATIF trajectory (agent steps, tool calls, observations)
     ├── eval_result.json   evaluation hook output
     ├── origin_log/        raw artifacts pulled from the VM
-    └── output/            agent-produced files (per `artifacts_path.output_path`)
+    └── output/            agent-produced files (per the environment's `output_path`)
 ```
 
 A complete recorded run lives in [`sample_run/`](../sample_run/) — open

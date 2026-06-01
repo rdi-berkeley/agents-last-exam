@@ -163,8 +163,8 @@ and place files at:
 `E:\ale-data` on Windows (resolved through the image registry — see
 [`ale_run/environments/images/`](../ale_run/environments/images/)).
 
-Set `task_data_source: baked_in_sandbox` under the experiment's
-top-level `artifacts_path:` block if you ship your own image with these
+Set `task_data_source: baked_in_sandbox` in the **environment** yaml
+(`configs/environments/<env>.yaml`) if you ship your own image with these
 files baked in. Otherwise point `task_data_source` at a `gs://<bucket>`
 and `ale_run/environments/data_staging.py` will rsync from GCS per run.
 

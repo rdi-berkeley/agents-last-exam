@@ -4,3 +4,7 @@
 provider: static
 endpoint: http://34.123.170.221:5000
 image: ale-win10
+
+# task data sourcing + output mirroring (substrate-coupled: code lives under environments/)
+task_data_source: gs://ale-data-public
+output_path: local

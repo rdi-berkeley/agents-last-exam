@@ -15,3 +15,7 @@ snapshots:
     - us-central1-a
     - us-east1-b
     - us-west1-a
+
+# task data sourcing + output mirroring (substrate-coupled: code lives under environments/)
+task_data_source: gs://ale-data-public
+output_path: local

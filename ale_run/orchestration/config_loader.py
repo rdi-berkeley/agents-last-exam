@@ -59,7 +59,7 @@ _ENV_RE = re.compile(r"\$\{env:([A-Z_][A-Z0-9_]*)\}")
 _TOP_LEVEL_KEYS = frozenset({
     "name", "secret_file", "agent", "agents", "environment", "tasks",
     # run-level fields:
-    "output", "artifacts_path",
+    "output",
     "concurrency",
     "cleanup_mode",
     "prompt_suffix",
@@ -190,9 +190,11 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
         raise TypeError(f"unknown top-level keys: {sorted(unknown)}")
     _require(raw, "name")
 
-    # Run-level knobs live directly at the experiment top level.
+    # Run-level knobs live directly at the experiment top level. `output.root`
+    # is the host-side run-log dir (a workflow choice); artifact SOURCING and
+    # output MIRRORING (task_data_source / output_path) are substrate-coupled
+    # and live in the environment yaml instead (see _build_environment_from_path).
     output = _build_output(raw.get("output") or {})
-    artifacts = _build_artifacts(raw.get("artifacts_path") or {})
     concurrency = _build_concurrency(raw)
     cleanup_mode = _build_cleanup_mode(raw)
     prompt_suffix = str(raw.get("prompt_suffix") or "")
@@ -210,7 +212,7 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
 
     if "environment" not in raw:
         raise KeyError("missing required field: `environment` (path to an environment yaml)")
-    provider = _build_environment_from_path(raw["environment"], base_dir=base_dir)
+    provider, artifacts = _build_environment_from_path(raw["environment"], base_dir=base_dir)
 
     if "tasks" not in raw:
         raise KeyError("missing required field: `tasks`")
@@ -349,14 +351,26 @@ def _build_agent_from_path(path: Any, *, base_dir: Path) -> AgentSpec:
 
 # ---- environment ---------------------------------------------------------
 
-# Environment yaml accepts any flat key besides `provider` — those extras
-# become ProviderSpec.config kwargs (passed straight to the provider-specific
-# Config dataclass).
-_ENVIRONMENT_RESERVED = frozenset({"provider"})
+# Environment yaml reserved keys (NOT passed into ProviderSpec.config):
+#   provider          — selects the provider impl
+#   task_data_source  — where task data is sourced from (→ ArtifactsSpec)
+#   output_path       — what to do with the agent's output dir (→ ArtifactsSpec)
+# Any OTHER key becomes a ProviderSpec.config kwarg (passed straight to the
+# provider-specific Config dataclass). task_data_source / output_path live
+# here because the code that consumes them — task_data/ (sourcing) and
+# output_pull.py (mirroring) — is substrate-coupled and lives under
+# environments/, so the config belongs with the environment too.
+_ENVIRONMENT_RESERVED = frozenset({"provider", "task_data_source", "output_path"})
 
 
-def _build_environment_from_path(path: Any, *, base_dir: Path) -> ProviderSpec:
-    """Load the single environment from a ``configs/environments/<env>.yaml``."""
+def _build_environment_from_path(
+    path: Any, *, base_dir: Path,
+) -> tuple[ProviderSpec, ArtifactsSpec]:
+    """Load the single environment from a ``configs/environments/<env>.yaml``.
+
+    Returns both the provider selection and the artifact-path config (task
+    data sourcing + output mirroring), which now live in the environment.
+    """
     if not isinstance(path, str):
         raise TypeError(
             f"environment must be a single path string to an environment yaml, "
@@ -369,6 +383,10 @@ def _build_environment_from_path(path: Any, *, base_dir: Path) -> ProviderSpec:
     if "provider" not in raw:
         raise KeyError(f"environment config {path!r} missing required field: `provider`")
     provider = str(raw["provider"])
+    artifacts = _build_artifacts({
+        "task_data_source": raw.get("task_data_source"),
+        "output_path": raw.get("output_path"),
+    })
     cfg = {k: v for k, v in raw.items() if k not in _ENVIRONMENT_RESERVED}
 
     # `service_account_key` is a user-friendly path field — expand `~`
@@ -377,7 +395,7 @@ def _build_environment_from_path(path: Any, *, base_dir: Path) -> ProviderSpec:
         cfg["service_account_key"] = str(Path(str(sa)).expanduser())
 
     _validate_provider_required(provider, cfg)
-    return ProviderSpec(kind=provider, config=cfg)
+    return ProviderSpec(kind=provider, config=cfg), artifacts
 
 
 def _validate_provider_required(provider: str, cfg: dict[str, Any]) -> None:
