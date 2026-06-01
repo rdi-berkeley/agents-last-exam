@@ -18,35 +18,24 @@
 snapshots:
 
   cpu-free-ubuntu:            # Linux, no GPU, no license — the bulk of tasks (~110)
-    provider: docker          # cheap path: local Docker container
-    image: ale-kasm           # container ref + port (8000) come from the Image entry
-    docker:                   # docker-only knobs: container sizing
-      cpus: 4
-      memory: 16g
-      shm_size: 1g
-    # ALTERNATIVE — send Ubuntu tasks to a GCloud VM instead:
-    #   provider: gcloud
-    #   image: ale-ubuntu22
-    #   gcloud:
-    #     project: ${env:GCP_PROJECT}
-    #     service_account_key: ${env:GCP_SA_KEY}
-    #     instance_prefix: ale
-    #     network: agenthle-vpc
-    #     subnet: agenthle-vpc
-    #     zones: [us-central1-a, us-east1-b, us-west1-a]
-
-  cpu-free:                   # Windows, no GPU, no license
     provider: gcloud
-    image: ale-win10
+    image: ale-ubuntu22
     gcloud:
       project: ${env:GCP_PROJECT}
       service_account_key: ${env:GCP_SA_KEY}
       instance_prefix: ale
       network: agenthle-vpc
       subnet: agenthle-vpc
-      zones: [us-central1-a, us-central1-b, us-east1-b]
+      zones: [us-central1-a, us-east1-b, us-west1-a]
+    # ALTERNATIVE — run Ubuntu tasks in a local Docker container instead:
+    #   provider: docker
+    #   image: ale-kasm           # container ref + port (8000) come from the Image entry
+    #   docker:                   # docker-only knobs: container sizing
+    #     cpus: 4
+    #     memory: 16g
+    #     shm_size: 1g
 
-  cpu-free-win:               # Windows (alias used by one task)
+  cpu-free:                   # Windows, no GPU, no license
     provider: gcloud
     image: ale-win10
     gcloud:
@@ -97,12 +86,10 @@ snapshots:
 # ---------------------------------------------------------------------------
 # Where to source task data: "baked_in_sandbox" | "gs://<bucket>" | "hf://<ds>".
 task_data_source: gs://ale-data-public
-
-# gcs_sa_key travels WITH a gs:// task_data_source — it is needed only when the
-# box has no baked GCS SA (e.g. the docker/ale-kasm image). gcloud images carry a
-# baked SA, so they don't need it. Uncomment to run cpu-free-ubuntu in Docker
-# against gs://: it is copied into each container + bills requester-pays buckets.
-# gcs_sa_key: secret/gcp_key.json
+# A gs:// source carries a GCS SA key (host path). The docker provider copies it
+# into each container so gsutil can stage + bill requester-pays buckets; gcloud
+# images already have a baked SA and ignore it.
+gcs_sa_key: secret/gcp_key.json
 
 # Output dir after the run: null (skip) | "local" | "gs://<bucket>".
 output_path: local
