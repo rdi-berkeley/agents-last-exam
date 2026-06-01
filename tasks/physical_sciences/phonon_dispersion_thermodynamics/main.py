@@ -29,7 +29,7 @@ VARIANTS = [("base", "Phonon dispersion and thermodynamics for a 2D hexagonal la
 
 
 async def _missing(session: cb.DesktopSession, path: str, *, label: str, tag: str) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("[%s] Missing %s: %s", tag, label, path)
     return True
@@ -149,10 +149,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         for name in REQUIRED_FILES:
             output_path = f'{meta["remote_output_dir"]}/{name}'
             reference_path = f'{meta["reference_dir"]}/{name}'
-            if not await session.exists(output_path):
+            if not (await session.file_exists(output_path) or await session.directory_exists(output_path)):
                 logger.error("[%s] Missing output file at %s", tag, output_path)
                 return [0.0]
-            if not await session.exists(reference_path):
+            if not (await session.file_exists(reference_path) or await session.directory_exists(reference_path)):
                 logger.error("[%s] Missing reference file at %s", tag, reference_path)
                 return [0.0]
             try:

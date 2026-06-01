@@ -71,7 +71,6 @@ class TaskConfig(GeneralTaskConfig):
 
     TASK_NAME: str = "vegetation_precip_spatial_temporal"
     VARIANT_NAME: str = "base"
-    REMOTE_ROOT_DIR: str = os.environ.get("REMOTE_ROOT_DIR", r"E:\agenthle")
 
     # Spatial domain: CONUS bounding box
     CONUS_WEST: float = -125.0

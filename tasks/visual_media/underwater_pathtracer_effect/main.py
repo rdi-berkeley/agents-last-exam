@@ -449,11 +449,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
     for fname in REQUIRED_OUTPUT_FILES:
         path = f'{meta["remote_output_dir"]}/{fname}'
-        if not await session.exists(path):
+        if not (await session.file_exists(path) or await session.directory_exists(path)):
             logger.warning("Missing output file: %s", path)
             return [0.0]
 
-    if not await session.exists(meta["hidden_reference_image"]):
+    if not (await session.file_exists(meta["hidden_reference_image"]) or await session.directory_exists(meta["hidden_reference_image"])):
         logger.error("Hidden reference missing: %s", meta["hidden_reference_image"])
         return [0.0]
 
@@ -485,7 +485,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
     # --- Sample-count probe: verify the renderer responds to -s parameter ---
     if not admin_fixture_mode:
-        if not await session.exists(probe_path):
+        if not (await session.file_exists(probe_path) or await session.directory_exists(probe_path)):
             logger.error("Probe render missing: %s", probe_path)
             return [0.0]
 

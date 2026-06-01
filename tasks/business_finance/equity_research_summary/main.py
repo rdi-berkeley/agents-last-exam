@@ -159,10 +159,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     output_workbook = meta["output_workbook"]
     reference_manifest = meta["reference_manifest"]
 
-    if not await session.exists(reference_manifest):
+    if not (await session.file_exists(reference_manifest) or await session.directory_exists(reference_manifest)):
         logger.error("Missing reference manifest: %s", reference_manifest)
         return [0.0]
-    if not await session.exists(output_workbook):
+    if not (await session.file_exists(output_workbook) or await session.directory_exists(output_workbook)):
         logger.error("Missing output workbook: %s", output_workbook)
         return [0.0]
 

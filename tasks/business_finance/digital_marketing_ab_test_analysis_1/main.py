@@ -45,7 +45,6 @@ DOMAIN_NAME = "business_finance"
 TASK_NAME = "digital_marketing_ab_test_analysis_1"
 TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
-LINUX_REMOTE_ROOT = "/media/user/data/agenthle"
 EVAL_TMP_DIR = f"/tmp/agenthle_eval/{TASK_NAME}"
 
 
@@ -87,7 +86,6 @@ class DigitalMarketingABTestConfig(LinuxTaskConfig):
             TASK_NAME=TASK_NAME,
             VARIANT_NAME=VARIANT_NAME,
             OS_TYPE="linux",
-            REMOTE_ROOT_DIR=os.environ.get("REMOTE_ROOT_DIR", LINUX_REMOTE_ROOT),
             REMOTE_OUTPUT_DIR=os.environ.get("REMOTE_OUTPUT_DIR", "output"),
         )
 
@@ -193,7 +191,7 @@ def _read_script(name: str) -> str:
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     verify_script_path = f"{EVAL_TMP_DIR}/verify_ab_test_outputs.py"
     await session.write_file(verify_script_path, _read_script("verify_ab_test_outputs.py"))
     cmd = " ".join(

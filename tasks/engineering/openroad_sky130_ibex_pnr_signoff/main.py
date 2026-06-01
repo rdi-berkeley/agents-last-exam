@@ -305,16 +305,16 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["reference_metrics"],
         meta["reference_starter_zip"],
     ]
-    missing_reference = [path for path in required_reference if not await session.exists(path)]
+    missing_reference = [path for path in required_reference if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing_reference:
         logger.error("[%s] missing evaluator reference paths: %s", tag, missing_reference)
         return [0.0]
 
-    if not await session.exists(meta["remote_output_dir"]):
+    if not (await session.file_exists(meta["remote_output_dir"]) or await session.directory_exists(meta["remote_output_dir"])):
         logger.error("[%s] missing submission directory: %s", tag, meta["remote_output_dir"])
         return [0.0]
 
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     run_dir_result = await _run_command(
         session,
         "bash -lc " + json.dumps(f"mktemp -d {shlex.quote(EVAL_TMP_DIR)}/run_XXXXXX"),

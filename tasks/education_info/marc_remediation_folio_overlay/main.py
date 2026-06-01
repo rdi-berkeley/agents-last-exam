@@ -219,17 +219,17 @@ async def start(task_cfg, session: cb.DesktopSession):
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    if not await session.exists(meta["candidate_submission_dir"]):
+    if not (await session.file_exists(meta["candidate_submission_dir"]) or await session.directory_exists(meta["candidate_submission_dir"])):
         logger.error(
             "[%s] missing candidate submission: %s", TASK_NAME, meta["candidate_submission_dir"]
         )
         return [0.0]
 
-    if not await session.exists(meta["evaluator_script"]):
+    if not (await session.file_exists(meta["evaluator_script"]) or await session.directory_exists(meta["evaluator_script"])):
         raise RuntimeError(f"missing evaluator script: {meta['evaluator_script']}")
 
     verifier_path = f'{meta["eval_tmp_dir"]}/evaluate_submission.py'
-    await session.makedirs(meta["eval_tmp_dir"])
+    await session.interface.create_dir(meta["eval_tmp_dir"])
     await session.write_file(
         verifier_path,
         (SCRIPTS_DIR / "evaluate_submission.py").read_text(encoding="utf-8"),

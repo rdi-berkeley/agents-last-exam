@@ -35,7 +35,7 @@ except ModuleNotFoundError:  # pragma: no cover - local fallback only
     )
 
 from tasks.common_setup import BaseTaskSetup
-from tasks.linux_runtime import DATA_ROOT, LinuxTaskConfig
+from tasks.linux_runtime import LinuxTaskConfig
 
 
 _setup = BaseTaskSetup()
@@ -52,7 +52,6 @@ DOMAIN_NAME = "health_medicine"
 TASK_NAME = "epidemiology_forecast"
 TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
-LINUX_REMOTE_ROOT = "/media/user/data/agenthle"
 
 
 def _remote_join(*parts: str) -> str:
@@ -75,7 +74,6 @@ class EpidemiologyForecastConfig(LinuxTaskConfig):
             TASK_NAME=TASK_NAME,
             VARIANT_NAME=VARIANT_NAME,
             OS_TYPE="linux",
-            REMOTE_ROOT_DIR=os.environ.get("REMOTE_ROOT_DIR", LINUX_REMOTE_ROOT),
             REMOTE_OUTPUT_DIR=os.environ.get("REMOTE_OUTPUT_DIR", "output"),
         )
 
@@ -245,7 +243,7 @@ def _log_score(result: ScoreResult) -> None:
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     required_outputs = [meta["submission_output"], meta["per_cell_output"]]
-    missing_outputs = [path for path in required_outputs if not await session.exists(path)]
+    missing_outputs = [path for path in required_outputs if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing_outputs:
         logger.error("[%s] missing output files: %s", TASK_NAME, "; ".join(missing_outputs))
         return [0.0]

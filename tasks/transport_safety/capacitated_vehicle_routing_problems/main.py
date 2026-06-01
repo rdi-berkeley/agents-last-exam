@@ -114,7 +114,7 @@ async def _download_remote_tree(
             continue
         remote_path = f"{remote_root}/{name}"
         local_path = local_root / name
-        if await session.exists(remote_path):
+        if (await session.file_exists(remote_path) or await session.directory_exists(remote_path)):
             try:
                 children = await session.list_dir(remote_path)
             except Exception:
@@ -155,7 +155,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession):
             session, f'{meta["input_dir"]}/instances', local_input_instances
         )
         await _download_remote_tree(session, meta["reference_dir"], local_reference)
-        if await session.exists(f'{meta["remote_output_dir"]}/solutions'):
+        if (await session.file_exists(f'{meta["remote_output_dir"]}/solutions') or await session.directory_exists(f'{meta["remote_output_dir"]}/solutions')):
             await _download_remote_tree(
                 session, f'{meta["remote_output_dir"]}/solutions', local_solutions
             )

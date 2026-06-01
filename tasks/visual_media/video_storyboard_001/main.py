@@ -31,7 +31,6 @@ def win_join(*parts: str) -> str:
 
 @dataclass
 class VideoStoryboardConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = os.environ.get("REMOTE_ROOT_DIR", r"E:\agenthle")
     DOMAIN_NAME: str = DOMAIN_NAME
     TASK_NAME: str = TASK_NAME
     VARIANT_NAME: str = VARIANT_NAME
@@ -138,10 +137,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     question_file = meta["question_file"]
 
     try:
-        if not await session.exists(output_file):
+        if not (await session.file_exists(output_file) or await session.directory_exists(output_file)):
             logger.warning("Missing storyboard output: %s", output_file)
             return [0.0]
-        if not await session.exists(question_file):
+        if not (await session.file_exists(question_file) or await session.directory_exists(question_file)):
             logger.warning("Missing question file: %s", question_file)
             return [0.0]
 

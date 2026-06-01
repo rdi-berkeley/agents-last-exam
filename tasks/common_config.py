@@ -8,14 +8,6 @@ from pathlib import Path
 _TASKS_ROOT = Path(__file__).resolve().parent
 
 
-# Sentinel used when no data root is injected by the lifecycle.
-# Tasks that still reference DATA_ROOT / REMOTE_ROOT_DIR directly will
-# get this and blow up loudly rather than silently writing to the wrong
-# path.  The lifecycle is expected to inject the real value from the
-# image spec before any path is resolved.
-_UNSET_DATA_ROOT = "__UNSET_DATA_ROOT__"
-
-
 @dataclass
 class GeneralTaskConfig:
     """Base configuration for Windows tasks (default OS).
@@ -35,7 +27,7 @@ class GeneralTaskConfig:
 
     # Global settings
     REMOTE_OUTPUT_DIR: str = os.environ.get("REMOTE_OUTPUT_DIR", "output")
-    REMOTE_ROOT_DIR: str = os.environ.get("REMOTE_ROOT_DIR", _UNSET_DATA_ROOT)
+    REMOTE_ROOT_DIR: str = os.environ.get("REMOTE_ROOT_DIR", r"E:\agenthle")
     DOMAIN_NAME: str = ""
     TASK_NAME: str = ""
     VARIANT_NAME: str = ""

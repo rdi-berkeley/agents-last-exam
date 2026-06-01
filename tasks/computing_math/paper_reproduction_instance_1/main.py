@@ -44,7 +44,7 @@ DATASET_PROBE_NAMES = {
 }
 
 DATASET_SEARCH_ROOTS = (
-    "/media/user/data/agenthle/computing_math/paper_reproduction_instance_1/base",
+    f"{LinuxTaskConfig.REMOTE_ROOT_DIR}/computing_math/paper_reproduction_instance_1/base",
     "/media/user/data",
     "/home/user",
     "/tmp",

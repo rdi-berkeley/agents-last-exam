@@ -252,7 +252,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     eval_tmp_dir = meta["eval_tmp_dir"]
-    await session.makedirs(eval_tmp_dir)
+    await session.interface.create_dir(eval_tmp_dir)
     verify_path = f"{eval_tmp_dir}/{VERIFY_SCRIPT_NAME}"
     await session.write_file(verify_path, _read_script(VERIFY_SCRIPT_NAME))
 

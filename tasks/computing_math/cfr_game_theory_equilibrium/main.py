@@ -141,7 +141,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession):
     meta = task_cfg.metadata
-    if not await session.exists(meta["output_file"]):
+    if not (await session.file_exists(meta["output_file"]) or await session.directory_exists(meta["output_file"])):
         logger.error("missing results.json at %s", meta["output_file"])
         return [0.0]
 

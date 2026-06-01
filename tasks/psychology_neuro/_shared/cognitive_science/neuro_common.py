@@ -10,6 +10,8 @@ from textwrap import dedent
 
 from computer import Computer
 
+from tasks.linux_runtime import LinuxTaskConfig
+
 
 DOMAIN_NAME = "cognitive_science"
 VM_PROJECT = "sunblaze-4"
@@ -18,7 +20,7 @@ VM_NAME = "agenthle-ubuntu"
 VM_CATEGORY = "cpu-free"
 VM_TYPE = "agenthle-ubuntu"
 RAW_BUNDLE_ROOT = "/home/user/brain_science/computer_use_benchmark_bundle"
-DATA_ROOT = "/media/user/data/agenthle"
+DATA_ROOT = LinuxTaskConfig.REMOTE_ROOT_DIR
 DESKTOP_ROOT = "/home/user/Desktop"
 BUCKET_ROOT = "gs://agenthle"
 DEFAULT_VARIANT = "base"

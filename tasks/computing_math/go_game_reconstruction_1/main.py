@@ -13,7 +13,7 @@ from typing import Any, Optional
 import cua_bench as cb
 
 from tasks.common_setup import BaseTaskSetup
-from tasks.linux_runtime import DATA_ROOT, LinuxTaskConfig
+from tasks.linux_runtime import LinuxTaskConfig
 
 _setup = BaseTaskSetup()
 
@@ -78,7 +78,6 @@ class GoGameReconstructionConfig(LinuxTaskConfig):
             DOMAIN_NAME="computing_math", TASK_NAME="go_game_reconstruction_1",
             VARIANT_NAME="base",
             OS_TYPE="linux",
-            REMOTE_ROOT_DIR=os.environ.get("REMOTE_ROOT_DIR", "/media/user/data/agenthle"),
         )
 
     @property
@@ -181,7 +180,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 
 async def _choose_candidate_path(meta: dict[str, Any], session: cb.DesktopSession) -> Optional[str]:
     preferred = meta["preferred_output_path"]
-    if await session.exists(preferred):
+    if (await session.file_exists(preferred) or await session.directory_exists(preferred)):
         return preferred
 
     result = await _run_command(

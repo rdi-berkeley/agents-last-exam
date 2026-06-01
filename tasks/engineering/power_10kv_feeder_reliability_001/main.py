@@ -12,7 +12,7 @@ from typing import Any, Optional
 import cua_bench as cb
 
 from tasks.common_setup import BaseTaskSetup
-from tasks.linux_runtime import DATA_ROOT, LinuxTaskConfig
+from tasks.linux_runtime import LinuxTaskConfig
 
 
 _setup = BaseTaskSetup()
@@ -96,7 +96,6 @@ class PowerFeederReliabilityConfig(LinuxTaskConfig):
             TASK_NAME=TASK_NAME,
             VARIANT_NAME=VARIANT_NAME,
             OS_TYPE="linux",
-            REMOTE_ROOT_DIR=os.environ.get("REMOTE_ROOT_DIR", "/media/user/data/agenthle"),
         )
 
     @property
@@ -218,14 +217,14 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     output_file = meta["output_file"]
     reference_file = f"{meta['reference_dir']}/reliability_indices.json"
 
-    if not await session.exists(output_file):
+    if not (await session.file_exists(output_file) or await session.directory_exists(output_file)):
         logger.error("[%s] Agent output not found at %s", tag, output_file)
         return [0.0]
-    if not await session.exists(reference_file):
+    if not (await session.file_exists(reference_file) or await session.directory_exists(reference_file)):
         logger.error("[%s] Reference file not found at %s", tag, reference_file)
         return [0.0]
 
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     verify_script_path = f"{EVAL_TMP_DIR}/verify_reliability_indices.py"
     await session.write_file(verify_script_path, _read_script("verify_reliability_indices.py"))
 

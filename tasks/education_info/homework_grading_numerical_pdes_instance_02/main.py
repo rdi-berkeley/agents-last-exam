@@ -243,7 +243,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         missing_outputs = []
         for filename in meta["required_output_files"]:
             remote_file = f"{meta['remote_output_dir']}/{filename}"
-            if not await session.exists(remote_file):
+            if not (await session.file_exists(remote_file) or await session.directory_exists(remote_file)):
                 missing_outputs.append(filename)
                 continue
             (submission_dir / filename).write_bytes(await session.read_bytes(remote_file))

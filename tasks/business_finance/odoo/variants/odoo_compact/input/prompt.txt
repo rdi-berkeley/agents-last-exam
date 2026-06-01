@@ -1,0 +1,94 @@
+Recovered compact Odoo supply-chain workflow.
+
+Use the active database `odoo_compact` and searchable run tag `odoo_compact`.
+
+Required workflow:
+1. Global config:
+   - Company currency USD; enable EUR and CNY; lock FX rates:
+       1 EUR = 1.20 USD; 1 CNY = 0.125 USD
+   - Inventory valuation for stockable items: FIFO + Automated valuation
+   - Warehouse steps:
+       - "WH": 2-step receipts (Vendors -> Input -> Stock)
+       - "My Co": 3-step delivery (Pick -> Pack -> Ship)
+
+2. Master data (exact codes):
+   Partners:
+     - Customer: CUST-EU01 Berlin Robotics GmbH (EUR)
+     - Vendors: V-CN01 Shenzhen Metals (CNY), V-US01 ChipWorld (USD),
+               V-US02 SensorCore (USD), V-SUB01 CalibrateLab (USD subcontractor),
+               V-DS01 DropShipHub (USD dropship)
+   Products:
+     - FP-1000 Smart Sensor Kit (Stockable; MTO+Manufacture; Serial)
+     - SA-200 Control Board (Stockable; Manufacture)
+     - SC-300 Calibrated Sensor (Stockable; Subcontract; Serial)
+     - RM-010 Aluminum Case (Buy; 96 CNY)
+     - RM-020 PCB Blank (Buy; 64 CNY)
+     - RM-030 Microcontroller (Buy; 20 USD)
+     - RM-040 Sensor Core (Buy; 7 USD; supplied to subcontractor)
+     - ACC-900 Power Adapter (Stockable; Dropship; Sale 30 EUR; Buy 10 USD)
+     - FREIGHT-100 International Freight (Service; used as Landed Cost line; 100 USD)
+   BoMs + operations:
+     - FP-1000 BoM: SA-200x1, SC-300x1, RM-010x2; Assembly 15min @ 40 USD/hour
+     - SA-200 BoM: RM-020x1, RM-030x1; SMT 30min @ 60 USD/hour
+     - SC-300 Subcontract BoM: RM-040x1 supplied; subcontract fee 25 USD/unit
+
+3. Sales:
+   - Create an EUR pricelist: FP-1000=200 EUR, ACC-900=30 EUR
+   - Create SO for FP-1000x3 and ACC-900x3; include tag `odoo_compact`; Confirm.
+   - SO must trigger: FP-1000 via MTO->Manufacture, ACC-900 via Dropship.
+
+4. Purchases (all must include tag `odoo_compact`):
+   - PO-CN-001 (CNY): RM-010x10 @96; RM-020x10 @64
+   - PO-US-001 (USD): RM-030x3 @20
+   - PO-US-002 (USD): RM-040x5 @7
+   - PO-SUB-001 (USD): SC-300x3 @25 (subcontract fee)
+   - PO-DS-001 (USD): ACC-900x3 @10 (Dropship)
+
+5. Inbound receiving + Landed Cost (must include tag `odoo_compact` in Landed Cost name/description):
+   - Receive PO-CN-001 into warehouse "WH" using 2-step receipts.
+   - Create one Landed Cost record for the PO-CN receipt:
+       Cost line: FREIGHT-100 = 100 USD
+       Split method: By Current Cost
+   - Validate Landed Cost.
+   - Complete WH/Input -> WH/Stock transfer.
+   - Transfer RM-010 and RM-020 from WH warehouse to "My Co" warehouse (internal transfer done).
+
+6. Subcontracting:
+   - Ensure RM-040 is received and transferred to "My Co".
+   - Resupply subcontractor with RM-040x3 (done).
+   - Receive SC-300x3; assign serials: CS-0001, CS-0002, CS-0003.
+
+7. Manufacturing (2-level) + mandatory shortage recovery:
+   - Produce SA-200x3 in "My Co" warehouse.
+   - During SA production, scrap RM-030 qty 1 (done) causing shortage.
+   - Resolve shortage by creating an extra PO for RM-030x1 (include tag `odoo_compact`), receive it and transfer to "My Co",
+     then finish SA-200x3.
+   - Produce FP-1000x3; assign serials: SSK-0001, SSK-0002, SSK-0003.
+
+8. Delivery (from "My Co" using 3-step delivery):
+   - Partially deliver FP-1000: ship 2 units first (SSK-0001, SSK-0002), generate backorder for 1.
+   - Deliver the backorder 1 unit (SSK-0003).
+   - ACC-900 must be delivered via Dropship (vendor -> customer).
+
+9. Invoicing & payments (EUR, invoice on delivered quantities):
+   - After first delivery: create/post invoice #1 total 460 EUR; register payment to Paid.
+   - After second delivery: create/post invoice #2 total 230 EUR; register payment to Paid.
+
+10. Vendor bills:
+   - Create/post vendor bills for all POs + freight; mark them paid/reconciled.
+
+11. Expenses:
+   - Create analytic account: AN-odoo_compact
+   - Create expense: "Travel to Berlin" 123.45 USD, linked to AN-odoo_compact
+   - Submit -> Approve -> Post -> Pay
+
+Mandatory return/refund:
+- Return serial SSK-0002 back into STOCK of warehouse "My Co".
+- Create/post a credit note for 200 EUR (FP only) and mark it paid.
+
+Final business state requirements to preserve:
+- Landed cost split must be RM-010=60.00 USD and RM-020=40.00 USD.
+- Paid customer invoices must include totals 460 EUR and 230 EUR.
+- WH/Stock must end with RM-010=0 and RM-020=0.
+- My Co/Stock must end with RM-010=4 and RM-020=7.
+- FP serials must include SSK-0001, SSK-0002, SSK-0003 and returned serial SSK-0002 must be back in My Co.

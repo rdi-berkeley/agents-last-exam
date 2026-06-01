@@ -161,7 +161,7 @@ async def _read_required_output_files(session: cb.DesktopSession, output_files: 
     payloads: dict[str, bytes] = {}
     missing: list[str] = []
     for name, path in output_files.items():
-        if not await session.exists(path):
+        if not (await session.file_exists(path) or await session.directory_exists(path)):
             missing.append(name)
             continue
         payloads[name] = await session.read_bytes(path)

@@ -30,7 +30,7 @@ VARIANTS = [("base", "ABB IRB6700 URDF reconstruction")]
 
 
 async def _missing(session: cb.DesktopSession, path: str, *, label: str, tag: str) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("[%s] Missing %s: %s", tag, label, path)
     return True
@@ -183,11 +183,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         ("reference_pose_manifest", "hidden pose manifest"),
     ]
     for key, label in required_hidden_paths:
-        if not await session.exists(meta[key]):
+        if not (await session.file_exists(meta[key]) or await session.directory_exists(meta[key])):
             logger.error("[%s] Missing %s at %s", tag, label, meta[key])
             return [0.0]
 
-    if not await session.exists(meta["remote_output_dir"]):
+    if not (await session.file_exists(meta["remote_output_dir"]) or await session.directory_exists(meta["remote_output_dir"])):
         logger.error("[%s] Missing output directory: %s", tag, meta["remote_output_dir"])
         return [0.0]
 
@@ -200,7 +200,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         )
         return [0.0]
 
-    if not await session.exists(meta["output_submission_urdf"]):
+    if not (await session.file_exists(meta["output_submission_urdf"]) or await session.directory_exists(meta["output_submission_urdf"])):
         logger.error(
             "[%s] Missing output submission.urdf at %s", tag, meta["output_submission_urdf"]
         )

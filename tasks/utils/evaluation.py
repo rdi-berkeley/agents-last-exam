@@ -1224,7 +1224,7 @@ async def evaluate_milestone_mode(
     Evaluate using milestone mode: compare agent-saved screenshots with references.
     """
     # Check if target directory exists
-    exists = await session.exists(target_path)
+    exists = (await session.file_exists(target_path) or await session.directory_exists(target_path))
     if not exists:
         logger.info(f"Evaluation: File NOT found at {target_path}")
         return 0.0, {"error": f"Target path not found: {target_path}"}

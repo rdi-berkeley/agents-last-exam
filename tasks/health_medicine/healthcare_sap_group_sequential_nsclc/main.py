@@ -36,7 +36,6 @@ logger = logging.getLogger(__name__)
 DOMAIN_NAME = "health_medicine"
 TASK_NAME = "healthcare_sap_group_sequential_nsclc"
 VARIANT_NAME = "base"
-DEFAULT_REMOTE_ROOT = "/media/user/data/agenthle"
 ALLOWED_OUTPUT_DIRS = {
     "output",
     "output_test_pos",
@@ -71,7 +70,6 @@ class TaskConfig(LinuxTaskConfig):
             TASK_NAME=TASK_NAME,
             VARIANT_NAME=VARIANT_NAME,
             OS_TYPE="linux",
-            REMOTE_ROOT_DIR=os.environ.get("REMOTE_ROOT_DIR", DEFAULT_REMOTE_ROOT),
             REMOTE_OUTPUT_DIR=os.environ.get("REMOTE_OUTPUT_DIR", "output"),
         )
 

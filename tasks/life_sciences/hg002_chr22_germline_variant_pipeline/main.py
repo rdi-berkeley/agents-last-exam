@@ -170,7 +170,7 @@ def load():
 async def _download_if_present(
     session: cb.DesktopSession, remote_path: str, local_path: Path
 ) -> bool:
-    if not await session.exists(remote_path):
+    if not (await session.file_exists(remote_path) or await session.directory_exists(remote_path)):
         return False
     payload = await session.read_bytes(remote_path)
     local_path.parent.mkdir(parents=True, exist_ok=True)

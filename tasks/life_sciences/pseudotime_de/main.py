@@ -121,7 +121,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     payloads: dict[str, bytes] = {}
     missing: list[str] = []
     for name, path in output_files.items():
-        if not await session.exists(path):
+        if not (await session.file_exists(path) or await session.directory_exists(path)):
             missing.append(name)
             continue
         payloads[name] = await session.read_bytes(path)
@@ -130,7 +130,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         logger.info("Missing output files: %s", missing)
         return [0.0]
 
-    if not await session.exists(meta["reference_file"]):
+    if not (await session.file_exists(meta["reference_file"]) or await session.directory_exists(meta["reference_file"])):
         raise RuntimeError(f"evaluator-controlled reference missing: {meta['reference_file']}")
 
     reference_csv = await session.read_bytes(meta["reference_file"])

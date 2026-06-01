@@ -11,7 +11,7 @@ from tasks.common_setup import BaseTaskSetup
 from tasks.life_sciences.amber_minimization_script_prep_instance_1.scripts.verify_submission import (
     evaluate_output_bundle,
 )
-from tasks.linux_runtime import DATA_ROOT, LinuxTaskConfig
+from tasks.linux_runtime import LinuxTaskConfig
 
 _setup = BaseTaskSetup()
 

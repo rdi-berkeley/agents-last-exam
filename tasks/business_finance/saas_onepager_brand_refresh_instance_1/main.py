@@ -19,7 +19,7 @@ SCRIPTS_DIR = Path(__file__).parent / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from score_onepager_output import score_output
+from score_onepager_v2 import SharedVlmJudge, score_output_v2
 
 _setup = BaseTaskSetup()
 
@@ -209,7 +209,7 @@ async def _reset_remote_output_dir(session: cb.DesktopSession, remote_output_dir
             "Failed to reset remote output dir "
             f"{remote_output_dir}: {result.get('stderr') or result.get('stdout')}"
         )
-    await session.makedirs(remote_output_dir)
+    await session.interface.create_dir(remote_output_dir)
 
 
 @cb.tasks_config(split="train")
@@ -234,7 +234,7 @@ async def _read_required_bytes(
 ) -> dict[str, bytes]:
     payload: dict[str, bytes] = {}
     for key, remote_path in paths.items():
-        if not await session.exists(remote_path):
+        if not (await session.file_exists(remote_path) or await session.directory_exists(remote_path)):
             raise FileNotFoundError(remote_path)
         payload[key] = await session.read_bytes(remote_path)
     return payload
@@ -284,15 +284,56 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         tmp_root = Path(tmp_dir)
         output_dir = tmp_root / "output"
         reference_dir = tmp_root / "reference"
+        input_dir = tmp_root / "input"
         output_dir.mkdir(parents=True, exist_ok=True)
         reference_dir.mkdir(parents=True, exist_ok=True)
+        input_dir.mkdir(parents=True, exist_ok=True)
 
         for name, payload in output_bytes.items():
             (output_dir / name).write_bytes(payload)
         for name, payload in reference_bytes.items():
             (reference_dir / name).write_bytes(payload)
 
-        result = score_output(output_dir, reference_dir)
+        # Concept image for the anti-copy gate (optional; gate is skipped if absent).
+        original_png_remote = meta.get("original_png")
+        try:
+            if original_png_remote and (await session.file_exists(original_png_remote) or await session.directory_exists(original_png_remote)):
+                (input_dir / "original_onepager.png").write_bytes(
+                    await session.read_bytes(original_png_remote)
+                )
+        except Exception as exc:
+            logger.warning(
+                "[%s] anti-copy concept image unavailable: %s", meta["variant_name"], exc
+            )
+
+        # VLM judge owns the soft visual/asset dimensions. Construct it, but never
+        # let a missing key / API error zero out the run: fall back to the
+        # render-independent deterministic layer (which still passes a correct
+        # rebuild and fails the exploit/copy classes).
+        judge = None
+        try:
+            judge = SharedVlmJudge()
+        except Exception as exc:
+            logger.error(
+                "[%s] VLM judge unavailable; scoring deterministic-only: %s",
+                meta["variant_name"],
+                exc,
+            )
+
+        try:
+            result = score_output_v2(
+                output_dir, reference_dir, judge=judge, input_dir=input_dir
+            )
+        except Exception as exc:
+            logger.error(
+                "[%s] scoring with VLM failed (%s); retrying deterministic-only",
+                meta["variant_name"],
+                exc,
+            )
+            result = score_output_v2(
+                output_dir, reference_dir, judge=None, input_dir=input_dir
+            )
+
         logger.info(
             "[%s] evaluation result: %s",
             meta["variant_name"],

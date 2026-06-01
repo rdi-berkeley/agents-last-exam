@@ -25,7 +25,6 @@ VARIANT_NAME_CONST = "international_festival"
 VARIANT_NAME = VARIANT_NAME_CONST
 DOMAIN_NAME = "visual_media"
 TASK_NAME_CONST = "video_reconstruction"
-REMOTE_ROOT_DIR = os.environ.get("IF_REMOTE_ROOT_DIR", r"E:\agenthle")
 PROJECT_FILE_NAME = "blank.drp"
 OUTPUT_VIDEO_NAME = os.environ.get("TARGET_VIDEO_NAME", "output-test.mp4")
 # Do not pin a preview build that Google will retire: `gemini-3-pro-preview`
@@ -208,7 +207,7 @@ async def _prepare_eval_video(
     )
     try:
         await _run_command(session, cmd, check=True)
-        if await session.exists(remote_tmp_video):
+        if (await session.file_exists(remote_tmp_video) or await session.directory_exists(remote_tmp_video)):
             return remote_tmp_video
     except Exception as exc:
         logger.warning("[eval] failed to compress output for Gemini: %s", exc)
@@ -217,7 +216,6 @@ async def _prepare_eval_video(
 
 @dataclass
 class TaskConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = REMOTE_ROOT_DIR
     DOMAIN_NAME: str = "visual_media"
 
     TASK_NAME: str = "video_reconstruction"
@@ -335,7 +333,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             encoding="utf-8",
         )
 
-    if not await session.exists(output_video):
+    if not (await session.file_exists(output_video) or await session.directory_exists(output_video)):
         _save_report(
             {
                 "variant_name": task_tag,
@@ -350,7 +348,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     prompt_source = "embedded_fallback"
     segment_prompt = FALLBACK_SEGMENT_PROMPT
     try:
-        if await session.exists(segment_prompt_path):
+        if (await session.file_exists(segment_prompt_path) or await session.directory_exists(segment_prompt_path)):
             prompt_text = await session.read_file(segment_prompt_path)
             if isinstance(prompt_text, str) and prompt_text.strip():
                 segment_prompt = prompt_text
@@ -360,7 +358,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
     remote_eval_dir = rf"{task_cfg.metadata['remote_output_dir']}\eval_tmp"
     try:
-        await session.makedirs(remote_eval_dir)
+        await session.interface.create_dir(remote_eval_dir)
     except Exception:
         pass
     remote_compact_video = rf"{remote_eval_dir}\gemini_eval_compact.mp4"

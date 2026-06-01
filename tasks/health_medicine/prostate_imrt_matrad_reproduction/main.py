@@ -249,12 +249,12 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         f"{sub_dir}/RTDOSE.dcm",
         f"{sub_dir}/RTSTRUCT_corrected.dcm",
     ]
-    missing = [p for p in required_after if not await session.exists(p)]
+    missing = [p for p in required_after if not (await session.file_exists(p) or await session.directory_exists(p))]
     if missing:
         logger.error("[%s] missing submission outputs: %s", TASK_NAME, missing)
         return [0.0]
 
-    await session.makedirs(tmp_dir)
+    await session.interface.create_dir(tmp_dir)
     await session.write_file(f"{tmp_dir}/evaluate.py", _read_script("evaluate.py"))
     await session.write_file(f"{tmp_dir}/replay.m", _read_script("replay.m"))
 
@@ -329,7 +329,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     poll_attempts = int(meta.get("eval_poll_attempts", 240))
     poll_interval = float(meta.get("eval_poll_interval_sec", 15.0))
     for _ in range(poll_attempts):
-        if await session.exists(done_flag):
+        if (await session.file_exists(done_flag) or await session.directory_exists(done_flag)):
             break
         await asyncio.sleep(poll_interval)
     else:
@@ -337,13 +337,13 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         return [0.0]
 
     rc_text = ""
-    if await session.exists(rc_path):
+    if (await session.file_exists(rc_path) or await session.directory_exists(rc_path)):
         rc_text = _as_text(await session.read_file(rc_path)).strip()
 
     # Always try to read score.json — even on non-zero exit code the
     # evaluator may have written partial results before crashing.
     payload = None
-    if await session.exists(score_path):
+    if (await session.file_exists(score_path) or await session.directory_exists(score_path)):
         try:
             payload = json.loads(_as_text(await session.read_file(score_path)))
         except Exception as exc:
@@ -351,7 +351,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
     if rc_text != "0":
         log_tail = ""
-        if await session.exists(log_path):
+        if (await session.file_exists(log_path) or await session.directory_exists(log_path)):
             log_tail = _as_text(await session.read_file(log_path))[-2000:]
         logger.error(
             "[%s] evaluate.py failed rc=%s log_tail=%s partial_score=%s",

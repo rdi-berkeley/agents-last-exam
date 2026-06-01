@@ -266,7 +266,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     variant = meta["variant_name"]
 
     for path in (meta["output_file"], meta["reference_file"]):
-        if not await session.exists(path):
+        if not (await session.file_exists(path) or await session.directory_exists(path)):
             logger.error("Missing evaluation artifact: %s", path)
             return [0.0]
 
