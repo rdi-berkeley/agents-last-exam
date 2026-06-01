@@ -108,6 +108,19 @@ RUN uv pip install --system playwright && \
     python3.12 -m playwright install --with-deps firefox
 
 # ============================================================
+# 7b. Task eval-side Python deps (system /usr/bin/python3)
+# ------------------------------------------------------------
+# The evaluate()/score scripts of the baked-in tasks import these at eval time
+# and run under /usr/bin/python3 (no venv). The set is the union of
+# tasks/pyproject.toml and a static AST scan of every cpu-free-ubuntu task's
+# imports (which surfaced pydicom + pymedphys that pyproject had missed).
+# torch is already present in the base image, so it is satisfied here.
+# ============================================================
+COPY tasks/pyproject.toml /tmp/ale_task_deps/pyproject.toml
+RUN uv pip install --system \
+      $(python3.12 -c "import tomllib,sys; print(' '.join(tomllib.load(open('/tmp/ale_task_deps/pyproject.toml','rb'))['project']['dependencies']))")
+
+# ============================================================
 # 8. Google Cloud SDK (gcloud + gsutil, for gs:// task data staging)
 # ============================================================
 RUN curl -fsSL https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz \
