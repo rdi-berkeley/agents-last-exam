@@ -87,7 +87,7 @@ timeouts.
 
 - Creates a fresh GCE VM via `gcloud compute instances create`.
 - Walks the capacity-pool fallback ladder
-  ([`configs/environments/gcloud_ubuntu.yaml`](../configs/environments/gcloud_ubuntu.yaml))
+  ([`configs/environments/gcloud.yaml`](../configs/environments/gcloud.yaml))
   on capacity errors.
 - Waits for `cua-server` to answer `/status` on TCP 5000.
 - `release(mode="delete")` runs `gcloud compute instances delete`.
@@ -129,7 +129,7 @@ environment: configs/environments/my_provider_default.yaml
 ```
 
 The env config lets users share defaults across experiments — see
-[`configs/environments/gcloud_ubuntu.yaml`](../configs/environments/gcloud_ubuntu.yaml)
+[`configs/environments/gcloud.yaml`](../configs/environments/gcloud.yaml)
 for the shape (`provider:`, a `snapshot:`, and the per-snapshot image map
 + capacity pools under `snapshots:`).
 
@@ -158,7 +158,7 @@ family. Otherwise add a new family and reference it from your provider's
 If you're staying on GCP but want a different OS, kernel, or pre-installed
 toolset, you don't need a new provider. Just edit the `snapshots:` block of
 a gcloud env config such as
-[`configs/environments/gcloud_ubuntu.yaml`](../configs/environments/gcloud_ubuntu.yaml):
+[`configs/environments/gcloud.yaml`](../configs/environments/gcloud.yaml):
 
 ```yaml
 snapshots:

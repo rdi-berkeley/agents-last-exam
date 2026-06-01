@@ -1,0 +1,47 @@
+# Environment: gcloud (provider=gcloud)
+# Referenced from an experiment as:  environment: ../configs/environments/gcloud.yaml
+#
+# ONE environment serves ALL tasks: the task card declares a logical snapshot
+# (`image_category` / `snapshot_name`), and the gcloud provider resolves it to
+# a GCE image via the `snapshots:` map below. Every snapshot a task can ask for
+# MUST appear here — an unmapped snapshot cannot be provisioned.
+
+provider: gcloud
+
+project: ${env:GCP_PROJECT}
+service_account_key: ${env:GCP_SA_KEY}
+instance_prefix: ale
+network: agenthle-vpc
+subnet: agenthle-vpc
+
+# logical snapshot tag (task_card) -> GCE image (+ optional gpu) + zone fallback
+snapshots:
+  cpu-free-ubuntu:
+    image: ale-ubuntu22
+    zones: [us-central1-a, us-east1-b, us-west1-a]
+
+  cpu-free:
+    image: ale-win10
+    zones: [us-central1-a, us-central1-b, us-east1-b]
+
+  cpu-free-win:
+    image: ale-win10
+    zones: [us-central1-a, us-central1-b, us-east1-b]
+
+  cpu-license:
+    image: ale-win10
+    zones: [us-east1-b, us-central1-a]
+
+  gpu-free:
+    image: ale-win10
+    gpu: nvidia-l4-vws
+    zones: [us-central1-a, us-central1-b]
+
+  gpu-license:
+    image: ale-win10
+    gpu: nvidia-l4-vws
+    zones: [us-central1-a, us-central1-b]
+
+# task data sourcing + output mirroring (substrate-coupled: code lives under environments/)
+task_data_source: gs://ale-data-public
+output_path: local

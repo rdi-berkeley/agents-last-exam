@@ -26,7 +26,7 @@ secret_file: secret/.env                          # KEY=value pairs
 
 agents:
   - configs/agents/cc_sonnet_or_t3.yaml           # add more lines to run a matrix
-environment: configs/environments/gcloud_ubuntu.yaml
+environment: configs/environments/gcloud.yaml
 
 tasks: selected_tasks/helloworld.txt
 
