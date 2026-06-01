@@ -10,6 +10,7 @@ from .runner import Runner
 from .experiment_spec import (
     AgentSpec,
     ArtifactsSpec,
+    EnvironmentSpec,
     ExperimentSpec,
     OutputSpec,
     ProviderSpec,
@@ -21,6 +22,7 @@ from .experiment_spec import (
 __all__ = [
     "AgentSpec",
     "ArtifactsSpec",
+    "EnvironmentSpec",
     "ExperimentSpec",
     "OutputSpec",
     "ProviderSpec",

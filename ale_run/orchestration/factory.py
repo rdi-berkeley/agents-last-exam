@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..base_interface import Provider
-    from .experiment_spec import AgentSpec, ProviderSpec
+    from .experiment_spec import AgentSpec, EnvironmentSpec, ProviderSpec
 
 
 # ----------------------------------------------------------------------
@@ -176,3 +176,23 @@ def build_provider(spec: "ProviderSpec") -> "Provider":
         from ..environments.providers.docker import DockerProvider
         return DockerProvider(spec.config)
     raise NotImplementedError(f"provider kind {kind!r} is not implemented")
+
+
+class EnvironmentRouter:
+    """Resolves a task-card snapshot to the Provider that serves it.
+
+    provider is chosen per snapshot, so an environment may use several
+    providers. Provider instances are built lazily and cached per kind (a
+    gcloud provider acquires a fresh VM per ``acquire()``, so one instance
+    safely serves all its snapshots concurrently).
+    """
+
+    def __init__(self, env: "EnvironmentSpec"):
+        self._env = env
+        self._cache: dict[str, "Provider"] = {}
+
+    def provider_for(self, snapshot: str) -> "Provider":
+        kind = self._env.kind_for(snapshot)
+        if kind not in self._cache:
+            self._cache[kind] = build_provider(self._env.provider_specs[kind])
+        return self._cache[kind]

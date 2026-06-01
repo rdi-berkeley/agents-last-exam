@@ -38,7 +38,7 @@ from ..environments.env import ALEEnv
 from ..executors import DockerExecutor, LocalExecutor, SandboxExecutor
 from ..tasks.loader import TaskLoader
 from ..tasks.driver import TaskDriver
-from .factory import build_config, resolve_agent
+from .factory import EnvironmentRouter, build_config, resolve_agent
 from .run_writer import RunWriter, slug_task
 from .experiment_spec import ArtifactsSpec, RunUnit, UnitResult
 from .termination import classify_error, err_dict, redact_config
@@ -137,7 +137,7 @@ def install_signal_handlers() -> None:
 async def run_one_unit(
     *,
     unit: RunUnit,
-    provider: Provider,
+    router: "EnvironmentRouter",
     output_root: Path,
     artifacts: ArtifactsSpec | None = None,
     sem: asyncio.Semaphore | None = None,
@@ -146,6 +146,9 @@ async def run_one_unit(
 ) -> UnitResult:
     started = time.monotonic()
     effective_cleanup_mode = cleanup_mode
+    # `provider` is resolved per unit from the task's snapshot (below), once the
+    # task card has been loaded.
+    provider: Provider | None = None
 
     # ---- 1. Resolve agent + config from the AgentSpec ----
     try:
@@ -215,6 +218,10 @@ async def run_one_unit(
             task_meta = TaskLoader(str(task_path)).load(unit.variant_index)
             env_spec = _build_env_spec(task_meta, unit=unit)
             timeout_s = int(task_meta.get("timeout_s") or _DEFAULT_TIMEOUT_S)
+
+            # Resolve the provider for THIS task's snapshot (per-snapshot
+            # routing: an environment can mix backends across snapshots).
+            provider = router.provider_for(env_spec.snapshot)
 
             # ============================================================
             # Phase 0 — provision the sandbox. Single-shot: with task data

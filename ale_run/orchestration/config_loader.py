@@ -39,15 +39,19 @@ from typing import Any
 
 import yaml
 
-from .factory import AGENT_REGISTRY
 from .experiment_spec import (
     AgentSpec,
     ArtifactsSpec,
+    EnvironmentSpec,
     ExperimentSpec,
     OutputSpec,
     ProviderSpec,
     TaskSpec,
 )
+
+# Fallback container ref if a docker-routed image family has no registered
+# docker_image (every shipped linux family does).
+_DEFAULT_DOCKER_IMAGE = "agentslastexam/ale-kasm:latest"
 
 logger = logging.getLogger(__name__)
 
@@ -212,7 +216,7 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
 
     if "environment" not in raw:
         raise KeyError("missing required field: `environment` (path to an environment yaml)")
-    provider, artifacts = _build_environment_from_path(raw["environment"], base_dir=base_dir)
+    environment, artifacts = _build_environment_from_path(raw["environment"], base_dir=base_dir)
 
     if "tasks" not in raw:
         raise KeyError("missing required field: `tasks`")
@@ -226,7 +230,7 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
     return ExperimentSpec(
         name=str(raw["name"]),
         output=output,
-        provider=provider,
+        environment=environment,
         agents=agents,
         tasks=tasks,
         artifacts=artifacts,
@@ -351,25 +355,30 @@ def _build_agent_from_path(path: Any, *, base_dir: Path) -> AgentSpec:
 
 # ---- environment ---------------------------------------------------------
 
-# Environment yaml reserved keys (NOT passed into ProviderSpec.config):
-#   provider          — selects the provider impl
-#   task_data_source  — where task data is sourced from (→ ArtifactsSpec)
-#   output_path       — what to do with the agent's output dir (→ ArtifactsSpec)
-# Any OTHER key becomes a ProviderSpec.config kwarg (passed straight to the
-# provider-specific Config dataclass). task_data_source / output_path live
-# here because the code that consumes them — task_data/ (sourcing) and
-# output_pull.py (mirroring) — is substrate-coupled and lives under
-# environments/, so the config belongs with the environment too.
-_ENVIRONMENT_RESERVED = frozenset({"provider", "task_data_source", "output_path"})
+# Keys at the env-yaml top level that are NOT provider config.
+_ENVIRONMENT_TOP_RESERVED = frozenset({
+    "provider", "providers", "snapshots", "task_data_source", "output_path",
+})
 
 
 def _build_environment_from_path(
     path: Any, *, base_dir: Path,
-) -> tuple[ProviderSpec, ArtifactsSpec]:
-    """Load the single environment from a ``configs/environments/<env>.yaml``.
+) -> tuple[EnvironmentSpec, ArtifactsSpec]:
+    """Load the environment from a ``configs/environments/<env>.yaml``.
 
-    Returns both the provider selection and the artifact-path config (task
-    data sourcing + output mirroring), which now live in the environment.
+    Two shapes are accepted:
+
+    * **Per-snapshot** (``snapshots:`` present) — each task-card snapshot maps
+      to ``{provider, image, <provider>: {knobs}}``. Shared per-provider config
+      (creds/network) lives under ``providers:``. The loader reshapes this into
+      one :class:`ProviderSpec` per provider kind (gcloud gets its snapshots
+      subset in the format its Config expects; docker gets the resolved image +
+      sizing) plus a snapshot→kind routing table.
+    * **Single provider** (``provider:`` at top level, no ``snapshots:``) — the
+      dev/``static`` shape: one provider serves every snapshot (it is a fixed
+      attached box, so there is nothing to map).
+
+    Returns the resolved :class:`EnvironmentSpec` plus the artifact-path config.
     """
     if not isinstance(path, str):
         raise TypeError(
@@ -380,37 +389,122 @@ def _build_environment_from_path(
     if not isinstance(raw, dict):
         raise TypeError(f"environment config {path!r} must be a mapping")
 
-    if "provider" not in raw:
-        raise KeyError(f"environment config {path!r} missing required field: `provider`")
-    provider = str(raw["provider"])
     artifacts = _build_artifacts({
         "task_data_source": raw.get("task_data_source"),
         "output_path": raw.get("output_path"),
     })
-    cfg = {k: v for k, v in raw.items() if k not in _ENVIRONMENT_RESERVED}
 
-    # `service_account_key` is a user-friendly path field — expand `~`
-    # before handing to the Config dataclass.
+    if "snapshots" in raw:
+        env = _build_per_snapshot_env(raw, path)
+    elif "provider" in raw:
+        env = _build_single_provider_env(raw, path)
+    else:
+        raise KeyError(
+            f"environment config {path!r} must declare either `snapshots:` "
+            f"(per-snapshot provider mapping) or `provider:` (single provider)"
+        )
+    return env, artifacts
+
+
+def _build_single_provider_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
+    """Single-provider env (e.g. static dev attach): one provider, all snapshots."""
+    provider = str(raw["provider"])
+    cfg = {k: v for k, v in raw.items() if k not in _ENVIRONMENT_TOP_RESERVED}
     if (sa := cfg.get("service_account_key")) is not None:
         cfg["service_account_key"] = str(Path(str(sa)).expanduser())
+    _validate_provider_required(provider, cfg, path)
+    return EnvironmentSpec(
+        provider_specs={provider: ProviderSpec(kind=provider, config=cfg)},
+        snapshot_kind={},
+        default_kind=provider,
+    )
 
-    _validate_provider_required(provider, cfg)
-    return ProviderSpec(kind=provider, config=cfg), artifacts
+
+def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
+    """Per-snapshot env: reshape snapshot→{provider,image,knobs} into one
+    ProviderSpec per kind + a snapshot→kind routing table."""
+    from ..environments.images import get as get_image
+
+    shared = raw.get("providers") or {}
+    if not isinstance(shared, dict):
+        raise TypeError(f"environment {path!r}: `providers:` must be a mapping")
+    snapshots = raw["snapshots"]
+    if not isinstance(snapshots, dict) or not snapshots:
+        raise TypeError(f"environment {path!r}: `snapshots:` must be a non-empty mapping")
+
+    snapshot_kind: dict[str, str] = {}
+    gcloud_snaps: dict[str, Any] = {}   # tag -> {image, gpu, zones}
+    docker_cfg: dict[str, Any] | None = None
+
+    for tag, entry in snapshots.items():
+        if not isinstance(entry, dict):
+            raise TypeError(f"environment {path!r}: snapshot {tag!r} must be a mapping")
+        kind = entry.get("provider")
+        image = entry.get("image")
+        if not kind:
+            raise KeyError(f"environment {path!r}: snapshot {tag!r} missing `provider`")
+        if not image:
+            raise KeyError(f"environment {path!r}: snapshot {tag!r} missing `image`")
+        knobs = entry.get(kind) or {}       # provider-specific block (e.g. gcloud:/docker:)
+        snapshot_kind[str(tag)] = str(kind)
+
+        if kind == "gcloud":
+            gcloud_snaps[str(tag)] = {"image": str(image), **knobs}
+        elif kind == "docker":
+            # docker has one container image; resolve the registry family to its
+            # published container ref. Multiple docker snapshots must agree.
+            ref = get_image(str(image)).docker_image or _DEFAULT_DOCKER_IMAGE
+            this = {"image": ref, "image_family": str(image), **knobs}
+            if docker_cfg is not None and docker_cfg != this:
+                raise ValueError(
+                    f"environment {path!r}: multiple docker snapshots with "
+                    f"differing config is not supported ({docker_cfg} vs {this})"
+                )
+            docker_cfg = this
+        elif kind == "static":
+            raise ValueError(
+                f"environment {path!r}: `static` cannot be a per-snapshot "
+                f"provider (it is a fixed attached box). Use a single-provider "
+                f"static env (e.g. static_dev.yaml) instead."
+            )
+        else:
+            raise NotImplementedError(
+                f"environment {path!r}: snapshot {tag!r} provider {kind!r} not supported"
+            )
+
+    provider_specs: dict[str, ProviderSpec] = {}
+    if gcloud_snaps:
+        gc = dict(shared.get("gcloud") or {})
+        if (sa := gc.get("service_account_key")) is not None:
+            gc["service_account_key"] = str(Path(str(sa)).expanduser())
+        gc["snapshots"] = gcloud_snaps
+        _validate_provider_required("gcloud", gc, path)
+        provider_specs["gcloud"] = ProviderSpec(kind="gcloud", config=gc)
+    if docker_cfg is not None:
+        dk = {**(shared.get("docker") or {}), **docker_cfg}
+        provider_specs["docker"] = ProviderSpec(kind="docker", config=dk)
+
+    return EnvironmentSpec(
+        provider_specs=provider_specs,
+        snapshot_kind=snapshot_kind,
+        default_kind=None,
+    )
 
 
-def _validate_provider_required(provider: str, cfg: dict[str, Any]) -> None:
+def _validate_provider_required(provider: str, cfg: dict[str, Any], path: str = "") -> None:
     """Surface friendly errors for the most common missing-field mistakes
     BEFORE the deployer Config dataclass raises a less-readable TypeError."""
+    where = f" in {path!r}" if path else ""
     if provider == "gcloud":
         for k in ("project", "service_account_key"):
             if not cfg.get(k):
                 raise KeyError(
-                    f"environment.provider=gcloud missing required field `{k}` "
-                    f"(set it in the main yaml; profile shouldn't carry it)"
+                    f"environment provider=gcloud missing required field `{k}`{where} "
+                    f"(set it under `providers.gcloud`)"
                 )
     elif provider == "static":
         if not cfg.get("endpoint"):
-            raise KeyError("environment.provider=static missing required field `endpoint`")
+            raise KeyError(f"environment provider=static missing required field `endpoint`{where}")
 
 
 # ---- tasks ---------------------------------------------------------------

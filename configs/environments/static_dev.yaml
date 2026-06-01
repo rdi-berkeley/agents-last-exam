@@ -1,0 +1,24 @@
+# ============================================================================
+# static_dev.yaml — DEV ONLY. Attach to an already-running cua-server.
+# ============================================================================
+# The `static` provider does NOT provision anything — it connects to a box you
+# started yourself (a long-lived dev VM, a local Kasm container, ...) at a
+# fixed ip:port. Because that box is ONE fixed machine, there is no per-snapshot
+# mapping: every task runs on this single endpoint regardless of the snapshot
+# its task card asks for. You are responsible for making the box's OS match the
+# tasks you point at it (don't run a Windows task against a Linux endpoint).
+#
+# Use it to iterate fast without paying VM boot time on every run.
+
+provider: static
+
+endpoint: http://localhost:33071     # ip:port of the running cua-server
+image: ale-kasm                      # which image's path-conventions + cua port this box uses
+                                     #   ale-kasm → Linux/Kasm, cua-server on :8000
+                                     #   ale-ubuntu22 → Linux GCE, :5000
+                                     #   ale-win10 → Windows, :5000
+# cleanup_on_release: false          # default — never tear down a box you didn't create
+
+# ---- task data sourcing + output mirroring (see environment.yaml for the full key reference) ----
+task_data_source: gs://ale-data-public
+output_path: local

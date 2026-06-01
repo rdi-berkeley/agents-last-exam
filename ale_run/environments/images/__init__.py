@@ -63,6 +63,12 @@ class Image:
     default_machine_type: str
     gpu: str | None = None
 
+    # ─── docker realization (consumed by the docker provider) ───
+    docker_image: str | None = None
+    """The published container image ref that realizes this family under the
+    docker provider (e.g. ``agentslastexam/ale-kasm:latest``). ``None`` for
+    families that only exist as GCE images (ale-ubuntu22 / ale-win10)."""
+
     # ─── cua-server port (image-specific; consumed by Providers + Executors) ───
     cua_server_port: int = 5000
     """Port the cua-server listens on inside this image. ``ale-kasm`` runs the

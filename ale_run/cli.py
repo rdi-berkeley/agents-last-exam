@@ -56,8 +56,15 @@ async def _cmd_run(args: argparse.Namespace) -> int:
     units = _filter_units(runner.enumerate_units(), args)
 
     if args.dry_run:
+        env = spec.environment
+        kinds = sorted(set(env.snapshot_kind.values()) | ({env.default_kind} if env.default_kind else set()))
+        if env.snapshot_kind:
+            routing = ", ".join(f"{s}->{k}" for s, k in sorted(env.snapshot_kind.items()))
+            env_desc = f"{'+'.join(kinds)} ({routing})"
+        else:
+            env_desc = "+".join(kinds)
         print(f"experiment: {spec.name}")
-        print(f"environment: {spec.provider.kind}")
+        print(f"environment: {env_desc}")
         print(f"output:     {runner.output_root}")
         print(f"concurrency: {spec.concurrency}")
         print(f"units ({len(units)}):")

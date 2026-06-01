@@ -49,8 +49,38 @@ class AgentSpec:
 class ProviderSpec:
     """VM provider selection. ``kind`` picks the impl; ``config`` is its kwargs."""
 
-    kind: str                                    # gcloud | static | (stub for tests)
+    kind: str                                    # gcloud | static | docker | (stub for tests)
     config: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class EnvironmentSpec:
+    """Resolved environment: which provider instantiates each task snapshot.
+
+    provider is chosen PER SNAPSHOT, so one environment can mix backends.
+
+    * ``provider_specs`` — one :class:`ProviderSpec` per provider *kind* that
+      any snapshot routes to (e.g. ``gcloud`` carries its snapshots subset;
+      ``docker`` carries the resolved image + sizing). Built lazily into
+      provider instances by the runner.
+    * ``snapshot_kind`` — maps a task-card snapshot tag to the provider kind
+      that serves it (the per-snapshot ``provider:`` in the env yaml).
+    * ``default_kind`` — for single-provider environments (``static`` dev
+      attach: no per-snapshot map) every snapshot routes here.
+    """
+
+    provider_specs: dict[str, ProviderSpec] = field(default_factory=dict)
+    snapshot_kind: dict[str, str] = field(default_factory=dict)
+    default_kind: str | None = None
+
+    def kind_for(self, snapshot: str) -> str:
+        kind = self.snapshot_kind.get(snapshot) or self.default_kind
+        if kind is None:
+            raise KeyError(
+                f"snapshot {snapshot!r} is not mapped to any provider in the "
+                f"environment (mapped: {sorted(self.snapshot_kind)})"
+            )
+        return kind
 
 
 @dataclass
@@ -93,7 +123,7 @@ class OutputSpec:
 class ExperimentSpec:
     name: str
     output: OutputSpec
-    provider: ProviderSpec
+    environment: EnvironmentSpec
     agents: list[AgentSpec]
     tasks: list[TaskSpec]
     artifacts: ArtifactsSpec = field(default_factory=ArtifactsSpec)

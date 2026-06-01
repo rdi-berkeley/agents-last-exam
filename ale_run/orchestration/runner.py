@@ -21,7 +21,7 @@ import logging
 from pathlib import Path
 from typing import Iterable
 
-from .factory import build_provider
+from .factory import EnvironmentRouter
 from .experiment_spec import ExperimentSpec, RunUnit, UnitResult
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,9 @@ class Runner:
 
     def __init__(self, spec: ExperimentSpec):
         self._spec = spec
-        self._provider = None  # built lazily — keeps --dry-run free of provider deps
+        # Router resolves each unit's snapshot to its provider, building +
+        # caching provider instances lazily (keeps --dry-run provider-free).
+        self._router = EnvironmentRouter(spec.environment)
         self._output_root = Path(spec.output.root) / spec.name
 
     @property
@@ -77,8 +79,6 @@ class Runner:
             logger.warning("Runner.run: no units to execute")
             return []
 
-        if self._provider is None:
-            self._provider = build_provider(self._spec.provider)
         self._output_root.mkdir(parents=True, exist_ok=True)
 
         n = self._spec.concurrency
@@ -89,7 +89,7 @@ class Runner:
             logger.info("[%s] queued", u.slug)
             result = await run_one_unit(
                 unit=u,
-                provider=self._provider,
+                router=self._router,
                 output_root=self._output_root,
                 artifacts=self._spec.artifacts,
                 sem=sem,

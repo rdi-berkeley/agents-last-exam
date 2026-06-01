@@ -1,0 +1,126 @@
+# ============================================================================
+# environment.yaml — the one environment config, fully annotated.
+# ============================================================================
+# A task card declares a logical `snapshot` (its `image_category`, e.g.
+# "cpu-free-ubuntu"). For EVERY snapshot a task can ask for, this file says:
+#
+#   • provider — which backend instantiates the box for that snapshot
+#                (gcloud VM / docker container / static endpoint)
+#   • image    — which sandbox image to boot on that provider
+#   • <provider>: { ... } — knobs that belong to THAT provider only, nested
+#                under the provider's name so ownership is obvious at a glance
+#
+# provider is chosen PER SNAPSHOT, so ONE environment can mix backends: run
+# cheap Linux tasks in a local Docker container while sending Windows / GPU
+# tasks to GCloud VMs. A snapshot a task asks for but that is not mapped here
+# cannot run.
+#
+# (image ⟂ provider: the same logical box can be realized by different
+# providers — e.g. an Ubuntu sandbox is `ale-ubuntu22` on gcloud but `ale-kasm`
+# in Docker — so they are two independent choices, not one derivable from the
+# other.)
+
+# ---------------------------------------------------------------------------
+# Shared per-provider config — credentials / networking that every snapshot
+# routed to that provider inherits. (Per-snapshot knobs go in the snapshot
+# blocks below.)
+# ---------------------------------------------------------------------------
+providers:
+  gcloud:
+    project: ${env:GCP_PROJECT}                # GCP project id (from secret/.env)
+    service_account_key: ${env:GCP_SA_KEY}     # path to the runner SA JSON key
+    instance_prefix: ale                       # VM name prefix
+    network: agenthle-vpc                      # VPC the VMs attach to — MUST expose tcp:5000 (cua-server)
+    subnet: agenthle-vpc
+    # gcs_sa_key is not needed on gcloud (the image's baked SA reads gs://ale-data-public).
+
+  docker:
+    # No credentials needed for local Docker. To let `task_data_source: gs://…`
+    # work INSIDE the container (private buckets), point gcs_sa_key at a host
+    # SA JSON; it is copied in and gsutil/boto is configured per container.
+    # gcs_sa_key: secret/gcp_key.json
+    {}
+
+# ---------------------------------------------------------------------------
+# Per-snapshot mapping: snapshot (task-card image_category) → provider + image
+# (+ provider-specific knobs). The six tags below are every snapshot the task
+# suite declares.
+# ---------------------------------------------------------------------------
+snapshots:
+
+  cpu-free-ubuntu:            # Linux, no GPU, no license — the bulk of tasks (~110)
+    provider: docker          # cheap path: run it in a local Docker container
+    image: ale-kasm           # trycua/cua-ubuntu (Kasm XFCE + cua-server on :8000)
+    docker:                   # docker-only knobs (container sizing) ↓
+      cpus: 4                 # CPU limit per container (0 = unlimited / host default)
+      memory: 16g            # memory limit per container ("" = unlimited)
+      shm_size: 1g            # /dev/shm size; bump for Chromium / big-buffer workloads
+      # extra_env: { FOO: bar }      # extra env vars injected into the container
+    # ALTERNATIVE — send Ubuntu tasks to a GCloud VM instead of Docker:
+    #   provider: gcloud
+    #   image: ale-ubuntu22                       # GCE Ubuntu 22.04 (cua-server on :5000)
+    #   gcloud:
+    #     zones: [us-central1-a, us-east1-b, us-west1-a]
+
+  cpu-free:                   # Windows, no GPU, no license
+    provider: gcloud
+    image: ale-win10
+    gcloud:                   # gcloud-only knobs ↓
+      zones: [us-central1-a, us-central1-b, us-east1-b]   # tried in order on capacity errors
+
+  cpu-free-win:               # Windows (alias used by one task)
+    provider: gcloud
+    image: ale-win10
+    gcloud:
+      zones: [us-central1-a, us-central1-b, us-east1-b]
+
+  cpu-license:                # Windows requiring a licensed image
+    provider: gcloud
+    image: ale-win10
+    gcloud:
+      zones: [us-east1-b, us-central1-a]
+
+  gpu-free:                   # Windows + GPU
+    provider: gcloud
+    image: ale-win10
+    gcloud:
+      gpu: nvidia-l4-vws      # accelerator type (gcloud-only); pulls in GPU-capable zones
+      zones: [us-central1-a, us-central1-b]
+
+  gpu-license:                # Windows + GPU, licensed
+    provider: gcloud
+    image: ale-win10
+    gcloud:
+      gpu: nvidia-l4-vws
+      zones: [us-central1-a, us-central1-b]
+
+# ---------------------------------------------------------------------------
+# Artifact paths — where task data is sourced from and what happens to the
+# agent's output dir after the run. The code that consumes these lives under
+# ale_run/environments/ (task_data/ for sourcing, output_pull.py for
+# mirroring), so the config lives with the environment.
+# ---------------------------------------------------------------------------
+
+# Where to source task data (input/, software/, reference.7z) from:
+#   "baked_in_sandbox"  — image already has task data baked in at
+#                         <sandbox.task_data_root>/<domain>/<task>/<variant>/.
+#                         Reference is shipped as encrypted reference.7z
+#                         (decrypted just-in-time at evaluation).
+#   "gs://<bucket>"     — gsutil rsync from that GCS bucket. Skips
+#                         input/software pull if image already has them
+#                         (image-baked detection). Always re-pulls
+#                         reference/ fresh.
+#                         Open-to-all bucket: gs://ale-data-public
+#                         (readable by the agenthle-vm-service@agenthle-488519
+#                         SA baked into our images; external runs can grant
+#                         their own SA `roles/storage.objectViewer` on it).
+#   "hf://<dataset>"    — HuggingFace Hub (stub, not yet implemented).
+task_data_source: gs://ale-data-public
+
+# What to do with the agent's output dir after the run:
+#   null              — skip; output stays on the sandbox and is lost on teardown.
+#   "local"           — pull files to <run_dir>/output/ via cua HTTP
+#                       (no GCS round-trip). Right for dev / smoke / small outputs.
+#   "gs://<bucket>"   — sandbox-side gsutil push to that bucket; nothing
+#                       lands on host run dir. Hard-fail on GCS error.
+output_path: local
