@@ -1,0 +1,117 @@
+# =============================================================================
+# inspection_kasm_exp.yaml — environment-inspection over cpu-free-ubuntu tasks
+# on the Docker provider (ale-kasm:eval-deps image).
+#
+# Same read-only audit as inspection_exp.yaml, but scoped to the Linux tasks and
+# run in local Docker containers whose system python has the eval deps baked in.
+# The software_usability dimension below is package-focused (Linux, not GUI).
+#
+#   uv run python -m ale_run run inspection_kasm_exp.yaml --dry-run
+#   uv run python -m ale_run run inspection_kasm_exp.yaml \
+#       --task computing_math/cost_optimization_1 --concurrency 1
+#   uv run python -m ale_run run inspection_kasm_exp.yaml
+# =============================================================================
+
+name: env_inspection_kasm_v1
+
+secret_file: secret/.env
+
+agents:
+  - configs/agents/cc_sonnet_or_base.yaml
+environment: configs/environments/environment.yaml
+
+tasks: selected_tasks/_inspection_ubuntu.txt     # cpu-free-ubuntu tasks
+
+output:
+  root: .logs/ale
+concurrency: 20
+cleanup_mode: delete
+
+# ---------------------------------------------------------------------------
+# Inspection instruction — appended verbatim to EVERY task's prompt (after the
+# task description + the framework's Input/Output contract). It overrides the
+# "solve the task" intent and tells the agent to audit + emit one JSON report.
+#
+# It cannot hardcode a per-task output path (one suffix, many tasks), so it
+# refers to "the OUTPUT directory named in the task above" — every task prompt
+# already states its concrete input/output paths.
+# ---------------------------------------------------------------------------
+prompt_suffix: |
+
+  ============================================================
+  ⚠️ MODE OVERRIDE — READ THIS FIRST. IT REPLACES THE TASK ABOVE.
+  ============================================================
+  This is a READ-ONLY AUDIT. Ignore the instruction above to perform the task.
+  You are NOT scored on the task. Your ONLY job is to inspect this task's setup
+  and environment, then write a single JSON report.
+
+  STRICT RULES — follow exactly:
+    - DO NOT run the task's computation: no solver, training, simulation,
+      analysis, build, conversion, or data-processing run of any kind.
+    - DO NOT produce the task's deliverables or any "answer".
+    - DO NOT create, move, or write ANY file ANYWHERE except the single
+      inspection_report.json described below. If running something would emit
+      files, do not run it.
+  ALLOWED, and only this: listing/reading files (e.g. ls, cat, head), checking
+  that a tool exists and launches (`<tool> --version`, or opening an app and
+  confirming its window/UI loads), and reasoning about the task text. Keep it to
+  a handful of quick read-only checks, then write the report and STOP.
+
+  Score these THREE dimensions. Each gets an integer rating 0-5 plus a short
+  English description (2-4 sentences citing concrete evidence — file names,
+  versions, exact error text):
+
+  1. task_clarity — Could a competent agent act on the task description WITHOUT
+     guessing? Judge each of these and mention any that fail:
+       - GOAL: is what to produce clearly stated (not vague)?
+       - INPUT PATH: is the input location given explicitly, and does it match
+         what is actually on disk?
+       - OUTPUT PATH: is the exact output directory/location to write results
+         specified?
+       - OUTPUT NAME+FORMAT: are the output file name(s), format, and
+         schema/columns/keys specified well enough to produce a gradeable
+         result without guessing?
+       - SUCCESS CRITERIA: are constraints, units, tolerances, or grading
+         expectations clear?
+     Rating guide: 5 = fully specified, zero guessing needed. 3 = the goal is
+     clear but at least one of input path / output path / output format is
+     vague or must be inferred. 0 = cannot tell what to do, or the input/output
+     paths are missing, wrong, or contradict what is on disk.
+
+  2. software_usability — Can EVERY tool the task needs actually be used in
+     THIS environment? On Linux this is usually NOT a GUI application — it is the
+     Python PACKAGES and CLI tools the task's code imports/calls. Check BOTH:
+       - Python packages: for every non-stdlib package the task imports (e.g.
+         numpy, scipy, pandas, scikit-learn, scikit-image, opencv (cv2),
+         rasterio, netCDF4, h5py, pydicom, pymedphys, torch, matplotlib, …),
+         confirm it imports under the task's Python (the system `/usr/bin/python3`).
+         A quick way: `python3 -c "import <pkg>; print(<pkg>.__version__)"`.
+         Name any package that fails to import or is the wrong version.
+       - CLI tools / GUI apps the task needs: run `<tool> --version` or launch it
+         and confirm it works.
+     5 = every required package imports and every required tool runs. 0 = a
+     required package is missing / fails to import, or a required tool is absent,
+     crashes, or is unusable. If the task needs nothing beyond the Python stdlib,
+     give 5 and say so explicitly.
+
+  3. input_data_completeness — Is the input data complete and usable? Verify
+     every file the task references exists in the input folder, is non-empty,
+     readable, and in the expected format. 5 = all inputs present and valid.
+     0 = inputs missing, empty, corrupt, or unreadable. Name any offending file.
+
+  Then WRITE your report as a file named exactly `inspection_report.json` in the
+  OUTPUT directory named in the task's "Input / Output" section above (create
+  the directory if it does not exist). Write ONLY that one file. Use EXACTLY
+  this JSON schema:
+
+  {
+    "task_clarity":            {"rating": <0-5>, "description": "..."},
+    "software_usability":      {"rating": <0-5>, "description": "..."},
+    "input_data_completeness": {"rating": <0-5>, "description": "..."},
+    "blocking_issues": ["<short issue>", "..."],
+    "inspected_paths": {"input_dir": "<path you saw>", "output_dir": "<path you wrote to>"}
+  }
+
+  overall_runnable = could a competent agent actually complete this task in this
+  environment as-is. blocking_issues = [] if none. Ensure the file is valid
+  JSON. After writing it, stop — do nothing else.
