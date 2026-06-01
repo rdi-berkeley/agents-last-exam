@@ -82,6 +82,21 @@ async def stage_reference(
 
 # ---- helpers ----
 
+def _gsutil(sandbox: SandboxHandle) -> str:
+    """``gsutil`` invocation, with ``-u <project>`` for requester-pays buckets.
+
+    Requester-pays buckets (e.g. ``gs://ale-data-public``) reject every request
+    that doesn't name a billing/user project, and no boto-config knob supplies
+    it — only the command-line ``-u`` flag works. The provider surfaces a usable
+    project (derived from the injected SA key's ``project_id``) via
+    ``sandbox.metadata['gcs_user_project']``; when absent (e.g. the GCE provider,
+    whose ambient SA can't bill this project anyway) we emit a bare ``gsutil`` so
+    behaviour is unchanged.
+    """
+    proj = (sandbox.metadata or {}).get("gcs_user_project")
+    return f"gsutil -u {shlex.quote(str(proj))}" if proj else "gsutil"
+
+
 def _gcs_prefix(source: str, task_data: TaskDataSpec) -> str:
     return (
         f"{source.rstrip('/')}/{task_data.domain_name}/"
@@ -98,23 +113,25 @@ async def _has_baked_files(sandbox: SandboxHandle, path: str) -> bool:
 
 
 async def _gcs_exists(sandbox: SandboxHandle, gs_url: str) -> bool:
+    gsutil = _gsutil(sandbox)
     cmd = (
-        f"gsutil ls '{gs_url}' >/dev/null 2>&1" if sandbox.is_linux
-        else f"powershell -NoProfile -Command \"gsutil ls '{gs_url}' *> $null; exit $LASTEXITCODE\""
+        f"{gsutil} ls '{gs_url}' >/dev/null 2>&1" if sandbox.is_linux
+        else f"powershell -NoProfile -Command \"{gsutil} ls '{gs_url}' *> $null; exit $LASTEXITCODE\""
     )
     r = await sandbox.run_command(cmd, timeout=30)
     return r.returncode == 0
 
 
 def _rsync_cmd(sandbox: SandboxHandle, src: str, dst: str) -> str:
+    gsutil = _gsutil(sandbox)
     if sandbox.is_linux:
         return (
             f"mkdir -p {shlex.quote(dst)} && "
-            f"gsutil -m rsync -r {shlex.quote(src)} {shlex.quote(dst)}"
+            f"{gsutil} -m rsync -r {shlex.quote(src)} {shlex.quote(dst)}"
         )
     return (
         'powershell -NoProfile -Command "'
         f"New-Item -ItemType Directory -Force -Path '{dst}' | Out-Null; "
-        f"gsutil -m rsync -r '{src}' '{dst}'"
+        f"{gsutil} -m rsync -r '{src}' '{dst}'"
         '"'
     )

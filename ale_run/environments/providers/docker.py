@@ -39,6 +39,10 @@ _KASM_ENTRYPOINT = "/dockerstartup/vnc_startup.sh"
 
 
 _GCS_KEY_CONTAINER_PATH = "/etc/agenthle/gcs-reader.json"
+# System-wide boto config so gsutil authenticates regardless of which user the
+# container runs as (kasm-user on ale-kasm, user on ale-ubuntu22-docker, ...).
+# boto reads /etc/boto.cfg before any per-user ~/.boto, so this is user-agnostic.
+_BOTO_CONFIG_CONTAINER_PATH = "/etc/boto.cfg"
 
 
 @dataclass(frozen=True)
@@ -54,7 +58,10 @@ class DockerProviderConfig:
     gcs_sa_key          Host path to a GCS service-account JSON key.
                         When set, copied into each container and gsutil
                         boto is configured so task_data_source=gs://...
-                        works inside the sandbox.
+                        works inside the sandbox. The key's ``project_id``
+                        doubles as the billing/user project for requester-pays
+                        buckets (gsutil ``-u``) — same source as the identity,
+                        so the two can't drift (see ``_sa_key_project_id``).
     """
 
     image: str = _DEFAULT_IMAGE
@@ -144,6 +151,22 @@ async def _wait_cua_ready(
     )
 
 
+def _sa_key_project_id(host_key_path: str) -> str:
+    """project_id field of a GCS service-account JSON key (``""`` on error).
+
+    Used as the billing/user project for requester-pays buckets: gsutil needs
+    an explicit ``-u <project>`` (no boto-config equivalent works), and the
+    injected SA key already names the project it can bill. Surfaced to
+    data-staging via ``SandboxHandle.metadata["gcs_user_project"]``.
+    """
+    import json as _json
+    from pathlib import Path as _P
+    try:
+        return _json.loads(_P(host_key_path).read_text()).get("project_id", "") or ""
+    except Exception:
+        return ""
+
+
 class DockerProvider(Provider):
     """Provider backed by ``docker run`` / ``docker rm``."""
 
@@ -219,8 +242,15 @@ class DockerProvider(Provider):
                 f"CUA server at {cua_url} (container {name}) did not become ready"
             )
 
+        gcs_user_project = ""
         if self._cfg.gcs_sa_key:
             await self._inject_gcs_credentials(name, self._cfg.gcs_sa_key)
+            # gs://ale-data-public is requester-pays: gsutil needs an explicit
+            # -u <billing-project>. Derive it from the SA key's own project_id
+            # — same source as the injected identity, so the project we bill
+            # always matches the SA we authenticate as. Surfaced so data-staging
+            # adds the flag (see gsbucket).
+            gcs_user_project = _sa_key_project_id(self._cfg.gcs_sa_key)
 
         return SandboxHandle(
             id=name,
@@ -234,6 +264,7 @@ class DockerProvider(Provider):
                 "vnc_port": vnc_port,
                 "image": self._cfg.image,
                 "snapshot": spec.snapshot,
+                "gcs_user_project": gcs_user_project,
             },
         )
 
@@ -259,18 +290,13 @@ class DockerProvider(Provider):
     @staticmethod
     async def _inject_gcs_credentials(container_name: str, host_key_path: str) -> None:
         """Copy SA key into container and write a boto config for gsutil."""
-        import json as _json
         from pathlib import Path as _P
 
         key_path = _P(host_key_path)
         if not key_path.exists():
             raise FileNotFoundError(f"gcs_sa_key not found: {host_key_path}")
 
-        project_id = ""
-        try:
-            project_id = _json.loads(key_path.read_text()).get("project_id", "")
-        except Exception:
-            pass
+        project_id = _sa_key_project_id(host_key_path)
 
         rc, _, stderr = await _run_docker(
             "exec", "-u", "root", container_name,
@@ -294,10 +320,20 @@ class DockerProvider(Provider):
             "[GSUtil]\n"
             f"default_project_id = {project_id}\n"
         )
-        await _run_docker(
-            "exec", container_name,
-            "bash", "-c", f"cat > /home/kasm-user/.boto << 'BOTOEOF'\n{boto_content}BOTOEOF",
+        # Write a system-wide /etc/boto.cfg (as root) rather than a per-user
+        # ~/.boto: the container user is image-specific (kasm-user, user, ...),
+        # and hardcoding one user's home silently broke gsutil auth on every
+        # other image family. /etc/boto.cfg is read regardless of $HOME.
+        rc, _, stderr = await _run_docker(
+            "exec", "-u", "root", container_name,
+            "bash", "-c",
+            f"cat > {_BOTO_CONFIG_CONTAINER_PATH} << 'BOTOEOF'\n{boto_content}BOTOEOF",
         )
+        if rc != 0:
+            raise RuntimeError(
+                f"Failed to write {_BOTO_CONFIG_CONTAINER_PATH} into "
+                f"{container_name}: {stderr}"
+            )
         logger.info("Injected GCS credentials into %s", container_name)
 
     def open_session(self, sandbox: SandboxHandle) -> Any:
