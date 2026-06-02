@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING, Optional, Union
 from agent.tools.base import BaseTool, register_tool
 
 from ._paths import _assert_within_workspace, _is_windows_path
-from ._tool_utils import _get_required_str, _run_async
+from ._tool_utils import _get_required_str, _run_tool_execute
 
 if TYPE_CHECKING:
     from computer.interface import BaseComputerInterface
@@ -204,11 +204,11 @@ class ExecTool(BaseTool):
         except ValueError as e:
             return {"success": False, "error": f"Error: {e}"}
 
-        try:
-            return _run_async(self._execute(command, cwd, timeout_seconds))
-        except Exception as e:  # noqa: BLE001 — surface RPC errors as tool errors
-            logger.error("exec tool failure for %r: %s", command, e)
-            return {"success": False, "error": f"Error: {e}"}
+        return _run_tool_execute(
+            self._execute(command, cwd, timeout_seconds),
+            logger,
+            f"exec tool failure for {command!r}",
+        )
 
     async def _execute(
         self,

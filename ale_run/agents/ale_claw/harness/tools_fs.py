@@ -36,7 +36,7 @@ from typing import Any, Optional, Union
 from agent.tools.base import BaseTool, register_tool
 
 from ._paths import _parent_dir
-from ._tool_utils import _get_required_str, _run_async
+from ._tool_utils import _get_required_str, _run_tool_execute
 from .fs_backends import FilesystemBackend, FilesystemRegistry
 from .image_sanitization import (
     DEFAULT_LIMITS as _IMAGE_DEFAULT_LIMITS,
@@ -219,11 +219,11 @@ class ReadFileTool(BaseTool):
         except ValueError as e:
             return {"success": False, "error": f"Error: {e}"}
 
-        try:
-            return _run_async(self._execute(parsed, backend, resolved))
-        except Exception as e:  # noqa: BLE001 — surface RPC errors as tool errors
-            logger.error("read tool failure on %s: %s", path, e)
-            return {"success": False, "error": f"Error: {e}"}
+        return _run_tool_execute(
+            self._execute(parsed, backend, resolved),
+            logger,
+            f"read tool failure on {path}",
+        )
 
     async def _execute(
         self,
@@ -469,11 +469,11 @@ class WriteFileTool(BaseTool):
         except ValueError as e:
             return {"success": False, "error": f"Error: {e}"}
 
-        try:
-            return _run_async(self._execute(parsed, backend, resolved, target))
-        except Exception as e:  # noqa: BLE001
-            logger.error("write tool failure on %s: %s", path, e)
-            return {"success": False, "error": f"Error: {e}"}
+        return _run_tool_execute(
+            self._execute(parsed, backend, resolved, target),
+            logger,
+            f"write tool failure on {path}",
+        )
 
     async def _execute(
         self,
@@ -589,11 +589,11 @@ class EditFileTool(BaseTool):
         except ValueError as e:
             return {"success": False, "error": f"Error: {e}"}
 
-        try:
-            return _run_async(self._execute(backend, resolved, edits, target))
-        except Exception as e:  # noqa: BLE001
-            logger.error("edit tool failure on %s: %s", path, e)
-            return {"success": False, "error": f"Error: {e}"}
+        return _run_tool_execute(
+            self._execute(backend, resolved, edits, target),
+            logger,
+            f"edit tool failure on {path}",
+        )
 
     @staticmethod
     def _validate_edits(raw: Any) -> list[tuple[str, str]]:
