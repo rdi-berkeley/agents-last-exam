@@ -28,6 +28,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .canonical import _normalize_actions
+
 DEFAULT_BASE_DIR = "openclaw_sessions"
 
 
@@ -1063,10 +1065,7 @@ def _unnest_assistant_blocks(
             call_id = block.get("id", block.get("call_id", ""))
             if call_id:
                 call_type_map[call_id] = "computer_call"
-            actions = block.get("actions")
-            if not isinstance(actions, list):
-                action = block.get("action")
-                actions = [action] if isinstance(action, dict) else []
+            actions = _normalize_actions(block)
             action_desc = json.dumps(actions)[:200] if actions else "details unavailable"
             items.append({
                 "type": "message",

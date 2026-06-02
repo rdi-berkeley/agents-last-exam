@@ -18,6 +18,7 @@ from __future__ import annotations
 import json as _json
 from typing import TYPE_CHECKING, Any
 
+from .canonical import _normalize_actions
 from .model_config import ResolvedModel, resolve_model
 
 from .helper_runtime import call_helper_model
@@ -205,10 +206,7 @@ def _serialize_content_blocks(content: Any) -> str:
             parts.append(block.get("text", ""))
         elif block.get("type") == "computer_call":
             # Handle both "action" (computer-use-preview) and "actions" (GPT 5.4)
-            actions_list = block.get("actions")  # GPT 5.4: array
-            if actions_list is None:
-                single = block.get("action", {})
-                actions_list = [single] if single else []
+            actions_list = _normalize_actions(block)
             for action in actions_list:
                 action_type = action.get("type", "unknown")
                 detail = ""
