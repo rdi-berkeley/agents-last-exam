@@ -172,6 +172,236 @@ async def _prepare_tools(
 # Input conversion: Responses API items → Chat Completions messages
 # ---------------------------------------------------------------------------
 
+def _append_tool_call(messages: List[Dict[str, Any]], tool_call: Dict[str, Any]) -> None:
+    """Attach a Chat Completions tool_call to the last assistant message, or
+    start a fresh assistant message when the previous one isn't an assistant."""
+    if messages and messages[-1].get("role") == "assistant":
+        messages[-1].setdefault("tool_calls", []).append(tool_call)
+    else:
+        messages.append(
+            {"role": "assistant", "content": None, "tool_calls": [tool_call]}
+        )
+
+
+def _append_tool_role(item: Dict[str, Any], messages: List[Dict[str, Any]]) -> None:
+    """Convert a ``role: tool`` item (canonical tool_result blocks or a plain
+    string) into Chat Completions tool messages."""
+    content = item.get("content", [])
+    if isinstance(content, list):
+        for c in content:
+            if isinstance(c, dict) and c.get("type") == "tool_result":
+                tool_use_id = c.get("tool_use_id", FALLBACK_CALL_ID)
+                result_content = c.get("content", "")
+                if isinstance(result_content, list):
+                    # Extract text from content blocks, skip images
+                    text_parts = []
+                    for rc in result_content:
+                        if isinstance(rc, dict):
+                            if rc.get("type") == "text":
+                                text_parts.append(rc.get("text", ""))
+                            elif rc.get("type") == "image":
+                                # Image in tool result — add as user message after
+                                pass
+                    result_content = "\n".join(text_parts) if text_parts else str(result_content)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_use_id,
+                    "content": str(result_content),
+                })
+    elif isinstance(content, str):
+        # Simple tool message
+        messages.append({
+            "role": "tool",
+            "tool_call_id": item.get("tool_call_id", FALLBACK_CALL_ID),
+            "content": content,
+        })
+
+
+def _append_user_role(item: Dict[str, Any], messages: List[Dict[str, Any]]) -> None:
+    """Convert a ``role: user`` item (string or content-block list) into a
+    Chat Completions user message; nested tool_result blocks become tool messages."""
+    content = item.get("content", "")
+    if isinstance(content, list):
+        converted = []
+        for c in content:
+            if isinstance(c, dict) and c.get("type") == "input_image":
+                image_url = c.get("image_url", "")
+                if image_url and image_url != "[omitted]":
+                    converted.append(_image_url_block(image_url))
+            elif isinstance(c, dict) and c.get("type") == "input_text":
+                converted.append({"type": "text", "text": c.get("text", "")})
+            elif isinstance(c, dict) and c.get("type") == "tool_result":
+                # tool_result inside user message (canonical format)
+                # Convert to a tool role message instead
+                tool_use_id = c.get("tool_use_id", FALLBACK_CALL_ID)
+                result_content = c.get("content", "")
+                if isinstance(result_content, list):
+                    text_parts = []
+                    for rc in result_content:
+                        if isinstance(rc, dict) and rc.get("type") == "text":
+                            text_parts.append(rc.get("text", ""))
+                    result_content = "\n".join(text_parts) if text_parts else str(result_content)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_use_id,
+                    "content": str(result_content),
+                })
+                continue
+            elif isinstance(c, dict) and c.get("type") in ("text", "image_url"):
+                converted.append(c)
+            else:
+                # Skip unknown content types rather than pass through
+                pass
+        if converted:
+            messages.append({"role": "user", "content": converted})
+    else:
+        messages.append({"role": "user", "content": content})
+
+
+def _append_assistant_role(
+    item: Dict[str, Any],
+    messages: List[Dict[str, Any]],
+    call_id_to_fn_name: Dict[str, str],
+) -> None:
+    """Convert a ``role: assistant`` item into a Chat Completions assistant
+    message, lifting tool_use blocks into ``tool_calls``."""
+    content = item.get("content", [])
+    if isinstance(content, str):
+        messages.append({"role": "assistant", "content": content})
+    elif isinstance(content, list):
+        text_parts = []
+        tool_calls = []
+        for c in content:
+            if not isinstance(c, dict):
+                continue
+            ctype = c.get("type", "")
+            if ctype == "text":
+                text_parts.append(c.get("text", ""))
+            elif ctype == "output_text":
+                text_parts.append(c.get("text", ""))
+            elif ctype == "tool_use":
+                # Canonical format: tool_use block inside assistant content
+                tool_calls.append({
+                    "id": c.get("id", FALLBACK_CALL_ID),
+                    "type": "function",
+                    "function": {
+                        "name": c.get("name", ""),
+                        "arguments": json.dumps(c.get("input", {})),
+                    },
+                })
+                call_id_to_fn_name[c.get("id", FALLBACK_CALL_ID)] = c.get("name", "")
+            elif ctype == "thinking":
+                # Thinking block — skip (not needed for replay)
+                pass
+        msg: Dict[str, Any] = {"role": "assistant"}
+        msg["content"] = "\n".join(text_parts) if text_parts else None
+        if tool_calls:
+            msg["tool_calls"] = tool_calls
+        messages.append(msg)
+    else:
+        messages.append({"role": "assistant", "content": None})
+
+
+def _append_reasoning(item: Dict[str, Any], messages: List[Dict[str, Any]]) -> None:
+    """Convert a prior-turn ``reasoning`` item into an assistant text message."""
+    summary = item.get("summary", [])
+    text = ""
+    if isinstance(summary, list):
+        for s in summary:
+            if isinstance(s, dict) and s.get("type") == "summary_text":
+                text = s.get("text", "")
+                break
+    if not text:
+        text = item.get("reasoning", "")
+    if text:
+        messages.append({"role": "assistant", "content": text})
+
+
+def _append_function_call(
+    item: Dict[str, Any],
+    messages: List[Dict[str, Any]],
+    call_id_to_fn_name: Dict[str, str],
+) -> None:
+    """Convert a ``function_call`` item into a tool_call on the assistant turn."""
+    fn_name = item.get("name", "")
+    fn_args = item.get("arguments", "{}")
+    call_id = item.get("call_id", FALLBACK_CALL_ID)
+    call_id_to_fn_name[call_id] = fn_name
+    _append_tool_call(messages, {
+        "id": call_id,
+        "type": "function",
+        "function": {"name": fn_name, "arguments": fn_args},
+    })
+
+
+def _append_function_call_output(
+    item: Dict[str, Any],
+    messages: List[Dict[str, Any]],
+    call_id_to_fn_name: Dict[str, str],
+) -> None:
+    """Convert a ``function_call_output`` item into a Chat Completions tool message."""
+    call_id = item.get("call_id", FALLBACK_CALL_ID)
+    fn_name = call_id_to_fn_name.get(call_id, "computer")
+    messages.append({
+        "role": "tool",
+        "name": fn_name,
+        "tool_call_id": call_id,
+        "content": str(item.get("output", "")),
+    })
+
+
+def _append_computer_call(
+    item: Dict[str, Any],
+    messages: List[Dict[str, Any]],
+    call_id_to_fn_name: Dict[str, str],
+) -> None:
+    """Convert a legacy ``computer_call`` item into a ``computer`` function tool_call."""
+    action = item.get("action", {})
+    call_id = item.get("call_id", FALLBACK_CALL_ID)
+    call_id_to_fn_name[call_id] = "computer"
+    # Convert to function_call format
+    args = dict(action)
+    _append_tool_call(messages, {
+        "id": call_id,
+        "type": "function",
+        "function": {
+            "name": "computer",
+            "arguments": json.dumps(args),
+        },
+    })
+
+
+def _append_computer_call_output(
+    item: Dict[str, Any],
+    messages: List[Dict[str, Any]],
+) -> None:
+    """Convert a legacy ``computer_call_output`` item into a tool message, plus a
+    following user image message when the output carries a screenshot."""
+    call_id = item.get("call_id", FALLBACK_CALL_ID)
+    output = item.get("output", "")
+    if isinstance(output, dict) and output.get("type") == "input_image":
+        # Screenshot result — send as user message with image
+        image_url = output.get("image_url", "")
+        messages.append({
+            "role": "tool",
+            "tool_call_id": call_id,
+            "content": json.dumps({"success": True}),
+        })
+        if image_url and image_url != "[omitted]":
+            messages.append({
+                "role": "user",
+                "content": [
+                    _image_url_block(image_url),
+                ],
+            })
+    else:
+        messages.append({
+            "role": "tool",
+            "tool_call_id": call_id,
+            "content": json.dumps(output) if isinstance(output, dict) else str(output),
+        })
+
+
 def _convert_input_to_messages(items: Messages) -> List[Dict[str, Any]]:
     """Convert Responses API input items to Chat Completions messages.
 
@@ -186,207 +416,22 @@ def _convert_input_to_messages(items: Messages) -> List[Dict[str, Any]]:
         item_type = item.get("type")
         role = item.get("role")
 
-        # --- tool role messages (canonical format: tool_result blocks) ---
         if role == "tool":
-            content = item.get("content", [])
-            if isinstance(content, list):
-                for c in content:
-                    if isinstance(c, dict) and c.get("type") == "tool_result":
-                        tool_use_id = c.get("tool_use_id", FALLBACK_CALL_ID)
-                        result_content = c.get("content", "")
-                        if isinstance(result_content, list):
-                            # Extract text from content blocks, skip images
-                            text_parts = []
-                            for rc in result_content:
-                                if isinstance(rc, dict):
-                                    if rc.get("type") == "text":
-                                        text_parts.append(rc.get("text", ""))
-                                    elif rc.get("type") == "image":
-                                        # Image in tool result — add as user message after
-                                        pass
-                            result_content = "\n".join(text_parts) if text_parts else str(result_content)
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_use_id,
-                            "content": str(result_content),
-                        })
-            elif isinstance(content, str):
-                # Simple tool message
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": item.get("tool_call_id", FALLBACK_CALL_ID),
-                    "content": content,
-                })
-            continue
-
-        # --- user message ---
-        if role == "user":
-            content = item.get("content", "")
-            if isinstance(content, list):
-                converted = []
-                for c in content:
-                    if isinstance(c, dict) and c.get("type") == "input_image":
-                        image_url = c.get("image_url", "")
-                        if image_url and image_url != "[omitted]":
-                            converted.append(_image_url_block(image_url))
-                    elif isinstance(c, dict) and c.get("type") == "input_text":
-                        converted.append({"type": "text", "text": c.get("text", "")})
-                    elif isinstance(c, dict) and c.get("type") == "tool_result":
-                        # tool_result inside user message (canonical format)
-                        # Convert to a tool role message instead
-                        tool_use_id = c.get("tool_use_id", FALLBACK_CALL_ID)
-                        result_content = c.get("content", "")
-                        if isinstance(result_content, list):
-                            text_parts = []
-                            for rc in result_content:
-                                if isinstance(rc, dict) and rc.get("type") == "text":
-                                    text_parts.append(rc.get("text", ""))
-                            result_content = "\n".join(text_parts) if text_parts else str(result_content)
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_use_id,
-                            "content": str(result_content),
-                        })
-                        continue
-                    elif isinstance(c, dict) and c.get("type") in ("text", "image_url"):
-                        converted.append(c)
-                    else:
-                        # Skip unknown content types rather than pass through
-                        pass
-                if converted:
-                    messages.append({"role": "user", "content": converted})
-            else:
-                messages.append({"role": "user", "content": content})
-
-        # --- assistant message ---
+            _append_tool_role(item, messages)
+        elif role == "user":
+            _append_user_role(item, messages)
         elif role == "assistant":
-            content = item.get("content", [])
-            if isinstance(content, str):
-                messages.append({"role": "assistant", "content": content})
-            elif isinstance(content, list):
-                text_parts = []
-                tool_calls = []
-                for c in content:
-                    if not isinstance(c, dict):
-                        continue
-                    ctype = c.get("type", "")
-                    if ctype == "text":
-                        text_parts.append(c.get("text", ""))
-                    elif ctype == "output_text":
-                        text_parts.append(c.get("text", ""))
-                    elif ctype == "tool_use":
-                        # Canonical format: tool_use block inside assistant content
-                        tool_calls.append({
-                            "id": c.get("id", FALLBACK_CALL_ID),
-                            "type": "function",
-                            "function": {
-                                "name": c.get("name", ""),
-                                "arguments": json.dumps(c.get("input", {})),
-                            },
-                        })
-                        call_id_to_fn_name[c.get("id", FALLBACK_CALL_ID)] = c.get("name", "")
-                    elif ctype == "thinking":
-                        # Thinking block — skip (not needed for replay)
-                        pass
-                msg: Dict[str, Any] = {"role": "assistant"}
-                msg["content"] = "\n".join(text_parts) if text_parts else None
-                if tool_calls:
-                    msg["tool_calls"] = tool_calls
-                messages.append(msg)
-            else:
-                messages.append({"role": "assistant", "content": None})
-
-        # --- reasoning (from prior turns) ---
+            _append_assistant_role(item, messages, call_id_to_fn_name)
         elif item_type == "reasoning":
-            summary = item.get("summary", [])
-            text = ""
-            if isinstance(summary, list):
-                for s in summary:
-                    if isinstance(s, dict) and s.get("type") == "summary_text":
-                        text = s.get("text", "")
-                        break
-            if not text:
-                text = item.get("reasoning", "")
-            if text:
-                messages.append({"role": "assistant", "content": text})
-
-        # --- function_call (from prior turns) ---
+            _append_reasoning(item, messages)
         elif item_type == "function_call":
-            fn_name = item.get("name", "")
-            fn_args = item.get("arguments", "{}")
-            call_id = item.get("call_id", FALLBACK_CALL_ID)
-            call_id_to_fn_name[call_id] = fn_name
-            tool_call = {
-                "id": call_id,
-                "type": "function",
-                "function": {"name": fn_name, "arguments": fn_args},
-            }
-            # Merge into last assistant message if possible
-            if messages and messages[-1].get("role") == "assistant":
-                messages[-1].setdefault("tool_calls", []).append(tool_call)
-            else:
-                messages.append(
-                    {"role": "assistant", "content": None, "tool_calls": [tool_call]}
-                )
-
-        # --- function_call_output ---
+            _append_function_call(item, messages, call_id_to_fn_name)
         elif item_type == "function_call_output":
-            call_id = item.get("call_id", FALLBACK_CALL_ID)
-            fn_name = call_id_to_fn_name.get(call_id, "computer")
-            messages.append({
-                "role": "tool",
-                "name": fn_name,
-                "tool_call_id": call_id,
-                "content": str(item.get("output", "")),
-            })
-
-        # --- computer_call (legacy, from prior turns with old loops) ---
+            _append_function_call_output(item, messages, call_id_to_fn_name)
         elif item_type == "computer_call":
-            action = item.get("action", {})
-            call_id = item.get("call_id", FALLBACK_CALL_ID)
-            call_id_to_fn_name[call_id] = "computer"
-            # Convert to function_call format
-            args = dict(action)
-            tool_call = {
-                "id": call_id,
-                "type": "function",
-                "function": {
-                    "name": "computer",
-                    "arguments": json.dumps(args),
-                },
-            }
-            if messages and messages[-1].get("role") == "assistant":
-                messages[-1].setdefault("tool_calls", []).append(tool_call)
-            else:
-                messages.append(
-                    {"role": "assistant", "content": None, "tool_calls": [tool_call]}
-                )
-
-        # --- computer_call_output (legacy) ---
+            _append_computer_call(item, messages, call_id_to_fn_name)
         elif item_type == "computer_call_output":
-            call_id = item.get("call_id", FALLBACK_CALL_ID)
-            output = item.get("output", "")
-            if isinstance(output, dict) and output.get("type") == "input_image":
-                # Screenshot result — send as user message with image
-                image_url = output.get("image_url", "")
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": call_id,
-                    "content": json.dumps({"success": True}),
-                })
-                if image_url and image_url != "[omitted]":
-                    messages.append({
-                        "role": "user",
-                        "content": [
-                            _image_url_block(image_url),
-                        ],
-                    })
-            else:
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": call_id,
-                    "content": json.dumps(output) if isinstance(output, dict) else str(output),
-                })
+            _append_computer_call_output(item, messages)
 
     return messages
 
