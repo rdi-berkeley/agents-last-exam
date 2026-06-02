@@ -94,17 +94,17 @@ class TaskLoader:
 
             modules_before = set(sys.modules.keys())
 
-            if os.path.isdir(scripts_dir):
-                for mod_name in _TASK_LOCAL_MODULE_NAMES:
-                    src = Path(scripts_dir) / f"{mod_name}.py"
-                    if not src.is_file():
-                        continue
-                    sub_spec = importlib.util.spec_from_file_location(mod_name, str(src))
-                    if sub_spec is None or sub_spec.loader is None:
-                        continue
-                    sub_module = importlib.util.module_from_spec(sub_spec)
-                    sys.modules[mod_name] = sub_module
-                    sub_spec.loader.exec_module(sub_module)
+            # Task-local modules (verify_outputs/score_outputs) are NOT
+            # eagerly executed here. They live in scripts/ which is on
+            # sys.path (above) for the duration of main.py's load, so a
+            # task that genuinely does ``import verify_outputs`` resolves
+            # it lazily via the normal import machinery. Eager execution
+            # would run their top-level imports (e.g. rasterio, netCDF4)
+            # on the host even for tasks that only ship the scripts as
+            # text into the sandbox and never import them — forcing those
+            # sandbox-only deps into the host venv. The pop-before /
+            # pop-after bookkeeping below still guarantees cross-task
+            # cache isolation for the bare module names.
 
             try:
                 spec = importlib.util.spec_from_file_location(module_name, str(self.main_py))
