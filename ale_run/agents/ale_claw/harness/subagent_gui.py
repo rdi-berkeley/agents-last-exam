@@ -30,7 +30,11 @@ from agent import ComputerAgent
 from agent.callbacks.base import AsyncCallbackHandler
 
 from .memory import MemoryGetTool, MemorySearchTool, MemoryStore, MemoryWriteTool
-from .subagent_registry import SubagentRegistry, SubagentUsage
+from .subagent_registry import (
+    SubagentRegistry,
+    SubagentUsage,
+    _subagent_transcript_path,
+)
 
 DEFAULT_MAX_STEPS = 15
 DEFAULT_MODEL = "openrouter/openai/gpt-5.4"
@@ -329,9 +333,7 @@ async def run_gui_subagent(
     """
     transcript_path: Path | None = None
     if parent_session_dir is not None:
-        transcript_path = (
-            Path(parent_session_dir) / "subagents" / run_id / "transcript.jsonl"
-        )
+        transcript_path = _subagent_transcript_path(Path(parent_session_dir), run_id)
     transcript = _TranscriptWriter(transcript_path)
 
     usage = SubagentUsage()

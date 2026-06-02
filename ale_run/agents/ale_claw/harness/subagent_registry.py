@@ -54,6 +54,11 @@ _TERMINAL_STATUSES = frozenset({
 })
 
 
+def _subagent_transcript_path(base: Path, run_id: str) -> Path:
+    """On-disk transcript JSONL for a subagent run: ``<base>/subagents/<run_id>/transcript.jsonl``."""
+    return base / "subagents" / run_id / "transcript.jsonl"
+
+
 @dataclass
 class SubagentUsage:
     """Token usage tracking for a single subagent run."""
@@ -446,8 +451,8 @@ class SubagentRegistry:
                 continue
             d = run.to_dict()
             if self._persist_path is not None:
-                transcript = (
-                    self._persist_path.parent / "subagents" / run.run_id / "transcript.jsonl"
+                transcript = _subagent_transcript_path(
+                    self._persist_path.parent, run.run_id
                 )
                 d["transcript_path"] = str(transcript) if transcript.exists() else None
             else:
