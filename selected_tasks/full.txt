@@ -1,5 +1,4 @@
-# Auto-generated union: cli.txt + full/{near-term,full-spectrum,last-exam}.txt
-# Environment-inspection experiment. One task dir per line (variant 0).
+# All tasks from 
 agriculture_env/crop_rotation_d02
 agriculture_env/ndvi_zonal_statistics_d02
 business_finance/american_option_pricing_ls
