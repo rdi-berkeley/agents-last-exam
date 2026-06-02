@@ -1111,6 +1111,107 @@ async def summarize_with_fallback(
 # Main compaction entry point
 # ---------------------------------------------------------------------------
 
+def _compute_kept_budget(
+    context_window: int,
+    max_history_share: float,
+    instructions_tokens: int,
+    preserved_tokens: int,
+) -> int:
+    """Token budget for the kept pruneable messages, with a 2000-token floor.
+
+    Budget = context_window * max_history_share - instructions - summary estimate
+    - preserved.
+    """
+    available = (
+        int(context_window * max_history_share)
+        - instructions_tokens
+        - SUMMARIZATION_OVERHEAD_TOKENS
+        - preserved_tokens
+    )
+    return max(available, 2000)  # safety floor
+
+
+def _resolve_pruneable_and_preserved(
+    messages: list[dict[str, Any]],
+    recent_turns_preserve: int,
+    context_window: int,
+    max_history_share: float,
+    instructions_tokens: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
+    """Split out preserved recent turns and compute the kept budget.
+
+    Returns ``(pruneable, preserved, available_for_kept)``. Includes the overflow
+    fallback that moves older preserved messages into pruneable when the
+    preserved set alone already exceeds the budget (CUA-style conversations whose
+    turn counting leaves too many messages preserved).
+    """
+    pruneable, preserved = split_preserved_recent_turns(messages, recent_turns_preserve)
+    preserved_tokens = estimate_messages_tokens(preserved) if preserved else 0
+    print(
+        f"[Compaction] Preserved {len(preserved)} recent messages "
+        f"(~{preserved_tokens} tokens), {len(pruneable)} pruneable"
+    )
+
+    available_for_kept = _compute_kept_budget(
+        context_window, max_history_share, instructions_tokens, preserved_tokens
+    )
+
+    if (
+        not pruneable
+        and preserved
+        and preserved_tokens > available_for_kept + SUMMARIZATION_OVERHEAD_TOKENS
+    ):
+        # Keep the most recent half of preserved, compact the rest
+        overflow_halves = chunk_messages_by_token_share(preserved, parts=2)
+        if len(overflow_halves) >= 2:
+            pruneable = overflow_halves[0]
+            preserved = overflow_halves[1]
+            preserved_tokens = estimate_messages_tokens(preserved)
+            available_for_kept = _compute_kept_budget(
+                context_window, max_history_share, instructions_tokens, preserved_tokens
+            )
+            print(
+                f"[Compaction] Overflow: moved {len(pruneable)} preserved messages "
+                f"to pruneable, {len(preserved)} remain preserved "
+                f"(~{preserved_tokens} tokens)"
+            )
+    return pruneable, preserved, available_for_kept
+
+
+def _split_compact_and_keep(
+    pruneable: list[dict[str, Any]],
+    available_for_kept: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
+    """Half-split pruneable, then iteratively prune the kept side until it fits.
+
+    Each pruning step moves the older half into to_compact and repairs tool
+    pairing on the remainder. Returns ``(to_compact, to_keep, prune_iterations)``.
+    """
+    if not pruneable:
+        to_compact: list[dict[str, Any]] = []
+        to_keep: list[dict[str, Any]] = []
+    else:
+        halves = chunk_messages_by_token_share(pruneable, parts=2)
+        if len(halves) < 2:
+            to_compact = pruneable
+            to_keep = []
+        else:
+            to_compact = halves[0]
+            to_keep = halves[1]
+
+    prune_iterations = 0
+    while to_keep and estimate_messages_tokens(to_keep) > available_for_kept:
+        sub_halves = chunk_messages_by_token_share(to_keep, parts=2)
+        if len(sub_halves) < 2:
+            break  # can't split further
+        to_compact = to_compact + sub_halves[0]
+        to_keep = sub_halves[1]
+        repair = repair_tool_use_result_pairing(to_keep)
+        to_keep = repair.messages
+        prune_iterations += 1
+    return to_compact, to_keep, prune_iterations
+
+
 async def compact_messages(
     messages: list[dict[str, Any]],
     model: str,
@@ -1156,75 +1257,15 @@ async def compact_messages(
     tokens_before = estimate_messages_tokens(messages)
     print(f"[Compaction] Starting: {len(messages)} messages, ~{tokens_before} tokens")
 
-    # 0. Split out preserved recent turns (never pruned or summarized)
-    pruneable, preserved = split_preserved_recent_turns(messages, recent_turns_preserve)
-    preserved_tokens = estimate_messages_tokens(preserved) if preserved else 0
-    print(
-        f"[Compaction] Preserved {len(preserved)} recent messages "
-        f"(~{preserved_tokens} tokens), {len(pruneable)} pruneable"
+    # 0-1. Split out preserved recent turns and compute the kept budget
+    pruneable, preserved, available_for_kept = _resolve_pruneable_and_preserved(
+        messages, recent_turns_preserve, context_window, max_history_share, instructions_tokens
     )
 
-    # 1. Budget calculation for kept pruneable messages
-    # Budget = (context_window * max_history_share) - instructions - summary estimate - preserved
-    summary_estimate = SUMMARIZATION_OVERHEAD_TOKENS
-    available_for_kept = (
-        int(context_window * max_history_share)
-        - instructions_tokens
-        - summary_estimate
-        - preserved_tokens
+    # 2-3. Half-split pruneable, then iteratively prune the kept side to budget
+    to_compact, to_keep, prune_iterations = _split_compact_and_keep(
+        pruneable, available_for_kept
     )
-    available_for_kept = max(available_for_kept, 2000)  # safety floor
-
-    # 1b. Overflow fallback: if pruneable is empty but preserved exceeds budget,
-    # move older preserved messages into pruneable so compaction can actually run.
-    # This handles CUA-style conversations where turn counting still leaves
-    # too many messages in the preserved set for the available budget.
-    if not pruneable and preserved and preserved_tokens > available_for_kept + summary_estimate:
-        # Keep the most recent half of preserved, compact the rest
-        overflow_halves = chunk_messages_by_token_share(preserved, parts=2)
-        if len(overflow_halves) >= 2:
-            pruneable = overflow_halves[0]
-            preserved = overflow_halves[1]
-            preserved_tokens = estimate_messages_tokens(preserved)
-            # Recalculate budget with new preserved size
-            available_for_kept = (
-                int(context_window * max_history_share)
-                - instructions_tokens
-                - summary_estimate
-                - preserved_tokens
-            )
-            available_for_kept = max(available_for_kept, 2000)
-            print(
-                f"[Compaction] Overflow: moved {len(pruneable)} preserved messages "
-                f"to pruneable, {len(preserved)} remain preserved "
-                f"(~{preserved_tokens} tokens)"
-            )
-
-    # 2. Initial half-split on pruneable messages
-    if not pruneable:
-        to_compact: list[dict[str, Any]] = []
-        to_keep: list[dict[str, Any]] = []
-    else:
-        halves = chunk_messages_by_token_share(pruneable, parts=2)
-        if len(halves) < 2:
-            to_compact = pruneable
-            to_keep = []
-        else:
-            to_compact = halves[0]
-            to_keep = halves[1]
-
-    # 3. Iterative pruning: while kept exceeds budget, split kept in half,
-    #    move older half to to_compact, repair pairing on remainder
-    prune_iterations = 0
-    while to_keep and estimate_messages_tokens(to_keep) > available_for_kept:
-        sub_halves = chunk_messages_by_token_share(to_keep, parts=2)
-        if len(sub_halves) < 2:
-            break  # can't split further
-        to_compact = to_compact + sub_halves[0]
-        to_keep = sub_halves[1]
-        repair = repair_tool_use_result_pairing(to_keep)
-        to_keep = repair.messages
-        prune_iterations += 1
 
     # 4. Final repair + recombine: to_keep + preserved = full kept portion
     if to_keep:
