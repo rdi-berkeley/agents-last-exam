@@ -57,8 +57,9 @@ async def _run_command(
 
 
 async def ensure_layout(session: cb.DesktopSession, task_name: str) -> None:
-    desktop_variant_root = f"{DESKTOP_ROOT}/{DOMAIN_NAME}/{task_name}/{DEFAULT_VARIANT}"
-    data_variant_root = f"{DATA_ROOT}/{DOMAIN_NAME}/{task_name}/{DEFAULT_VARIANT}"
+    domain = SCENE_SPECS[task_name].domain
+    desktop_variant_root = f"{DESKTOP_ROOT}/{domain}/{task_name}/{DEFAULT_VARIANT}"
+    data_variant_root = f"{DATA_ROOT}/{domain}/{task_name}/{DEFAULT_VARIANT}"
     desktop_parent = desktop_variant_root.rsplit("/", 1)[0]
     result = await _run_command(
         session,
@@ -181,7 +182,11 @@ Do not read from `reference/`, `output_test_pos/`, or `output_test_neg/`.
 
 
 def load_single_task(task_name: str, task_title: str):
-    cfg = NeuroTaskConfig(TASK_NAME=task_name, TASK_TITLE=task_title)
+    cfg = NeuroTaskConfig(
+        TASK_NAME=task_name,
+        TASK_TITLE=task_title,
+        DOMAIN_NAME=SCENE_SPECS[task_name].domain,
+    )
     return [
         cb.Task(
             description=cfg.task_description,

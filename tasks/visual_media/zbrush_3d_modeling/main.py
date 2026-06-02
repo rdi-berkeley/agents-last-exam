@@ -330,7 +330,7 @@ def _local_soft_score(image_pairs: list[dict[str, Any]], *, report_path: Path | 
 @dataclass
 class ZBrushTaskConfig(GeneralTaskConfig):
     spec: ProjectSpec = field(default=None)
-    DOMAIN_NAME: str = field(init=False, default="game")
+    DOMAIN_NAME: str = field(init=False, default="visual_media")
 
     TASK_NAME: str = field(init=False, default="zbrush_3d_modeling")
     VARIANT_NAME: str = field(init=False, default="")
