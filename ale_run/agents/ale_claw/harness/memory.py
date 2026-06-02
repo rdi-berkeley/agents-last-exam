@@ -19,7 +19,6 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Union
 
 from agent.tools.base import BaseTool, register_tool
 
@@ -277,7 +276,7 @@ class MemorySearchTool(BaseTool):
             "required": [],
         }
 
-    def call(self, params: Union[str, dict], **kwargs) -> str:
+    def call(self, params: str | dict, **kwargs) -> str:
         params_dict = self._verify_json_format_args(params)
 
         keywords = params_dict.get("keywords", [])
@@ -354,7 +353,7 @@ class MemoryGetTool(BaseTool):
             "required": ["path"],
         }
 
-    def call(self, params: Union[str, dict], **kwargs) -> str:
+    def call(self, params: str | dict, **kwargs) -> str:
         params_dict = self._verify_json_format_args(params)
 
         file_path = params_dict.get("path", "")
@@ -421,7 +420,7 @@ class MemoryWriteTool(BaseTool):
             "required": ["content"],
         }
 
-    def call(self, params: Union[str, dict], **kwargs) -> str:
+    def call(self, params: str | dict, **kwargs) -> str:
         params_dict = self._verify_json_format_args(params)
 
         content = params_dict.get("content", "")

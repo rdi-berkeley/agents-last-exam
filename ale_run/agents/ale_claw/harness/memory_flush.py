@@ -99,14 +99,10 @@ async def run_memory_flush(
 
     print(f"[MemoryFlush] Running pre-compaction memory flush turn ({len(conversation_text)} chars context)")
     try:
-        # Budget rationale: flush turns routinely chain multiple memory_write
-        # calls (session log + TASK_MEMORY), and with thinking_params set
-        # reasoning tokens share the output budget. 1024 was too tight — seen
-        # in practice to truncate a second tool call's JSON args mid-string
-        # ("Unterminated string starting at: line 1 column 12 char 11") after
-        # the first write consumed most of the budget. 4096 gives comfortable
-        # headroom; the model still stops naturally when it's out of things
-        # to persist, so the nominal cost per flush doesn't grow.
+        # Budget: flush turns chain multiple memory_write calls and (with
+        # thinking enabled) reasoning shares the output budget, so a tight cap
+        # can truncate a later call's JSON args mid-string. 4096 gives headroom;
+        # the model still stops when done, so cost per flush doesn't grow.
         response = await call_helper_model(
             resolved_summary,
             purpose="memory_flush",

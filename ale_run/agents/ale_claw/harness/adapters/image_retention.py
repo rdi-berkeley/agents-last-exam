@@ -1,4 +1,4 @@
-"""E — ImageRetentionCallback extensions for the openclaw harness.
+"""ImageRetentionCallback extensions for the openclaw harness.
 
 Three extensions on top of the SDK's ``ImageRetentionCallback``:
 

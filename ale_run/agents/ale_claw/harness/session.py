@@ -708,9 +708,7 @@ def sanitize_history(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     result: list[dict[str, Any]] = []
     for msg in messages:
-        sanitized = _sanitize_single_message(msg)
-        if sanitized is not None:
-            result.append(sanitized)
+        result.append(_sanitize_single_message(msg))
 
     # Pass 3: Repair orphaned tool results / calls
     result = _repair_orphaned_tool_pairs(result)
@@ -722,7 +720,7 @@ def sanitize_history(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return result
 
 
-def _sanitize_single_message(msg: dict[str, Any]) -> dict[str, Any] | None:
+def _sanitize_single_message(msg: dict[str, Any]) -> dict[str, Any]:
     """Apply per-message sanitization (passes 1, 2, 4)."""
     role = msg.get("role", "")
     content = msg.get("content", "")
@@ -739,8 +737,8 @@ def _sanitize_single_message(msg: dict[str, Any]) -> dict[str, Any] | None:
         # Pass 2: Strip thinking blocks from assistant messages
         if role == "assistant":
             content = _THINKING_BLOCK_RE.sub("", content).strip()
-        sanitized["content"] = content
-        return sanitized if content else sanitized  # keep even if empty
+        sanitized["content"] = content  # keep even if empty
+        return sanitized
 
     if isinstance(content, list):
         sanitized_blocks: list[dict[str, Any]] = []
@@ -756,7 +754,7 @@ def _sanitize_single_message(msg: dict[str, Any]) -> dict[str, Any] | None:
                 continue
 
             # Pass 1: Strip base64 from source blocks
-            if block_type == "image" or (
+            if (
                 isinstance(block.get("source"), dict)
                 and block["source"].get("type") == "base64"
             ):
@@ -888,13 +886,12 @@ def convert_to_responses_api_items(
 
     CUA SDK agent loops (anthropic.py, openai.py) dispatch on top-level ``type``
     fields (Responses API item format), not on ``role`` with nested content blocks
-    (Chat Completions format).  Our transcript stores the latter, so replay
-    messages are silently mangled — the Anthropic loop joins only ``text`` from
-    content items (line 169), dropping all function_call / computer_call blocks,
-    and tool messages (``role: "tool"``) match no branch at all.
+    (Chat Completions format).  Our transcript stores the latter, so without this
+    conversion the loops drop function_call / computer_call blocks and ignore
+    ``role: "tool"`` messages entirely.
 
-    This function unnests each Chat Completions message into one or more
-    flat Responses API items that the loops can dispatch correctly:
+    Unnests each Chat Completions message into one or more flat Responses API
+    items that the loops can dispatch correctly:
 
     - User message → ``{type: "message", role: "user", content: [{type: "input_text", …}]}``
     - Assistant text → ``{type: "message", role: "assistant", content: [{type: "output_text", …}]}``

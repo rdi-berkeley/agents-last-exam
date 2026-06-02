@@ -76,6 +76,22 @@ MIDDLE_OMISSION_MARKER = (
     "\n\n\u26a0\ufe0f [... middle content omitted \u2014 showing head and tail ...]\n\n"
 )
 
+# --- Head+tail truncation tuning (truncate_tool_result_text) ---
+
+TAIL_BUDGET_SHARE = 0.3
+"""Fraction of the truncation budget reserved for the tail (the rest goes to the head)."""
+
+MAX_TAIL_BUDGET_CHARS = 4_000
+"""Absolute cap on tail-budget chars, regardless of TAIL_BUDGET_SHARE."""
+
+NEWLINE_SNAP_THRESHOLD = 0.8
+"""Snap a head/tail cut to a nearby newline only if it lands within this fraction of
+the budget \u2014 avoids discarding most of the budget to reach a clean boundary."""
+
+TAIL_NEWLINE_SNAP_SHARE = 0.2
+"""Advance the tail start to a newline only if that newline is within this fraction of
+the tail budget \u2014 keeps the tail close to its intended size."""
+
 
 # ---------------------------------------------------------------------------
 # Context window resolution
@@ -88,14 +104,6 @@ def resolve_context_window(model: str) -> int:
     """
     resolved = resolve_model(model)
     return resolved.context_window or DEFAULT_CONTEXT_TOKENS
-
-
-def _model_candidates(model: str) -> list[str]:
-    """Yield model name variants to try (full name, then without provider prefix)."""
-    candidates = [model]
-    if "/" in model:
-        candidates.append(model.split("/", 1)[1])
-    return candidates
 
 
 # ---------------------------------------------------------------------------
@@ -172,19 +180,19 @@ def truncate_tool_result_text(text: str, max_chars: int) -> str:
 
     # Head+tail when tail looks important
     if has_important_tail(text) and budget > MIN_KEEP_CHARS * 2:
-        tail_budget = min(int(budget * 0.3), 4_000)
+        tail_budget = min(int(budget * TAIL_BUDGET_SHARE), MAX_TAIL_BUDGET_CHARS)
         head_budget = budget - tail_budget - len(MIDDLE_OMISSION_MARKER)
 
         if head_budget > MIN_KEEP_CHARS:
             # Find clean cut points at newline boundaries
             head_cut = head_budget
             head_newline = text.rfind("\n", 0, head_budget)
-            if head_newline > head_budget * 0.8:
+            if head_newline > head_budget * NEWLINE_SNAP_THRESHOLD:
                 head_cut = head_newline
 
             tail_start = len(text) - tail_budget
             tail_newline = text.find("\n", tail_start)
-            if tail_newline != -1 and tail_newline < tail_start + int(tail_budget * 0.2):
+            if tail_newline != -1 and tail_newline < tail_start + int(tail_budget * TAIL_NEWLINE_SNAP_SHARE):
                 tail_start = tail_newline + 1
 
             return text[:head_cut] + MIDDLE_OMISSION_MARKER + text[tail_start:] + TRUNCATION_SUFFIX
@@ -192,7 +200,7 @@ def truncate_tool_result_text(text: str, max_chars: int) -> str:
     # Default: keep the beginning
     cut_point = budget
     last_newline = text.rfind("\n", 0, budget)
-    if last_newline > budget * 0.8:
+    if last_newline > budget * NEWLINE_SNAP_THRESHOLD:
         cut_point = last_newline
     return text[:cut_point] + TRUNCATION_SUFFIX
 

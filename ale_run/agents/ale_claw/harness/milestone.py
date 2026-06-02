@@ -2,8 +2,11 @@
 Milestone Tool for saving screenshots on the remote computer.
 """
 
+import asyncio
 import base64
+import concurrent.futures
 import logging
+import re
 from typing import TYPE_CHECKING, Optional, Union
 
 from agent.tools.base import BaseTool, register_tool
@@ -63,9 +66,6 @@ class MilestoneTool(BaseTool):
         Returns:
             Result of the action execution
         """
-        import asyncio
-        import concurrent.futures
-
         # Verify and parse parameters
         params_dict = self._verify_json_format_args(params)
         path = params_dict.get("path")
@@ -100,7 +100,6 @@ class MilestoneTool(BaseTool):
         forward-slash form because it avoids double-escaping in JSON
         tool-args; the remote VM normalises slashes internally.
         """
-        import re
         # Windows paths: C:\, C:/, D:\, \\server\, or contain backslashes
         return bool(re.match(r'^[A-Za-z]:[\\/]', path) or
                     path.startswith('\\\\') or

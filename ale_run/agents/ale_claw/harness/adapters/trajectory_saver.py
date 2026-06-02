@@ -1,4 +1,4 @@
-"""F — TrajectorySaverCallback turn-bump back-port.
+"""TrajectorySaverCallback turn-bump back-port.
 
 For CUA SDK pins that predate the openclaw fork, ``on_responses``
 increments ``self.current_turn`` at the end — immediately after saving

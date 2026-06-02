@@ -32,6 +32,13 @@ from agent.types import AgentCapability, Messages, Tools
 from .cache_policy import apply_openclaw_cache_markers
 
 
+# Fallback call_id when a tool/computer call item arrives without an id/call_id.
+FALLBACK_CALL_ID = "call_1"
+
+# Default screen dimensions used when the computer handler can't report them.
+DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT = 1024, 768
+
+
 # ---------------------------------------------------------------------------
 # Tool preparation
 # ---------------------------------------------------------------------------
@@ -45,7 +52,7 @@ async def _build_computer_tool_schema(computer_handler: Any) -> Dict[str, Any]:
     try:
         width, height = await computer_handler.get_dimensions()
     except Exception:
-        width, height = 1024, 768
+        width, height = DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT
 
     try:
         environment = await computer_handler.get_environment()
@@ -184,7 +191,7 @@ def _convert_input_to_messages(items: Messages) -> List[Dict[str, Any]]:
             if isinstance(content, list):
                 for c in content:
                     if isinstance(c, dict) and c.get("type") == "tool_result":
-                        tool_use_id = c.get("tool_use_id", "call_1")
+                        tool_use_id = c.get("tool_use_id", FALLBACK_CALL_ID)
                         result_content = c.get("content", "")
                         if isinstance(result_content, list):
                             # Extract text from content blocks, skip images
@@ -206,7 +213,7 @@ def _convert_input_to_messages(items: Messages) -> List[Dict[str, Any]]:
                 # Simple tool message
                 messages.append({
                     "role": "tool",
-                    "tool_call_id": item.get("tool_call_id", "call_1"),
+                    "tool_call_id": item.get("tool_call_id", FALLBACK_CALL_ID),
                     "content": content,
                 })
             continue
@@ -228,7 +235,7 @@ def _convert_input_to_messages(items: Messages) -> List[Dict[str, Any]]:
                     elif isinstance(c, dict) and c.get("type") == "tool_result":
                         # tool_result inside user message (canonical format)
                         # Convert to a tool role message instead
-                        tool_use_id = c.get("tool_use_id", "call_1")
+                        tool_use_id = c.get("tool_use_id", FALLBACK_CALL_ID)
                         result_content = c.get("content", "")
                         if isinstance(result_content, list):
                             text_parts = []
@@ -271,14 +278,14 @@ def _convert_input_to_messages(items: Messages) -> List[Dict[str, Any]]:
                     elif ctype == "tool_use":
                         # Canonical format: tool_use block inside assistant content
                         tool_calls.append({
-                            "id": c.get("id", "call_1"),
+                            "id": c.get("id", FALLBACK_CALL_ID),
                             "type": "function",
                             "function": {
                                 "name": c.get("name", ""),
                                 "arguments": json.dumps(c.get("input", {})),
                             },
                         })
-                        call_id_to_fn_name[c.get("id", "call_1")] = c.get("name", "")
+                        call_id_to_fn_name[c.get("id", FALLBACK_CALL_ID)] = c.get("name", "")
                     elif ctype == "thinking":
                         # Thinking block — skip (not needed for replay)
                         pass
@@ -308,7 +315,7 @@ def _convert_input_to_messages(items: Messages) -> List[Dict[str, Any]]:
         elif item_type == "function_call":
             fn_name = item.get("name", "")
             fn_args = item.get("arguments", "{}")
-            call_id = item.get("call_id", "call_1")
+            call_id = item.get("call_id", FALLBACK_CALL_ID)
             call_id_to_fn_name[call_id] = fn_name
             tool_call = {
                 "id": call_id,
@@ -325,7 +332,7 @@ def _convert_input_to_messages(items: Messages) -> List[Dict[str, Any]]:
 
         # --- function_call_output ---
         elif item_type == "function_call_output":
-            call_id = item.get("call_id", "call_1")
+            call_id = item.get("call_id", FALLBACK_CALL_ID)
             fn_name = call_id_to_fn_name.get(call_id, "computer")
             messages.append({
                 "role": "tool",
@@ -337,7 +344,7 @@ def _convert_input_to_messages(items: Messages) -> List[Dict[str, Any]]:
         # --- computer_call (legacy, from prior turns with old loops) ---
         elif item_type == "computer_call":
             action = item.get("action", {})
-            call_id = item.get("call_id", "call_1")
+            call_id = item.get("call_id", FALLBACK_CALL_ID)
             call_id_to_fn_name[call_id] = "computer"
             # Convert to function_call format
             args = dict(action)
@@ -358,7 +365,7 @@ def _convert_input_to_messages(items: Messages) -> List[Dict[str, Any]]:
 
         # --- computer_call_output (legacy) ---
         elif item_type == "computer_call_output":
-            call_id = item.get("call_id", "call_1")
+            call_id = item.get("call_id", FALLBACK_CALL_ID)
             output = item.get("output", "")
             if isinstance(output, dict) and output.get("type") == "input_image":
                 # Screenshot result — send as user message with image
@@ -567,7 +574,7 @@ class UnifiedAgentConfig(AsyncAgentConfig):
             image = Image.open(BytesIO(image_data))
             display_width, display_height = image.size
         except Exception:
-            display_width, display_height = 1024, 768
+            display_width, display_height = DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT
 
         click_tool = {
             "type": "function",

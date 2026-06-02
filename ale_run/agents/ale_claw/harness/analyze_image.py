@@ -14,7 +14,9 @@ Design reference: openclaw/src/agents/tools/image-tool.ts
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import concurrent.futures
 import logging
 import re
 from pathlib import PurePosixPath, PureWindowsPath
@@ -150,9 +152,6 @@ class AnalyzeImageTool(BaseTool):
 
     def call(self, params: Union[str, dict], **kwargs) -> Union[str, dict]:
         """Execute image analysis (sync wrapper around async implementation)."""
-        import asyncio
-        import concurrent.futures
-
         params_dict = self._verify_json_format_args(params)
 
         try:

@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json as _json
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -46,6 +47,8 @@ from .subagent_registry import SubagentRegistry, SubagentUsage
 
 DEFAULT_MAX_STEPS = 50
 DEFAULT_MAX_COMPACTIONS = 10**9
+
+logger = logging.getLogger(__name__)
 
 
 def _build_subagent_system_prompt(task: str) -> str:
@@ -508,7 +511,8 @@ class GeneralSubagentSession:
 
         self.overflow_cb.reset_after_compaction()
         self.compaction_count += 1
-        print(
-            f"[Subagent {self._run_id}] In-place compaction "
-            f"#{self.compaction_count} ({result.tokens_before}->~{result.tokens_after} tokens)"
+        logger.info(
+            "[Subagent %s] In-place compaction #%d (%d->~%d tokens)",
+            self._run_id, self.compaction_count,
+            result.tokens_before, result.tokens_after,
         )

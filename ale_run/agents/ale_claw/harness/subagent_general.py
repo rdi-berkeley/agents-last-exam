@@ -20,6 +20,7 @@ tests.
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +44,8 @@ __all__ = [
     "_tools_to_litellm_schema",
     "run_general_subagent",
 ]
+
+logger = logging.getLogger(__name__)
 
 
 async def run_general_subagent(
@@ -111,20 +114,21 @@ async def run_general_subagent(
             )
         else:
             shown = result_text
-        print(
-            f"[Subagent] General subagent {run_id} completed "
-            f"({session.usage.input_tokens}+{session.usage.output_tokens} tokens)\n"
-            f"[Subagent:{run_id}] result:\n{shown}"
+        logger.info(
+            "[Subagent] General subagent %s completed (%d+%d tokens)\n"
+            "[Subagent:%s] result:\n%s",
+            run_id, session.usage.input_tokens, session.usage.output_tokens,
+            run_id, shown,
         )
         registry.complete(run_id, result_text, session.usage)
     except asyncio.CancelledError:
         # Cooperative cancellation — US-SUB-005's SubagentsTool.kill path.
         # Mark the registry KILLED but re-raise so the asyncio.Task surfaces
         # as cancelled to the supervising tool.
-        print(f"[Subagent] General subagent {run_id} cancelled")
+        logger.info("[Subagent] General subagent %s cancelled", run_id)
         registry.kill(run_id)
         raise
     except Exception as e:
-        print(f"[Subagent] General subagent {run_id} failed: {e}")
+        logger.warning("[Subagent] General subagent %s failed: %s", run_id, e)
         usage = session.usage if session is not None else SubagentUsage()
         registry.fail(run_id, str(e), usage)

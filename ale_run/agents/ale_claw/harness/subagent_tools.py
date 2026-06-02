@@ -35,7 +35,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 
 from agent.tools.base import BaseTool, register_tool
 
@@ -219,7 +219,7 @@ class DelegateGeneralTool(BaseTool):
             "required": ["task"],
         }
 
-    def call(self, params: Union[str, dict], **kwargs) -> dict:
+    def call(self, params: str | dict, **kwargs) -> dict:
         params_dict = self._verify_json_format_args(params)
 
         task = params_dict.get("task", "")
@@ -357,7 +357,7 @@ class DelegateGUITool(BaseTool):
             "required": ["instruction"],
         }
 
-    def call(self, params: Union[str, dict], **kwargs) -> dict:
+    def call(self, params: str | dict, **kwargs) -> dict:
         params_dict = self._verify_json_format_args(params)
 
         instruction = params_dict.get("instruction", "")
@@ -569,7 +569,7 @@ class SubagentsTool(BaseTool):
             "required": [],
         }
 
-    def call(self, params: Union[str, dict], **kwargs) -> dict:
+    def call(self, params: str | dict, **kwargs) -> dict:
         params_dict = self._verify_json_format_args(params)
         action = params_dict.get("action", "list")
 

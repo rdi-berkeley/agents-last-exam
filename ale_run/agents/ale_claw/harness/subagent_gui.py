@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,8 @@ from .subagent_registry import SubagentRegistry, SubagentUsage
 DEFAULT_MAX_STEPS = 15
 DEFAULT_MODEL = "openrouter/openai/gpt-5.4"
 DEFAULT_IMAGE_HISTORY = 3
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -370,7 +373,7 @@ async def run_gui_subagent(
             is_done = _is_terminated(output_items)
 
             if actions:
-                print(f"  [GUI {run_id}] step {step}: {actions}")
+                logger.info("  [GUI %s] step %d: %s", run_id, step, actions)
                 transcript.write_turn(step, actions, output_items, is_done)
                 step += 1
 
