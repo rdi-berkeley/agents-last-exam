@@ -50,7 +50,7 @@ async def _log_missing_path(
     tag: str,
     label: str,
 ) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("[%s] Missing staged %s at %s", tag, label, path)
     return True
@@ -168,19 +168,19 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
 
     # Agent output precheck
-    if not await session.exists(meta["output_file"]):
+    if not (await session.file_exists(meta["output_file"]) or await session.directory_exists(meta["output_file"])):
         logger.error("agent missing output: %s", meta["output_file"])
         return [0.0]
 
     # Evaluator-controlled prerequisites — staging/config bug if missing
     for ref_key in ("reference_dir", "reference_file"):
-        if not await session.exists(meta[ref_key]):
+        if not (await session.file_exists(meta[ref_key]) or await session.directory_exists(meta[ref_key])):
             raise RuntimeError(
                 f"evaluator-controlled {ref_key} missing: {meta[ref_key]}"
             )
 
     # Upload verifier script to eval temp dir
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     verify_script_path = f"{EVAL_TMP_DIR}/verify_output.py"
     await session.write_file(verify_script_path, _read_script("verify_output.py"))
 

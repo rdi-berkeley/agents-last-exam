@@ -46,7 +46,7 @@ async def _log_missing_path(
     tag: str,
     label: str,
 ) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("[%s] Missing staged %s at %s", tag, label, path)
     return True
@@ -177,7 +177,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     reference_file = meta["reference_file"]
     evaluator_python = meta["evaluator_python"]
 
-    if not await session.exists(evaluator_python):
+    if not (await session.file_exists(evaluator_python) or await session.directory_exists(evaluator_python)):
         raise RuntimeError(
             f"evaluator-controlled python missing at {evaluator_python}; "
             "Stage 1 must stage reference/evaluator_env/.venv"
@@ -185,11 +185,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     if await _log_missing_path(session, reference_file, tag=tag, label="reference file"):
         return [0.0]
 
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     verify_script_path = rf"{EVAL_TMP_DIR}\verify_submission.py"
     await session.write_file(verify_script_path, _read_script("verify_submission.py"))
 
-    if not await session.exists(output_file):
+    if not (await session.file_exists(output_file) or await session.directory_exists(output_file)):
         logger.error("[%s] Agent output not found at %s", tag, output_file)
         return [0.0]
 

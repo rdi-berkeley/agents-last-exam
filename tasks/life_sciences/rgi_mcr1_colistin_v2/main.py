@@ -42,7 +42,7 @@ if __name__ not in sys.modules:
     sys.modules[__name__] = sys.modules.get(__name__, type(sys)(__name__))
 
 from tasks.common_setup import BaseTaskSetup
-from tasks.linux_runtime import DATA_ROOT, LinuxTaskConfig
+from tasks.linux_runtime import LinuxTaskConfig
 
 _setup = BaseTaskSetup()
 
@@ -89,11 +89,11 @@ class RgiMcr1ColistinV2Config(LinuxTaskConfig):
 
     @property
     def data_task_dir(self) -> str:
-        return f"{DATA_ROOT}/{self.DOMAIN_NAME}/{TASK_NAME}/{self.VARIANT_NAME}"
+        return f"{self.REMOTE_ROOT_DIR}/{self.DOMAIN_NAME}/{TASK_NAME}/{self.VARIANT_NAME}"
 
     @property
     def task_dir(self) -> str:
-        return f"{DATA_ROOT}/{self.DOMAIN_NAME}/{VISIBLE_TASK_NAME}/{self.VARIANT_NAME}"
+        return f"{self.REMOTE_ROOT_DIR}/{self.DOMAIN_NAME}/{VISIBLE_TASK_NAME}/{self.VARIANT_NAME}"
 
     @property
     def reference_dir(self) -> str:
@@ -233,11 +233,11 @@ async def start(task_cfg, session: cb.DesktopSession):
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
 
-    if not await session.exists(meta["answer_file"]):
+    if not (await session.file_exists(meta["answer_file"]) or await session.directory_exists(meta["answer_file"])):
         logger.error("agent missing output: %s", meta["answer_file"])
         return [0.0]
 
-    if not await session.exists(meta["verification_targets_file"]):
+    if not (await session.file_exists(meta["verification_targets_file"]) or await session.directory_exists(meta["verification_targets_file"])):
         raise RuntimeError(
             f"evaluator-controlled reference missing: {meta['verification_targets_file']}"
         )

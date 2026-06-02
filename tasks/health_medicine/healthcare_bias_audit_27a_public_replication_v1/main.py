@@ -113,7 +113,6 @@ class HealthcareBiasAuditConfig(LinuxTaskConfig):
             TASK_NAME=TASK_NAME,
             VARIANT_NAME=variant_name,
             OS_TYPE="linux",
-            REMOTE_ROOT_DIR=os.environ.get("REMOTE_ROOT_DIR", "/media/user/data/agenthle"),
             REMOTE_OUTPUT_DIR=os.environ.get("REMOTE_OUTPUT_DIR", "output"),
         )
 
@@ -306,7 +305,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["reference_memo_file"],
         *[f'{meta["reference_dir"]}/{name}' for name in REQUIRED_OUTPUT_FILES if name.startswith("results/")],
     ]
-    missing_reference = [path for path in reference_paths if not await session.exists(path)]
+    missing_reference = [path for path in reference_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing_reference:
         logger.error("Missing reference evaluation paths: %s", missing_reference)
         return [0.0]

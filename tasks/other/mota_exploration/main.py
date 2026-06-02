@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TaskConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = r"E:\agenthle"
     DOMAIN_NAME: str = "other"
 
     TASK_NAME: str = "mota_exploration"

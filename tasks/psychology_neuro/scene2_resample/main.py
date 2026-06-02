@@ -16,7 +16,7 @@ TASK_DIR = Path(__file__).resolve().parent
 
 @cb.tasks_config(split="train")
 def load():
-    return load_single_task(TASK_NAME, TASK_TITLE, domain_name="psychology_neuro")
+    return load_single_task(TASK_NAME, TASK_TITLE)
 
 
 class _NeuroSetup(BaseTaskSetup):

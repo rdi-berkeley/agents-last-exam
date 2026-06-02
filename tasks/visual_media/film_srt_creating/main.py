@@ -42,7 +42,6 @@ VARIANTS = ["train"]
 
 @dataclass
 class TaskConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = os.environ.get("REMOTE_ROOT_DIR", r"E:\agenthle")
     DOMAIN_NAME: str = "visual_media"
 
     TASK_NAME: str = "film_srt_creating"
@@ -251,7 +250,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         # Extract frames on remote, then read the small PNGs back.
         remote_tmp_dir = rf"{task_cfg.metadata['remote_output_dir']}\eval_frames"
         try:
-            await session.makedirs(remote_tmp_dir)
+            await session.interface.create_dir(remote_tmp_dir)
         except Exception:
             pass
 

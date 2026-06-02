@@ -1,4 +1,4 @@
-﻿'''
+'''
 2025 New Year Keygen Challenge
 Credit to: 52pojie
 '''

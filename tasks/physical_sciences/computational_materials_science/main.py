@@ -12,7 +12,7 @@ if __name__ not in sys.modules:
 import cua_bench as cb
 
 from tasks.common_setup import BaseTaskSetup
-from tasks.linux_runtime import DATA_ROOT, LinuxTaskConfig
+from tasks.linux_runtime import LinuxTaskConfig
 from tasks.physical_sciences._shared.materials_science._common import (
     MOSE2_BSE_ABSORPTION_SOC_SPEC,
     SILICON_BSE_ABSORPTION_SPEC,

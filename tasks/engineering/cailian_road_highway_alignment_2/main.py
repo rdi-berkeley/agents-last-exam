@@ -23,7 +23,6 @@ TASK_NAME = "cailian_road_highway_alignment_2"
 TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
 
-REMOTE_ROOT_DIR = r"E:\agenthle"
 CIVIL3D_EXE = r"C:\Program Files\Autodesk\AutoCAD 2024\acad.exe"
 
 # Control points from the submission
@@ -64,7 +63,6 @@ def _read_script(name: str) -> str:
 
 @dataclass
 class CailianRoadConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = REMOTE_ROOT_DIR
     DOMAIN_NAME: str = DOMAIN_NAME
     TASK_NAME: str = TASK_NAME
     VARIANT_NAME: str = VARIANT_NAME

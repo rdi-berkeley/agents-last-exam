@@ -55,7 +55,6 @@ VARIANTS = [
 class MoldFlowTaskConfig(GeneralTaskConfig):
     """Configuration for a single Moldex3D mold-flow analysis task."""
 
-    REMOTE_ROOT_DIR: str = os.environ.get("REMOTE_ROOT_DIR", r"E:\agenthle")
     DOMAIN_NAME: str = "engineering"
 
     TASK_NAME: str = "mold-flow"
@@ -219,7 +218,7 @@ async def _log_missing_path(
     tag: str,
     label: str,
 ) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("[%s] Missing %s: %s", tag, label, path)
     return True
@@ -303,7 +302,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
     # ── 0. Upload evaluation scripts ──────────────────────────────────────────
     tmp_scripts = r"C:\Users\User\AppData\Local\Temp\mold_flow_eval_scripts"
-    await session.makedirs(tmp_scripts)
+    await session.interface.create_dir(tmp_scripts)
 
     for script_name in ["verify_results.py", "verify_process.py"]:
         script_content = _read_script(script_name)
@@ -313,7 +312,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     logger.info(f"[{task_tag}] Evaluation scripts uploaded to {tmp_scripts}")
 
     # ── 1. Gate check: does results.json exist? ───────────────────────────────
-    if not await session.exists(agent_results):
+    if not (await session.file_exists(agent_results) or await session.directory_exists(agent_results)):
         logger.error(f"[{task_tag}] results.json not found at {agent_results}")
         return [0.0]
 
@@ -340,7 +339,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         logger.error(f"[{task_tag}] stderr: {result.get('stderr', '')[:500]}")
 
     # ── 3. Optional: process config check for partial credit ──────────────────
-    if score < 0.5 and await session.exists(ref_process):
+    if score < 0.5 and (await session.file_exists(ref_process) or await session.directory_exists(ref_process)):
         logger.info(f"[{task_tag}] Low score — checking process config for partial credit...")
         process_script = rf"{tmp_scripts}\verify_process.py"
 
@@ -348,7 +347,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         pro_file = ""
         try:
             process_dir = rf"{output_project}\Process"
-            if await session.exists(process_dir):
+            if (await session.file_exists(process_dir) or await session.directory_exists(process_dir)):
                 files = await session.list_dir(process_dir)
                 pro_files = [f for f in files if f.endswith(".pro")]
                 if pro_files:

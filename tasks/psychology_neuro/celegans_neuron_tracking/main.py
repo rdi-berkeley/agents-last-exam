@@ -28,7 +28,7 @@ VARIANT_NAMES = ["137", "153", "184", "185"]
 ALLOWED_OUTPUT_DIRS = {"output", "output_test_pos", "output_test_neg"}
 # `agenthle-ubuntu` currently has a full root disk, so evaluator scratch must
 # live on the data disk instead of `/tmp`.
-EVAL_SCRATCH_ROOT = f"/media/user/data/agenthle/.tmp_eval/{TASK_NAME}"
+EVAL_SCRATCH_ROOT = f"{LinuxTaskConfig.REMOTE_ROOT_DIR}/.tmp_eval/{TASK_NAME}"
 
 
 def _canonical_output_dir_name(path: str) -> str:
@@ -353,7 +353,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["runtime_pyproject"],
         meta["runtime_lock"],
     ]
-    missing = [path for path in required_paths if not await session.exists(path)]
+    missing = [path for path in required_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing:
         logger.error("[%s] missing evaluation paths: %s", meta["variant_name"], missing)
         return [0.0]

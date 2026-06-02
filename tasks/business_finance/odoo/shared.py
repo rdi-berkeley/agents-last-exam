@@ -83,7 +83,6 @@ class OdooTaskConfig(GeneralTaskConfig):
     RUN_TAG: str = ""
     DEFAULT_DB_NAME: str = ""
     VARIANT_NOTE: str = ""
-    REMOTE_ROOT_DIR: str = os.environ.get("REMOTE_ROOT_DIR", r"E:\agenthle")
 
     DEFAULT_ODOO_URL: str = "http://localhost:8069/web"
     DEFAULT_ODOO_SERVICE_NAME: str = "odoo-server-19.0"
@@ -113,7 +112,15 @@ class OdooTaskConfig(GeneralTaskConfig):
 
     @property
     def task_description(self) -> str:
-        prompt_text = (self.variant_source_dir / "input" / "prompt.txt").read_text(encoding="utf-8").strip()
+        # Only the published variant (odoo_compact) ships its prompt.txt with
+        # the repo. Unpublished variants have no vendored prompt file, so fall
+        # back to the variant note instead of letting a missing file crash the
+        # whole module load (load() eagerly builds every variant's description).
+        prompt_file = self.variant_source_dir / "input" / "prompt.txt"
+        try:
+            prompt_text = prompt_file.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            prompt_text = self.VARIANT_NOTE
         out_dir = self.remote_output_dir
         return f"""\
 Goal:
@@ -363,8 +370,8 @@ async def start_variant_task(task_cfg, session: cb.DesktopSession) -> None:
     db_name = task_cfg.metadata["db_name"]
     work_dir = eval_work_dir(task_cfg.metadata["variant_name"])
 
-    await session.makedirs(out_dir)
-    await session.makedirs(work_dir)
+    await session.interface.create_dir(out_dir)
+    await session.interface.create_dir(work_dir)
 
     try:
         info = await _reset_db(
@@ -416,7 +423,7 @@ async def evaluate_variant_task(task_cfg, session: cb.DesktopSession) -> list[fl
     db_name = task_cfg.metadata["db_name"]
     run_tag = task_cfg.metadata["run_tag"]
     work_dir = eval_work_dir(task_cfg.metadata["variant_name"])
-    await session.makedirs(work_dir)
+    await session.interface.create_dir(work_dir)
 
     report = {
         "task_tag": task_cfg.metadata["variant_name"],

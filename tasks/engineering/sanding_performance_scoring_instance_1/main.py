@@ -27,7 +27,6 @@ TASK_NAME = "sanding_performance_scoring_instance_1"
 TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
 SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
-REMOTE_ROOT = r"E:\agenthle"
 
 
 def _remote_child(base: str, *parts: str) -> str:
@@ -56,7 +55,6 @@ class SandingPerformanceScoringConfig(GeneralTaskConfig):
     DOMAIN_NAME: str = DOMAIN_NAME
     TASK_NAME: str = TASK_NAME
     VARIANT_NAME: str = VARIANT_NAME
-    REMOTE_ROOT_DIR: str = os.environ.get("REMOTE_ROOT_DIR", REMOTE_ROOT)
     REMOTE_OUTPUT_DIR: str = os.environ.get("REMOTE_OUTPUT_DIR", "output")
 
     @property

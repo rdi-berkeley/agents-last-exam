@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _missing(session: cb.DesktopSession, path: str, *, label: str) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("Missing %s: %s", label, path)
     return True
@@ -264,11 +264,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     ]
 
     for key, label in required_outputs:
-        if not await session.exists(meta[key]):
+        if not (await session.file_exists(meta[key]) or await session.directory_exists(meta[key])):
             logger.error("Missing %s at %s", label, meta[key])
             return [0.0]
 
-    if not await session.exists(meta["starter_scenarios"]):
+    if not (await session.file_exists(meta["starter_scenarios"]) or await session.directory_exists(meta["starter_scenarios"])):
         raise RuntimeError(
             f"evaluator-controlled starter_scenarios missing: {meta['starter_scenarios']}"
         )

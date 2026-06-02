@@ -270,7 +270,7 @@ async def _vlm_render_score(
     candidate_render_path: str,
 ) -> float:
     try:
-        if not await session.exists(candidate_render_path):
+        if not (await session.file_exists(candidate_render_path) or await session.directory_exists(candidate_render_path)):
             return 0.0
         ref_bytes = await session.read_bytes(reference_render_path)
         cand_bytes = await session.read_bytes(candidate_render_path)
@@ -480,14 +480,14 @@ async def start(task_cfg, session: cb.DesktopSession):
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    if not await session.exists(meta["reference_scene_spec"]):
+    if not (await session.file_exists(meta["reference_scene_spec"]) or await session.directory_exists(meta["reference_scene_spec"])):
         logger.error("Missing hidden reference facts: %s", meta["reference_scene_spec"])
         return [0.0]
-    if not await session.exists(meta["output_scene"]):
+    if not (await session.file_exists(meta["output_scene"]) or await session.directory_exists(meta["output_scene"])):
         logger.error("Missing candidate scene: %s", meta["output_scene"])
         return [0.0]
 
-    await session.makedirs(EVAL_TMP_DIR)
+    await session.interface.create_dir(EVAL_TMP_DIR)
     output_tag = PureWindowsPath(meta["remote_output_dir"]).name or "output"
     helper_path = _remote_child(EVAL_TMP_DIR, f"extract_scene_metrics_{output_tag}.py")
     metrics_path = _remote_child(EVAL_TMP_DIR, f"candidate_metrics_{output_tag}.json")
@@ -509,7 +509,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     if result.get("return_code", 1) != 0:
         logger.error("Blender metrics extraction failed: %s", result.get("stderr", "")[:400])
         return [0.0]
-    if not await session.exists(metrics_path):
+    if not (await session.file_exists(metrics_path) or await session.directory_exists(metrics_path)):
         logger.error("Expected metrics file missing: %s", metrics_path)
         return [0.0]
 

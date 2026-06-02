@@ -89,7 +89,7 @@ async def _inject_required_credentials(task_cfg: Any, session: Any) -> None:
 
     sep = "\\" if "\\" in input_dir else "/"
     target_dir = f"{input_dir}{sep}credentials"
-    await session.makedirs(target_dir)
+    await session.interface.create_dir(target_dir)
 
     local_dir = credentials_local_dir()
     task_id = meta.get("task_id") or f"{meta.get('domain_name')}/{meta.get('task_name')}"

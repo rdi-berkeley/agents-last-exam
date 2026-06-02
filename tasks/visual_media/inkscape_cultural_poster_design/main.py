@@ -299,7 +299,6 @@ async def _read_remote_bytes(session: cb.DesktopSession, path: str) -> bytes:
 
 @dataclass
 class InkscapeCulturalPosterConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = os.environ.get("REMOTE_ROOT_DIR", r"E:\agenthle")
     DOMAIN_NAME: str = "visual_media"
     TASK_NAME: str = "inkscape_cultural_poster_design"
     VARIANT_NAME: str = VARIANT_NAME
@@ -402,7 +401,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         return [0.0]
 
     output_path = meta["output_poster"]
-    if not await session.exists(output_path):
+    if not (await session.file_exists(output_path) or await session.directory_exists(output_path)):
         logger.info("Missing poster output: %s", output_path)
         return [0.0]
 

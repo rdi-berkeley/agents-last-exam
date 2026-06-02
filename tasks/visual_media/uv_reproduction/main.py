@@ -266,9 +266,6 @@ def _remote_child(base: str, *parts: str) -> str:
 
 @dataclass
 class UVTaskConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = os.environ.get(
-        "BLENDER_PACKAGE_REMOTE_ROOT", os.environ.get("REMOTE_ROOT_DIR", r"E:\agenthle")
-    )
     DOMAIN_NAME: str = "visual_media"
 
     TASK_NAME: str = "uv_reproduction"
@@ -543,7 +540,7 @@ def _obj_has_uv_text(content: str) -> bool:
 
 
 async def _upload_scripts(session: cb.DesktopSession, remote_scripts_dir: str) -> None:
-    await session.makedirs(remote_scripts_dir)
+    await session.interface.create_dir(remote_scripts_dir)
     for name in [
         "remote_hard_eval.py",
         "blender_render_material_views.py",
@@ -585,7 +582,7 @@ async def _wait_for_file(
     deadline = asyncio.get_event_loop().time() + timeout_sec
     while asyncio.get_event_loop().time() < deadline:
         try:
-            if await session.exists(path):
+            if (await session.file_exists(path) or await session.directory_exists(path)):
                 return True
         except Exception:
             pass
@@ -597,10 +594,10 @@ async def _wait_for_file(
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     if meta["task_shape"] == "single_part":
-        if not await session.exists(meta["output_obj"]):
+        if not (await session.file_exists(meta["output_obj"]) or await session.directory_exists(meta["output_obj"])):
             return [0.0]
     else:
-        if not await session.exists(meta["output_scene"]):
+        if not (await session.file_exists(meta["output_scene"]) or await session.directory_exists(meta["output_scene"])):
             return [0.0]
 
     if meta["task_shape"] == "single_part" and meta["mode"] == "contract_only":
@@ -615,7 +612,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     remote_scripts_dir = _remote_child(remote_eval_dir, "scripts")
     remote_results_dir = _remote_child(remote_eval_dir, "results")
     remote_report = _remote_child(remote_results_dir, "hard_eval_report.json")
-    await session.makedirs(remote_eval_dir)
+    await session.interface.create_dir(remote_eval_dir)
     await session.run_command(
         "powershell -NoProfile -Command "
         + repr(

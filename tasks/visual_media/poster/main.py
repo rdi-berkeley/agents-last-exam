@@ -122,7 +122,6 @@ def _check_host_verifier_runtime() -> None:
 
 @dataclass
 class PosterTaskConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = os.environ.get("REMOTE_ROOT_DIR", r"E:\agenthle")
     DOMAIN_NAME: str = "visual_media"
 
     TASK_NAME: str = "poster"
@@ -232,10 +231,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     original_poster = meta["original_poster"]
     edit_request_path = meta["edit_request"]
 
-    if not await session.exists(output_poster):
+    if not (await session.file_exists(output_poster) or await session.directory_exists(output_poster)):
         logger.warning("Missing output file: %s", output_poster)
         return [0.0]
-    if not await session.exists(reference_poster):
+    if not (await session.file_exists(reference_poster) or await session.directory_exists(reference_poster)):
         logger.warning("Missing reference file: %s", reference_poster)
         return [0.0]
 
@@ -309,7 +308,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         return [0.0]
 
     edit_request_text = ""
-    if await session.exists(edit_request_path):
+    if (await session.file_exists(edit_request_path) or await session.directory_exists(edit_request_path)):
         edit_request_text = (await session.read_bytes(edit_request_path)).decode(
             "utf-8", errors="replace"
         )

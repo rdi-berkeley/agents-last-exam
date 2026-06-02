@@ -215,7 +215,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     output_file = meta["output_file"]
 
-    if not await session.exists(output_file):
+    if not (await session.file_exists(output_file) or await session.directory_exists(output_file)):
         logger.error("[%s] Missing agent output at %s", meta["variant_name"], output_file)
         return [0.0]
 
