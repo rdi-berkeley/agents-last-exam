@@ -491,6 +491,11 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
         gc = dict(gcloud_creds)
         if (sa := gc.get("service_account_key")) is not None:
             gc["service_account_key"] = str(Path(str(sa)).expanduser())
+        # The GCS SA key (top level, with task_data_source) must be injected
+        # into gcloud VMs too: their baked gsutil is unauthenticated, so in-VM
+        # staging (stage_reference) and any gs:// pull would otherwise 401.
+        if gcs_sa_key:
+            gc["gcs_sa_key"] = str(Path(str(gcs_sa_key)).expanduser())
         gc["snapshots"] = gcloud_snaps
         _validate_provider_required("gcloud", gc, path)
         provider_specs["gcloud"] = ProviderSpec(kind="gcloud", config=gc)

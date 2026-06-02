@@ -83,18 +83,31 @@ async def stage_reference(
 # ---- helpers ----
 
 def _gsutil(sandbox: SandboxHandle) -> str:
-    """``gsutil`` invocation, with ``-u <project>`` for requester-pays buckets.
+    """``gsutil`` invocation, with ``-u <project>`` for requester-pays buckets
+    and ``-o gs_service_key_file`` when the SA key was pushed into the VM.
 
     Requester-pays buckets (e.g. ``gs://ale-data-public``) reject every request
     that doesn't name a billing/user project, and no boto-config knob supplies
     it — only the command-line ``-u`` flag works. The provider surfaces a usable
     project (derived from the injected SA key's ``project_id``) via
-    ``sandbox.metadata['gcs_user_project']``; when absent (e.g. the GCE provider,
-    whose ambient SA can't bill this project anyway) we emit a bare ``gsutil`` so
-    behaviour is unchanged.
+    ``sandbox.metadata['gcs_user_project']``.
+
+    On the GCE provider the VM's baked gsutil is unauthenticated, so the
+    provider also pushes the SA key into the VM and surfaces its path via
+    ``sandbox.metadata['gcs_key_path']``; we add ``-o
+    Credentials:gs_service_key_file=<path>`` so gsutil authenticates as the SA.
+    (The docker provider instead writes /etc/boto.cfg and sets no key_path, so
+    its behaviour is unchanged.) The key path is benchmark-controlled and has
+    no spaces, so it is appended unquoted to compose inside the linux/windows
+    command shapes below.
     """
-    proj = (sandbox.metadata or {}).get("gcs_user_project")
-    return f"gsutil -u {shlex.quote(str(proj))}" if proj else "gsutil"
+    meta = sandbox.metadata or {}
+    proj = meta.get("gcs_user_project")
+    cmd = f"gsutil -u {shlex.quote(str(proj))}" if proj else "gsutil"
+    key_path = meta.get("gcs_key_path")
+    if key_path:
+        cmd += f" -o Credentials:gs_service_key_file={key_path}"
+    return cmd
 
 
 def _gcs_prefix(source: str, task_data: TaskDataSpec) -> str:

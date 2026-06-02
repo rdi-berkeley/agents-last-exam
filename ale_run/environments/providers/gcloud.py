@@ -273,6 +273,11 @@ class GcloudProviderConfig:
     instance_prefix: str = "ale"
     network: str = "default"
     subnet: str = "default"
+    gcs_sa_key: str = ""
+    """Host path to a GCS SA key. Injected into each VM (its baked gsutil is
+    unauthenticated) so in-VM staging + gs:// pulls work; the key's project_id
+    also bills requester-pays buckets via gsutil ``-u``. Mirrors the docker
+    provider's same-named knob."""
     snapshots: dict[str, SnapshotConfig] = dataclass_field(default_factory=dict)
 
 
@@ -299,6 +304,7 @@ def _build_provider_config(raw: dict[str, Any]) -> GcloudProviderConfig:
         instance_prefix=str(raw.get("instance_prefix") or "ale"),
         network=str(raw.get("network") or "default"),
         subnet=str(raw.get("subnet") or "default"),
+        gcs_sa_key=str(raw.get("gcs_sa_key") or ""),
         snapshots=snapshots,
     )
 
@@ -754,6 +760,19 @@ class GcloudProvider(Provider):
         if not ready:
             raise RuntimeError(f"CUA server at {cua_url} did not become ready")
 
+        # The VM's baked gsutil is unauthenticated. Inject the GCS SA key so
+        # in-VM staging (stage_reference) and gs:// pulls authenticate; surface
+        # the key path + billing project via metadata so gsbucket's _gsutil
+        # adds `-o gs_service_key_file` + `-u <project>`.
+        gcs_key_path, gcs_user_project = "", ""
+        if self._cfg.gcs_sa_key:
+            try:
+                gcs_key_path, gcs_user_project = await self._inject_gcs_credentials(
+                    cua_url, image.os, self._cfg.gcs_sa_key,
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.error("gcloud: GCS credential injection failed on %s: %s", name, e)
+
         return SandboxHandle(
             id=name,
             endpoint=cua_url,
@@ -766,8 +785,44 @@ class GcloudProvider(Provider):
                 "external_ip": external_ip,
                 "image": image.name,
                 "snapshot": spec.snapshot,
+                "gcs_key_path": gcs_key_path,
+                "gcs_user_project": gcs_user_project,
             },
         )
+
+    @staticmethod
+    async def _inject_gcs_credentials(
+        cua_url: str, os_type: str, host_key_path: str,
+    ) -> tuple[str, str]:
+        """Push the GCS SA key into the VM and return (vm_key_path, project_id).
+
+        gsbucket's ``_gsutil`` reads ``metadata['gcs_key_path']`` and adds
+        ``-o Credentials:gs_service_key_file=<path>`` so the VM's gsutil
+        authenticates as the SA (instead of anonymous). The SA key's
+        ``project_id`` bills requester-pays buckets via ``-u``.
+        """
+        from cua_bench.computers.remote import RemoteDesktopSession
+
+        key = Path(host_key_path).expanduser()
+        data = key.read_bytes()
+        try:
+            project_id = json.loads(data).get("project_id", "") or ""
+        except (json.JSONDecodeError, AttributeError):
+            project_id = ""
+
+        is_win = os_type != "linux"
+        dest = r"C:\agenthle\gcs-reader.json" if is_win else "/tmp/agenthle/gcs-reader.json"
+        mk = (
+            r'cmd /c if not exist C:\agenthle mkdir C:\agenthle'
+            if is_win else "mkdir -p /tmp/agenthle"
+        )
+
+        session = RemoteDesktopSession(api_url=cua_url, os_type=os_type)
+        _init_computer_skip_wait(session)
+        await session.run_command(mk, check=False)
+        await session.write_bytes(dest, data)
+        logger.info("gcloud: injected GCS SA key -> %s (project=%s)", dest, project_id)
+        return dest, project_id
 
     # ------------------------------------------------------------------ release
 
