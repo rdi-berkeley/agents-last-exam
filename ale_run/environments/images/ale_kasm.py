@@ -19,7 +19,7 @@ IMAGE = Image(
 
     # sandbox-side paths
     work_dir_base="/home/kasm-user/.ale",
-    task_data_root="/media/user/data/ale-data",
+    task_data_root="/media/user/data/agenthle",
     node="/usr/bin/node",
     python="/usr/bin/python3",
     mcp_server_dir="/home/kasm-user/cua_mcp_server",

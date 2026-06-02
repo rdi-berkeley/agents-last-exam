@@ -17,7 +17,7 @@ IMAGE = Image(
 
     # sandbox-side paths (identical to ale-ubuntu22 — same exported rootfs)
     work_dir_base="/home/user/.ale",
-    task_data_root="/media/user/data/ale-data",
+    task_data_root="/media/user/data/agenthle",
     node="/usr/local/bin/node",
     python="/opt/ale-run/.venv/bin/python",
     mcp_server_dir="/home/user/cua_mcp_server",
