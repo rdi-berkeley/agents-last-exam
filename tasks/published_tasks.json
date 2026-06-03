@@ -300,11 +300,6 @@
         "images"
       ]
     },
-    "visual_media/video_reconstruction": {
-      "variants": [
-        "images"
-      ]
-    },
     "business_finance/ar_full_1500": {
       "variants": [
         "base"
@@ -625,11 +620,6 @@
         "base"
       ]
     },
-    "psychology_neuro/neuroscience_pub_figure_reproduce_1": {
-      "variants": [
-        "base"
-      ]
-    },
     "business_finance/internal_employee_agent_instance_1": {
       "variants": [
         "base"
@@ -744,60 +734,6 @@
       "variants": [
         "base"
       ]
-    },
-    "business_finance/odoo_hard": {
-      "variants": []
-    },
-    "computing_math/researcher_keynote_slide_deck_from_pdfs": {
-      "variants": []
-    },
-    "engineering/robotics_blender_tabletop_reconstruction": {
-      "variants": []
-    },
-    "health_medicine/radiology_dicom_chest_xray_report_1": {
-      "variants": []
-    },
-    "legal/e_discovery_chinese": {
-      "variants": []
-    },
-    "other/praat_analysis": {
-      "variants": []
-    },
-    "physical_sciences/vegetation_precip_spatial_temporal": {
-      "variants": []
-    },
-    "psychology_neuro/neuroscience_pub_figure_reproduce_2": {
-      "variants": []
-    },
-    "visual_media/film_srt_creating": {
-      "variants": []
-    },
-    "visual_media/high_to_low_modeling": {
-      "variants": []
-    },
-    "visual_media/mota_reproduction": {
-      "variants": []
-    },
-    "visual_media/music_reproduction": {
-      "variants": []
-    },
-    "visual_media/poster": {
-      "variants": []
-    },
-    "visual_media/score_to_part": {
-      "variants": []
-    },
-    "visual_media/timbre_synthesis": {
-      "variants": []
-    },
-    "visual_media/underwater_pathtracer_effect": {
-      "variants": []
-    },
-    "visual_media/vocal_synthesis": {
-      "variants": []
-    },
-    "visual_media/zbrush_3d_modeling": {
-      "variants": []
     }
   }
 }

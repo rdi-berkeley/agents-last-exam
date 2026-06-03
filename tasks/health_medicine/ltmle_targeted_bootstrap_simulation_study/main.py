@@ -351,7 +351,6 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["reference_dir"],
         meta["reference_expected_summary_file"],
         meta["evaluation_contract_file"],
-        meta["output_test_pos_dir"],
     ]
     missing_eval = [path for path in required_eval_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing_eval:
@@ -434,8 +433,12 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             meta["input_dir"],
             "--reference-dir",
             meta["reference_dir"],
+            # The hidden-smoke verifier only reads fixture_smoke_plan.csv from
+            # this dir. That plan is evaluator config and lives in reference/
+            # (which IS staged to the eval VM); output_test_pos/ is a self-test
+            # fixture and is never staged, so do not depend on it at eval time.
             "--positive-fixture-dir",
-            meta["output_test_pos_dir"],
+            meta["reference_dir"],
             "--eval-data-dir",
             hidden_smoke_eval_dir,
             "--rscript-binary",

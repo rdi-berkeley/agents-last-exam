@@ -71,12 +71,13 @@ VARIANTS = [
         "submission_obj_name": "samurai.obj",
         "submission_mtl_name": "material.mtl",
         "reference_mtl_name": "samurai.mtl",
-        "reference_texture_subpath": ("textures",),
+        "reference_texture_subpath": ("objects", "textures"),
         "requires_material_files": True,
         "requires_uv": True,
         "requires_mtl": True,
-        "requires_basecolor_texture": False,
-        "requires_color_match_gate": False,
+        "requires_basecolor_texture": True,
+        "requires_color_match_gate": True,
+        "color_match_gate_threshold": 0.9,
     },
     {
         "task_tag": "uv_reproduction_muji_paper_bag",
@@ -382,6 +383,13 @@ class UVTaskConfig(GeneralTaskConfig):
         return None
 
     @property
+    def reference_image_render_dir(self) -> str:
+        # Pre-rendered reference views (front/back/left/right/top_front/bottom_front).
+        # Consumed by the single-part hard eval when the full set is staged; otherwise
+        # the evaluator renders the reference OBJ live.
+        return _remote_child(self.reference_dir, "images")
+
+    @property
     def task_description(self) -> str:
         if self.TASK_SHAPE == "multi_part":
             return textwrap.dedent(f"""\
@@ -463,6 +471,7 @@ class UVTaskConfig(GeneralTaskConfig):
                 "reference_manifest": self.reference_manifest,
                 "reference_mtl": self.reference_mtl,
                 "reference_texture_dir": self.reference_texture_dir,
+                "reference_image_render_dir": self.reference_image_render_dir,
                 "remote_task_dir_name": self.REMOTE_TASK_DIR_NAME,
                 "requires_material_files": self.REQUIRES_MATERIAL_FILES,
                 "requires_uv": self.REQUIRES_UV,
@@ -649,6 +658,8 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
                 meta["reference_mtl"],
                 "--reference-texture-dir",
                 meta["reference_texture_dir"],
+                "--reference-images-dir",
+                meta["reference_image_render_dir"],
                 "--candidate-obj",
                 meta["output_obj"],
                 "--candidate-mtl",

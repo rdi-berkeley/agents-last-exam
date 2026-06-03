@@ -90,7 +90,7 @@ class NDVIZonalStatisticsConfig(GeneralTaskConfig):
 
     @property
     def evaluator_python(self) -> str:
-        return rf"{self.software_dir}\evaluator_venv\Scripts\python.exe"
+        return rf"{self.reference_dir}\evaluator_env\.venv\Scripts\python.exe"
 
     @property
     def runtime_pyproject(self) -> str:

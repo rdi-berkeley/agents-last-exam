@@ -47,7 +47,7 @@ DOMAIN_NAME = "engineering"
 TASK_NAME = "sumo_urban_am_peak_calibration"
 TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
-EVAL_TMP_DIR = f"/media/user/data/agenthle_eval/{TASK_NAME}"
+EVAL_TMP_DIR = f"/tmp/agenthle_eval/{TASK_NAME}"
 SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
 
 if __name__ not in sys.modules:
