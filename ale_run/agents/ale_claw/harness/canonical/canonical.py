@@ -124,7 +124,7 @@ def get_transcript_policy(model: str | Any) -> TranscriptPolicy:
 
     Reference: openclaw/src/agents/transcript-policy.ts:resolveTranscriptPolicy
     """
-    from ..model_config import resolve_model
+    from ..inference.model_config import resolve_model
 
     runtime = resolve_model(model)
     model_lower = runtime.model.lower()
@@ -642,7 +642,7 @@ def sanitize_items(
     if target is None:
         if model is None:
             raise ValueError("sanitize_items() requires target or model")
-        from ..model_config import resolve_model
+        from ..inference.model_config import resolve_model
 
         target = resolve_model(model).adapter_target
 

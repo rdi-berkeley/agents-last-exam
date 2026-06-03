@@ -10,7 +10,7 @@ Verifies:
 
 import pytest
 
-from ale_run.agents.ale_claw.harness.model_config import (
+from ale_run.agents.ale_claw.harness.inference.model_config import (
     HelperTransportDefaults,
     ModelConfig,
     ResolvedModel,

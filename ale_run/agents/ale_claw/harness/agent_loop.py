@@ -36,7 +36,7 @@ from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 from agent.agent import ComputerAgent, assert_callable_with, get_json, get_output_call_ids
 from agent.computers.base import AsyncComputerHandler
 from agent.computers.cua import cuaComputerHandler
-from .model_config import ResolvedModel
+from .inference.model_config import ResolvedModel
 from agent.responses import make_tool_error_item, replace_failed_computer_calls_with_function_calls
 from agent.tools.base import BaseTool
 from agent.types import ToolError
@@ -61,7 +61,7 @@ _COMPUTER_ACTION_PARAMS: Dict[str, List[str]] = {
     "terminate": ["status"],
 }
 
-from ._message_shapes import _function_call_output, _image_url_block
+from .inference._message_shapes import _function_call_output, _image_url_block
 from .canonical.canonical import normalize_to_canonical, sanitize_items
 from .computer_handler import OpenClawComputerHandler
 from .context.context import ContextOverflowCallback, compact_messages, is_context_overflow_error

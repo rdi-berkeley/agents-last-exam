@@ -16,7 +16,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from ale_run.agents.ale_claw.harness.model_config import HelperTransportDefaults, ModelConfig, register_model_config
+from ale_run.agents.ale_claw.harness.inference.model_config import HelperTransportDefaults, ModelConfig, register_model_config
 
 from ale_run.agents.ale_claw.harness.context.context import (
     BASE_CHUNK_RATIO,
@@ -465,7 +465,7 @@ class TestSummarizeChunksIterative:
         assert result == "Combined summary"
 
     def test_custom_resolved_runtime_can_switch_compaction_transport(self):
-        from ale_run.agents.ale_claw.harness.model_config import _MODEL_CONFIGS
+        from ale_run.agents.ale_claw.harness.inference.model_config import _MODEL_CONFIGS
 
         original = list(_MODEL_CONFIGS)
         mock_resp = MagicMock()
