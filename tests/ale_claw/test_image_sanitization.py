@@ -13,7 +13,7 @@ import io
 
 from PIL import Image
 
-from ale_run.agents.ale_claw.harness.image_sanitization import (
+from ale_run.agents.ale_claw.harness.utils.image_sanitization import (
     DEFAULT_MAX_BYTES,
     DEFAULT_MAX_DIMENSION_PX,
     ImageLimits,

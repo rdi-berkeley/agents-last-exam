@@ -13,7 +13,7 @@ import re
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from .inference._message_shapes import _image_url_block
-from .image_sanitization import (
+from .utils.image_sanitization import (
     DEFAULT_LIMITS as _IMAGE_DEFAULT_LIMITS,
     sanitize_raw_image_bytes as _sanitize_raw_image_bytes,
 )

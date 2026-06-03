@@ -38,7 +38,7 @@ from agent.tools.base import BaseTool, register_tool
 from ._paths import _parent_dir
 from ._tool_utils import _get_required_str, _run_tool_execute
 from .fs_backends import FilesystemBackend, FilesystemRegistry
-from ..image_sanitization import (
+from ..utils.image_sanitization import (
     DEFAULT_LIMITS as _IMAGE_DEFAULT_LIMITS,
     sanitize_raw_image_bytes,
     sniff_mime_from_bytes as _sniff_mime_from_bytes,
@@ -249,7 +249,7 @@ class ReadFileTool(BaseTool):
         # Per-call override flows into ImageLimits; otherwise OpenClaw defaults
         # (5 MB / 1200 px / 25 MP) live in image_sanitization.py.
         if isinstance(max_bytes_raw, (int, float)) and max_bytes_raw > 0:
-            from ..image_sanitization import ImageLimits
+            from ..utils.image_sanitization import ImageLimits
             limits = ImageLimits(max_bytes=int(max_bytes_raw))
         else:
             limits = _IMAGE_DEFAULT_LIMITS
