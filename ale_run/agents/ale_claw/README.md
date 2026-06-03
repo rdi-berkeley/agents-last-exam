@@ -1,87 +1,114 @@
-# `ale.agents.ale_claw` — OpenClaw native deployer
+# ALE Claw
 
-First **native** deployer in ALE: the OpenClaw agent harness runs in the
-ALE host's Python process (not subprocess, not docker, not in-VM). It
-drives the test VM through `env.session.computer` (cua Computer SDK) and
-writes its own per-turn transcripts + state.json + per-turn API result
-dumps to a host tempdir we mirror back into the run directory.
+**ALE Claw** is a computer-use agent for [ALE](https://github.com/rdi-berkeley/agents-last-exam),
+built on the OpenClaw agent architecture and the [CUA](https://cua.ai) Computer-Use
+Agent SDK. It drives a test VM
+(click, type, read/write files, run shell commands, browse the web) to complete
+benchmark tasks, while managing its own conversation context the way a
+long-horizon assistant does — canonical message history, tool-result
+truncation, automatic compaction, durable memory, and subagent delegation.
 
-The agent itself is unchanged from upstream `cua_bench/agents/openclaw/`
-(branch `openclaw-cua` of `yixiao-huang/cua`, sha pinned in
-`AleClawConfig.upstream_version`). The harness lives in `harness/` as
-ALE-owned code — no `_vendor/` namespace, no `sys.modules` tricks. The
-only edits to copied files were:
+It is ALE's first **native** deployer: the agent runs in-process in the ALE
+host's Python interpreter (no subprocess, no container, not inside the VM) and
+talks to the target machine through the CUA Computer SDK (`env.session.computer`).
+Per-turn transcripts, `state.json`, and raw API result dumps are written to a
+host tempdir and mirrored back into the run directory, then translated into an
+ALE `Trajectory`.
 
-- delete `adapters/computer_agent.py` (historical alias)
-- drop `OpenClawImageAwareComputerAgent` from `harness/__init__.py` and
-  `harness/adapters/__init__.py`
+## What's inside
 
-The upstream wrapper class (`cua_bench/agents/openclaw_agent.py`) was
-not copied; its `perform_task` body was inlined into
-`AleClawDeployer.launch` so we have one procedural code path instead of
-inheritance + 8 hook overrides.
+The agent loop is an OpenClaw reproduction adapted for CUA's `ComputerAgent`
+lifecycle. The pieces that make it more than a thin tool-calling loop:
+
+- **Canonical context pipeline** — a single typed message format with sanitize
+  passes (orphaned tool-pair repair, thinking-block handling, provider-specific
+  ordering) before each API call (`canonical/`).
+- **Budget-aware compaction** — when the context window fills, older history is
+  chunked and summarized in place and the loop continues, no agent rebuild
+  (`context.py` + `compaction.py`).
+- **Durable memory + pre-compaction flush** — the agent persists task memory and
+  a session log to disk; a flush turn runs before compaction so nothing
+  important is lost (`memory*.py`).
+- **Subagent delegation** — spawn focused workers: an async general subagent
+  (its own session + compaction) and a blocking GUI subagent that relays
+  vision→action through a second `ComputerAgent` (`subagent/`).
+- **Tool suite** — file read/write/edit, shell exec, web search/fetch, image
+  analysis, milestone screenshots, and memory tools (`tools/`).
+- **Multi-provider via OpenRouter** — a unified Chat-Completions loop registered
+  for `openrouter/*` plus image sanitization (resize/transcode) so screenshots
+  fit provider limits (`unified_loop.py`, `image_sanitization.py`).
+
+## Running it
+
+ALE Claw runs as an ALE agent (`harness: ale_claw`). Point an agent config at it
+and run an experiment:
+
+```yaml
+# configs/agents/ale_claw.yaml
+harness: ale_claw
+model: openrouter/anthropic/claude-sonnet-4.6
+config:
+  max_turns: 100
+  thinking_level: "off"
+```
+
+```bash
+export OPENROUTER_API_KEY=...
+uv run python -m ale_run run experiments/my_experiment.yaml
+```
+
+For a programmatic/standalone construction, the deployer and its config are:
+
+```python
+from ale_run.agents.ale_claw import AleClawConfig, AleClawDeployer
+
+cfg = AleClawConfig(
+    model="openrouter/anthropic/claude-sonnet-4.6",
+    max_turns=100,                  # OpenClaw max_steps
+    thinking_level="off",           # off | low | medium | high
+    disabled_tools=["web_search"],  # default; set to [] + export BRAVE_API_KEY to enable
+)
+```
+
+The full kwarg surface is documented in `config.py`. Two knobs worth calling out:
+
+- **`summary_model` / `gui_model` / `lightweight_model`** — route compaction,
+  GUI subagent, and helper calls through cheaper sibling models to save cost on
+  long runs. Default: all use `model`.
+- **`thinking_level`** (`off | low | medium | high`) — Claude reasoning depth;
+  defaults per-model. Variants exist for flush / compaction / vision / GUI.
+
+API keys are read from the environment: litellm picks up `OPENROUTER_API_KEY`
+(or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) straight from `os.environ`, so export
+the key for your provider before running — the deployer errors early if none is
+set. Web search additionally needs `BRAVE_API_KEY` (and `web_search` removed from
+`disabled_tools`).
 
 ## Layout
 
 ```
 ale_run/agents/ale_claw/
-├── __init__.py                 — re-exports AleClawConfig, AleClawDeployer
-├── config.py                   — standalone dataclass
-├── deployer.py                 — AleClawDeployer (work_dir_on_vm=False)
-├── transcript_to_trajectory.py — on-disk transcripts → ATIF Steps
+├── config.py                   — AleClawConfig (standalone dataclass)
+├── deployer.py                 — AleClawDeployer (install → launch → parse_artifacts)
+├── transcript_to_trajectory.py — on-disk transcripts → ALE Trajectory (ATIF) steps
+├── CLAUDE.md                   — dev workflow + code map for this harness
 ├── README.md                   — this file
-└── harness/                    — OpenClaw harness (in-tree, ALE code)
+└── harness/                    — the OpenClaw agent, in-tree and ALE-owned
     ├── AGENTS.md               — system-prompt context file
-    ├── agent_loop.py           — OpenClawComputerAgent (run loop)
-    ├── ... (32 modules)
-    └── adapters/
+    ├── agent_loop.py           — OpenClawComputerAgent (the run loop)
+    ├── session.py / replay.py  — session state + cross-run transcript replay
+    ├── canonical/              — typed message format + sanitize passes
+    ├── tools/                  — fs / shell / web tool implementations
+    ├── subagent/               — general + GUI subagent engines
+    ├── adapters/               — CUA SDK callback extensions
+    └── … (context, compaction, memory, prompt, unified_loop, …)
 ```
 
-## Configuration
+## Provenance
 
-```python
-from ale.agents.ale_claw import AleClawConfig
-
-cfg = AleClawConfig(
-    model="openrouter/anthropic/claude-sonnet-4-20250514",
-    openrouter_api_key=os.environ["OPENROUTER_API_KEY"],
-    max_turns=100,         # OpenClaw max_steps
-    timeout_s=3600,        # wall budget (asyncio.wait_for)
-    disabled_tools=["web_search"],  # default; provide brave_api_key + clear list to enable
-)
-```
-
-Full kwarg surface in `config.py` docstrings. Two model knobs to call out:
-
-- `summary_model` / `gui_model` / `lightweight_model` — when set, OpenClaw
-  routes compaction / vision / GUI subagent through cheaper siblings. Saves
-  cost on long runs. Default: all use `model`.
-- `thinking_level` (`off | low | medium | high`) — Claude reasoning depth.
-  Defaults per-model via `harness.thinking.resolve_thinking_default`.
-
-API keys are passed in explicitly. The deployer injects them into
-`os.environ` (litellm reads from env) just-in-time around `agent.run()`,
-restoring on exit. **Concurrency caveat**: with `concurrency > 1` and
-DIFFERENT keys per unit, this races on the env. Same-key batches are
-fine; different-key batches need subprocess isolation (v2).
-
-## How it differs from agenthle's `ale-claw`
-
-| | agenthle | ALE |
-|---|---|---|
-| Source layout | sparse git submodule + `_loader.py` (sys.modules trick) | in-tree `harness/`, no loader |
-| Wrapper layer | `AleClawAgent(_UpstreamOpenClawAgent)` with 8 hook overrides | one procedural `launch()` body, no inheritance |
-| Log format | `interaction_log.json` (InteractionLog/InteractionStep) | ALE `Trajectory` (ATIF) directly |
-| `_resolve_workspace_root` | TASK_TAG / REMOTE_ROOT_DIR / TASK_CATEGORY env vars | `None` (permissive — full VM access) |
-| Cross-run resume | `memory_base_dir` / `session_base_dir` per-run/explicit toggle | always per-run (v1); resume is a future flag |
-| `_after_run_finally` writes log | yes | no — `collect()` translates transcript → Trajectory |
-
-## Deferred for v2
-
-- Cross-run memory + session resume (config flags + carry-over to subsequent runs)
-- Subagent trajectory extraction into `Trajectory.subagent_trajectories`
-- API key isolation across concurrent units (subprocess wrapping)
-- Workspace root derivation from `task_path` (currently permissive)
-
-See `docs/AGENTS.md` for the general deployer-author SOP and the Native
-cookbook section that uses this deployer as the reference impl.
+The harness reproduces OpenClaw's agent-side architecture but is **fully
+ALE-owned** — no vendored namespace, no submodule, no upstream sync. The
+`upstream_version` field in `config.py` records the OpenClaw commit the design
+was adapted from, for provenance only. Develop here directly; see `CLAUDE.md`
+for the workflow and verification rules, and `harness/AGENTS.md` for the agent's
+own system-prompt context.
