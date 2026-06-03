@@ -1,8 +1,8 @@
 # ALE Claw
 
 **ALE Claw** is a computer-use agent for [ALE](https://github.com/rdi-berkeley/agents-last-exam),
-built on the OpenClaw agent architecture and the [CUA](https://cua.ai) Computer-Use
-Agent SDK. It drives a test VM
+built on the [OpenClaw](https://openclaw.ai/) agent architecture and the
+[CUA](https://cua.ai) Computer-Use Agent SDK. It drives a test VM
 (click, type, read/write files, run shell commands, browse the web) to complete
 benchmark tasks, while managing its own conversation context the way a
 long-horizon assistant does — canonical message history, tool-result
