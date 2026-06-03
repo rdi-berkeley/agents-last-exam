@@ -49,10 +49,6 @@ from .experiment_spec import (
     TaskSpec,
 )
 
-# Fallback container ref if a docker-routed image family has no registered
-# docker_image (every shipped linux family does).
-_DEFAULT_DOCKER_IMAGE = "agentslastexam/ale-kasm:latest"
-
 logger = logging.getLogger(__name__)
 
 
@@ -358,7 +354,13 @@ def _build_agent_from_path(path: Any, *, base_dir: Path) -> AgentSpec:
 # Keys at the env-yaml top level that are NOT provider config.
 _ENVIRONMENT_TOP_RESERVED = frozenset({
     "provider", "providers", "snapshots", "task_data_source", "output_path",
+    "gcs_sa_key",
 })
+
+# gcloud connection fields that belong to the provider as a whole (vs the
+# per-snapshot routing fields image/zones/gpu). They are repeated on each gcloud
+# snapshot's block and reconciled here into one provider config.
+_GCLOUD_CRED_KEYS = ("project", "service_account_key", "instance_prefix", "network", "subnet")
 
 
 def _build_environment_from_path(
@@ -369,11 +371,12 @@ def _build_environment_from_path(
     Two shapes are accepted:
 
     * **Per-snapshot** (``snapshots:`` present) — each task-card snapshot maps
-      to ``{provider, image, <provider>: {knobs}}``. Shared per-provider config
-      (creds/network) lives under ``providers:``. The loader reshapes this into
-      one :class:`ProviderSpec` per provider kind (gcloud gets its snapshots
-      subset in the format its Config expects; docker gets the resolved image +
-      sizing) plus a snapshot→kind routing table.
+      to ``{provider, image, <provider>: {knobs}}``. Each block is self-contained
+      (there is no shared top-level ``providers:`` section — gcloud connection
+      fields are repeated per snapshot and reconciled). The loader reshapes this
+      into one :class:`ProviderSpec` per provider kind plus a snapshot→kind
+      routing table. ``gcs_sa_key`` (top level, alongside ``task_data_source``)
+      is injected into the docker provider when present.
     * **Single provider** (``provider:`` at top level, no ``snapshots:``) — the
       dev/``static`` shape: one provider serves every snapshot (it is a fixed
       attached box, so there is nothing to map).
@@ -422,18 +425,24 @@ def _build_single_provider_env(raw: dict[str, Any], path: str) -> EnvironmentSpe
 
 def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
     """Per-snapshot env: reshape snapshot→{provider,image,knobs} into one
-    ProviderSpec per kind + a snapshot→kind routing table."""
-    from ..environments.images import get as get_image
+    ProviderSpec per kind + a snapshot→kind routing table.
 
-    shared = raw.get("providers") or {}
-    if not isinstance(shared, dict):
-        raise TypeError(f"environment {path!r}: `providers:` must be a mapping")
+    Each snapshot block is self-contained — there is no shared ``providers:``
+    section. gcloud connection fields (project/sa/network/...) are repeated on
+    every gcloud snapshot and reconciled here into the single gcloud provider
+    config; the per-snapshot routing (image/zones/gpu) stays per snapshot.
+    Docker carries only the image NAME + container sizing; the container ref,
+    cua port and paths are read from the Image entry by the provider.
+    ``gcs_sa_key`` (top level, with ``task_data_source``) is injected into the
+    docker provider when set.
+    """
     snapshots = raw["snapshots"]
     if not isinstance(snapshots, dict) or not snapshots:
         raise TypeError(f"environment {path!r}: `snapshots:` must be a non-empty mapping")
 
     snapshot_kind: dict[str, str] = {}
     gcloud_snaps: dict[str, Any] = {}   # tag -> {image, gpu, zones}
+    gcloud_creds: dict[str, Any] = {}   # project/sa/network/... (reconciled, last wins)
     docker_cfg: dict[str, Any] | None = None
 
     for tag, entry in snapshots.items():
@@ -449,12 +458,15 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
         snapshot_kind[str(tag)] = str(kind)
 
         if kind == "gcloud":
-            gcloud_snaps[str(tag)] = {"image": str(image), **knobs}
+            # split the block into provider-wide creds vs per-snapshot routing
+            gcloud_creds.update({k: knobs[k] for k in _GCLOUD_CRED_KEYS if k in knobs})
+            routing = {k: v for k, v in knobs.items() if k not in _GCLOUD_CRED_KEYS}
+            gcloud_snaps[str(tag)] = {"image": str(image), **routing}
         elif kind == "docker":
-            # docker has one container image; resolve the registry family to its
-            # published container ref. Multiple docker snapshots must agree.
-            ref = get_image(str(image)).docker_image or _DEFAULT_DOCKER_IMAGE
-            this = {"image": ref, "image_family": str(image), **knobs}
+            # docker carries just the image NAME + sizing knobs; the provider
+            # resolves the container ref + port from the Image entry. Multiple
+            # docker snapshots must agree.
+            this = {"image": str(image), **knobs}
             if docker_cfg is not None and docker_cfg != this:
                 raise ValueError(
                     f"environment {path!r}: multiple docker snapshots with "
@@ -472,16 +484,25 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
                 f"environment {path!r}: snapshot {tag!r} provider {kind!r} not supported"
             )
 
+    gcs_sa_key = raw.get("gcs_sa_key")
+
     provider_specs: dict[str, ProviderSpec] = {}
     if gcloud_snaps:
-        gc = dict(shared.get("gcloud") or {})
+        gc = dict(gcloud_creds)
         if (sa := gc.get("service_account_key")) is not None:
             gc["service_account_key"] = str(Path(str(sa)).expanduser())
+        # The GCS SA key (top level, with task_data_source) must be injected
+        # into gcloud VMs too: their baked gsutil is unauthenticated, so in-VM
+        # staging (stage_reference) and any gs:// pull would otherwise 401.
+        if gcs_sa_key:
+            gc["gcs_sa_key"] = str(Path(str(gcs_sa_key)).expanduser())
         gc["snapshots"] = gcloud_snaps
         _validate_provider_required("gcloud", gc, path)
         provider_specs["gcloud"] = ProviderSpec(kind="gcloud", config=gc)
     if docker_cfg is not None:
-        dk = {**(shared.get("docker") or {}), **docker_cfg}
+        dk = dict(docker_cfg)
+        if gcs_sa_key:
+            dk["gcs_sa_key"] = gcs_sa_key
         provider_specs["docker"] = ProviderSpec(kind="docker", config=dk)
 
     return EnvironmentSpec(
@@ -500,7 +521,7 @@ def _validate_provider_required(provider: str, cfg: dict[str, Any], path: str = 
             if not cfg.get(k):
                 raise KeyError(
                     f"environment provider=gcloud missing required field `{k}`{where} "
-                    f"(set it under `providers.gcloud`)"
+                    f"(set it on each gcloud snapshot's `gcloud:` block)"
                 )
     elif provider == "static":
         if not cfg.get("endpoint"):

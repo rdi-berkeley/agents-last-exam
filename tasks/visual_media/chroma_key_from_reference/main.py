@@ -25,9 +25,6 @@ logger = logging.getLogger(__name__)
 THIS_DIR = Path(__file__).resolve().parent
 REMOTE_HARD_EVAL_SCRIPT = THIS_DIR / "scripts" / "remote_hard_eval.py"
 
-REMOTE_DESKTOP_ROOT = (
-    os.environ.get("SFX_REMOTE_ROOT_DIR") or os.environ.get("MG_REMOTE_ROOT_DIR") or r"E:\agenthle"
-)
 REMOTE_TEMP_ROOT = os.environ.get(
     "CHROMA_REMOTE_EVAL_ROOT",
     r"C:\Users\User\AppData\Local\Temp\agenthle_eval\chroma",
@@ -105,7 +102,6 @@ VARIANT_MAP = {spec.task_tag: spec for spec in VARIANTS}
 
 @dataclass
 class ChromaTaskConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = REMOTE_DESKTOP_ROOT
     DOMAIN_NAME: str = "visual_media"
 
     TASK_NAME: str = "chroma_key_from_reference"
@@ -227,11 +223,11 @@ async def _run_remote_hard_eval(
     output_video = task_cfg.metadata["output_video"]
     reference_video = eval_cfg.remote_reference_video
     input_video = task_cfg.metadata["input_video"]
-    if not await session.exists(output_video):
+    if not (await session.file_exists(output_video) or await session.directory_exists(output_video)):
         return 0.0, [], [], {"reason": "missing_output_video"}
-    if not await session.exists(reference_video):
+    if not (await session.file_exists(reference_video) or await session.directory_exists(reference_video)):
         return 0.0, [], [], {"reason": "missing_reference_video"}
-    if not await session.exists(input_video):
+    if not (await session.file_exists(input_video) or await session.directory_exists(input_video)):
         return 0.0, [], [], {"reason": "missing_input_video"}
 
     remote_breakpoint_path = eval_cfg.remote_breakpoint_json
@@ -242,12 +238,12 @@ async def _run_remote_hard_eval(
     remote_report_path = remote_child(remote_eval_dir, "hard_eval_report.json")
     remote_frames_dir = remote_child(remote_eval_dir, "frames")
 
-    await session.makedirs(remote_eval_dir)
-    await session.makedirs(remote_frames_dir)
+    await session.interface.create_dir(remote_eval_dir)
+    await session.interface.create_dir(remote_frames_dir)
     await session.write_file(
         remote_script_path, REMOTE_HARD_EVAL_SCRIPT.read_text(encoding="utf-8")
     )
-    if not await session.exists(remote_breakpoint_path):
+    if not (await session.file_exists(remote_breakpoint_path) or await session.directory_exists(remote_breakpoint_path)):
         return 0.0, [], [], {"reason": "missing_breakpoint_json", "path": remote_breakpoint_path}
 
     argv = " ".join(

@@ -1,0 +1,27 @@
+# =============================================================================
+# dummy_exp.yaml — run the no-LLM dummy smoke agent over all 147 tasks.
+#
+#   uv run python -m ale_run run dummy_exp.yaml --dry-run   # parse only
+#   uv run python -m ale_run run dummy_exp.yaml             # real sweep
+#
+# The dummy agent spends no model tokens: per task it scans the prompt for
+# input/output paths, verifies inputs exist on the eval VM, and writes a
+# dummy.json into the output dir. Use it to validate orchestration, sandbox
+# provisioning, task-data staging and artifact pull end-to-end.
+# =============================================================================
+
+name: dummy_smoke
+
+secret_file: secret/.env
+
+agents:
+  - configs/agents/dummy.yaml
+environment: configs/environments/environment_dummy_docker.yaml
+
+tasks: selected_tasks/full.txt
+
+output:
+  root: .logs/
+# Bump once the pipeline looks healthy; start at 1 to watch the first units.
+concurrency: 30
+cleanup_mode: delete

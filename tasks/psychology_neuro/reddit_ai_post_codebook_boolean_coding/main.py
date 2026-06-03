@@ -2,7 +2,6 @@
 
 import json
 import logging
-import os
 from dataclasses import dataclass
 from pathlib import PureWindowsPath
 
@@ -29,7 +28,6 @@ def _is_runtime_output_dir(path: str) -> bool:
 
 @dataclass
 class RedditAIPostCodebookConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = os.environ.get("REMOTE_ROOT_DIR", r"E:\agenthle")
     DOMAIN_NAME: str = "psychology_neuro"
     TASK_NAME: str = "reddit_ai_post_codebook_boolean_coding"
     VARIANT_NAME: str = "base"
@@ -138,10 +136,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
 
     try:
-        if not await session.exists(meta["output_workbook"]):
+        if not (await session.file_exists(meta["output_workbook"]) or await session.directory_exists(meta["output_workbook"])):
             logger.warning("Missing output workbook: %s", meta["output_workbook"])
             return [0.0]
-        if not await session.exists(meta["reference_workbook"]):
+        if not (await session.file_exists(meta["reference_workbook"]) or await session.directory_exists(meta["reference_workbook"])):
             logger.warning("Missing hidden reference workbook: %s", meta["reference_workbook"])
             return [0.0]
 

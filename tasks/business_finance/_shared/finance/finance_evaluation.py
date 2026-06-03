@@ -123,10 +123,10 @@ async def verify_metrics_table_remote(session, output_dir: str, reference_dir: s
     output_path = win_join(output_dir, METRICS_OUTPUT_FILENAME)
     reference_path = win_join(reference_dir, METRICS_REFERENCE_FILENAME)
 
-    if not await session.exists(output_path):
+    if not (await session.file_exists(output_path) or await session.directory_exists(output_path)):
         logger.warning("finance eval missing output workbook: %s", output_path)
         return 0.0
-    if not await session.exists(reference_path):
+    if not (await session.file_exists(reference_path) or await session.directory_exists(reference_path)):
         logger.warning("finance eval missing reference workbook: %s", reference_path)
         return 0.0
 
@@ -270,7 +270,7 @@ $sw.Stop()
 """
 
     try:
-        await session.makedirs(eval_tmp_dir)
+        await session.interface.create_dir(eval_tmp_dir)
         await session.write_file(ps1_path, ps1)
         result = await session.run_command(
             (
@@ -333,7 +333,7 @@ async def verify_dataset_samples_remote(session, output_dir: str, reference_dir:
         logger.warning("failed to load data_samples.json: %s", exc)
         return 0.0
 
-    if not await session.exists(table_path):
+    if not (await session.file_exists(table_path) or await session.directory_exists(table_path)):
         logger.warning("missing output workbook: %s", table_path)
         return 0.0
 

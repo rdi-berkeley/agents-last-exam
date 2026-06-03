@@ -162,14 +162,14 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     output_json = meta["output_json"]
     reference_npy = meta["reference_npy"]
 
-    if not await session.exists(output_npy):
+    if not (await session.file_exists(output_npy) or await session.directory_exists(output_npy)):
         logger.warning("Output npy not found: %s", output_npy)
         return [0.0]
-    if not await session.exists(output_json):
+    if not (await session.file_exists(output_json) or await session.directory_exists(output_json)):
         logger.warning("Output json not found: %s", output_json)
         return [0.0]
 
-    if not await session.exists(reference_npy):
+    if not (await session.file_exists(reference_npy) or await session.directory_exists(reference_npy)):
         raise RuntimeError(
             f"evaluator-controlled reference missing: {reference_npy}"
         )

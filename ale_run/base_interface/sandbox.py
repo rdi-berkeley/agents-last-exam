@@ -517,25 +517,40 @@ def _download_to_local_sync(
         except Exception as e:
             logger.debug("read_text failed for %s: %s", remote_path, e)
         return False
-    # Windows: base64 path
-    escaped = remote_path.replace("'", "''")
-    ps_cmd = (
-        f"$fs=[IO.File]::Open('{escaped}','Open','Read','ReadWrite');"
-        "try{$buf=New-Object byte[] $fs.Length;"
-        "$null=$fs.Read($buf,0,$fs.Length);"
-        "[Convert]::ToBase64String($buf)"
-        "}finally{$fs.Close()}"
-    )
-    cmd = f'powershell -NoProfile -Command "{ps_cmd}"'
-    result = _run_remote_sync(sandbox, cmd, timeout=timeout)
-    if result.returncode != 0:
-        return False
+    # Windows: chunked native read_bytes.
+    # The old path base64-encoded the WHOLE file in one powershell call and
+    # returned it as a single giant stdout over one /cmd RPC. For large outputs
+    # (e.g. a 76 MB GeoPackage → ~101 MB base64 string) that runs far past the
+    # timeout and effectively hangs the unit until the task wall-clock fires.
+    # Use the cua-server's native ``read_bytes`` command (offset/length) and
+    # stream in 1 MB chunks — the same mechanism the cua SDK uses for files
+    # > 5 MB — so each RPC carries a bounded, fast payload.
+    _CHUNK = 1024 * 1024
     try:
-        raw = base64.b64decode(result.stdout.strip())
-        Path(local_path).write_bytes(raw)
+        offset = 0
+        parts: list[bytes] = []
+        while True:
+            data = _post_cmd(
+                sandbox,
+                {"command": "read_bytes",
+                 "params": {"path": remote_path, "offset": offset, "length": _CHUNK}},
+                timeout=timeout,
+            )
+            if data is None:
+                logger.debug("read_bytes transport error for %s at offset %d", remote_path, offset)
+                return False
+            if not data.get("success"):
+                logger.debug("read_bytes failed for %s: %s", remote_path, data.get("error"))
+                return False
+            raw = base64.b64decode(data.get("content_b64", "") or "")
+            parts.append(raw)
+            offset += len(raw)
+            if len(raw) < _CHUNK:
+                break
+        Path(local_path).write_bytes(b"".join(parts))
         return True
     except Exception as e:
-        logger.debug("windows base64 download failed for %s: %s", remote_path, e)
+        logger.debug("windows chunked read_bytes download failed for %s: %s", remote_path, e)
         return False
 
 

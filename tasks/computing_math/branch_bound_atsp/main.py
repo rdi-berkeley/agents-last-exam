@@ -35,7 +35,7 @@ except ModuleNotFoundError:  # pragma: no cover - local import fallback only
     )
 
 from tasks.common_setup import BaseTaskSetup
-from tasks.linux_runtime import DATA_ROOT, LinuxTaskConfig
+from tasks.linux_runtime import LinuxTaskConfig
 
 _setup = BaseTaskSetup()
 
@@ -84,10 +84,6 @@ class BranchBoundATSPConfig(LinuxTaskConfig):
     @property
     def output_dir_name(self) -> str:
         return _normalize_output_dir_name(self.REMOTE_OUTPUT_DIR)
-
-    @property
-    def task_dir(self) -> str:
-        return f"{DATA_ROOT}/{self.DOMAIN_NAME}/{self.TASK_NAME}/{self.VARIANT_NAME}"
 
     @property
     def input_dir(self) -> str:
@@ -202,10 +198,10 @@ async def start(task_cfg, session: cb.DesktopSession):
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    if not await session.exists(meta["output_file"]):
+    if not (await session.file_exists(meta["output_file"]) or await session.directory_exists(meta["output_file"])):
         logger.error("missing results.json at %s", meta["output_file"])
         return [0.0]
-    if not await session.exists(meta["reference_file"]):
+    if not (await session.file_exists(meta["reference_file"]) or await session.directory_exists(meta["reference_file"])):
         raise RuntimeError(f"evaluator-controlled reference missing: {meta['reference_file']}")
 
     submission = json.loads((await session.read_bytes(meta["output_file"])).decode("utf-8-sig"))

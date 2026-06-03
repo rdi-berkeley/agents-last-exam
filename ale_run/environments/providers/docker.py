@@ -21,7 +21,7 @@ import logging
 import random
 import re
 import time
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass
 from typing import Any
 
 from ...base_interface import SandboxSpec, Provider, ReleaseMode, SandboxHandle
@@ -34,33 +34,36 @@ _CUA_READY_TIMEOUT = 120
 _CUA_READY_POLL_INTERVAL = 3
 _CUA_READY_STABLE_SUCCESSES = 2
 
-_DEFAULT_IMAGE = "agentslastexam/ale-kasm:latest"
+_DEFAULT_CONTAINER_REF = "agentslastexam/ale-kasm:latest"  # fallback if an Image has no docker_image
+_CONTAINER_PREFIX = "ale"                                  # container name prefix (not configurable)
 _KASM_ENTRYPOINT = "/dockerstartup/vnc_startup.sh"
 
 
 _GCS_KEY_CONTAINER_PATH = "/etc/agenthle/gcs-reader.json"
+# System-wide boto config so gsutil authenticates regardless of which user the
+# container runs as (kasm-user on ale-kasm, user on ale-ubuntu22-docker, ...).
+# boto reads /etc/boto.cfg before any per-user ~/.boto, so this is user-agnostic.
+_BOTO_CONFIG_CONTAINER_PATH = "/etc/boto.cfg"
 
 
 @dataclass(frozen=True)
 class DockerProviderConfig:
-    """Docker provider config (yaml ``provider.config``).
+    """Docker provider config (the per-snapshot ``docker:`` block).
 
-    image               Docker image to run (default: agentslastexam/ale-kasm:latest)
-    container_prefix    Name prefix for containers
-    extra_env           Extra env vars to inject into containers
-    shm_size            Shared memory size (default: 512m)
-    cpus                CPU limit per container (0 = unlimited)
-    memory              Memory limit per container (e.g. "8g", "" = unlimited)
-    gcs_sa_key          Host path to a GCS service-account JSON key.
-                        When set, copied into each container and gsutil
-                        boto is configured so task_data_source=gs://...
-                        works inside the sandbox.
+    image       Image NAME (registry key, e.g. "ale-kasm"). The container ref to
+                boot + the cua-server port + sandbox paths are read from that
+                Image's registry entry — nothing image-specific is configured here.
+    shm_size    Shared memory size (default: 512m).
+    cpus        CPU limit per container (0 = unlimited).
+    memory      Memory limit per container (e.g. "8g", "" = unlimited).
+    gcs_sa_key  Host path to a GCS service-account JSON key. NOT a provider knob —
+                the loader injects it from the env-yaml top level (it travels with
+                ``task_data_source: gs://…``). When set, it is copied into each
+                container and gsutil/boto configured so gs:// staging works; the
+                key's ``project_id`` also bills requester-pays buckets.
     """
 
-    image: str = _DEFAULT_IMAGE
-    image_family: str = "ale-kasm"
-    container_prefix: str = "ale"
-    extra_env: dict[str, str] = dataclass_field(default_factory=dict)
+    image: str = "ale-kasm"
     shm_size: str = "512m"
     cpus: float = 0
     memory: str = ""
@@ -73,10 +76,7 @@ def _build_provider_config(raw: dict[str, Any]) -> DockerProviderConfig:
         from pathlib import Path as _P
         gcs_sa = str(_P(gcs_sa).expanduser().resolve())
     return DockerProviderConfig(
-        image=str(raw.get("image") or _DEFAULT_IMAGE),
-        image_family=str(raw.get("image_family") or "ale-kasm"),
-        container_prefix=str(raw.get("container_prefix") or "ale"),
-        extra_env=dict(raw.get("extra_env") or {}),
+        image=str(raw.get("image") or "ale-kasm"),
         shm_size=str(raw.get("shm_size") or "512m"),
         cpus=float(raw.get("cpus") or 0),
         memory=str(raw.get("memory") or ""),
@@ -144,6 +144,22 @@ async def _wait_cua_ready(
     )
 
 
+def _sa_key_project_id(host_key_path: str) -> str:
+    """project_id field of a GCS service-account JSON key (``""`` on error).
+
+    Used as the billing/user project for requester-pays buckets: gsutil needs
+    an explicit ``-u <project>`` (no boto-config equivalent works), and the
+    injected SA key already names the project it can bill. Surfaced to
+    data-staging via ``SandboxHandle.metadata["gcs_user_project"]``.
+    """
+    import json as _json
+    from pathlib import Path as _P
+    try:
+        return _json.loads(_P(host_key_path).read_text()).get("project_id", "") or ""
+    except Exception:
+        return ""
+
+
 class DockerProvider(Provider):
     """Provider backed by ``docker run`` / ``docker rm``."""
 
@@ -158,19 +174,19 @@ class DockerProvider(Provider):
 
     async def acquire(self, spec: SandboxSpec) -> SandboxHandle:
         name = _generate_container_name(
-            self._cfg.container_prefix,
+            _CONTAINER_PREFIX,
             snapshot=spec.snapshot,
             task_id=spec.task_id,
             harness=spec.harness,
             model_tag=spec.model_tag,
         )
 
-        # The cua-server's in-container port is image-specific (8000 on
-        # ale-kasm, 5000 on GCE families). Read it from the Image registry
-        # rather than hard-coding, so the published port + handle URL stay
-        # correct for any image family.
+        # Everything image-specific comes from the Image entry named by `image`:
+        # the container ref to boot, the in-container cua-server port (8000 on
+        # ale-kasm, 5000 on the ubuntu22 export), and the sandbox paths.
         from ..images import get as get_image
-        image = get_image(self._cfg.image_family)
+        image = get_image(self._cfg.image)
+        container_ref = image.docker_image or _DEFAULT_CONTAINER_REF
         cua_internal_port = image.cua_server_port
 
         run_args = [
@@ -189,12 +205,10 @@ class DockerProvider(Provider):
             run_args.extend(["--cpus", str(self._cfg.cpus)])
         if self._cfg.memory:
             run_args.extend(["--memory", self._cfg.memory])
-        for k, v in self._cfg.extra_env.items():
-            run_args.extend(["-e", f"{k}={v}"])
-        run_args.append(self._cfg.image)
+        run_args.append(container_ref)
         run_args.append("--wait")
 
-        logger.info("Creating Docker container %s from %s", name, self._cfg.image)
+        logger.info("Creating Docker container %s from %s", name, container_ref)
         rc, stdout, stderr = await _run_docker(*run_args)
         if rc != 0:
             raise RuntimeError(
@@ -219,8 +233,15 @@ class DockerProvider(Provider):
                 f"CUA server at {cua_url} (container {name}) did not become ready"
             )
 
+        gcs_user_project = ""
         if self._cfg.gcs_sa_key:
             await self._inject_gcs_credentials(name, self._cfg.gcs_sa_key)
+            # gs://ale-data-public is requester-pays: gsutil needs an explicit
+            # -u <billing-project>. Derive it from the SA key's own project_id
+            # — same source as the injected identity, so the project we bill
+            # always matches the SA we authenticate as. Surfaced so data-staging
+            # adds the flag (see gsbucket).
+            gcs_user_project = _sa_key_project_id(self._cfg.gcs_sa_key)
 
         return SandboxHandle(
             id=name,
@@ -234,6 +255,7 @@ class DockerProvider(Provider):
                 "vnc_port": vnc_port,
                 "image": self._cfg.image,
                 "snapshot": spec.snapshot,
+                "gcs_user_project": gcs_user_project,
             },
         )
 
@@ -259,18 +281,13 @@ class DockerProvider(Provider):
     @staticmethod
     async def _inject_gcs_credentials(container_name: str, host_key_path: str) -> None:
         """Copy SA key into container and write a boto config for gsutil."""
-        import json as _json
         from pathlib import Path as _P
 
         key_path = _P(host_key_path)
         if not key_path.exists():
             raise FileNotFoundError(f"gcs_sa_key not found: {host_key_path}")
 
-        project_id = ""
-        try:
-            project_id = _json.loads(key_path.read_text()).get("project_id", "")
-        except Exception:
-            pass
+        project_id = _sa_key_project_id(host_key_path)
 
         rc, _, stderr = await _run_docker(
             "exec", "-u", "root", container_name,
@@ -294,10 +311,20 @@ class DockerProvider(Provider):
             "[GSUtil]\n"
             f"default_project_id = {project_id}\n"
         )
-        await _run_docker(
-            "exec", container_name,
-            "bash", "-c", f"cat > /home/kasm-user/.boto << 'BOTOEOF'\n{boto_content}BOTOEOF",
+        # Write a system-wide /etc/boto.cfg (as root) rather than a per-user
+        # ~/.boto: the container user is image-specific (kasm-user, user, ...),
+        # and hardcoding one user's home silently broke gsutil auth on every
+        # other image family. /etc/boto.cfg is read regardless of $HOME.
+        rc, _, stderr = await _run_docker(
+            "exec", "-u", "root", container_name,
+            "bash", "-c",
+            f"cat > {_BOTO_CONFIG_CONTAINER_PATH} << 'BOTOEOF'\n{boto_content}BOTOEOF",
         )
+        if rc != 0:
+            raise RuntimeError(
+                f"Failed to write {_BOTO_CONFIG_CONTAINER_PATH} into "
+                f"{container_name}: {stderr}"
+            )
         logger.info("Injected GCS credentials into %s", container_name)
 
     def open_session(self, sandbox: SandboxHandle) -> Any:

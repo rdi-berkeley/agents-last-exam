@@ -615,11 +615,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         reference_midi_path = meta["reference_midi_path"]
         reference_stems_dir = meta["reference_stems_dir"]
 
-        if not await session.exists(ref_dir):
+        if not (await session.file_exists(ref_dir) or await session.directory_exists(ref_dir)):
             logger.error(f"[{tag}] reference_dir missing: {ref_dir}")
             return [0.0]
 
-        if not await session.exists(output_dir):
+        if not (await session.file_exists(output_dir) or await session.directory_exists(output_dir)):
             logger.warning(f"Output directory not found: {output_dir}")
             return [0.0]
 
@@ -672,7 +672,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             # Gate 3: stems/ directory exists with WAV files
             # -----------------------------------------------------------
             stems_output_dir = os.path.join(output_dir, STEMS_DIR)
-            if not await session.exists(stems_output_dir):
+            if not (await session.file_exists(stems_output_dir) or await session.directory_exists(stems_output_dir)):
                 logger.warning("stems/ directory not found — gate fail")
                 ctx.log_evaluation(
                     identifier="gate_stems",
@@ -738,7 +738,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             # Load reference MIDI (small file, stays local)
             # -----------------------------------------------------------
             ref_midi_bytes = None
-            if await session.exists(reference_midi_path):
+            if (await session.file_exists(reference_midi_path) or await session.directory_exists(reference_midi_path)):
                 ref_midi_bytes = await session.read_bytes(reference_midi_path)
 
             if not ref_midi_bytes:
@@ -748,7 +748,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
             # List reference stems (filenames only — no download)
             ref_stem_files: list[str] = []
-            if await session.exists(reference_stems_dir):
+            if (await session.file_exists(reference_stems_dir) or await session.directory_exists(reference_stems_dir)):
                 ref_dir_list = await session.list_dir(reference_stems_dir)
                 ref_stem_files = [f for f in ref_dir_list if f.lower().endswith(AUDIO_EXTENSIONS)]
 

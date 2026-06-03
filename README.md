@@ -138,7 +138,7 @@ claude_code           demo/hello_win                              0  completed  
 [docs/SETUP_GCP.md](docs/SETUP_GCP.md)); it boots a Windows or Ubuntu
 sandbox with `cua-server` and the agent CLIs pre-installed. Point
 your experiment's `environment:` at a gcloud env config such as
-`configs/environments/gcloud.yaml` (it sets `provider: gcloud`)
+`configs/environments/environment.yaml` (its gcloud snapshots carry your project + creds)
 and fill in your project via its `${env:GCP_PROJECT}` references.
 
 **VMWare** and **Local** providers are not yet implemented (see TODO

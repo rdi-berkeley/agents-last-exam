@@ -41,6 +41,7 @@ _AGENT_FQNS: dict[str, str] = {
     "openhands_cli": "ale_run.agents.openhands_cli.deployer.OpenHandsCliDeployer",
     "hermes": "ale_run.agents.hermes.deployer.HermesDeployer",
     "terminus_2": "ale_run.agents.terminus_2.deployer.Terminus2Deployer",
+    "dummy": "ale_run.agents.dummy.deployer.DummyDeployer",
 }
 
 

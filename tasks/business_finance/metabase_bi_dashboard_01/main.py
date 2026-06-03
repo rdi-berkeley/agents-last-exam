@@ -118,7 +118,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     logger.info("[%s] Starting evaluation", tag)
 
     # Read agent output
-    if not await session.exists(output_file):
+    if not (await session.file_exists(output_file) or await session.directory_exists(output_file)):
         logger.error("[%s] Output file not found: %s", tag, output_file)
         return [0.0]
 

@@ -52,3 +52,6 @@ CLAUDE.md
 # Per-task secret store (real values ignored; .example templates tracked)
 secret/eval_time/gemini.env
 secret/eval_time/openai.env
+
+# Stray cua-bench eval artifacts written to cwd during host-side task eval
+trycua/

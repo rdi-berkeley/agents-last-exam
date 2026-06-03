@@ -37,8 +37,8 @@ agents:
   - configs/agents/openclaw_sonnet_or.yaml         # add more lines to run a matrix
 
 # `environment:` is a single path under configs/environments/. The provider
-# lives inside that file (static_kasm.yaml sets `provider: static`).
-environment: configs/environments/static_kasm.yaml
+# lives inside that file (static_dev.yaml sets `provider: static`).
+environment: configs/environments/static_dev.yaml
 
 tasks: selected_tasks/helloworld.txt
 ```

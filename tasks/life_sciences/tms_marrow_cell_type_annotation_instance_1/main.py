@@ -177,11 +177,11 @@ async def start(task_cfg, session: cb.DesktopSession):
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    if not await session.exists(meta["predictions_path"]):
+    if not (await session.file_exists(meta["predictions_path"]) or await session.directory_exists(meta["predictions_path"])):
         logger.error("agent missing output: %s", meta["predictions_path"])
         return [0.0]
 
-    if not await session.exists(meta["ground_truth_path"]):
+    if not (await session.file_exists(meta["ground_truth_path"]) or await session.directory_exists(meta["ground_truth_path"])):
         raise RuntimeError(
             f"evaluator-controlled reference missing: {meta['ground_truth_path']}"
         )

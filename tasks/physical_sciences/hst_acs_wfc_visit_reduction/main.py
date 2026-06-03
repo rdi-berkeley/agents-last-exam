@@ -182,7 +182,7 @@ async def _pull_tree(session: cb.DesktopSession, remote_root: str) -> dict[str, 
 
 async def _run_candidate(session: cb.DesktopSession, meta: dict[str, Any]) -> str:
     candidate = meta["candidate_script"]
-    if not await session.exists(candidate):
+    if not (await session.file_exists(candidate) or await session.directory_exists(candidate)):
         raise RuntimeError(f"missing required candidate script: {candidate}")
 
     run_dir = f"{EVAL_TMP_DIR}/candidate_run"

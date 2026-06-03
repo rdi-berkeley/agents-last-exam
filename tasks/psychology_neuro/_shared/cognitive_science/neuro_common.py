@@ -10,17 +10,22 @@ from textwrap import dedent
 
 from computer import Computer
 
+from tasks.linux_runtime import LinuxTaskConfig
 
-DOMAIN_NAME = "cognitive_science"
+
+# Default canonical domain for cognitive scenes. Per-scene domain lives on
+# SceneSpec.domain (scene3_skullstrip_qc overrides to health_medicine); this
+# module constant is only the fallback for non-scene paths.
+DOMAIN_NAME = "psychology_neuro"
 VM_PROJECT = "sunblaze-4"
 VM_ZONE = "us-west2-a"
 VM_NAME = "agenthle-ubuntu"
 VM_CATEGORY = "cpu-free"
 VM_TYPE = "agenthle-ubuntu"
 RAW_BUNDLE_ROOT = "/home/user/brain_science/computer_use_benchmark_bundle"
-DATA_ROOT = "/media/user/data/agenthle"
+DATA_ROOT = LinuxTaskConfig.REMOTE_ROOT_DIR
 DESKTOP_ROOT = "/home/user/Desktop"
-BUCKET_ROOT = "gs://agenthle"
+BUCKET_ROOT = "gs://ale-data-all"
 DEFAULT_VARIANT = "base"
 
 
@@ -38,6 +43,10 @@ class SceneSpec:
     required_outputs: tuple[str, ...]
     reference_files: tuple[str, ...]
     evaluation_hint: str
+    # Canonical taxonomy domain this scene is filed under. Most cognitive scenes
+    # live under psychology_neuro; scene3_skullstrip_qc is classified under
+    # health_medicine. Single source of truth for all path resolution below.
+    domain: str = "psychology_neuro"
 
 
 SCENE_SPECS: dict[str, SceneSpec] = {
@@ -108,6 +117,7 @@ SCENE_SPECS: dict[str, SceneSpec] = {
     "scene3_skullstrip_qc": SceneSpec(
         task_name="scene3_skullstrip_qc",
         scene_slug="scene3_skullstrip_qc",
+        domain="health_medicine",
         description_pdf="task3.pdf",
         software_name="3D Slicer",
         software_version="5.0.3",
@@ -241,15 +251,15 @@ def scene_spec(task_name: str) -> SceneSpec:
 
 
 def task_root(task_name: str, variant_name: str = DEFAULT_VARIANT) -> str:
-    return f"{DATA_ROOT}/{DOMAIN_NAME}/{task_name}/{variant_name}"
+    return f"{DATA_ROOT}/{scene_spec(task_name).domain}/{task_name}/{variant_name}"
 
 
 def desktop_root(task_name: str, variant_name: str = DEFAULT_VARIANT) -> str:
-    return f"{DESKTOP_ROOT}/{DOMAIN_NAME}/{task_name}/{variant_name}"
+    return f"{DESKTOP_ROOT}/{scene_spec(task_name).domain}/{task_name}/{variant_name}"
 
 
 def gcs_root(task_name: str, variant_name: str = DEFAULT_VARIANT) -> str:
-    return f"{BUCKET_ROOT}/{DOMAIN_NAME}/{task_name}/{variant_name}"
+    return f"{BUCKET_ROOT}/{scene_spec(task_name).domain}/{task_name}/{variant_name}"
 
 
 async def _run(session, command: str, *, check: bool = True, timeout: float | None = None):

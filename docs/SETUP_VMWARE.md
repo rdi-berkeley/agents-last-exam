@@ -59,7 +59,7 @@ If you bring up a VMware VM by hand today, you can drive it through the
    ```
 3. **Point the experiment at it** with the `static` provider. Copy an
    existing static env config (e.g.
-   [`configs/environments/static_win10.yaml`](../configs/environments/static_win10.yaml))
+   [`configs/environments/static_dev.yaml`](../configs/environments/static_dev.yaml))
    and set its `endpoint:`/`image:` for your VM:
    ```yaml
    # configs/environments/static_myvmware.yaml

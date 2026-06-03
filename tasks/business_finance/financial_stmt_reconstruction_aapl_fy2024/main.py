@@ -35,7 +35,7 @@ except ModuleNotFoundError:  # pragma: no cover - local import fallback only
     )
 
 from tasks.common_setup import BaseTaskSetup
-from tasks.linux_runtime import DATA_ROOT, LinuxTaskConfig
+from tasks.linux_runtime import LinuxTaskConfig
 
 _setup = BaseTaskSetup()
 
@@ -82,10 +82,6 @@ class AAPLBalanceSheetConfig(LinuxTaskConfig):
     @property
     def output_dir_name(self) -> str:
         return _normalize_output_dir_name(self.REMOTE_OUTPUT_DIR)
-
-    @property
-    def task_dir(self) -> str:
-        return f"{DATA_ROOT}/{self.DOMAIN_NAME}/{self.TASK_NAME}/{self.VARIANT_NAME}"
 
     @property
     def input_dir(self) -> str:
@@ -182,13 +178,13 @@ async def start(task_cfg, session: cb.DesktopSession):
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     reference_file = f"{meta['reference_dir']}/aapl_fy2024_balance_sheet_reference.json"
-    if not await session.exists(reference_file):
+    if not (await session.file_exists(reference_file) or await session.directory_exists(reference_file)):
         logger.error("missing evaluator reference file: %s", reference_file)
         return [0.0]
 
     score_script = f"{meta['eval_tmp_dir']}/score_outputs.py"
     try:
-        await session.makedirs(meta["eval_tmp_dir"])
+        await session.interface.create_dir(meta["eval_tmp_dir"])
         await session.write_file(score_script, SCORE_SCRIPT)
         result = await session.run_command(
             f'python "{score_script}" '

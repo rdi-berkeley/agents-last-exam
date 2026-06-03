@@ -164,10 +164,10 @@ async def start(task_cfg, session: cb.DesktopSession):
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    if not await session.exists(meta["output_file"]):
+    if not (await session.file_exists(meta["output_file"]) or await session.directory_exists(meta["output_file"])):
         logger.error("Missing output CSV: %s", meta["output_file"])
         return [0.0]
-    if not await session.exists(meta["reference_file"]):
+    if not (await session.file_exists(meta["reference_file"]) or await session.directory_exists(meta["reference_file"])):
         logger.error("Missing hidden reference CSV: %s", meta["reference_file"])
         return [0.0]
 

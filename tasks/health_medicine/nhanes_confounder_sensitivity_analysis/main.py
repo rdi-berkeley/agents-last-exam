@@ -92,7 +92,6 @@ class NHANESConfounderSensitivityConfig(LinuxTaskConfig):
             TASK_NAME=TASK_NAME,
             VARIANT_NAME=variant_name,
             OS_TYPE="linux",
-            REMOTE_ROOT_DIR=os.environ.get("REMOTE_ROOT_DIR", "/media/user/data/agenthle"),
             REMOTE_OUTPUT_DIR=os.environ.get("REMOTE_OUTPUT_DIR", "output"),
         )
 
@@ -236,7 +235,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["reference_subset_file"],
         meta["reference_summary_file"],
     ]
-    missing = [path for path in required_paths if not await session.exists(path)]
+    missing = [path for path in required_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing:
         logger.error("Missing evaluation paths: %s", missing)
         return [0.0]

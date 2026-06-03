@@ -110,7 +110,7 @@ Do not ask for confirmation. Execute directly.
         return metadata
 
 
-config = TaskConfig(TASK_NAME="WGS_Variant_Calling")
+config = TaskConfig(TASK_NAME="WGS_Variant_Calling", DOMAIN_NAME="life_sciences")
 
 
 @cb.tasks_config(split="train")

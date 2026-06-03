@@ -43,7 +43,7 @@ input / reference / software / output surface in ~250 lines.
 The framework reads `vm.snapshot` to pick the image; everything else
 (network, machine family, fallback zones) comes from the env config your
 experiment points at, e.g.
-[`configs/environments/gcloud.yaml`](../configs/environments/gcloud.yaml).
+[`configs/environments/environment.yaml`](../configs/environments/environment.yaml).
 
 ---
 

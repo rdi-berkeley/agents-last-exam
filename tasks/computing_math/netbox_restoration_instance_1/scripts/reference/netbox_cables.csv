@@ -1,8 +1,0 @@
-ID,Label,Termination A,Termination B,Status,Type
-1,,GigabitEthernet0/0,ge-0/0/0,Connected,CAT6
-2,,ge-0/0/1,Gi1/0/24,Connected,CAT6
-3,,Gi1/0/23,Gi1/0/23,Connected,CAT6
-4,,ge-0/0/0,Gi1/0/22,Connected,CAT6
-5,,eth0,Gi1/0/1,Connected,CAT6
-6,,eth0,Gi1/0/2,Connected,CAT6
-7,,eth0,Gi1/0/3,Connected,CAT6

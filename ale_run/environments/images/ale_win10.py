@@ -14,7 +14,7 @@ IMAGE = Image(
 
     # sandbox-side paths
     work_dir_base=r"C:\Users\User\.ale",
-    task_data_root=r"E:\ale-data",
+    task_data_root=r"E:\agenthle",
     node=r"C:\Users\User\node-v24.12.0-win-x64\node.exe",
     # Image-baked dedicated venv (Python 3.12 + pydantic + requests).
     # Counterpart on linux: ``/opt/ale-run/.venv/bin/python``. Same version.

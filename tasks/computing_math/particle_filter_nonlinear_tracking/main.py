@@ -47,7 +47,7 @@ async def _read_bytes_map(session: cb.DesktopSession, path_map: dict[str, str]) 
     payloads: dict[str, bytes] = {}
     missing: list[str] = []
     for name, path in path_map.items():
-        if not await session.exists(path):
+        if not (await session.file_exists(path) or await session.directory_exists(path)):
             missing.append(name)
             continue
         payloads[name] = await session.read_bytes(path)

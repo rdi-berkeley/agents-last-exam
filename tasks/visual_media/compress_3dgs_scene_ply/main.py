@@ -50,7 +50,6 @@ DOMAIN_NAME = "visual_media"
 TASK_NAME = "compress_3dgs_scene_ply"
 TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
-WINDOWS_REMOTE_ROOT = r"E:\agenthle"
 
 
 def _remote_join(base: str, *parts: str) -> str:
@@ -125,7 +124,6 @@ async def _count_remote_ply_vertices(session: cb.DesktopSession, path: str) -> i
 
 @dataclass
 class Compress3dgsScenePlyConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = os.environ.get("REMOTE_ROOT_DIR", WINDOWS_REMOTE_ROOT)
     DOMAIN_NAME: str = DOMAIN_NAME
     TASK_NAME: str = TASK_NAME
     VARIANT_NAME: str = VARIANT_NAME
@@ -138,7 +136,6 @@ class Compress3dgsScenePlyConfig(GeneralTaskConfig):
             TASK_NAME=TASK_NAME,
             VARIANT_NAME=VARIANT_NAME,
             OS_TYPE="windows",
-            REMOTE_ROOT_DIR=os.environ.get("REMOTE_ROOT_DIR", WINDOWS_REMOTE_ROOT),
             REMOTE_OUTPUT_DIR=remote_output_dir or os.environ.get("REMOTE_OUTPUT_DIR", "output"),
         )
 

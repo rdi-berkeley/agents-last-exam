@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _missing(session: cb.DesktopSession, path: str, *, label: str) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("Missing %s: %s", label, path)
     return True
@@ -223,7 +223,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         ("truth_file", "hidden truth CSV"),
         ("scoring_baseline_file", "scoring baseline JSON"),
     ]:
-        if not await session.exists(meta[key]):
+        if not (await session.file_exists(meta[key]) or await session.directory_exists(meta[key])):
             logger.error("Missing %s at %s", label, meta[key])
             return [0.0]
 

@@ -19,7 +19,7 @@ IMAGE = Image(
 
     # sandbox-side paths
     work_dir_base="/home/kasm-user/.ale",
-    task_data_root="/media/user/data/ale-data",
+    task_data_root="/media/user/data/agenthle",
     node="/usr/bin/node",
     python="/usr/bin/python3",
     mcp_server_dir="/home/kasm-user/cua_mcp_server",
@@ -27,7 +27,9 @@ IMAGE = Image(
     # no GCE machine type — Docker containers are sized by the host
     default_machine_type="",
 
-    # published container image that realizes this family under the docker provider
+    # published container image the docker provider boots. :latest now has
+    # the task eval packages baked into /usr/bin/python3 (scipy/sklearn/skimage/
+    # opencv/h5py/rasterio/netCDF4/pydicom/pymedphys/torch/...).
     docker_image="agentslastexam/ale-kasm:latest",
 
     # cua-computer-server's package default port on this image (vs 5000 on GCE)

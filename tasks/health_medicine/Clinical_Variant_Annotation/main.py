@@ -84,7 +84,7 @@ Rules:
         return metadata
 
 
-config = TaskConfig(TASK_NAME="Clinical_Variant_Annotation")
+config = TaskConfig(TASK_NAME="Clinical_Variant_Annotation", DOMAIN_NAME="health_medicine")
 
 
 @cb.tasks_config(split="train")

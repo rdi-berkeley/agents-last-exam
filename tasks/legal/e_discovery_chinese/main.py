@@ -250,7 +250,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     eval_dir = f"/tmp/agenthle_eval/{meta['task_name']}"
     extract_script = f"{eval_dir}/score_evidence_index.py"
     try:
-        await session.makedirs(eval_dir)
+        await session.interface.create_dir(eval_dir)
         await session.write_file(extract_script, EXTRACT_SCRIPT)
         result = await session.run_command(
             f'python "{extract_script}" --output "{meta["remote_output_dir"]}"'

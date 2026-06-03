@@ -18,7 +18,6 @@ _setup = BaseTaskSetup()
 
 logger = logging.getLogger(__name__)
 
-CANONICAL_REMOTE_ROOT = os.environ.get("REMOTE_ROOT_DIR", r"E:\agenthle")
 REQUIRED_BOX_HEADERS = [
     "case_id",
     "selected_reader",
@@ -47,7 +46,6 @@ def win_join(*parts: str) -> str:
 
 @dataclass
 class TaskConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = CANONICAL_REMOTE_ROOT
     DOMAIN_NAME: str = "health_medicine"
     TASK_NAME: str = "microdicom_nih_cxr_reader_adjudication"
     VARIANT_NAME: str = "base"
@@ -301,7 +299,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         return [0.0]
 
     boxes_ok = False
-    if await session.exists(meta["adjudicated_boxes_path"]):
+    if (await session.file_exists(meta["adjudicated_boxes_path"]) or await session.directory_exists(meta["adjudicated_boxes_path"])):
         try:
             candidate_boxes = await session.read_file(meta["adjudicated_boxes_path"])
             boxes_ok = _boxes_pass(candidate_boxes, reference_boxes)
@@ -311,7 +309,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         logger.warning("Missing required output file: %s", meta["adjudicated_boxes_path"])
 
     log_ok = False
-    if await session.exists(meta["adjudication_log_path"]):
+    if (await session.file_exists(meta["adjudication_log_path"]) or await session.directory_exists(meta["adjudication_log_path"])):
         try:
             candidate_log = await session.read_file(meta["adjudication_log_path"])
             candidate_log_rows = _parse_tsv(candidate_log, REQUIRED_LOG_HEADERS)
@@ -340,7 +338,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         logger.warning("Missing required output file: %s", meta["adjudication_log_path"])
 
     impressions_ok = False
-    if await session.exists(meta["final_impressions_path"]):
+    if (await session.file_exists(meta["final_impressions_path"]) or await session.directory_exists(meta["final_impressions_path"])):
         try:
             candidate_impressions = await session.read_file(meta["final_impressions_path"])
             candidate_impression_rows = _parse_tsv(candidate_impressions, REQUIRED_IMPRESSION_HEADERS)

@@ -223,13 +223,13 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["reference_eligible_file"],
         meta["reference_flagged_file"],
     ]
-    missing = [path for path in required_paths if not await session.exists(path)]
+    missing = [path for path in required_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing:
         logger.error("Missing output or hidden reference for evaluation: %s", missing)
         return [0.0]
 
     try:
-        await session.makedirs(REMOTE_EVAL_TMP_DIR)
+        await session.interface.create_dir(REMOTE_EVAL_TMP_DIR)
         verify_script_path = rf"{REMOTE_EVAL_TMP_DIR}\score_outputs.py"
         await session.write_file(verify_script_path, _read_script("score_outputs.py"))
         command = subprocess.list2cmdline(

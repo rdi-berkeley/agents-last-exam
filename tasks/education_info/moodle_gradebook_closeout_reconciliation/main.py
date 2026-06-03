@@ -45,7 +45,7 @@ DOMAIN_NAME = "education_info"
 TASK_NAME = "moodle_gradebook_closeout_reconciliation"
 TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
-VISIBLE_ROOT = f"/media/user/data/agenthle/{TASK_ID}/{VARIANT_NAME}"
+VISIBLE_ROOT = f"{LinuxTaskConfig.REMOTE_ROOT_DIR}/{TASK_ID}/{VARIANT_NAME}"
 EVAL_TMP_DIR = f"/tmp/agenthle_eval/{TASK_NAME}"
 SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
 ALLOWED_OUTPUT_DIRS = {"output", "output_test_pos", "output_test_neg"}
@@ -99,7 +99,6 @@ class MoodleGradebookCloseoutConfig(LinuxTaskConfig):
             TASK_NAME=TASK_NAME,
             VARIANT_NAME=VARIANT_NAME,
             OS_TYPE="linux",
-            REMOTE_ROOT_DIR=os.environ.get("REMOTE_ROOT_DIR", "/media/user/data/agenthle"),
             REMOTE_OUTPUT_DIR=remote_output_dir or os.environ.get("REMOTE_OUTPUT_DIR", "output"),
         )
 
@@ -267,7 +266,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
 
-    await session.makedirs(meta["eval_tmp_dir"])
+    await session.interface.create_dir(meta["eval_tmp_dir"])
     try:
         tag = meta["output_dir_name"]
         score_script = f'{meta["eval_tmp_dir"]}/score_submission_{tag}.py'

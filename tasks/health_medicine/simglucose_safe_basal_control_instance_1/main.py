@@ -33,7 +33,7 @@ except ModuleNotFoundError:  # pragma: no cover - local fallback only
     )
 
 from tasks.common_setup import BaseTaskSetup
-from tasks.linux_runtime import DATA_ROOT, LinuxTaskConfig
+from tasks.linux_runtime import LinuxTaskConfig
 
 
 _setup = BaseTaskSetup()
@@ -50,7 +50,6 @@ DOMAIN_NAME = "health_medicine"
 TASK_NAME = "simglucose_safe_basal_control_instance_1"
 TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
-LINUX_REMOTE_ROOT = "/media/user/data/agenthle"
 EVAL_TMP_DIR = f"/tmp/agenthle_eval/{TASK_NAME}"
 
 
@@ -124,7 +123,6 @@ class SimGlucoseSafeBasalControlConfig(LinuxTaskConfig):
             TASK_NAME=TASK_NAME,
             VARIANT_NAME=VARIANT_NAME,
             OS_TYPE="linux",
-            REMOTE_ROOT_DIR=os.environ.get("REMOTE_ROOT_DIR", LINUX_REMOTE_ROOT),
             REMOTE_OUTPUT_DIR=os.environ.get("REMOTE_OUTPUT_DIR", "output"),
         )
 
@@ -315,19 +313,19 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     controller_output = meta["controller_output"]
     metadata_output = meta["metadata_output"]
 
-    if not await session.exists(submission_dir):
+    if not (await session.file_exists(submission_dir) or await session.directory_exists(submission_dir)):
         if meta["remote_output_dir"].endswith("/output"):
             logger.info("submission directory not present yet under default output path: %s", submission_dir)
         else:
             logger.error("submission directory missing: %s", submission_dir)
         return [0.0]
-    if not await session.exists(controller_output):
+    if not (await session.file_exists(controller_output) or await session.directory_exists(controller_output)):
         if meta["remote_output_dir"].endswith("/output"):
             logger.info("controller.py not present yet under default output path: %s", controller_output)
         else:
             logger.error("controller.py missing: %s", controller_output)
         return [0.0]
-    if not await session.exists(metadata_output):
+    if not (await session.file_exists(metadata_output) or await session.directory_exists(metadata_output)):
         if meta["remote_output_dir"].endswith("/output"):
             logger.info("metadata.json not present yet under default output path: %s", metadata_output)
         else:

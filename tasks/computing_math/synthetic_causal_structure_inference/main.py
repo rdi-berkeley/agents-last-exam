@@ -33,7 +33,7 @@ OUTPUT_FILENAME = "submission.json"
 
 
 async def _missing(session: cb.DesktopSession, path: str, *, label: str, tag: str) -> bool:
-    if await session.exists(path):
+    if (await session.file_exists(path) or await session.directory_exists(path)):
         return False
     logger.error("[%s] Missing %s: %s", tag, label, path)
     return True

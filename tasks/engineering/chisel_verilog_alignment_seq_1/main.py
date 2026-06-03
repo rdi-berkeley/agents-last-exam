@@ -37,8 +37,6 @@ class ChiselAlignmentConfig(LinuxTaskConfig):
 
     @property
     def output_file(self) -> str:
-        if self.REMOTE_OUTPUT_DIR == "output":
-            return f"{self.workdir}/output/answer.json"
         return f"{self.remote_output_dir}/answer.json"
 
     @property
@@ -79,13 +77,13 @@ The VM has no internet access during solve time.
 
 ## Rules
 
-1. Do NOT edit any file under `src/`, `generated/`, or `TASK.md`. Writes are only allowed under `output/`.
+1. Do NOT edit any file under `src/`, `generated/`, or `TASK.md`. Writes are only allowed under the task output directory.
 2. Focus on the sub-expression `stateReg == 2'h2` at line 21, columns 23-39 of optimized.sv.
 3. Approach is unconstrained (formal verification, simulation, semantic analysis — whatever works).
 
 ## Output
 
-Write a single file: `{self.workdir}/output/answer.json`
+Write a single file: `{self.remote_output_dir}/answer.json`
 
 ```json
 {{

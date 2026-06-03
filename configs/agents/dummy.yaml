@@ -1,0 +1,13 @@
+# Agent preset: dummy — no-LLM pipeline smoke agent.
+# Scans each task prompt for input/output paths, checks inputs exist on the
+# eval VM, writes dummy.json into the output dir. Spends no model tokens.
+#
+# Referenced from an experiment as:  agents: [ configs/agents/dummy.yaml ]
+
+harness: dummy
+executor: local
+config:
+  # Record missing inputs but still complete the run, so one broken task
+  # doesn't mask the rest of the sweep. Flip to true to hard-fail on a
+  # missing input.
+  fail_on_missing_input: false

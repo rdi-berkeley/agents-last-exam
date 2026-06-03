@@ -223,7 +223,7 @@ gcloud compute instances delete <name> --zone=<zone>
 
 The gcloud env config lists the fallback zones under its `snapshots:`
 block (see
-[`configs/environments/gcloud.yaml`](../configs/environments/gcloud.yaml)).
+[`configs/environments/environment.yaml`](../configs/environments/environment.yaml)).
 If you set `GCP_REGION` to something else in Step 3, also edit the
 `zones:` list in that env config (or copy it to a new
 `configs/environments/*.yaml` and point your experiment's `environment:`
@@ -253,7 +253,7 @@ alongside `provider` + `task_data_source`). Step 3 already created the bucket
 and granted the runner service account access:
 
 ```yaml
-# in configs/environments/gcloud.yaml
+# in configs/environments/environment.yaml
 output_path: gs://<GCP_PROJECT>-ale-results    # null = skip, "local" = pull to run dir
 ```
 

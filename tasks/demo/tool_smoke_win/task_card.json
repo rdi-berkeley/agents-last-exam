@@ -10,7 +10,7 @@
     "Write tool_report.json to the output directory with tools_tested, tools_passed, tools_failed, tools_untested, total, tested, passed, failed, untested fields"
   ],
   "vm": {
-    "snapshot": "cpu-free-win",
+    "snapshot": "cpu-free",
     "vcpus": 4,
     "memory_gb": 16,
     "disk_gb": 200,

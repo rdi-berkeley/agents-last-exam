@@ -140,11 +140,11 @@ async def start(task_cfg, session: cb.DesktopSession):
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     reference_results = f'{meta["reference_dir"]}/results.json'
-    if not await session.exists(reference_results):
+    if not (await session.file_exists(reference_results) or await session.directory_exists(reference_results)):
         logger.error("reference results missing on VM: %s", reference_results)
         return [0.0]
 
-    await session.makedirs(meta["eval_tmp_dir"])
+    await session.interface.create_dir(meta["eval_tmp_dir"])
     verifier_path = f'{meta["eval_tmp_dir"]}/score_outputs.py'
     await session.write_file(verifier_path, _read_script("score_outputs.py"))
 

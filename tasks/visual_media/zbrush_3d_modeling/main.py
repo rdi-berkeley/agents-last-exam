@@ -137,7 +137,7 @@ def _hard_score_from_report(report: dict[str, Any]) -> float:
 
 
 async def _upload_remote_eval_bundle(session: cb.DesktopSession, remote_scripts_dir: str) -> None:
-    await session.makedirs(remote_scripts_dir)
+    await session.interface.create_dir(remote_scripts_dir)
     for name in REMOTE_SCRIPT_FILES:
         local_path = SCRIPTS_DIR / name
         await session.write_file(_remote_child(remote_scripts_dir, name), local_path.read_text(encoding="utf-8"))
@@ -175,7 +175,7 @@ async def _wait_for_remote_file(
     deadline = asyncio.get_event_loop().time() + timeout_sec
     while asyncio.get_event_loop().time() < deadline:
         try:
-            if await session.exists(path):
+            if (await session.file_exists(path) or await session.directory_exists(path)):
                 return True
         except Exception:
             pass
@@ -329,9 +329,8 @@ def _local_soft_score(image_pairs: list[dict[str, Any]], *, report_path: Path | 
 
 @dataclass
 class ZBrushTaskConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = field(init=False, default=os.environ.get("REMOTE_ROOT_DIR", r"E:\agenthle"))
     spec: ProjectSpec = field(default=None)
-    DOMAIN_NAME: str = field(init=False, default="game")
+    DOMAIN_NAME: str = field(init=False, default="visual_media")
 
     TASK_NAME: str = field(init=False, default="zbrush_3d_modeling")
     VARIANT_NAME: str = field(init=False, default="")
@@ -453,7 +452,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     remote_scripts_dir = _remote_child(remote_job_root, "scripts")
     remote_eval_output_dir = _remote_child(remote_job_root, "results")
 
-    await session.makedirs(remote_eval_output_dir)
+    await session.interface.create_dir(remote_eval_output_dir)
     await _upload_remote_eval_bundle(session, remote_scripts_dir)
     await _launch_remote_python_job(
         session,
@@ -491,7 +490,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     soft_score = 0.0
     try:
         candidate_manifest_path = _remote_child(remote_eval_output_dir, "candidate_renders", "candidate_manifest.json")
-        if await session.exists(candidate_manifest_path):
+        if (await session.file_exists(candidate_manifest_path) or await session.directory_exists(candidate_manifest_path)):
             candidate_manifest = json.loads((await session.read_bytes(candidate_manifest_path)).decode("utf-8"))
             sampled_parts = await _sample_reference_views(
                 session,

@@ -10,10 +10,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from tasks.linux_runtime import LinuxTaskConfig
+
 logger = logging.getLogger(__name__)
 
-MATERIALS_DOMAIN = "materials_science"
-MATERIALS_DATA_ROOT = f"/media/user/data/agenthle/{MATERIALS_DOMAIN}"
+MATERIALS_DOMAIN = "physical_sciences"
+MATERIALS_DATA_ROOT = f"{LinuxTaskConfig.REMOTE_ROOT_DIR}/{MATERIALS_DOMAIN}"
 
 
 @dataclass(frozen=True)

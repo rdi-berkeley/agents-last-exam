@@ -16,7 +16,7 @@ IMAGE = Image(
 
     # sandbox-side paths
     work_dir_base="/home/user/.ale",
-    task_data_root="/media/user/data/ale-data",
+    task_data_root="/media/user/data/agenthle",
     node="/usr/local/bin/node",
     # Dedicated venv (Python 3.12 + framework deps like pydantic).
     # Must be user-writable so install_agent_deps() can add agent-

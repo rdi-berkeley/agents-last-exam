@@ -317,10 +317,10 @@ class _OdooHardSetup(BaseTaskSetup):
         pg_password = task_cfg.metadata.get("pg_password", config.DEFAULT_PG_PASSWORD)
 
         try:
-            await session.remove_file(out_dir)
+            await session.interface.delete_dir(out_dir)
         except Exception:
             logger.warning(f"Failed to remove existing output directory '{out_dir}', it may not exist or be a file. Attempting to continue.")
-        await session.makedirs(out_dir)
+        await session.interface.create_dir(out_dir)
 
         try:
             info = await _reset_db(

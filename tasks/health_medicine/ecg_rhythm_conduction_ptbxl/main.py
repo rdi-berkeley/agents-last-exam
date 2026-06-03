@@ -197,10 +197,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     reference_file = meta["reference_file"]
     threshold = float(meta["score_threshold"])
 
-    if not await session.exists(output_file):
+    if not (await session.file_exists(output_file) or await session.directory_exists(output_file)):
         logger.error("[%s] Missing output file: %s", tag, output_file)
         return [0.0]
-    if not await session.exists(reference_file):
+    if not (await session.file_exists(reference_file) or await session.directory_exists(reference_file)):
         logger.error("[%s] Missing reference file: %s", tag, reference_file)
         return [0.0]
 

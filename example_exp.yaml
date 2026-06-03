@@ -26,7 +26,7 @@ secret_file: secret/.env                          # KEY=value pairs
 
 agents:
   - configs/agents/cc_sonnet_or_t3.yaml           # add more lines to run a matrix
-environment: configs/environments/gcloud.yaml
+environment: configs/environments/environment.yaml
 
 tasks: selected_tasks/helloworld.txt
 
@@ -41,6 +41,6 @@ cleanup_mode: delete                              # delete | stop | keep
 
 # Appended verbatim (as its own paragraph) to EVERY task's prompt before it
 # reaches the agent. Empty/unset ⇒ no change. Use a `|` block for multi-line.
-prompt_suffix: |
-  Complete the task fully autonomously. You have no opportunity to interact with the user; the user will directly evaluate the output you produce.
-  Do not get stuck in a failure loop — if you conclude the task genuinely cannot be completed (for example, the input data is incomplete, the task itself is unreasonable, or the environment has an anomaly you cannot resolve), write an `infeasible.md` to the output directory explaining the specific reason in detail.
+# prompt_suffix: |
+#   Complete the task fully autonomously. You have no opportunity to interact with the user; the user will directly evaluate the output you produce.
+#   Do not get stuck in a failure loop — if you conclude the task genuinely cannot be completed (for example, the input data is incomplete, the task itself is unreasonable, or the environment has an anomaly you cannot resolve), write an `infeasible.md` to the output directory explaining the specific reason in detail.

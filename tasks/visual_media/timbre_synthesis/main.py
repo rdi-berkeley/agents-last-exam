@@ -189,7 +189,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         output_dir = meta["remote_output_dir"]
         ground_truth_path = meta["ground_truth_path"]
 
-        if not await session.exists(output_dir):
+        if not (await session.file_exists(output_dir) or await session.directory_exists(output_dir)):
             logger.warning(f"Output directory not found: {output_dir}")
             return [0.0]
 
@@ -204,7 +204,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             # Gate 1: rendered_chords.wav exists
             # ---------------------------------------------------------------
             filepath = os.path.join(output_dir, RENDERED_CHORDS)
-            if not await session.exists(filepath):
+            if not (await session.file_exists(filepath) or await session.directory_exists(filepath)):
                 logger.warning(f"{RENDERED_CHORDS} not found — gate fail")
                 ctx.log_evaluation(
                     identifier="gate_audio",
@@ -218,7 +218,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             # Gate 2: screenshot exists and shows synthesizer UI
             # ---------------------------------------------------------------
             screenshot_path = os.path.join(output_dir, OVERVIEW_SCREENSHOT)
-            if not await session.exists(screenshot_path):
+            if not (await session.file_exists(screenshot_path) or await session.directory_exists(screenshot_path)):
                 logger.warning(f"{OVERVIEW_SCREENSHOT} not found — gate fail")
                 ctx.log_evaluation(
                     identifier="gate_screenshot",
@@ -258,7 +258,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             # ---------------------------------------------------------------
             # Gate: ground truth exists
             # ---------------------------------------------------------------
-            if not await session.exists(ground_truth_path):
+            if not (await session.file_exists(ground_truth_path) or await session.directory_exists(ground_truth_path)):
                 logger.error("Ground truth not found")
                 ctx.finalize()
                 return [0.0]

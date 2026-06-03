@@ -41,7 +41,6 @@ def _extract_json_payload(stdout: str) -> dict[str, Any]:
 
 @dataclass
 class Qm9Mmff94ForceFieldSurveyConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = r"E:\agenthle"
     DOMAIN_NAME: str = "physical_sciences"
     TASK_NAME: str = "qm9_mmff94_forcefield_survey_1"
     VARIANT_NAME: str = ""
@@ -180,14 +179,14 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     reference_dir = meta["reference_dir"]
     eval_tmp_dir = meta["eval_tmp_dir"]
 
-    if not await session.exists(reference_dir):
+    if not (await session.file_exists(reference_dir) or await session.directory_exists(reference_dir)):
         logger.error("[%s] Missing reference dir: %s", tag, reference_dir)
         return [0.0]
-    if not await session.exists(agent_output_dir):
+    if not (await session.file_exists(agent_output_dir) or await session.directory_exists(agent_output_dir)):
         logger.error("[%s] Missing agent output dir: %s", tag, agent_output_dir)
         return [0.0]
 
-    await session.makedirs(eval_tmp_dir)
+    await session.interface.create_dir(eval_tmp_dir)
     verifier_path = rf"{eval_tmp_dir}\verify.py"
     await session.write_file(verifier_path, _read_script("verify.py"))
 

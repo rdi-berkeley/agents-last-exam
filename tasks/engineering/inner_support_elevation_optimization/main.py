@@ -20,7 +20,6 @@ TASK_NAME = "inner_support_elevation_optimization"
 TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
 
-REMOTE_ROOT_DIR = r"E:\agenthle"
 PLAXIS_INPUT_EXE = r"C:\Program Files\Seequent\PLAXIS 3D 2023.2\Plaxis3DInput.exe"
 PLAXIS_OUTPUT_EXE = r"C:\Program Files\Seequent\PLAXIS 3D 2023.2\Plaxis3DOutput.exe"
 PLAXIS_OUTPUT_VIEWER_EXE = r"C:\Program Files\Seequent\PLAXIS 3D Output Viewer 2023.2\Plaxis3DOutputViewer.exe"
@@ -129,7 +128,6 @@ def _parse_case_summary(csv_text: str) -> list[dict[str, str]]:
 
 @dataclass
 class InnerSupportElevationConfig(GeneralTaskConfig):
-    REMOTE_ROOT_DIR: str = REMOTE_ROOT_DIR
     DOMAIN_NAME: str = DOMAIN_NAME
     TASK_NAME: str = TASK_NAME
     VARIANT_NAME: str = VARIANT_NAME
@@ -315,20 +313,20 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     ground_truth_file = meta["ground_truth_file"]
     verification_contract_file = meta["verification_contract_file"]
 
-    if not await session.exists(ground_truth_file):
+    if not (await session.file_exists(ground_truth_file) or await session.directory_exists(ground_truth_file)):
         logger.error("missing reference ground truth: %s", ground_truth_file)
         return [0.0]
-    if not await session.exists(verification_contract_file):
+    if not (await session.file_exists(verification_contract_file) or await session.directory_exists(verification_contract_file)):
         logger.error("missing verification contract: %s", verification_contract_file)
         return [0.0]
-    if not await session.exists(answer_file):
+    if not (await session.file_exists(answer_file) or await session.directory_exists(answer_file)):
         logger.error("missing answer.json: %s", answer_file)
         return [0.0]
 
     required_named_outputs = [case_summary_file, memo_file] + [
         _win_join(output_dir, name) for name in REQUIRED_SCREENSHOT_FILES
     ]
-    missing_named_outputs = [path for path in required_named_outputs if not await session.exists(path)]
+    missing_named_outputs = [path for path in required_named_outputs if not (await session.file_exists(path) or await session.directory_exists(path))]
     project_files = await _list_project_files(session, output_dir)
     if missing_named_outputs or not project_files:
         logger.error(
