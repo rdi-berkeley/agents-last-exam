@@ -10,9 +10,9 @@ truncation, automatic compaction, durable memory, and subagent delegation.
 
 It is ALE's first **native** deployer: the agent runs in-process in the ALE
 host's Python interpreter (no subprocess, no container, not inside the VM),
-driving the test VM through a pluggable transport (see
-[VM transport](#vm-transport)). Per-turn transcripts, `state.json`, and raw API
-result dumps are written to a host tempdir and mirrored back into the run
+reaching the test VM over MCP bridge servers or a direct CUA Computer SDK session
+(see [VM transport](#vm-transport)). Per-turn transcripts, `state.json`, and raw
+API result dumps are written to a host tempdir and mirrored back into the run
 directory, then translated into an ALE `Trajectory`.
 
 ## What's inside
