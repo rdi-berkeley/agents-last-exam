@@ -27,6 +27,31 @@ _CUA_COMMAND_BASE_DELAY_S = 5
 _CUA_SESSION_ATTEMPTS = 4
 _CUA_SESSION_CLOSE_TIMEOUT_S = 10
 
+# Detached run_command (detach + poll). A task's evaluate() runs its scorer
+# via one ``session.run_command`` that holds a SINGLE cua HTTP connection open
+# for the whole command — for a long eval (minutes→tens of minutes) that
+# connection eventually gets dropped by the network and the result (which lives
+# only in that stream, the server doesn't persist it) is lost, hanging the unit.
+# Instead we run the command in the background ON the VM, redirect
+# stdout/stderr/exit-code to files + a done-marker, then poll the marker with
+# SHORT calls and read the result files. Each call is brief (drop-resistant) and
+# the result survives connection blips because it lives on disk.
+# Poll backs off from quick early checks (so fast scorers stay fast) up to a
+# 30s ceiling for long-running ones.
+_DETACHED_POLL_BACKOFF_S = (1, 1, 2, 3, 5, 10, 15)
+_DETACHED_POLL_MAX_S = 30
+# Overall ceiling for the detached command. Kept just under the eval phase
+# wall-clock (lifecycle._EVAL_TIMEOUT_S = 3600) so the poll loop surfaces a
+# clean error before the phase-level wait_for fires.
+_DETACHED_TIMEOUT_S = 3300
+
+
+class _DetachedSetupError(Exception):
+    """Raised when the detached-run scaffolding (mkdir/write/launch) fails —
+    signals the caller it is safe to fall back to a direct run_command (the
+    command has NOT started yet). Failures AFTER launch raise their own
+    exceptions and must NOT trigger a re-run."""
+
 _TRANSIENT_ERROR_SNIPPETS = (
     "Request failed",
     "Server returned malformed response",
@@ -60,8 +85,96 @@ async def _sleep_before_retry(attempt: int) -> None:
     await asyncio.sleep(delay)
 
 
-def install_resilient_cua_commands(interface: Any) -> None:
-    """Wrap the interface's _send_command with extra retries for transient errors.
+async def _detached_run_command(
+    interface: Any, raw_run_command: Any, command: str, *, os_type: str,
+) -> Any:
+    """Run ``command`` on the VM in the background, polling a done-marker, and
+    return a ``CommandResult`` read from on-disk stdout/stderr/exit-code files.
+
+    All VM I/O here uses short, drop-resistant calls (``raw_run_command`` is the
+    UN-wrapped interface.run_command captured before wrapping, so no recursion).
+    The command is written to a script file (not interpolated into a shell line)
+    so arbitrary quoting in ``command`` is preserved exactly.
+    """
+    from computer.interface.models import CommandResult
+    import uuid
+
+    is_win = os_type != "linux"
+    jid = "ale_job_" + uuid.uuid4().hex[:12]
+    if is_win:
+        jdir = rf"C:\Windows\Temp\{jid}"
+        cmd_f, wrap_f = rf"{jdir}\cmd.bat", rf"{jdir}\wrap.bat"
+        out_f, err_f, rc_f, done_f = (rf"{jdir}\out", rf"{jdir}\err", rf"{jdir}\rc", rf"{jdir}\done")
+        mkdir = f'cmd /c if not exist "{jdir}" mkdir "{jdir}"'
+        wrap = (
+            "@echo off\r\n"
+            f'call "{cmd_f}" > "{out_f}" 2> "{err_f}"\r\n'
+            f'echo %ERRORLEVEL%> "{rc_f}"\r\n'
+            f'echo done> "{done_f}"\r\n'
+        )
+        launch = f'cmd /c start "" /b cmd /c "{wrap_f}"'
+        done_check = f'cmd /c if exist "{done_f}" (echo __DONE__) else (echo __WAIT__)'
+        cleanup = f'cmd /c rmdir /s /q "{jdir}"'
+        cmd_body = command + "\r\n"
+    else:
+        jdir = f"/tmp/{jid}"
+        cmd_f, wrap_f = f"{jdir}/cmd.sh", f"{jdir}/wrap.sh"
+        out_f, err_f, rc_f, done_f = (f"{jdir}/out", f"{jdir}/err", f"{jdir}/rc", f"{jdir}/done")
+        mkdir = f"mkdir -p '{jdir}'"
+        wrap = (
+            "#!/bin/bash\n"
+            f"bash '{cmd_f}' > '{out_f}' 2> '{err_f}'\n"
+            f"echo $? > '{rc_f}'\n"
+            f"touch '{done_f}'\n"
+        )
+        launch = f"nohup bash '{wrap_f}' >/dev/null 2>&1 &"
+        done_check = f"[ -f '{done_f}' ] && echo __DONE__ || echo __WAIT__"
+        cleanup = f"rm -rf '{jdir}'"
+        cmd_body = command + "\n"
+
+    # --- setup (mkdir + stage scripts + launch). Failure here is safe to fall
+    #     back from: the command has NOT started. ---
+    try:
+        await raw_run_command(mkdir)
+        await interface.write_text(cmd_f, cmd_body)
+        await interface.write_text(wrap_f, wrap)
+        await raw_run_command(launch)
+    except Exception as e:  # noqa: BLE001
+        raise _DetachedSetupError(str(e)) from e
+
+    # --- collect: poll the done-marker (short, drop-resistant calls), backing
+    #     off to a 30s ceiling, then read the on-disk result. Failures here
+    #     propagate (the command already ran — never re-run it). ---
+    deadline = asyncio.get_event_loop().time() + _DETACHED_TIMEOUT_S
+    poll = 0
+    while True:
+        r = await raw_run_command(done_check)
+        if "__DONE__" in (getattr(r, "stdout", "") or ""):
+            break
+        if asyncio.get_event_loop().time() >= deadline:
+            raise TimeoutError(f"detached command exceeded {_DETACHED_TIMEOUT_S}s")
+        wait = _DETACHED_POLL_BACKOFF_S[poll] if poll < len(_DETACHED_POLL_BACKOFF_S) else _DETACHED_POLL_MAX_S
+        poll += 1
+        await asyncio.sleep(wait)
+
+    out = (await interface.read_bytes(out_f)).decode("utf-8", errors="replace")
+    err = (await interface.read_bytes(err_f)).decode("utf-8", errors="replace")
+    rc_txt = (await interface.read_bytes(rc_f)).decode("utf-8", errors="replace").strip()
+    try:
+        rc = int(rc_txt)
+    except (ValueError, TypeError):
+        logger.warning("detached run_command: unparseable exit code %r; defaulting 0", rc_txt)
+        rc = 0
+    try:
+        await raw_run_command(cleanup)
+    except Exception:  # noqa: BLE001 -- cleanup is best-effort
+        pass
+    return CommandResult(stdout=out, stderr=err, returncode=rc)
+
+
+def install_resilient_cua_commands(interface: Any, *, os_type: str = "linux") -> None:
+    """Wrap the interface's _send_command with extra retries for transient errors,
+    and make ``run_command`` robust for long evals via detach + poll.
 
     Idempotent — sets ``interface._ale_resilient_commands = True`` after the
     first install.
@@ -111,6 +224,29 @@ def install_resilient_cua_commands(interface: Any) -> None:
         )
 
     interface._send_command = resilient_send_command
+
+    # Robust run_command: detach + poll so a long eval's result survives a
+    # dropped long-lived connection. On ANY setup failure we fall back to the
+    # original run_command — never worse than today's behaviour.
+    raw_run_command = interface.run_command
+
+    async def resilient_run_command(command: str):
+        try:
+            return await _detached_run_command(
+                interface, raw_run_command, command, os_type=os_type,
+            )
+        except _DetachedSetupError as e:
+            # Scaffolding failed before the command started → safe to run it
+            # directly (never worse than the old single-connection path).
+            logger.warning(
+                "detached run_command setup failed (%s); falling back to direct run", e,
+            )
+            return await raw_run_command(command)
+        # Any other error (poll timeout, result-read failure, cancellation)
+        # propagates: the command has already run on the VM, so re-running it
+        # would be wrong (and could re-run a multi-minute eval).
+
+    interface.run_command = resilient_run_command
     interface._ale_resilient_commands = True
 
 
@@ -148,7 +284,8 @@ class TaskDriver:
 
     def _install_resilient(self, session: RemoteDesktopSession) -> None:
         try:
-            install_resilient_cua_commands(session.computer.interface)
+            os_type = getattr(session, "_os_type", None) or "linux"
+            install_resilient_cua_commands(session.computer.interface, os_type=os_type)
         except Exception as e:
             logger.debug("install_resilient_cua_commands skipped: %s", e)
 
