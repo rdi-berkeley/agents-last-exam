@@ -176,6 +176,8 @@ class AleClawDeployer(BaseAgentDeployer):
         mcp_runtime = None
         if cfg.substrate_transport == "mcp":
             from ale_run.agents._bootstrap import (
+                cua_bridge_env,
+                ensure_cua_mcp_server_at,
                 ensure_node_npm,
                 ensure_vm_mcp_server,
                 vm_bridge_env,
@@ -185,14 +187,25 @@ class AleClawDeployer(BaseAgentDeployer):
             from .harness.tools.mcp_runtime import MCPRuntime
 
             node_path, _ = await ensure_node_npm()
+            servers: dict[str, Any] = {}
             vm_bridge_dir = await ensure_vm_mcp_server(str(work_dir / "mcp" / "vm"))
-            vm_params = StdioServerParameters(
+            servers["vm"] = StdioServerParameters(
                 command=node_path,
                 args=[os.path.join(vm_bridge_dir, "src", "index.js")],
                 env={**os.environ, **vm_bridge_env(self.executor)},
             )
-            mcp_runtime = MCPRuntime({"vm": vm_params})
-            logger.info("ale-claw: substrate_transport=mcp (vm bridge at %s)", vm_bridge_dir)
+            if cfg.gui_transport == "mcp":
+                cua_bridge_dir = await ensure_cua_mcp_server_at(str(work_dir / "mcp" / "cua"))
+                servers["cua"] = StdioServerParameters(
+                    command=node_path,
+                    args=[os.path.join(cua_bridge_dir, "src", "index.js")],
+                    env={**os.environ, **cua_bridge_env(self.executor)},
+                )
+            mcp_runtime = MCPRuntime(servers)
+            logger.info(
+                "ale-claw: substrate_transport=mcp gui_transport=%s (servers=%s)",
+                cfg.gui_transport, sorted(servers),
+            )
 
         # ---- 2. Memory + session + subagent registry ----
         memory_store = MemoryStore(task_id=task_id, base_dir=str(memory_base))
@@ -227,11 +240,18 @@ class AleClawDeployer(BaseAgentDeployer):
         thinking_api_params = thinking_config.to_api_params(cfg.model)
         gui_thinking_params = thinking_config.gui_params(cfg.gui_model or cfg.model)
 
-        # ---- 5. Pre-build OpenClaw computer handler ----
+        # ---- 5. Pre-build computer handler ----
+        # gui_transport=mcp → drive GUI through the cua bridge; else the session
+        # handler. The MCP handler inits lazily (the runtime connects later,
+        # around the drive loop), so don't _initialize it here.
         computer_handler = None
         if not cfg.disable_main_computer:
-            computer_handler = OpenClawComputerHandler(session.computer)
-            await computer_handler._initialize()                # noqa: SLF001
+            if cfg.gui_transport == "mcp" and mcp_runtime is not None:
+                from .harness.computer_handler import MCPComputerHandler
+                computer_handler = MCPComputerHandler(mcp_runtime, os_type=sb.os)
+            else:
+                computer_handler = OpenClawComputerHandler(session.computer)
+                await computer_handler._initialize()            # noqa: SLF001
 
         # ---- 6. Tools + disabled_tools filter ----
         tools = build_tools(

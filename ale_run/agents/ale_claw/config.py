@@ -84,7 +84,19 @@ class AleClawConfig:
     - ``"session"``: legacy direct ``session.interface`` RPC. Retained as a
       debug / parity escape hatch; may be removed once the MCP path is validated.
 
-    GUI (the ``computer`` tool) stays on ``session`` regardless (Phase 1)."""
+    GUI (the ``computer`` tool) is governed separately by :attr:`gui_transport`."""
+
+    gui_transport: str = "session"
+    """How the GUI ``computer`` tool reaches the VM (Phase 2).
+
+    - ``"session"`` (default): the cua ``RemoteDesktopSession`` handler (pixel
+      coords), unchanged.
+    - ``"mcp"``: route GUI through the ``cua_mcp_server`` bridge — clicks/keys/
+      screenshots become MCP tool calls (pixel→[0,1000] conversion in the
+      handler). Requires ``substrate_transport="mcp"``.
+
+    Default ``"session"`` keeps GUI behavior identical until the MCP GUI path is
+    validated; set ``"mcp"`` to fully decouple from ``RemoteDesktopSession``."""
 
     # ---- thinking levels (off | low | medium | high) ----
     thinking_level: str | None = None
@@ -127,6 +139,14 @@ class AleClawConfig:
             raise ValueError(
                 f"AleClawConfig.substrate_transport={self.substrate_transport!r} "
                 "not in {mcp, session}"
+            )
+        if self.gui_transport not in ("mcp", "session"):
+            raise ValueError(
+                f"AleClawConfig.gui_transport={self.gui_transport!r} not in {{mcp, session}}"
+            )
+        if self.gui_transport == "mcp" and self.substrate_transport != "mcp":
+            raise ValueError(
+                "AleClawConfig.gui_transport='mcp' requires substrate_transport='mcp'"
             )
         for level_field, value in [
             ("thinking_level", self.thinking_level),

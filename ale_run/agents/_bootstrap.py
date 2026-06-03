@@ -286,6 +286,16 @@ async def ensure_cua_mcp_server(sandbox: "SandboxHandle") -> str:
     return await _ensure_bridge_at(_CUA_BRIDGE_SRC, sandbox.mcp_server_dir, what="cua")
 
 
+async def ensure_cua_mcp_server_at(target_dir: str) -> str:
+    """Host-install variant of :func:`ensure_cua_mcp_server` (explicit dir).
+
+    Native agents (ale_claw, ``local`` executor) run on the host and route GUI
+    through the cua bridge in Phase 2; they pass an explicit host dir rather than
+    a sandbox field. Idempotent; returns ``target_dir``.
+    """
+    return await _ensure_bridge_at(_CUA_BRIDGE_SRC, target_dir, what="cua")
+
+
 async def ensure_vm_mcp_server(target_dir: str) -> str:
     """Ensure the vm (non-GUI) MCP bridge is installed at ``target_dir``.
 

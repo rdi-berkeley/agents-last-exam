@@ -54,16 +54,27 @@ Seam confirmed in code (post-refactor `tools/` subpackage):
 (the bugged `run_command`/fs/clipboard/window/python_exec methods in
 `SESSION_API.md §13`). GUI stays on `session.computer`.
 
-**Phase 2 (optional, later): GUI → cua MCP.** Route the `computer` tool through
-`cua_mcp_server` and fully drop `RemoteDesktopSession`. Deferred because the cua
-MCP `key` tool collapses a multi-key list into a chord/`hotkey`
-(`cua_mcp_server/src/index.js:185-189`), whereas
-`harness/computer_handler.py` added **chord-vs-sequence disambiguation** (a list =
-press in order) that silently breaks games/apps if lost. Phase 2 must port that
-fix into the bridge first.
+**Phase 2 (implemented): GUI → cua MCP.** The `computer` tool routes through
+`cua_mcp_server` when `gui_transport="mcp"` (requires `substrate_transport="mcp"`).
+`harness/computer_handler.MCPComputerHandler` implements the `AsyncComputerHandler`
+protocol over the cua bridge:
+- **Coordinates:** the model emits pixel coords in screenshot space; the cua
+  bridge speaks normalized [0,1000]. The handler converts px→[0,1000] using the
+  screen size from a new `get_screen_size` bridge tool (the bridge previously
+  exposed no pixel dimensions); the bridge converts back. Rounding ≤ 1px.
+- **Keypress:** the chord-vs-sequence rule stays in the *handler* (a list → one
+  `key` call per key = sequence; a `+`/`-` string → one `key` with all keys =
+  chord), so no bridge change was needed for it — only `get_screen_size` was
+  added to the cua bridge.
+- Wiring: deployer adds the `cua` server to the `MCPRuntime` and builds
+  `MCPComputerHandler` (lazy-init; the runtime connects around the drive loop);
+  `gui_transport` config knob (default `session`).
 
-> After Phase 1, `RemoteDesktopSession` is reduced to GUI + connection mgmt only.
-> Full removal is Phase 2.
+> With `substrate_transport=mcp` + `gui_transport=mcp`, ale_claw no longer touches
+> `RemoteDesktopSession` for tool I/O (the session is still constructed for
+> connection/setup). Verified: GUI actions (dims/screenshot/move/keypress/click)
+> drive the live VM over the cua bridge, and a full `hello_win` run with both
+> bridges completed score 1.0.
 
 ## Components
 

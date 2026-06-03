@@ -465,6 +465,25 @@ server.tool(
   }
 );
 
+server.registerTool(
+  "get_screen_size",
+  {
+    description:
+      "On a desktop, get the screen size in absolute pixels. Coordinates for the " +
+      "other tools are normalized to [0, 1000]; this reports the underlying pixel " +
+      "dimensions for callers that work in pixel space.",
+    inputSchema: {},
+    outputSchema: { width: z.number().int(), height: z.number().int() },
+  },
+  async () => {
+    const size = await getScreenSize();
+    return {
+      content: [{ type: "text", text: `Screen size: ${size.width}x${size.height}` }],
+      structuredContent: { width: size.width, height: size.height },
+    };
+  }
+);
+
 // ------------------------------------------------------------------
 // Start stdio transport
 // ------------------------------------------------------------------

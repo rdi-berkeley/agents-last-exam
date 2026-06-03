@@ -9,3 +9,4 @@ model: openrouter/anthropic/claude-sonnet-4.6
 config:
   max_turns: 30
   substrate_transport: mcp
+  gui_transport: mcp
