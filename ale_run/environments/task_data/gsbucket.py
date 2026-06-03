@@ -77,6 +77,15 @@ async def stage_reference(
             f"gsutil rsync reference failed (rc={r.returncode}): "
             f"{(r.stderr or '')[:300]}"
         )
+    # gsutil rsync does not preserve POSIX mode bits, so reference lands with
+    # umask-derived perms (644 files / 755 dirs) — no exec bit. Grading is the
+    # only consumer of reference and may execute scripts or expect specific
+    # perms, so normalize the whole tree to 777 to remove any surprise.
+    if sandbox.is_linux:
+        await sandbox.run_command(
+            f"chmod -R 777 {shlex.quote(dst)}",
+            timeout=60,
+        )
     return {"staged": ["reference"], "source": source}
 
 
