@@ -59,14 +59,14 @@ from .context.context import (
     repair_tool_use_result_pairing,
     split_preserved_recent_turns,
 )
-from .memory import (
+from .memory.memory import (
     MemoryGetTool,
     MemorySearchTool,
     MemoryStore,
     MemoryWriteTool,
     SearchResult,
 )
-from .memory_flush import run_memory_flush
+from .memory.memory_flush import run_memory_flush
 from .prompt import ContextFile, PromptBuilder, PromptConfig, SectionConfig
 from .session import (
     DEFAULT_MEMORY_FLUSH_RESERVE_TOKENS_FLOOR,

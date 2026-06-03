@@ -39,7 +39,7 @@ from typing import Any
 
 from agent.tools.base import BaseTool, register_tool
 
-from ..memory import MemoryStore
+from ..memory.memory import MemoryStore
 from .subagent_general import DEFAULT_MAX_STEPS as GENERAL_DEFAULT_MAX_STEPS
 from .subagent_general import run_general_subagent
 from .subagent_gui import DEFAULT_MAX_STEPS as GUI_DEFAULT_MAX_STEPS

@@ -26,7 +26,7 @@ from agent.tools.base import BaseTool
 from agent.types import ToolError
 
 from .fs_backends import FilesystemRegistry, HostBackend, MCPBackend, VMBackend
-from ..memory import MemoryGetTool, MemorySearchTool, MemoryStore  # MemoryWriteTool retained in memory.py; intentionally not exposed to the main agent (write(target='host') covers journaling).
+from ..memory.memory import MemoryGetTool, MemorySearchTool, MemoryStore  # MemoryWriteTool retained in memory.py; intentionally not exposed to the main agent (write(target='host') covers journaling).
 from ..subagent.subagent_registry import SubagentRegistry
 from ..subagent.subagent_tools import DelegateGeneralTool, DelegateGUITool, SubagentsTool
 from .tools_fs import EditFileTool, ReadFileTool, WriteFileTool

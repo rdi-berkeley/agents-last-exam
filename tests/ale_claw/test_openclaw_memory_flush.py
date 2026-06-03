@@ -4,7 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from ale_run.agents.ale_claw.harness.model_config import HelperTransportDefaults, ModelConfig, register_model_config
-from ale_run.agents.ale_claw.harness.memory_flush import run_memory_flush
+from ale_run.agents.ale_claw.harness.memory.memory_flush import run_memory_flush
 
 
 def _mock_flush_response(content: str = "<silent>") -> MagicMock:

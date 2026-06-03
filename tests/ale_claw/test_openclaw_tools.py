@@ -74,7 +74,7 @@ class TestGetToolSummaries:
 
     def test_includes_basetool_instances(self):
         """All BaseTool subclasses should appear in summaries."""
-        from ale_run.agents.ale_claw.harness.memory import (
+        from ale_run.agents.ale_claw.harness.memory.memory import (
             MemoryGetTool,
             MemorySearchTool,
             MemoryStore,
@@ -98,7 +98,7 @@ class TestGetToolSummaries:
 
     def test_mixed_tools_correct_count(self):
         """Mixed list should include Computer plus BaseTool summaries only."""
-        from ale_run.agents.ale_claw.harness.memory import MemoryGetTool, MemoryStore
+        from ale_run.agents.ale_claw.harness.memory.memory import MemoryGetTool, MemoryStore
 
         store = MemoryStore(task_id="test", base_dir="/tmp/test_tools_mixed")
         computer = FakeComputer()

@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .memory_flush_policy import (  # re-exported for back-compat
+from .memory.memory_flush_policy import (  # re-exported for back-compat
     DEFAULT_COMPACTION_RATIO,
     DEFAULT_MEMORY_FLUSH_FORCE_TRANSCRIPT_BYTES,
     DEFAULT_MEMORY_FLUSH_RESERVE_TOKENS_FLOOR,
