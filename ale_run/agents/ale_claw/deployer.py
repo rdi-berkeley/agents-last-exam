@@ -303,7 +303,7 @@ class AleClawDeployer(BaseAgentDeployer):
             resolved_model=resolved_model,
         )
         if session_mgr._state is not None:                       # noqa: SLF001
-            session_mgr._state.contextTokens = overflow_cb.context_window  # noqa: SLF001
+            session_mgr._state.context_tokens = overflow_cb.context_window  # noqa: SLF001
             session_mgr.save_state()
 
         agent = OpenClawComputerAgent(

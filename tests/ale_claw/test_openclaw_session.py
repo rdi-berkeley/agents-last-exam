@@ -89,11 +89,14 @@ class TestSessionState:
             compaction_count=1,
             compaction_summaries=["Agent navigated floor 2"],
             model="claude-sonnet",
-            contextTokens=200000,
+            context_tokens=200000,
             created_at="2026-03-11T10:00:00Z",
             updated_at="2026-03-11T10:15:00Z",
         )
         d = state.to_dict()
+        # On-disk key stays camelCase "contextTokens" (OpenClaw state.json format),
+        # even though the Python attribute is snake_case context_tokens.
+        assert d["contextTokens"] == 200000
         restored = SessionState.from_dict(d)
         assert restored.task_id == "mota_24_easy"
         assert restored.step_count == 47
@@ -101,14 +104,14 @@ class TestSessionState:
         assert restored.compaction_count == 1
         assert restored.compaction_summaries == ["Agent navigated floor 2"]
         assert restored.model == "claude-sonnet"
-        assert restored.contextTokens == 200000
+        assert restored.context_tokens == 200000
 
     def test_defaults(self):
         state = SessionState(task_id="test")
         assert state.step_count == 0
         assert state.compaction_summaries == []
         assert state.model == ""
-        assert state.contextTokens == 0
+        assert state.context_tokens == 0
         assert state.system_prompt_report is None
 
     def test_backward_compat_old_state(self):

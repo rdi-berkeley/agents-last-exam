@@ -109,7 +109,7 @@ class SessionState:
     compaction_count: int = 0
     compaction_summaries: list[str] = field(default_factory=list)
     model: str = ""
-    contextTokens: int = 0  # Context window size (model capacity), NOT usage. Matches OpenClaw's top-level contextTokens.
+    context_tokens: int = 0  # Context window size (model capacity), NOT usage. Persisted as "contextTokens" to match OpenClaw's state.json key.
     system_prompt_report: dict[str, Any] | None = None
     memory_flush_at: str | None = None
     memory_flush_compaction_count: int | None = None
@@ -124,7 +124,7 @@ class SessionState:
             "compaction_count": self.compaction_count,
             "compaction_summaries": self.compaction_summaries,
             "model": self.model,
-            "contextTokens": self.contextTokens,
+            "contextTokens": self.context_tokens,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -146,7 +146,7 @@ class SessionState:
             compaction_count=data.get("compaction_count", 0),
             compaction_summaries=list(data.get("compaction_summaries", [])),
             model=data.get("model", ""),
-            contextTokens=data.get("contextTokens", 0),
+            context_tokens=data.get("contextTokens", 0),
             system_prompt_report=data.get("system_prompt_report"),
             memory_flush_at=data.get("memory_flush_at"),
             memory_flush_compaction_count=data.get("memory_flush_compaction_count"),
