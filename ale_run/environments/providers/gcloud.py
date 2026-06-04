@@ -734,66 +734,82 @@ class GcloudProvider(Provider):
                 f"gcloud instances create failed for all machines/zones: {last_stderr}"
             )
 
+        # VM is now created. Until the SandboxHandle is returned below, ANY
+        # failure (cua never ready, IP poll, parse, ...) would leak the VM —
+        # the caller's cleanup (run_one_unit finally) only runs once it holds
+        # the handle. So delete-on-failure here before propagating.
         try:
-            instances = json.loads(stdout)
-            inst = instances[0] if isinstance(instances, list) else instances
-        except (json.JSONDecodeError, IndexError, KeyError) as e:
-            raise RuntimeError(
-                f"Failed to parse gcloud output: {e}\nstdout: {stdout[:500]}"
-            ) from e
+            try:
+                instances = json.loads(stdout)
+                inst = instances[0] if isinstance(instances, list) else instances
+            except (json.JSONDecodeError, IndexError, KeyError) as e:
+                raise RuntimeError(
+                    f"Failed to parse gcloud output: {e}\nstdout: {stdout[:500]}"
+                ) from e
 
-        external_ip = _extract_external_ip(inst)
-        if not external_ip:
-            external_ip = await _poll_for_ip(
-                name, used_zone, self._cfg.project, timeout=120,
+            external_ip = _extract_external_ip(inst)
+            if not external_ip:
+                external_ip = await _poll_for_ip(
+                    name, used_zone, self._cfg.project, timeout=120,
+                )
+
+            # GCE image name == framework Image-registry family name. Fetch it
+            # early so the cua-server URL uses the image's declared port instead
+            # of a hard-coded literal.
+            from ..images import get as get_image
+
+            image = get_image(snap.image)
+
+            cua_url = f"http://{external_ip}:{image.cua_server_port}"
+            logger.info(
+                "VM %s created via %s in %s at %s",
+                name, used_machine, used_zone, cua_url,
             )
 
-        # GCE image name == framework Image-registry family name. Fetch it
-        # early so the cua-server URL uses the image's declared port instead
-        # of a hard-coded literal.
-        from ..images import get as get_image
+            ready = await wait_cua_ready(cua_url, snap.os)
+            if not ready:
+                raise RuntimeError(f"CUA server at {cua_url} did not become ready")
 
-        image = get_image(snap.image)
+            # The VM's baked gsutil is unauthenticated. Inject the GCS SA key so
+            # in-VM staging (stage_reference) and gs:// pulls authenticate; surface
+            # the key path + billing project via metadata so gsbucket's _gsutil
+            # adds `-o gs_service_key_file` + `-u <project>`.
+            gcs_key_path, gcs_user_project = "", ""
+            if self._cfg.gcs_sa_key:
+                try:
+                    gcs_key_path, gcs_user_project = await self._inject_gcs_credentials(
+                        cua_url, image.os, self._cfg.gcs_sa_key,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    logger.error("gcloud: GCS credential injection failed on %s: %s", name, e)
 
-        cua_url = f"http://{external_ip}:{image.cua_server_port}"
-        logger.info(
-            "VM %s created via %s in %s at %s",
-            name, used_machine, used_zone, cua_url,
-        )
-
-        ready = await wait_cua_ready(cua_url, snap.os)
-        if not ready:
-            raise RuntimeError(f"CUA server at {cua_url} did not become ready")
-
-        # The VM's baked gsutil is unauthenticated. Inject the GCS SA key so
-        # in-VM staging (stage_reference) and gs:// pulls authenticate; surface
-        # the key path + billing project via metadata so gsbucket's _gsutil
-        # adds `-o gs_service_key_file` + `-u <project>`.
-        gcs_key_path, gcs_user_project = "", ""
-        if self._cfg.gcs_sa_key:
+            return SandboxHandle(
+                id=name,
+                endpoint=cua_url,
+                os=image.os,
+                **image.sandbox_paths(),
+                metadata={
+                    "zone": used_zone,
+                    "project": self._cfg.project,
+                    "machine_type": used_machine,
+                    "external_ip": external_ip,
+                    "image": image.name,
+                    "snapshot": spec.snapshot,
+                    "gcs_key_path": gcs_key_path,
+                    "gcs_user_project": gcs_user_project,
+                },
+            )
+        except BaseException:
+            # Delete the just-created VM so a post-create failure doesn't leak
+            # it (the caller never got a handle to clean it up). Best-effort.
+            logger.warning(
+                "acquire: post-create failure on %s — deleting VM to avoid leak", name,
+            )
             try:
-                gcs_key_path, gcs_user_project = await self._inject_gcs_credentials(
-                    cua_url, image.os, self._cfg.gcs_sa_key,
-                )
-            except Exception as e:  # noqa: BLE001
-                logger.error("gcloud: GCS credential injection failed on %s: %s", name, e)
-
-        return SandboxHandle(
-            id=name,
-            endpoint=cua_url,
-            os=image.os,
-            **image.sandbox_paths(),
-            metadata={
-                "zone": used_zone,
-                "project": self._cfg.project,
-                "machine_type": used_machine,
-                "external_ip": external_ip,
-                "image": image.name,
-                "snapshot": spec.snapshot,
-                "gcs_key_path": gcs_key_path,
-                "gcs_user_project": gcs_user_project,
-            },
-        )
+                await _delete_vm(name, used_zone, self._cfg.project)
+            except Exception as de:  # noqa: BLE001
+                logger.error("acquire: could not delete leaked VM %s: %s", name, de)
+            raise
 
     @staticmethod
     async def _inject_gcs_credentials(
