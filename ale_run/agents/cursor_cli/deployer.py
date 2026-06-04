@@ -215,12 +215,27 @@ class CursorCliDeployer(BaseAgentDeployer):
         pinned = cfg.cursor_version or self._PINNED_VERSION
 
         if self._is_windows:
-            # Windows: always (re)install the pinned package (node.exe +
-            # index.js) into a versioned dir, then launch via node directly.
-            # The VM may carry a stale baked copy, and a clean/reverted VM has
-            # none — a fresh pinned extract self-heals both.
-            logger.info("cursor_cli: installing pinned Windows version %s …", pinned)
-            await asyncio.to_thread(self._install_pinned_windows_sync, pinned)
+            # Windows runs via `node.exe index.js` from a versioned dir. Skip the
+            # ~63MB download when the pinned version is already baked at the path
+            # we'd extract to (node.exe + index.js present) — verify-and-skip,
+            # mirroring the Linux branch. A clean/reverted or stale-version VM has
+            # no matching dir, so it falls through to a fresh pinned extract.
+            home = os.path.expanduser("~")
+            version_dir = (
+                Path(home) / ".local" / "share" / "cursor-agent" / "versions" / pinned
+            )
+            node_exe = version_dir / "node.exe"
+            index_js = version_dir / "index.js"
+            if node_exe.is_file() and index_js.is_file():
+                self._win_node = str(node_exe)
+                self._win_index_js = str(index_js)
+                logger.info(
+                    "cursor_cli: pinned Windows version %s already installed at %s — skipping",
+                    pinned, version_dir,
+                )
+            else:
+                logger.info("cursor_cli: installing pinned Windows version %s …", pinned)
+                await asyncio.to_thread(self._install_pinned_windows_sync, pinned)
             self._cursor_path = self._win_index_js
         else:
             # Verify-and-correct: keep a pre-installed binary only if it already
