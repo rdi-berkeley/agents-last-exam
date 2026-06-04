@@ -187,9 +187,9 @@ def _infer_provider(model: str) -> str:
     if model_lower.startswith("anthropic/") or "claude" in model_lower:
         return "anthropic"
     if (
-        model_lower.startswith("openai/")
+        "openai" in model_lower
         or "gpt" in model_lower
-        or model_lower.startswith("o")
+        or model_lower.startswith(("o1", "o3", "o4"))
     ):
         return "openai"
     if "gemini" in model_lower or "google" in model_lower:

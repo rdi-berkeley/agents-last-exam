@@ -15,10 +15,12 @@ from ale_run.agents.ale_claw.harness.model.model_config import (
     ModelConfig,
     ResolvedModel,
     _MODEL_CONFIGS,
+    _infer_provider,
     get_model_config,
     register_model_config,
     resolve_model,
 )
+from ale_run.agents.ale_claw.harness.model.thinking import _is_openai_model
 
 
 # ---------------------------------------------------------------------------
@@ -291,3 +293,54 @@ class TestModelConfigImmutable:
         config = get_model_config("openai/gpt-5.4")
         with pytest.raises(AttributeError):
             config.tool_schema_type = "something_else"
+
+
+# ---------------------------------------------------------------------------
+# Provider inference — OpenAI detection (regression for the over-broad
+# `startswith("o")` heuristic that tagged any `o*` string as OpenAI)
+# ---------------------------------------------------------------------------
+
+
+class TestOpenAIProviderDetection:
+    """`_infer_provider` / `_is_openai_model` must key off the real provider
+    segment, not the leading letter. The OpenRouter slug for o3 is
+    `openrouter/openai/o3` — its `openai` segment is mid-string, so a
+    `startswith("openai/")`/`startswith("o")` pair both mis-handled it: the
+    former missed it, the latter "caught" it only via the `o` in `openrouter`
+    while also mis-tagging `openrouter/google/*` and `ollama/*` as OpenAI.
+    """
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "openrouter/openai/o3",
+            "openrouter/openai/o3-mini",
+            "openrouter/openai/gpt-5.4",
+            "openai/o3",
+            "gpt-4o",
+            "o3-mini",  # bare o-series (no provider token) — narrow prefix keeps these
+            "o1",
+            "o4-mini",
+        ],
+    )
+    def test_openai_models_detected(self, model):
+        assert _infer_provider(model) == "openai"
+        assert _is_openai_model(model.lower()) is True
+
+    @pytest.mark.parametrize(
+        "model,expected",
+        [
+            ("openrouter/google/gemini-2.5", "google"),
+            ("openrouter/anthropic/claude-sonnet-4.6", "anthropic"),
+            ("ollama/llama3", "unknown"),
+            ("openchat/openchat-7b", "unknown"),
+        ],
+    )
+    def test_non_openai_not_mistagged(self, model, expected):
+        assert _infer_provider(model) == expected
+        assert _is_openai_model(model.lower()) is False
+
+    def test_openrouter_o3_resolves_to_openai_provider(self):
+        # End-to-end through resolve_model (config.provider is unset for this
+        # slug, so _infer_provider is the deciding path).
+        assert resolve_model("openrouter/openai/o3").provider == "openai"

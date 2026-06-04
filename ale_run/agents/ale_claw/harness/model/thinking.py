@@ -276,9 +276,9 @@ def _is_openai_model(model: str) -> bool:
     """Heuristic for OpenAI-family models used by the harness."""
     model_lower = model.lower()
     return (
-        "openai/" in model_lower
+        "openai" in model_lower
         or "gpt" in model_lower
-        or model_lower.startswith("o")
+        or model_lower.startswith(("o1", "o3", "o4"))
     )
 
 
