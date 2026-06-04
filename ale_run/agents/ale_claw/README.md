@@ -9,11 +9,11 @@ long-horizon assistant does — canonical message history, tool-result
 truncation, automatic compaction, durable memory, and subagent delegation.
 
 It is ALE's first **native** deployer: the agent runs in-process in the ALE
-host's Python interpreter (no subprocess, no container, not inside the VM) and
-talks to the target machine through the CUA Computer SDK (`env.session.computer`).
-Per-turn transcripts, `state.json`, and raw API result dumps are written to a
-host tempdir and mirrored back into the run directory, then translated into an
-ALE `Trajectory`.
+host's Python interpreter (no subprocess, no container, not inside the VM),
+reaching the test VM over MCP bridge servers or a direct CUA Computer SDK session
+(see [VM transport](#vm-transport)). Per-turn transcripts, `state.json`, and raw
+API result dumps are written to a host tempdir and mirrored back into the run
+directory, then translated into an ALE `Trajectory`.
 
 ## What's inside
 
@@ -38,18 +38,45 @@ lifecycle. The pieces that make it more than a thin tool-calling loop:
   for `openrouter/*` plus image sanitization (resize/transcode) so screenshots
   fit provider limits (`unified_loop.py`, `image_sanitization.py`).
 
+## VM transport
+
+ALE Claw keeps its thick `read` / `write` / `edit` / `exec` / `computer` tools;
+only the I/O *underneath* them changes, per concern:
+
+| Concern | `session` (direct) | `mcp` (bridge, default) |
+|---|---|---|
+| Non-GUI — `read`/`write`/`edit`/`exec` | CUA `RemoteDesktopSession` | `vm_mcp_server` bridge |
+| GUI — `computer` | `session.computer` | `cua_mcp_server` bridge |
+
+- **`substrate_transport`** (default `mcp`) — non-GUI transport. `mcp` routes the
+  file/shell tools through the `vm_mcp_server` bridge, the same MCP substrate ALE's
+  installed agents use. Tool granularity and value-add logic (adaptive paging,
+  image sanitize, `edit` recovery, `exec` truncation/timeout/cwd) are unchanged.
+- **`gui_transport`** (default `mcp`, requires `substrate_transport=mcp`) — GUI
+  transport. `mcp` routes `computer` through the `cua_mcp_server` bridge;
+  `MCPComputerHandler` converts pixel coords ↔ the bridge's `[0,1000]` space.
+
+At the default (both `mcp`) ALE Claw never touches `RemoteDesktopSession` for tool
+I/O — but either transport ultimately drives the same **CUA computer-server** in
+the VM (the MCP bridges are thin adapters over its HTTP API), so ALE Claw stays
+built on CUA regardless. The bridges are Node MCP servers the deployer installs on
+the host per episode (`<work_dir>/mcp/`), driven by a thin client
+(`harness/tools/mcp_runtime.py::MCPRuntime`) that consumes MCP as a backend, not
+exposed to the model.
+
 ## Running it
 
 ALE Claw runs as an ALE agent (`harness: ale_claw`). Point an agent config at it
 and run an experiment:
 
 ```yaml
-# configs/agents/ale_claw.yaml
+# configs/agents/ale_claw_or.yaml
 harness: ale_claw
 model: openrouter/anthropic/claude-sonnet-4.6
 config:
   max_turns: 100
   thinking_level: "off"
+  # VM transport defaults to mcp; see "VM transport" to switch to session.
 ```
 
 ```bash
@@ -70,8 +97,10 @@ cfg = AleClawConfig(
 )
 ```
 
-The full kwarg surface is documented in `config.py`. Two knobs worth calling out:
+The full kwarg surface is documented in `config.py`. A few knobs worth calling out:
 
+- **`substrate_transport` / `gui_transport`** — which transport reaches the VM;
+  see [VM transport](#vm-transport).
 - **`summary_model` / `gui_model` / `lightweight_model`** — route compaction,
   GUI subagent, and helper calls through cheaper sibling models to save cost on
   long runs. Default: all use `model`.
@@ -95,9 +124,10 @@ ale_run/agents/ale_claw/
 └── harness/                    — the OpenClaw agent, in-tree and ALE-owned
     ├── AGENTS.md               — system-prompt context file
     ├── agent_loop.py           — OpenClawComputerAgent (the run loop)
+    ├── computer_handler.py     — GUI handlers: session + MCP (MCPComputerHandler)
     ├── session.py / replay.py  — session state + cross-run transcript replay
     ├── canonical/              — typed message format + sanitize passes
-    ├── tools/                  — fs / shell / web tool implementations
+    ├── tools/                  — fs / shell / web tools + mcp_runtime (MCP bridge client)
     ├── subagent/               — general + GUI subagent engines
     ├── adapters/               — CUA SDK callback extensions
     └── … (context, compaction, memory, prompt, unified_loop, …)

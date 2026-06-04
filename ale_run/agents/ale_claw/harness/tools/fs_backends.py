@@ -20,8 +20,10 @@ the agent's vocabulary and the API-level constraint from one place.
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
+import shlex
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -30,6 +32,8 @@ from ._paths import _assert_within_workspace
 
 if TYPE_CHECKING:
     from computer.interface import BaseComputerInterface
+
+    from .mcp_runtime import MCPRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +128,101 @@ class VMBackend(FilesystemBackend):
 
     async def create_dir(self, resolved_path: str) -> None:
         await self.interface.create_dir(resolved_path)
+
+
+# ---------------------------------------------------------------------------
+# MCPBackend — same VM surface as VMBackend, routed through the vm MCP bridge
+# ---------------------------------------------------------------------------
+
+
+class MCPBackend(FilesystemBackend):
+    """VM filesystem I/O routed through the ``vm_mcp_server`` bridge.
+
+    Drop-in replacement for :class:`VMBackend`: registered under the same
+    ``name = "vm"`` so the tool ``target`` enum, descriptions, and the agent's
+    vocabulary are byte-identical — only the transport changes (``RemoteDesktop
+    Session`` RPC → MCP stdio bridge → the same cua-server). Path policy is the
+    existing lexical ``_assert_within_workspace`` check; the VM is the model's
+    own surface, so symlink-aware resolution buys nothing here (same rationale as
+    ``VMBackend``).
+
+    The three substrate ops map onto vm-bridge primitives:
+      - ``read_bytes``  → ``read_bytes`` (returns base64; decoded here).
+      - ``write_text``  → ``write_text`` (overwrite) / ``write_bytes`` (append;
+        the bridge's ``write_text`` overwrites only).
+      - ``create_dir``  → ``run_command("mkdir -p …")`` (the bridge omits a mkdir
+        primitive by design — it is reducible to ``run_command``).
+    """
+
+    name = "vm"
+    capabilities = frozenset({"read", "write", "edit"})
+
+    def __init__(
+        self,
+        runtime: "MCPRuntime",
+        workspace_root: Optional[str] = None,
+        os_type: Optional[str] = None,
+    ) -> None:
+        self.runtime = runtime
+        self.workspace_root = workspace_root
+        # The vm bridge has no mkdir primitive, so create_dir is synthesized as a
+        # run_command — which is shell/OS-specific. ``os_type`` (from the session)
+        # selects the right form; default to POSIX when unknown.
+        self._is_windows = (os_type or "").lower().startswith("win")
+        if workspace_root is None:
+            logger.info("MCPBackend: workspace_root is None — permissive path policy")
+        if workspace_root:
+            self.description = (
+                f"VM filesystem via the vm MCP bridge (paths resolve under {workspace_root})."
+            )
+        else:
+            self.description = (
+                "VM filesystem via the vm MCP bridge (no workspace bound — permissive)."
+            )
+
+    def resolve(self, path: str) -> str:
+        _assert_within_workspace(path, self.workspace_root)
+        return path
+
+    async def read_bytes(self, resolved_path: str) -> bytes:
+        # vm bridge read_bytes returns base64 of the (full, no-range) file body.
+        from .mcp_runtime import result_text
+        res = await self.runtime.call("vm", "read_bytes", {"path": resolved_path})
+        return base64.b64decode(result_text(res))
+
+    async def write_text(
+        self,
+        resolved_path: str,
+        content: str,
+        *,
+        append: bool,
+    ) -> None:
+        if append:
+            # write_text overwrites; append goes through write_bytes(append=true).
+            b64 = base64.b64encode(content.encode("utf-8")).decode("ascii")
+            await self.runtime.call(
+                "vm", "write_bytes",
+                {"path": resolved_path, "content_b64": b64, "append": True},
+            )
+        else:
+            await self.runtime.call(
+                "vm", "write_text",
+                {"path": resolved_path, "content": content},
+            )
+
+    async def create_dir(self, resolved_path: str) -> None:
+        # The bridge has no mkdir primitive (reducible to run_command, by design),
+        # so synthesize one. cmd.exe and POSIX sh disagree on flags AND quoting:
+        #   - Windows: cmd `mkdir` has no -p and creates intermediates by default;
+        #     guard with `if not exist` so an existing dir isn't an error. cmd
+        #     uses double quotes (it does not understand POSIX single-quoting).
+        #   - POSIX: `mkdir -p` is idempotent; shlex.quote is the correct quoting.
+        if self._is_windows:
+            p = resolved_path.replace('"', "")  # drop stray quotes; cmd paths can't contain them
+            command = f'if not exist "{p}" mkdir "{p}"'
+        else:
+            command = f"mkdir -p {shlex.quote(resolved_path)}"
+        await self.runtime.call("vm", "run_command", {"command": command})
 
 
 # ---------------------------------------------------------------------------

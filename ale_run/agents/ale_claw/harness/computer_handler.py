@@ -42,10 +42,13 @@ Why coerce pointer coordinates:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 from agent.computers.cua import cuaComputerHandler
 from agent.types import ToolError
+
+if TYPE_CHECKING:
+    from .tools.mcp_runtime import MCPRuntime
 
 
 _KEY_MAPPING = {
@@ -162,3 +165,188 @@ class OpenClawComputerHandler(cuaComputerHandler):
         sx, sy = self._require_xy("drag (start)", start_x, start_y)
         ex, ey = self._require_xy("drag (end)", end_x, end_y)
         await super().drag(start_x=sx, start_y=sy, end_x=ex, end_y=ey)
+
+
+def _normalize_key(key: str) -> str:
+    """Map LLM-style key names to the form the cua bridge expects.
+
+    The bridge does its own normalization too; this only smooths the arrow-key
+    aliases the harness has always handled and lowercases the rest.
+    """
+    return _KEY_MAPPING.get(key.upper(), key.lower())
+
+
+class MCPComputerHandler:
+    """GUI computer handler that drives the VM through the cua MCP bridge.
+
+    Implements the ``AsyncComputerHandler`` protocol (a ``runtime_checkable``
+    Protocol — only method *names* are checked), so it drops into ``build_tools``
+    as the ``computer`` tool in place of :class:`OpenClawComputerHandler` when GUI
+    is routed over MCP (Phase 2). Every action becomes a cua-bridge tool call;
+    the harness no longer touches ``RemoteDesktopSession`` for GUI.
+
+    Coordinates: the model emits **pixel** coords in screenshot space, but the
+    cua bridge speaks **normalized [0, 1000]**. We convert px→[0,1000] here using
+    the screen size (fetched once via the bridge's ``get_screen_size`` tool); the
+    bridge converts back to pixels. Rounding is ≤ 1px at typical resolutions.
+
+    Keypress keeps the harness's chord-vs-sequence rule (mirrors
+    :class:`OpenClawComputerHandler`): a list is a *sequence* of independent
+    presses (one ``key`` call each), a ``+``/``-`` string is a *chord*.
+    """
+
+    def __init__(self, runtime: "MCPRuntime", *, os_type: Optional[str] = None) -> None:
+        self._runtime = runtime
+        self._os_type = (os_type or "").lower()
+        self._dims: Optional[Tuple[int, int]] = None
+        # Present for parity with cua handlers that expose ``.interface``; the
+        # MCP path has no direct interface object.
+        self.interface = None
+
+    async def _initialize(self) -> None:
+        await self._dimensions()
+
+    # -- helpers --
+
+    async def _call_cua(self, tool: str, args: dict):
+        """Call a cua bridge tool, mapping tool failures to ``ToolError``.
+
+        A GUI op can fail for recoverable, environment-dependent reasons (e.g.
+        the desktop is locked, a window isn't focused). The harness loop turns
+        ``ToolError`` into a ``function_call_output`` the model sees next turn, so
+        the run adapts instead of crashing — matching the session handler's
+        semantics. Without this, the raw ``MCPToolError`` (a ``RuntimeError``)
+        would propagate and abort the episode.
+        """
+        from .tools.mcp_runtime import MCPToolError
+        try:
+            return await self._runtime.call("cua", tool, args)
+        except MCPToolError as e:
+            raise ToolError(str(e)) from e
+
+    async def _dimensions(self) -> Tuple[int, int]:
+        if self._dims is None:
+            res = await self._call_cua("get_screen_size", {})
+            sc = res.structuredContent or {}
+            self._dims = (int(sc["width"]), int(sc["height"]))
+        return self._dims
+
+    async def _to_norm(self, x: int, y: int) -> List[int]:
+        w, h = await self._dimensions()
+        nx = 0 if w <= 0 else round(x / w * 1000)
+        ny = 0 if h <= 0 else round(y / h * 1000)
+        return [max(0, min(1000, nx)), max(0, min(1000, ny))]
+
+    # -- observation --
+
+    async def get_environment(self) -> str:
+        if self._os_type.startswith("win"):
+            return "windows"
+        if self._os_type.startswith("mac") or self._os_type.startswith("darwin"):
+            return "mac"
+        return "linux"
+
+    async def get_dimensions(self) -> Tuple[int, int]:
+        return await self._dimensions()
+
+    async def screenshot(self, text: Optional[str] = None) -> str:
+        res = await self._call_cua("screenshot", {})
+        for block in res.content:
+            if getattr(block, "type", None) == "image":
+                return block.data  # base64 str
+        raise ToolError("cua screenshot returned no image content")
+
+    async def get_current_url(self) -> str:
+        return ""  # no browser-URL primitive over the cua bridge
+
+    # -- pointer --
+
+    async def click(self, x: Any, y: Any = None, button: str = "left") -> None:
+        nx, ny = self._require_xy("click", x, y)
+        await self._call_cua("click", {"coordinate": await self._to_norm(nx, ny), "button": button})
+
+    async def double_click(self, x: Any, y: Any = None) -> None:
+        nx, ny = self._require_xy("double_click", x, y)
+        await self._call_cua("click", {"coordinate": await self._to_norm(nx, ny), "clicks": 2})
+
+    async def right_click(self, x: Any, y: Any = None) -> None:
+        nx, ny = self._require_xy("right_click", x, y)
+        await self._call_cua("click", {"coordinate": await self._to_norm(nx, ny), "button": "right"})
+
+    async def move(self, x: Any, y: Any = None) -> None:
+        nx, ny = self._require_xy("move", x, y)
+        await self._call_cua("mouse_move", {"coordinate": await self._to_norm(nx, ny)})
+
+    async def scroll(self, x: Any, y: Any = None, scroll_x: Any = 0, scroll_y: Any = 0) -> None:
+        nx, ny = self._require_xy("scroll", x, y)
+        coord = await self._to_norm(nx, ny)
+        sx = _coerce_int(scroll_x) or 0
+        sy = _coerce_int(scroll_y) or 0
+        if sy:
+            await self._call_cua("scroll", {
+                "direction": "down" if sy > 0 else "up", "amount": abs(sy), "coordinate": coord})
+        if sx:
+            await self._call_cua("scroll", {
+                "direction": "right" if sx > 0 else "left", "amount": abs(sx), "coordinate": coord})
+
+    async def drag(
+        self,
+        path: Optional[List[Dict[str, int]]] = None,
+        start_x: Any = None,
+        start_y: Any = None,
+        end_x: Any = None,
+        end_y: Any = None,
+    ) -> None:
+        if path:
+            sx, sy = path[0]["x"], path[0]["y"]
+            ex, ey = path[-1]["x"], path[-1]["y"]
+        else:
+            sx, sy = self._require_xy("drag (start)", start_x, start_y)
+            ex, ey = self._require_xy("drag (end)", end_x, end_y)
+        await self._call_cua("drag", {
+            "start_coordinate": await self._to_norm(sx, sy),
+            "coordinate": await self._to_norm(ex, ey),
+            "button": "left",
+        })
+
+    async def left_mouse_down(self, x: Any = None, y: Any = None) -> None:
+        if x is not None and y is not None:
+            await self.move(x, y)
+        await self._call_cua("mouse_down", {"button": "left"})
+
+    async def left_mouse_up(self, x: Any = None, y: Any = None) -> None:
+        if x is not None and y is not None:
+            await self.move(x, y)
+        await self._call_cua("mouse_up", {"button": "left"})
+
+    # -- keyboard --
+
+    async def type(self, text: str) -> None:
+        await self._call_cua("type", {"text": text})
+
+    async def keypress(self, keys: Union[List[str], str]) -> None:
+        if isinstance(keys, str):
+            # chord: split "ctrl+shift+s" / legacy "ctrl-shift-s"
+            parts = [p for p in keys.replace("-", "+").split("+") if p] or [keys]
+            await self._call_cua("key", {"keys": [_normalize_key(k) for k in parts]})
+            return
+        # list: sequence of independent presses, in order
+        for k in keys:
+            await self._call_cua("key", {"keys": [_normalize_key(k)]})
+
+    async def wait(self, ms: int = 1000) -> None:
+        await self._call_cua("wait", {"duration": (ms or 0) / 1000})
+
+    # -- misc --
+
+    async def terminate(self, status: str = "success") -> Dict[str, Any]:
+        return {"status": status}
+
+    def _require_xy(self, action: str, x: Any, y: Any) -> Tuple[int, int]:
+        nx, ny = _coerce_xy(x, y)
+        if nx is None or ny is None:
+            raise ToolError(
+                f"computer.{action} requires both x and y coordinates "
+                f"(got x={x!r}, y={y!r}); pass them as separate integers."
+            )
+        return nx, ny

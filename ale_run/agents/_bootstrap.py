@@ -32,6 +32,11 @@ _IS_WINDOWS = platform.system() == "Windows"
 # ``ale_run/agents/_assets/cua_mcp_server/``.
 _CUA_BRIDGE_SRC = Path(__file__).resolve().parent / "_assets" / "cua_mcp_server"
 
+# Sibling non-GUI bridge (run_command / fs / clipboard / pty primitives). Native
+# agents (ale_claw) install this on the host and consume it as their substrate
+# I/O backend; see ``ensure_vm_mcp_server`` / ``vm_bridge_env`` below.
+_VM_BRIDGE_SRC = Path(__file__).resolve().parent / "_assets" / "vm_mcp_server"
+
 
 async def _sh(cmd: str, timeout: int = 180) -> subprocess.CompletedProcess:
     return await asyncio.to_thread(
@@ -180,71 +185,61 @@ async def ensure_npm() -> str:
     return npm
 
 
-def _cua_bridge_installed(mcp_server_dir: str) -> bool:
-    """Whether the cua MCP bridge at ``mcp_server_dir`` is present AND runnable.
+def _bridge_installed(bridge_dir: str) -> bool:
+    """Whether the MCP bridge at ``bridge_dir`` is present AND runnable.
 
-    Gating on ``src/index.js`` alone is not enough: a bridge dir that has the
-    entry script but no installed ``node_modules`` (e.g. a prebaked image where
-    the source was copied in but ``npm install`` never ran, or a partially
+    Surface-agnostic (used for both the cua GUI bridge and the vm primitives
+    bridge). Gating on ``src/index.js`` alone is not enough: a bridge dir that
+    has the entry script but no installed ``node_modules`` (e.g. a prebaked image
+    where the source was copied in but ``npm install`` never ran, or a partially
     shipped tree) makes the node child die on its first import of
-    ``@modelcontextprotocol/sdk`` with ``MODULE_NOT_FOUND``. We therefore
-    require the SDK module the bridge imports first to exist alongside the
-    entry script. This predicate is the fast-skip path: when both are present
-    (prebaked image), the ensure-step is a no-op.
+    ``@modelcontextprotocol/sdk`` with ``MODULE_NOT_FOUND``. We therefore require
+    the SDK module the bridge imports first to exist alongside the entry script.
+    This predicate is the fast-skip path: when both are present, the ensure-step
+    is a no-op.
     """
-    index = os.path.join(mcp_server_dir, "src", "index.js")
+    index = os.path.join(bridge_dir, "src", "index.js")
     sdk_dir = os.path.join(
-        mcp_server_dir, "node_modules", "@modelcontextprotocol", "sdk",
+        bridge_dir, "node_modules", "@modelcontextprotocol", "sdk",
     )
     return os.path.isfile(index) and os.path.isdir(sdk_dir)
 
 
-async def ensure_cua_mcp_server(sandbox: "SandboxHandle") -> str:
-    """Ensure the cua MCP bridge is installed at ``sandbox.mcp_server_dir``.
+async def _ensure_bridge_at(src_dir: Path, target_dir: str, *, what: str) -> str:
+    """Copy ``src_dir`` → ``target_dir`` and ``npm install --production`` it.
 
-    Idempotent: if the bridge is already present and runnable (prebaked image
-    fast-path), this is a no-op and returns immediately. Otherwise it copies
-    the vendored bridge source into ``mcp_server_dir`` and runs
-    ``npm install --production``.
+    Shared implementation behind :func:`ensure_cua_mcp_server` (GUI bridge into
+    the sandbox's ``mcp_server_dir``) and :func:`ensure_vm_mcp_server` (vm bridge
+    into a host dir for native agents). Idempotent: a prebaked / already-installed
+    tree is a no-op.
 
-    Runs IN the substrate (the deployer process lives on the sandbox VM /
-    container), so it uses ``shutil`` / ``subprocess`` directly rather than
-    ``sandbox.run_command`` RPCs. Cross-OS: ``mcp_server_dir`` is whatever the
-    image declares (``/home/.../cua_mcp_server`` on linux,
-    ``C:\\Users\\User\\cua_mcp_server`` on windows).
-
-    Prebaking the bridge into the image is purely a speed optimization; this
-    dynamic install is the correctness guarantee on a thin image.
-
-    Returns the resolved ``mcp_server_dir`` (the bridge root).
+    Runs where the deployer runs — IN the sandbox for sandbox-resident agents, on
+    the host for native agents — so it uses ``shutil`` / ``subprocess`` directly
+    rather than ``run_command`` RPCs. ``what`` is a short label used only in log
+    and error messages. Returns ``target_dir`` (the bridge root).
     """
-    mcp_server_dir = sandbox.mcp_server_dir
-
     # Fast-path: prebaked / already-installed. Skip the copy + npm install.
-    if _cua_bridge_installed(mcp_server_dir):
-        logger.info("ensure_cua_mcp_server: bridge already present at %s", mcp_server_dir)
-        return mcp_server_dir
+    if _bridge_installed(target_dir):
+        logger.info("ensure_%s_mcp_server: bridge already present at %s", what, target_dir)
+        return target_dir
 
-    if not _CUA_BRIDGE_SRC.is_dir():
+    if not src_dir.is_dir():
         raise RuntimeError(
-            f"ensure_cua_mcp_server: vendored bridge source missing at "
-            f"{_CUA_BRIDGE_SRC} — it must ship into the substrate alongside "
-            "ale_run (docker /ale_src mount or sandbox .ale-src ship)."
+            f"ensure_{what}_mcp_server: vendored bridge source missing at "
+            f"{src_dir} — it must ship alongside ale_run (docker /ale_src mount, "
+            "sandbox .ale-src ship, or the in-tree _assets dir on the host)."
         )
 
-    logger.info(
-        "ensure_cua_mcp_server: installing bridge %s → %s",
-        _CUA_BRIDGE_SRC, mcp_server_dir,
-    )
+    logger.info("ensure_%s_mcp_server: installing bridge %s → %s", what, src_dir, target_dir)
 
     # 1. Copy the bridge source (package.json + package-lock.json + src/) into
-    #    mcp_server_dir. Never copy node_modules — it is rebuilt on the
-    #    substrate by npm install (binaries must match the substrate's arch).
-    os.makedirs(mcp_server_dir, exist_ok=True)
-    for entry in _CUA_BRIDGE_SRC.iterdir():
+    #    target_dir. Never copy node_modules — it is rebuilt by npm install
+    #    (binaries must match the substrate's arch).
+    os.makedirs(target_dir, exist_ok=True)
+    for entry in src_dir.iterdir():
         if entry.name == "node_modules":
             continue
-        dest = os.path.join(mcp_server_dir, entry.name)
+        dest = os.path.join(target_dir, entry.name)
         if entry.is_dir():
             shutil.copytree(entry, dest, dirs_exist_ok=True)
         else:
@@ -255,28 +250,61 @@ async def ensure_cua_mcp_server(sandbox: "SandboxHandle") -> str:
     proc = await asyncio.to_thread(
         subprocess.run,
         [npm, "install", "--production"],
-        cwd=mcp_server_dir,
+        cwd=target_dir,
         capture_output=True, text=True, timeout=600,
     )
     if proc.returncode != 0:
         raise RuntimeError(
-            f"ensure_cua_mcp_server: npm install --production failed in "
-            f"{mcp_server_dir} (rc={proc.returncode}): "
+            f"ensure_{what}_mcp_server: npm install --production failed in "
+            f"{target_dir} (rc={proc.returncode}): "
             f"{(proc.stderr or proc.stdout or '')[-800:]}"
         )
 
     # 3. Verify the install actually landed the SDK (npm can exit 0 but produce
-    #    an unusable tree on a flaky registry); a broken bridge wedges MCP
-    #    stdio handshakes downstream, so fail loud here instead.
-    if not _cua_bridge_installed(mcp_server_dir):
+    #    an unusable tree on a flaky registry); a broken bridge wedges MCP stdio
+    #    handshakes downstream, so fail loud here instead.
+    if not _bridge_installed(target_dir):
         raise RuntimeError(
-            f"ensure_cua_mcp_server: npm install completed but bridge still "
-            f"not runnable at {mcp_server_dir} (missing src/index.js or "
+            f"ensure_{what}_mcp_server: npm install completed but bridge still "
+            f"not runnable at {target_dir} (missing src/index.js or "
             "node_modules/@modelcontextprotocol/sdk)"
         )
 
-    logger.info("ensure_cua_mcp_server: bridge installed at %s", mcp_server_dir)
-    return mcp_server_dir
+    logger.info("ensure_%s_mcp_server: bridge installed at %s", what, target_dir)
+    return target_dir
+
+
+async def ensure_cua_mcp_server(sandbox: "SandboxHandle") -> str:
+    """Ensure the cua (GUI) MCP bridge is installed at ``sandbox.mcp_server_dir``.
+
+    Idempotent (prebaked-image fast-path). Cross-OS: ``mcp_server_dir`` is
+    whatever the image declares (``/home/.../cua_mcp_server`` on linux,
+    ``C:\\Users\\User\\cua_mcp_server`` on windows). Prebaking the bridge into the
+    image is purely a speed optimization; this dynamic install is the correctness
+    guarantee on a thin image. Returns the resolved ``mcp_server_dir``.
+    """
+    return await _ensure_bridge_at(_CUA_BRIDGE_SRC, sandbox.mcp_server_dir, what="cua")
+
+
+async def ensure_cua_mcp_server_at(target_dir: str) -> str:
+    """Host-install variant of :func:`ensure_cua_mcp_server` (explicit dir).
+
+    Native agents (ale_claw, ``local`` executor) run on the host and route GUI
+    through the cua bridge in Phase 2; they pass an explicit host dir rather than
+    a sandbox field. Idempotent; returns ``target_dir``.
+    """
+    return await _ensure_bridge_at(_CUA_BRIDGE_SRC, target_dir, what="cua")
+
+
+async def ensure_vm_mcp_server(target_dir: str) -> str:
+    """Ensure the vm (non-GUI) MCP bridge is installed at ``target_dir``.
+
+    Counterpart to :func:`ensure_cua_mcp_server` for the vm primitives bridge.
+    Native agents (ale_claw, ``local`` executor) run on the host, so they pass an
+    explicit **host** dir (e.g. ``<work_dir>/mcp/vm``) rather than a sandbox
+    field. Idempotent; returns ``target_dir``.
+    """
+    return await _ensure_bridge_at(_VM_BRIDGE_SRC, target_dir, what="vm")
 
 
 def cua_bridge_env(executor: "BaseExecutor") -> dict[str, str]:
@@ -288,6 +316,15 @@ def cua_bridge_env(executor: "BaseExecutor") -> dict[str, str]:
     executor knows the URL reachable from where the bridge runs
     (``SandboxExecutor`` → loopback + image port; Local/Docker → host endpoint),
     so deployers splat this into their ``mcpServers.cua`` entry's ``env``."""
+    return {"CUA_SERVER_URL": executor.cua_bridge_url()}
+
+
+def vm_bridge_env(executor: "BaseExecutor") -> dict[str, str]:
+    """Env vars for the vm MCP bridge — identical contract to :func:`cua_bridge_env`.
+
+    Both bridges talk to the same cua-server and read ``CUA_SERVER_URL``; the URL
+    is whatever is reachable from where the bridge runs (host endpoint for the
+    ``local`` executor that native agents use)."""
     return {"CUA_SERVER_URL": executor.cua_bridge_url()}
 
 

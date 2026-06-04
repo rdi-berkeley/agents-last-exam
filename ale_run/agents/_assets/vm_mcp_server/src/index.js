@@ -167,18 +167,30 @@ const server = new McpServer({
 // Process execution
 // ================================================================
 
-server.tool(
+server.registerTool(
   "run_command",
-  "Run a command on the VM and wait for it to finish. One-shot and blocking: it does not stream and is " +
-    "not interactive, and no shell state persists between calls (set cwd inline with `cd /path && ...`, " +
-    "pass env inline with `VAR=val cmd`). For long-running, interactive, or streaming processes use the " +
-    "pty_* tools. Returns stdout, stderr, and the exit code.",
   {
-    command: z.string().describe("The command to run (executed via the VM's system shell)."),
-    timeout: z
-      .number()
-      .optional()
-      .describe("Optional server-side timeout in seconds; the command is terminated if it runs longer."),
+    description:
+      "Run a command on the VM and wait for it to finish. One-shot and blocking: it does not stream and is " +
+      "not interactive, and no shell state persists between calls (set cwd inline with `cd /path && ...`, " +
+      "pass env inline with `VAR=val cmd`). For long-running, interactive, or streaming processes use the " +
+      "pty_* tools. Returns stdout, stderr, and the exit code.",
+    inputSchema: {
+      command: z.string().describe("The command to run (executed via the VM's system shell)."),
+      timeout: z
+        .number()
+        .optional()
+        .describe("Optional server-side timeout in seconds; the command is terminated if it runs longer."),
+    },
+    // Structured output: the three fields travel as data, not flattened prose.
+    // Reverse-parsing the text block is lossy (stdout may itself contain a line
+    // "stderr:", and the stderr section is conditionally present), so machine
+    // consumers read structuredContent; the text block stays for readability.
+    outputSchema: {
+      exit_code: z.number().int().describe("Process exit code."),
+      stdout: z.string().describe("Captured standard output."),
+      stderr: z.string().describe("Captured standard error."),
+    },
   },
   async ({ command, timeout }) => {
     const params = { command };
@@ -186,10 +198,17 @@ server.tool(
     // Generous client-side headroom over the server-side timeout.
     const clientTimeout = timeout !== undefined ? (timeout + 30) * 1000 : 120000;
     const r = await client.sendCommand("run_command", params, clientTimeout);
-    const parts = [`exit_code: ${r.return_code ?? 0}`];
-    parts.push(`stdout:\n${r.stdout ?? ""}`);
-    if (r.stderr) parts.push(`stderr:\n${r.stderr}`);
-    return textOnly(parts.join("\n"));
+    const structured = {
+      exit_code: r.return_code ?? 0,
+      stdout: r.stdout ?? "",
+      stderr: r.stderr ?? "",
+    };
+    const parts = [`exit_code: ${structured.exit_code}`, `stdout:\n${structured.stdout}`];
+    if (structured.stderr) parts.push(`stderr:\n${structured.stderr}`);
+    return {
+      content: [{ type: "text", text: parts.join("\n") }],
+      structuredContent: structured,
+    };
   },
 );
 

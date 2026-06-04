@@ -25,12 +25,12 @@ from agent.computers.cua import cuaComputerHandler
 from agent.tools.base import BaseTool
 from agent.types import ToolError
 
-from .fs_backends import FilesystemRegistry, HostBackend, VMBackend
+from .fs_backends import FilesystemRegistry, HostBackend, MCPBackend, VMBackend
 from ..memory import MemoryGetTool, MemorySearchTool, MemoryStore  # MemoryWriteTool retained in memory.py; intentionally not exposed to the main agent (write(target='host') covers journaling).
 from ..subagent.subagent_registry import SubagentRegistry
 from ..subagent.subagent_tools import DelegateGeneralTool, DelegateGUITool, SubagentsTool
 from .tools_fs import EditFileTool, ReadFileTool, WriteFileTool
-from .tools_shell import ExecTool
+from .tools_shell import ExecTool, _MCPExecInterface
 from .tools_web import WebFetchTool, WebSearchTool
 
 
@@ -167,6 +167,7 @@ def build_tools(
     host_workspace_root: str | None = None,
     context_window_tokens: int | None = None,
     computer_handler: Any = None,
+    mcp_runtime: Any = None,
 ) -> list:
     """Assemble the canonical tool list for the OpenClaw agent.
 
@@ -239,8 +240,18 @@ def build_tools(
         model=summary_model,
         thinking_params=vision_thinking_params,
     )
+    # `vm` target: route through the vm MCP bridge when an MCPRuntime is supplied,
+    # else the legacy direct session RPC. Same `name="vm"` either way, so the
+    # tool vocabulary the model sees is identical.
     fs_registry = FilesystemRegistry()
-    fs_registry.register(VMBackend(session.interface, workspace_root=workspace_root))
+    if mcp_runtime is not None:
+        fs_registry.register(MCPBackend(
+            mcp_runtime,
+            workspace_root=workspace_root,
+            os_type=getattr(session, "os_type", None),
+        ))
+    else:
+        fs_registry.register(VMBackend(session.interface, workspace_root=workspace_root))
     if host_workspace_root:
         try:
             fs_registry.register(HostBackend(host_workspace_root))
@@ -258,7 +269,10 @@ def build_tools(
     )
     write_tool = WriteFileTool(fs_registry)
     edit_tool = EditFileTool(fs_registry)
-    exec_tool = ExecTool(session.interface, workspace_root=workspace_root)
+    exec_interface = (
+        _MCPExecInterface(mcp_runtime) if mcp_runtime is not None else session.interface
+    )
+    exec_tool = ExecTool(exec_interface, workspace_root=workspace_root)
     web_search = WebSearchTool()
     web_fetch = WebFetchTool()
     memory_search = MemorySearchTool(memory_store)

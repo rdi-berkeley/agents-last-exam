@@ -37,6 +37,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Union
 
 from agent.tools.base import BaseTool, register_tool
@@ -46,6 +47,8 @@ from ._tool_utils import _get_required_str, _run_tool_execute
 
 if TYPE_CHECKING:
     from computer.interface import BaseComputerInterface
+
+    from .mcp_runtime import MCPRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +61,55 @@ _DEFAULT_MAX_OUTPUT_CHARS = 200_000
 _DEFAULT_TIMEOUT_SECONDS = 60
 _MIN_TIMEOUT_SECONDS = 1
 _MAX_TIMEOUT_SECONDS = 300
+
+
+# ---------------------------------------------------------------------------
+# MCP exec adapter — lets ExecTool run unchanged over the vm MCP bridge
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _CmdResult:
+    """Duck-typed stand-in for cua's ``CommandResult``.
+
+    ``ExecTool`` only reads ``.stdout`` / ``.stderr`` / ``.returncode`` (see
+    ``_execute``), so an instance of this is interchangeable with the SDK result.
+    """
+
+    stdout: str
+    stderr: str
+    returncode: int
+
+
+class _MCPExecInterface:
+    """Adapter exposing ``run_command`` over the vm MCP bridge.
+
+    Passed to :class:`ExecTool` in place of ``session.interface`` when the agent
+    runs on the MCP substrate. ``ExecTool`` is otherwise unchanged: it still
+    applies its own timeout, middle-truncation, and cwd policy on top.
+
+    Reads the bridge's **structured** result (``structuredContent``) rather than
+    parsing the human-readable text block — the flattened text is lossy (stdout
+    may itself contain a line ``stderr:``), so the bridge ships the three fields
+    as data and we read them directly.
+    """
+
+    def __init__(self, runtime: "MCPRuntime") -> None:
+        self.runtime = runtime
+
+    async def run_command(self, command: str) -> _CmdResult:
+        res = await self.runtime.call("vm", "run_command", {"command": command})
+        sc = res.structuredContent
+        if sc is None:
+            raise RuntimeError(
+                "vm MCP run_command returned no structuredContent — the bridge "
+                "build predates the structured-output run_command; rebuild it."
+            )
+        return _CmdResult(
+            stdout=sc.get("stdout", "") or "",
+            stderr=sc.get("stderr", "") or "",
+            returncode=int(sc.get("exit_code", 0) or 0),
+        )
 
 
 # ---------------------------------------------------------------------------
