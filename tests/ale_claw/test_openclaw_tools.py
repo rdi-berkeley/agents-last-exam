@@ -74,7 +74,7 @@ class TestGetToolSummaries:
 
     def test_includes_basetool_instances(self):
         """All BaseTool subclasses should appear in summaries."""
-        from ale_run.agents.ale_claw.harness.memory import (
+        from ale_run.agents.ale_claw.harness.memory.memory import (
             MemoryGetTool,
             MemorySearchTool,
             MemoryStore,
@@ -98,7 +98,7 @@ class TestGetToolSummaries:
 
     def test_mixed_tools_correct_count(self):
         """Mixed list should include Computer plus BaseTool summaries only."""
-        from ale_run.agents.ale_claw.harness.memory import MemoryGetTool, MemoryStore
+        from ale_run.agents.ale_claw.harness.memory.memory import MemoryGetTool, MemoryStore
 
         store = MemoryStore(task_id="test", base_dir="/tmp/test_tools_mixed")
         computer = FakeComputer()
@@ -115,8 +115,8 @@ class TestBuildTools:
         session.interface = MagicMock()
         session._computer = object()
 
-        with patch("ale_run.agents.ale_claw.harness.analyze_image.AnalyzeImageTool") as mock_analyze_image_tool, patch(
-            "ale_run.agents.ale_claw.harness.milestone.MilestoneTool"
+        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool") as mock_analyze_image_tool, patch(
+            "ale_run.agents.ale_claw.harness.tools.milestone.MilestoneTool"
         ):
             store = MagicMock()
             build_tools(
@@ -136,8 +136,8 @@ class TestBuildTools:
         session.interface = MagicMock()
         session._computer = object()
 
-        with patch("ale_run.agents.ale_claw.harness.analyze_image.AnalyzeImageTool") as mock_analyze_image_tool, patch(
-            "ale_run.agents.ale_claw.harness.milestone.MilestoneTool"
+        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool") as mock_analyze_image_tool, patch(
+            "ale_run.agents.ale_claw.harness.tools.milestone.MilestoneTool"
         ) as mock_milestone_tool:
             store = MagicMock()
             build_tools(
@@ -162,7 +162,7 @@ class TestBuildTools:
         sentinel = object()
         session._computer = sentinel
 
-        with patch("ale_run.agents.ale_claw.harness.analyze_image.AnalyzeImageTool"), patch("ale_run.agents.ale_claw.harness.milestone.MilestoneTool"):
+        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool"), patch("ale_run.agents.ale_claw.harness.tools.milestone.MilestoneTool"):
             tools = build_tools(
                 session,
                 MagicMock(),
@@ -180,7 +180,7 @@ class TestBuildTools:
         sentinel = object()
         session._computer = sentinel
 
-        with patch("ale_run.agents.ale_claw.harness.analyze_image.AnalyzeImageTool"), patch("ale_run.agents.ale_claw.harness.milestone.MilestoneTool"):
+        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool"), patch("ale_run.agents.ale_claw.harness.tools.milestone.MilestoneTool"):
             tools = build_tools(
                 session,
                 MagicMock(),
@@ -209,7 +209,7 @@ class TestBuildTools:
         session._computer = object()
         registry = SubagentRegistry()
 
-        with patch("ale_run.agents.ale_claw.harness.analyze_image.AnalyzeImageTool"), patch("ale_run.agents.ale_claw.harness.milestone.MilestoneTool"):
+        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool"), patch("ale_run.agents.ale_claw.harness.tools.milestone.MilestoneTool"):
             tools = build_tools(
                 session,
                 MagicMock(),
@@ -237,7 +237,7 @@ class TestBuildTools:
         session._computer = object()
         registry = SubagentRegistry()
 
-        with patch("ale_run.agents.ale_claw.harness.analyze_image.AnalyzeImageTool"), patch("ale_run.agents.ale_claw.harness.milestone.MilestoneTool"):
+        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool"), patch("ale_run.agents.ale_claw.harness.tools.milestone.MilestoneTool"):
             tools = build_tools(
                 session,
                 MagicMock(),
@@ -262,7 +262,7 @@ class TestBuildTools:
         session._computer = sentinel
         registry = SubagentRegistry()
 
-        with patch("ale_run.agents.ale_claw.harness.analyze_image.AnalyzeImageTool"), patch("ale_run.agents.ale_claw.harness.milestone.MilestoneTool"):
+        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool"), patch("ale_run.agents.ale_claw.harness.tools.milestone.MilestoneTool"):
             tools = build_tools(
                 session,
                 MagicMock(),

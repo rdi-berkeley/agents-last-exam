@@ -29,7 +29,7 @@ from typing import Any
 from agent import ComputerAgent
 from agent.callbacks.base import AsyncCallbackHandler
 
-from ..memory import MemoryGetTool, MemorySearchTool, MemoryStore, MemoryWriteTool
+from ..memory.memory import MemoryGetTool, MemorySearchTool, MemoryStore, MemoryWriteTool
 from .subagent_registry import (
     SubagentRegistry,
     SubagentUsage,

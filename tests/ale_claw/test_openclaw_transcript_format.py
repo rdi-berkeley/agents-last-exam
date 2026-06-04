@@ -10,7 +10,7 @@ differently per provider on replay.
 
 import time
 
-from ale_run.agents.ale_claw.harness.transcript import _find_latest_screenshot, group_step_output
+from ale_run.agents.ale_claw.harness.context.transcript import _find_latest_screenshot, group_step_output
 from ale_run.agents.ale_claw.harness.session import SessionManager
 
 

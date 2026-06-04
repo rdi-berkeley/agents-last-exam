@@ -101,8 +101,8 @@ class TestRegistration:
         session._computer = object()
 
         with patch(
-            "ale_run.agents.ale_claw.harness.analyze_image.AnalyzeImageTool"
-        ), patch("ale_run.agents.ale_claw.harness.milestone.MilestoneTool"):
+            "ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool"
+        ), patch("ale_run.agents.ale_claw.harness.tools.milestone.MilestoneTool"):
             tools = build_tools(
                 session,
                 MagicMock(),

@@ -31,6 +31,11 @@ sample_run/
 # under experiments/ is treated as local-only state.
 experiments/
 
+# Local-only smoke configs that hardcode a developer's VM IP / model choice —
+# never check in (see ale_claw VM-smoke workflow). Templates are documented inline.
+configs/agents/ale_claw_sonnet_or.yaml
+configs/environments/static_ale_vm.yaml
+
 # Per-session working notes / planning docs — not part of the public repo.
 docs/sessions/
 docs/dev

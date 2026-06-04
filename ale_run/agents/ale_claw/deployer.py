@@ -59,8 +59,8 @@ from .harness import (
     convert_to_responses_api_items,
 )
 from .harness.agent_loop import has_done_signal
-from .harness.context import DEFAULT_CONTEXT_TOKENS, resolve_context_window
-from .harness.model_config import resolve_model
+from .harness.context.context import DEFAULT_CONTEXT_TOKENS, resolve_context_window
+from .harness.model.model_config import resolve_model
 
 logger = logging.getLogger(__name__)
 
@@ -247,7 +247,7 @@ class AleClawDeployer(BaseAgentDeployer):
         computer_handler = None
         if not cfg.disable_main_computer:
             if cfg.gui_transport == "mcp" and mcp_runtime is not None:
-                from .harness.computer_handler import MCPComputerHandler
+                from .harness.tools.computer_handler import MCPComputerHandler
                 computer_handler = MCPComputerHandler(mcp_runtime, os_type=sb.os)
             else:
                 computer_handler = OpenClawComputerHandler(session.computer)

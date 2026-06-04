@@ -3,8 +3,8 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from ale_run.agents.ale_claw.harness.model_config import HelperTransportDefaults, ModelConfig, register_model_config
-from ale_run.agents.ale_claw.harness.memory_flush import run_memory_flush
+from ale_run.agents.ale_claw.harness.model.model_config import HelperTransportDefaults, ModelConfig, register_model_config
+from ale_run.agents.ale_claw.harness.memory.memory_flush import run_memory_flush
 
 
 def _mock_flush_response(content: str = "<silent>") -> MagicMock:
@@ -58,12 +58,12 @@ class _MemoryStoreStub:
 
 class TestRunMemoryFlush:
     def setup_method(self):
-        from ale_run.agents.ale_claw.harness.model_config import _MODEL_CONFIGS
+        from ale_run.agents.ale_claw.harness.model.model_config import _MODEL_CONFIGS
 
         self._original = list(_MODEL_CONFIGS)
 
     def teardown_method(self):
-        from ale_run.agents.ale_claw.harness.model_config import _MODEL_CONFIGS
+        from ale_run.agents.ale_claw.harness.model.model_config import _MODEL_CONFIGS
 
         _MODEL_CONFIGS.clear()
         _MODEL_CONFIGS.extend(self._original)

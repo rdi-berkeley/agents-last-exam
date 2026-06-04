@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .session import SessionState
+    from ..session import SessionState
 
 SILENT_REPLY_TOKEN = "[!silent]"
 

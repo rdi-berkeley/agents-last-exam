@@ -27,13 +27,13 @@ from .adapters import (
     OpenClawTrajectorySaverCallback,
 )
 from .agent_loop import OpenClawComputerAgent
-from .analyze_image import AnalyzeImageTool
-from .cache_policy import (
+from .tools.analyze_image import AnalyzeImageTool
+from .model.cache_policy import (
     OPENCLAW_CACHE_BOUNDARY,
     apply_openclaw_cache_markers,
     supports_anthropic_cache,
 )
-from .computer_handler import OpenClawComputerHandler
+from .tools.computer_handler import OpenClawComputerHandler
 from .canonical.canonical import (
     CanonicalMessage,
     CompactionSummaryBlock,
@@ -50,7 +50,7 @@ from .canonical.canonical import (
     repair_orphaned_pairs,
     sanitize_items,
 )
-from .context import (
+from .context.context import (
     CompactionResult,
     ContextOverflowCallback,
     ToolPairingRepairReport,
@@ -59,14 +59,14 @@ from .context import (
     repair_tool_use_result_pairing,
     split_preserved_recent_turns,
 )
-from .memory import (
+from .memory.memory import (
     MemoryGetTool,
     MemorySearchTool,
     MemoryStore,
     MemoryWriteTool,
     SearchResult,
 )
-from .memory_flush import run_memory_flush
+from .memory.memory_flush import run_memory_flush
 from .prompt import ContextFile, PromptBuilder, PromptConfig, SectionConfig
 from .session import (
     DEFAULT_MEMORY_FLUSH_RESERVE_TOKENS_FLOOR,
@@ -94,19 +94,19 @@ from .subagent.subagent_registry import (
     SubagentUsage,
 )
 from .subagent.subagent_tools import DelegateGeneralTool, DelegateGUITool, SubagentsTool
-from .thinking import ThinkingConfig, ThinkLevel, resolve_thinking_default
+from .model.thinking import ThinkingConfig, ThinkLevel, resolve_thinking_default
 from .tools.tools import ToolLoggingCallback, build_tools, get_tool_summaries
 from .tools.tools_fs import EditFileTool, ReadFileTool, WriteFileTool
 from .tools.tools_shell import ExecTool
 from .tools.tools_web import WebFetchTool, WebSearchTool
-from .transcript import group_step_output
+from .context.transcript import group_step_output
 
 # Side-effect import — registers the OpenRouter unified loop with
 # agent.decorators._AGENT_REGISTRY. Lives here (rather than agent/loops/)
 # so sparse-checkout consumers that only pull the openclaw subpackage
 # still get the chat-completions OpenRouter route instead of falling
 # through to loops/openai.py (Responses API).
-from . import unified_loop  # noqa: F401
+from .model import unified_loop  # noqa: F401
 
 __all__ = [
     "OpenClawComputerAgent",

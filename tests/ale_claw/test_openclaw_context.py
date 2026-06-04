@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-from ale_run.agents.ale_claw.harness.context import (
+from ale_run.agents.ale_claw.harness.context.context import (
     DEFAULT_CONTEXT_TOKENS,
     FIXED_IMAGE_TOKENS,
     HARD_MAX_TOOL_RESULT_CHARS,
@@ -301,7 +301,7 @@ class TestContextOverflowCallback:
 
     def test_resolves_context_from_model(self):
         with patch(
-            "ale_run.agents.ale_claw.harness.context.resolve_context_window",
+            "ale_run.agents.ale_claw.harness.context.context.resolve_context_window",
             return_value=500_000,
         ):
             cb = ContextOverflowCallback(model="test-model")

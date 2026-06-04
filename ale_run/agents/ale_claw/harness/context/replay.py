@@ -14,10 +14,10 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
-from .canonical.canonical import _normalize_actions
+from ..canonical.canonical import _normalize_actions
 
 if TYPE_CHECKING:
-    from .session import TranscriptEntry
+    from ..session import TranscriptEntry
 
 
 _THINKING_BLOCK_RE = re.compile(r"<THINKING>.*?</THINKING>", re.DOTALL)

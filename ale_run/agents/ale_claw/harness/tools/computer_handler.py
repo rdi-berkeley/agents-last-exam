@@ -48,7 +48,7 @@ from agent.computers.cua import cuaComputerHandler
 from agent.types import ToolError
 
 if TYPE_CHECKING:
-    from .tools.mcp_runtime import MCPRuntime
+    from .mcp_runtime import MCPRuntime
 
 
 _KEY_MAPPING = {
@@ -218,7 +218,7 @@ class MCPComputerHandler:
         semantics. Without this, the raw ``MCPToolError`` (a ``RuntimeError``)
         would propagate and abort the episode.
         """
-        from .tools.mcp_runtime import MCPToolError
+        from .mcp_runtime import MCPToolError
         try:
             return await self._runtime.call("cua", tool, args)
         except MCPToolError as e:

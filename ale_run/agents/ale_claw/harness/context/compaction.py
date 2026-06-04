@@ -13,9 +13,9 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from .canonical.canonical_sanitize import _SKIP_SYNTHESIS_STOP_REASONS
-from .helper_runtime import call_helper_model
-from .model_config import ResolvedModel, resolve_model
+from ..canonical.canonical_sanitize import _SKIP_SYNTHESIS_STOP_REASONS
+from ..model.helper_runtime import call_helper_model
+from ..model.model_config import ResolvedModel, resolve_model
 from .token_estimation import (
     SAFETY_MARGIN,
     estimate_message_tokens,

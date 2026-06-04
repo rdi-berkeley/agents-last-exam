@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .memory_flush_policy import (  # re-exported for back-compat
+from .memory.memory_flush_policy import (  # re-exported for back-compat
     DEFAULT_COMPACTION_RATIO,
     DEFAULT_MEMORY_FLUSH_FORCE_TRANSCRIPT_BYTES,
     DEFAULT_MEMORY_FLUSH_RESERVE_TOKENS_FLOOR,
@@ -38,8 +38,8 @@ from .memory_flush_policy import (  # re-exported for back-compat
     has_already_flushed_for_current_compaction,
     should_run_memory_flush,
 )
-from .prompt_report import build_system_prompt_report  # re-exported for back-compat
-from .replay import (  # re-exported for back-compat
+from .prompt import build_system_prompt_report  # re-exported for back-compat
+from .context.replay import (  # re-exported for back-compat
     build_replay_messages,
     convert_to_responses_api_items,
     limit_history_turns,
@@ -517,4 +517,4 @@ class SessionManager:
 # limit_history_turns / convert_to_responses_api_items + helpers) moved to
 # replay.py; public entry points re-exported above.
 
-# build_system_prompt_report moved to prompt_report.py; re-exported below.
+# build_system_prompt_report lives in prompt.py (merged from prompt_report.py); re-exported below.
