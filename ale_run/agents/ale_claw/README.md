@@ -25,10 +25,10 @@ lifecycle. The pieces that make it more than a thin tool-calling loop:
   ordering) before each API call (`canonical/`).
 - **Budget-aware compaction** — when the context window fills, older history is
   chunked and summarized in place and the loop continues, no agent rebuild
-  (`context.py` + `compaction.py`).
+  (`context/`).
 - **Durable memory + pre-compaction flush** — the agent persists task memory and
   a session log to disk; a flush turn runs before compaction so nothing
-  important is lost (`memory*.py`).
+  important is lost (`memory/`).
 - **Subagent delegation** — spawn focused workers: an async general subagent
   (its own session + compaction) and a blocking GUI subagent that relays
   vision→action through a second `ComputerAgent` (`subagent/`).
@@ -36,7 +36,7 @@ lifecycle. The pieces that make it more than a thin tool-calling loop:
   analysis, milestone screenshots, and memory tools (`tools/`).
 - **Multi-provider via OpenRouter** — a unified Chat-Completions loop registered
   for `openrouter/*` plus image sanitization (resize/transcode) so screenshots
-  fit provider limits (`unified_loop.py`, `image_sanitization.py`).
+  fit provider limits (`inference/unified_loop.py`, `utils/image_sanitization.py`).
 
 ## VM transport
 
@@ -124,13 +124,18 @@ ale_run/agents/ale_claw/
 └── harness/                    — the OpenClaw agent, in-tree and ALE-owned
     ├── AGENTS.md               — system-prompt context file
     ├── agent_loop.py           — OpenClawComputerAgent (the run loop)
-    ├── computer_handler.py     — GUI handlers: session + MCP (MCPComputerHandler)
-    ├── session.py / replay.py  — session state + cross-run transcript replay
+    ├── agent_loop_helpers.py   — the loop's stateless free functions
+    ├── session.py              — session state + state.json persistence
+    ├── prompt.py               — system-prompt builder + composition report
     ├── canonical/              — typed message format + sanitize passes
-    ├── tools/                  — fs / shell / web tools + mcp_runtime (MCP bridge client)
+    ├── context/                — context-window lifecycle: truncation, compaction, replay
+    ├── memory/                 — durable task memory + pre-compaction flush
+    ├── inference/              — model config, the unified provider loop, caching
+    ├── computer/               — VM execution-substrate handlers (session + MCP)
+    ├── tools/                  — fs / shell / web / image tools + mcp_runtime (MCP client)
     ├── subagent/               — general + GUI subagent engines
-    ├── adapters/               — CUA SDK callback extensions
-    └── … (context, compaction, memory, prompt, unified_loop, …)
+    ├── utils/                  — leaf transforms (image sanitization)
+    └── adapters/               — CUA SDK callback extensions
 ```
 
 ## Provenance
