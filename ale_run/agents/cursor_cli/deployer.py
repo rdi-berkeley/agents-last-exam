@@ -465,7 +465,7 @@ class CursorCliDeployer(BaseAgentDeployer):
         # Source 2: file path from CURSOR_AUTH_JSON_PATH env var
         auth_path_str = os.environ.get("CURSOR_AUTH_JSON_PATH", "").strip()
         if auth_path_str:
-            auth_path = Path(auth_path_str)
+            auth_path = Path(auth_path_str).expanduser()
             if auth_path.is_file():
                 content = auth_path.read_text(encoding="utf-8")
                 auth_dir.mkdir(parents=True, exist_ok=True)

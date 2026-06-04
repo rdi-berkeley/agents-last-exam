@@ -728,7 +728,7 @@ def _collect_env_passthrough() -> dict[str, str]:
     if "CURSOR_AUTH_JSON" not in result:
         auth_path_str = os.environ.get("CURSOR_AUTH_JSON_PATH", "").strip()
         if auth_path_str:
-            auth_path = _Path(auth_path_str)
+            auth_path = _Path(auth_path_str).expanduser()
             if auth_path.is_file():
                 try:
                     content = auth_path.read_text(encoding="utf-8")
