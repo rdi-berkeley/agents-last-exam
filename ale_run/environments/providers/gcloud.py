@@ -54,7 +54,12 @@ _CUA_READY_STABLE_SUCCESSES = 2         # consecutive /status oks before "ready"
 # stderr substring → error class. transient = retry same zone; zone =
 # move to next zone (capacity/quota); anything else = fail fast.
 _GCP_RETRYABLE_TRANSIENT = [
-    "ratelimitexceeded", "503", "service unavailable",
+    "ratelimitexceeded",
+    # transient HTTP 5xx from the GCE API itself (not capacity): retry w/ backoff.
+    # 503 was already covered; 500/502 (e.g. "Error 502 (Server Error)") were not,
+    # so they previously failed fast with no backoff and no zone fallback.
+    "500", "502", "503", "service unavailable", "bad gateway",
+    "internal error", "backend error",
     "connection reset", "connection refused", "timed out", "deadline exceeded",
 ]
 _GCP_RETRYABLE_ZONE = [
