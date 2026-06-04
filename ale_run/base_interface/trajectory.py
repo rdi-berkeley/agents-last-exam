@@ -248,10 +248,38 @@ class TrajectoryBuilder:
         )
         self._next_step_id = 1
         self._t0 = time.monotonic()
+        self._final_metrics_override: dict[str, float] = {}
+
+    #: FinalMetrics fields a deployer may override in :meth:`finalize`.
+    _OVERRIDABLE_METRICS = frozenset({
+        "total_input_tokens",
+        "total_output_tokens",
+        "total_cache_read_tokens",
+        "total_cache_creation_tokens",
+        "total_cost_usd",
+    })
 
     @property
     def trajectory(self) -> Trajectory:
         return self._traj
+
+    def override_final_metrics(self, **totals: float | None) -> None:
+        """Record authoritative trajectory totals to apply in :meth:`finalize`.
+
+        :meth:`finalize` defaults to summing per-step :class:`StepMetrics`, which
+        is lossy for some agents — e.g. ale_claw's transcript carries neither the
+        prompt-cache read/write split nor the final/helper turns, so the per-step
+        sum under-counts tokens and cost. A deployer that can compute exact totals
+        from richer artifacts records them here; finalize then prefers them over
+        the per-step sum for exactly the keys provided (others still come from the
+        sum). Passing ``None`` for a key is a no-op, so callers can offer a metric
+        only when they actually have it.
+        """
+        for key, value in totals.items():
+            if key not in self._OVERRIDABLE_METRICS:
+                raise ValueError(f"non-overridable FinalMetrics field: {key!r}")
+            if value is not None:
+                self._final_metrics_override[key] = value
 
     def add_step(
         self,
@@ -299,6 +327,10 @@ class TrajectoryBuilder:
             m.total_cache_creation_tokens += s.metrics.cache_creation_tokens or 0
             if s.metrics.cost_usd is not None:
                 m.total_cost_usd += s.metrics.cost_usd
+        # Authoritative deployer-supplied totals win over the per-step sum,
+        # per provided key (see :meth:`override_final_metrics`).
+        for key, value in self._final_metrics_override.items():
+            setattr(m, key, value)
         self._traj.final_metrics = m
         self._traj.ended_at = _now_iso()
         return self._traj

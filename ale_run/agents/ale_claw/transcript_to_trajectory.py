@@ -84,6 +84,32 @@ def parse_transcripts_into(work_dir: Path, builder: TrajectoryBuilder) -> None:
     aggregated = _aggregate_usage(work_dir)
     builder.trajectory.extra.setdefault("ale_claw", {})["usage"] = aggregated
     builder.trajectory.extra["ale_claw"]["raw_transcript"] = str(transcripts[0])
+    _reconcile_final_metrics(builder, aggregated)
+
+
+def _reconcile_final_metrics(
+    builder: TrajectoryBuilder, aggregated: dict[str, Any]
+) -> None:
+    """Feed the authoritative aggregate into ``final_metrics`` via the builder.
+
+    The default per-step ``StepMetrics`` sum drops the prompt-cache split (the
+    transcript never carries it) and the final/helper turns (they bypass the
+    transcript writer), so ``final_metrics`` under-reports tokens, cache, and
+    cost. ``aggregated`` (from :func:`_aggregate_usage`: state.json tokens +
+    per-turn api_result cache/cost) is complete, so prefer it. No-op when there
+    is no authoritative input-token total (degraded run) — keeps the per-step
+    sum rather than zeroing it out.
+    """
+    if aggregated.get("overall_input_tokens", 0) <= 0:
+        return
+    builder.override_final_metrics(
+        total_input_tokens=aggregated.get("overall_input_tokens"),
+        total_output_tokens=aggregated.get("output_tokens"),
+        total_cache_read_tokens=aggregated.get("cache_read_input_tokens", 0),
+        total_cache_creation_tokens=aggregated.get("cache_write_input_tokens", 0),
+        # Only override cost when the aggregate has it; else keep per-step sum.
+        total_cost_usd=aggregated.get("total_cost_usd"),
+    )
 
 
 # =============================================================================
@@ -273,20 +299,24 @@ def _aggregate_usage(work_dir: Path) -> dict[str, Any]:
     overall_input_tokens is sourced from state.json (not transcript).
     """
     state_in, state_out = _aggregate_state_json_tokens(work_dir)
-    cache_read, cache_write = _aggregate_cache_tokens(work_dir)
+    cache_read, cache_write, api_cost = _aggregate_api_result_usage(work_dir)
     msg_in, msg_out, msg_cost = _aggregate_message_usage(work_dir)
 
     in_t = state_in or msg_in
     out_t = state_out or msg_out
     uncached_in = max(in_t - cache_read - cache_write, 0)
+    # Per-call api_result cost is authoritative — it includes the final/helper
+    # turns the transcript-message cost (msg_cost) drops. Fall back to msg_cost
+    # only when no api_result dumps are present.
+    cost = api_cost or msg_cost
 
     out: dict[str, Any] = {
         "uncached_input_tokens": uncached_in,
         "output_tokens": out_t,
         "overall_input_tokens": in_t,
     }
-    if msg_cost > 0:
-        out["total_cost_usd"] = round(msg_cost, 6)
+    if cost > 0:
+        out["total_cost_usd"] = round(cost, 6)
     if cache_read > 0:
         out["cache_read_input_tokens"] = cache_read
     if cache_write > 0:
@@ -311,12 +341,20 @@ def _aggregate_state_json_tokens(work_dir: Path) -> tuple[int, int]:
     return in_t, out_t
 
 
-def _aggregate_cache_tokens(work_dir: Path) -> tuple[int, int]:
-    """Sum cached_tokens / cache_write_tokens from per-turn API result dumps."""
+def _aggregate_api_result_usage(work_dir: Path) -> tuple[int, int, float]:
+    """Sum cache split + cost from per-turn API result dumps.
+
+    Returns ``(cache_read, cache_write, cost)``. Unlike the transcript-message
+    usage, these dumps cover EVERY provider call — including the final "done"
+    turn and helper/compaction/VLM calls that bypass the transcript writer — so
+    the cost here is the authoritative total. Usage lives under ``result.usage``
+    (NOT top-level ``usage``).
+    """
     trajectories_root = work_dir / _TRAJECTORIES_SUBDIR
     if not trajectories_root.is_dir():
-        return 0, 0
+        return 0, 0, 0.0
     cache_read = cache_write = 0
+    cost = 0.0
     for path in trajectories_root.glob("*/turn_*/[0-9]*_api_result.json"):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -326,7 +364,8 @@ def _aggregate_cache_tokens(work_dir: Path) -> tuple[int, int]:
         details = usage.get("prompt_tokens_details") or {}
         cache_read += int(details.get("cached_tokens") or 0)
         cache_write += int(details.get("cache_write_tokens") or 0)
-    return cache_read, cache_write
+        cost += float(usage.get("cost") or 0.0)
+    return cache_read, cache_write, cost
 
 
 def _aggregate_message_usage(work_dir: Path) -> tuple[int, int, float]:
