@@ -63,7 +63,7 @@ _COMPUTER_ACTION_PARAMS: Dict[str, List[str]] = {
 
 from .inference._message_shapes import _function_call_output, _image_url_block
 from .canonical.canonical import normalize_to_canonical, sanitize_items
-from .computer.computer_handler import OpenClawComputerHandler
+from .tools.computer_handler import OpenClawComputerHandler
 from .context.context import ContextOverflowCallback, compact_messages, is_context_overflow_error
 from .memory.memory import MemoryStore
 from .memory.memory_flush import run_memory_flush

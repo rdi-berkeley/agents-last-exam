@@ -131,8 +131,7 @@ ale_run/agents/ale_claw/
     ├── context/                — context-window lifecycle: truncation, compaction, replay
     ├── memory/                 — durable task memory + pre-compaction flush
     ├── inference/              — model config, unified provider loop, caching, image sanitization
-    ├── computer/               — VM execution-substrate handlers (session + MCP)
-    ├── tools/                  — fs / shell / web / image tools + mcp_runtime (MCP client)
+    ├── tools/                  — fs / shell / web / image tools, computer handlers (session + MCP), mcp_runtime
     ├── subagent/               — general + GUI subagent engines
     └── adapters/               — CUA SDK callback extensions
 ```

@@ -247,7 +247,7 @@ class AleClawDeployer(BaseAgentDeployer):
         computer_handler = None
         if not cfg.disable_main_computer:
             if cfg.gui_transport == "mcp" and mcp_runtime is not None:
-                from .harness.computer.computer_handler import MCPComputerHandler
+                from .harness.tools.computer_handler import MCPComputerHandler
                 computer_handler = MCPComputerHandler(mcp_runtime, os_type=sb.os)
             else:
                 computer_handler = OpenClawComputerHandler(session.computer)
