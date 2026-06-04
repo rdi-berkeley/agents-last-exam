@@ -1,0 +1,6 @@
+# Agent preset: cursor_composer25_cursor
+# harness=cursor_cli model=composer-2.5 (Standard tier; composer_fast defaults False)
+# Composer 2.5 via Cursor backend (CURSOR_API_KEY). Standard = same weights as
+# Fast at ~1/6 the price; Fast only lowers latency (irrelevant for batch).
+harness: cursor_cli
+model: composer-2.5
