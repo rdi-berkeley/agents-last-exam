@@ -90,22 +90,33 @@ class CodexDeployer(BaseAgentDeployer):
         sandbox = self.executor.sandbox
         self._is_windows = not sandbox.is_linux
 
-        # 1. npm install -g @openai/codex@<version>. Always ensure npm is on
-        # PATH first (on Windows node ships off PATH; ensure_npm fixes it).
+        # 1. Ensure node/npm are on PATH (on Windows node ships off PATH;
+        # ensure_npm fixes it and also puts the npm-global bin dir on PATH so a
+        # baked global ``codex`` resolves via shutil.which).
         from ale_run.agents._bootstrap import ensure_npm
         self._npm_path = await ensure_npm()
 
+        # Skip-install policy (Option B): if a ``codex`` is already present
+        # (baked into the image) USE IT, regardless of its version string. Both
+        # the ale-ubuntu22 and ale-win10 images bake the *fork* build, which
+        # reports ``codex-cli 0.0.0`` — requiring the npm-pinned semver would
+        # force a needless reinstall + GitHub re-download on every single run.
+        # We only treat a baked binary as good enough to skip the patched-binary
+        # overlay when it IS the fork; a stock build (or anything not the fork)
+        # still gets the fork overlaid below, so the running engine is always
+        # the fork — we never silently fall back to stock.
         codex_path = shutil.which("codex")
-        # Force-correct a stale/mismatched pinned version even if a codex is
-        # already on PATH (the baked win image may carry an old build).
-        if codex_path and not await self._version_matches(codex_path, cfg.codex_version):
+        baked_is_fork = bool(codex_path) and await self._is_fork_build(codex_path)
+        if codex_path:
             logger.info(
-                "codex: on-PATH binary version != pinned %s, reinstalling ...",
+                "codex: using pre-installed binary %s (fork=%s), skipping npm install",
+                codex_path, baked_is_fork,
+            )
+        else:
+            logger.info(
+                "codex: not found on PATH, installing @openai/codex@%s via npm ...",
                 cfg.codex_version,
             )
-            codex_path = None
-        if not codex_path:
-            logger.info("codex: installing @openai/codex@%s via npm ...", cfg.codex_version)
             await self._npm_install_codex(cfg.codex_version)
             codex_path = shutil.which("codex")
             if not codex_path:
@@ -115,17 +126,21 @@ class CodexDeployer(BaseAgentDeployer):
                 )
         self._codex_path = codex_path
 
-        # 2. Optionally download + replace the native vendor binary. The
-        # Linux and Windows builds are distinct release assets (musl ELF vs
-        # codex.exe / windows-msvc), so pick the URL matching the OS we're
-        # running on. Empty URL for this OS = skip replacement (use npm's
-        # bundled binary).
-        patched_url = (
-            cfg.patched_binary_url_windows if self._is_windows
-            else cfg.patched_binary_url
-        )
-        if patched_url:
-            await self._replace_native_binary(patched_url)
+        # 2. Overlay the patched fork native binary UNLESS we already have the
+        # fork. A baked fork build needs no overlay (this skips a per-run GitHub
+        # download — important at concurrency × 135 tasks); a freshly
+        # npm-installed stock build (or a non-fork baked one) gets the fork
+        # overlaid so the engine is always the fork. The Linux and Windows
+        # builds are distinct release assets, so pick the URL matching the OS.
+        if baked_is_fork:
+            logger.info("codex: baked fork build detected, skipping patched-binary overlay")
+        else:
+            patched_url = (
+                cfg.patched_binary_url_windows if self._is_windows
+                else cfg.patched_binary_url
+            )
+            if patched_url:
+                await self._replace_native_binary(patched_url)
 
         # 3. Verify codex --version
         try:
@@ -149,6 +164,19 @@ class CodexDeployer(BaseAgentDeployer):
 
         # 5. Write MCP config (config.toml) for CUA bridge
         await self._write_codex_config(cfg)
+
+    # The cua-verse fork carries no real semver and reports ``codex-cli
+    # 0.0.0``; any stock npm release reports a normal version (e.g.
+    # ``0.114.0``). We use that sentinel to recognise a baked fork build.
+    _FORK_VERSION_MARKER: ClassVar[str] = "0.0.0"
+
+    async def _is_fork_build(self, codex_path: str) -> bool:
+        """True if the codex at ``codex_path`` is our cua-verse fork build.
+
+        Used to decide whether the patched-binary overlay can be skipped (the
+        baked binary already IS the fork) — see :meth:`install` step 2.
+        """
+        return await self._version_matches(codex_path, self._FORK_VERSION_MARKER)
 
     async def _version_matches(self, codex_path: str, version: str) -> bool:
         """True if ``codex --version`` reports the pinned version string."""
