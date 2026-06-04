@@ -19,7 +19,7 @@ to exercise the function directly — same semantics, sync API.
 
 import pytest
 
-from ale_run.agents.ale_claw.harness.inference.cache_policy import (
+from ale_run.agents.ale_claw.harness.model.cache_policy import (
     OPENCLAW_CACHE_BOUNDARY,
     apply_openclaw_cache_markers,
     supports_anthropic_cache,

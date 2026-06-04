@@ -19,9 +19,9 @@ import json as _json
 from typing import TYPE_CHECKING, Any
 
 from ..canonical.canonical import _normalize_actions
-from ..inference.model_config import ResolvedModel, resolve_model
+from ..model.model_config import ResolvedModel, resolve_model
 
-from ..inference.helper_runtime import call_helper_model
+from ..model.helper_runtime import call_helper_model
 
 if TYPE_CHECKING:
     from .memory import MemoryStore

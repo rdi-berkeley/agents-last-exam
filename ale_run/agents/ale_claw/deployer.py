@@ -60,7 +60,7 @@ from .harness import (
 )
 from .harness.agent_loop import has_done_signal
 from .harness.context.context import DEFAULT_CONTEXT_TOKENS, resolve_context_window
-from .harness.inference.model_config import resolve_model
+from .harness.model.model_config import resolve_model
 
 logger = logging.getLogger(__name__)
 

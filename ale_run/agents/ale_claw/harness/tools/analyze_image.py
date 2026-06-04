@@ -26,7 +26,7 @@ import litellm
 
 from agent.tools.base import BaseTool, register_tool
 
-from ..inference.image_sanitization import ImageLimits, sanitize_raw_image_bytes
+from ..model.image_sanitization import ImageLimits, sanitize_raw_image_bytes
 
 if TYPE_CHECKING:
     from computer.interface import BaseComputerInterface

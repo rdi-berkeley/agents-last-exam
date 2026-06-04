@@ -14,8 +14,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..canonical.canonical_sanitize import _SKIP_SYNTHESIS_STOP_REASONS
-from ..inference.helper_runtime import call_helper_model
-from ..inference.model_config import ResolvedModel, resolve_model
+from ..model.helper_runtime import call_helper_model
+from ..model.model_config import ResolvedModel, resolve_model
 from .token_estimation import (
     SAFETY_MARGIN,
     estimate_message_tokens,

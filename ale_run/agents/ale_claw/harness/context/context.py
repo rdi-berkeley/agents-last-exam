@@ -31,7 +31,7 @@ import copy
 import re
 from typing import Any
 
-from ..inference.model_config import ResolvedModel, resolve_model
+from ..model.model_config import ResolvedModel, resolve_model
 from agent.callbacks.base import AsyncCallbackHandler
 
 from .token_estimation import (  # re-exported for back-compat

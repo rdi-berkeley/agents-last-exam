@@ -36,7 +36,7 @@ lifecycle. The pieces that make it more than a thin tool-calling loop:
   analysis, milestone screenshots, and memory tools (`tools/`).
 - **Multi-provider via OpenRouter** — a unified Chat-Completions loop registered
   for `openrouter/*` plus image sanitization (resize/transcode) so screenshots
-  fit provider limits (`inference/unified_loop.py`, `inference/image_sanitization.py`).
+  fit provider limits (`model/unified_loop.py`, `model/image_sanitization.py`).
 
 ## VM transport
 
@@ -130,7 +130,7 @@ ale_run/agents/ale_claw/
     ├── canonical/              — typed message format + sanitize passes
     ├── context/                — context-window lifecycle: truncation, compaction, replay
     ├── memory/                 — durable task memory + pre-compaction flush
-    ├── inference/              — model config, unified provider loop, caching, image sanitization
+    ├── model/                  — model config, unified provider loop, caching, image sanitization
     ├── tools/                  — fs / shell / web / image tools, computer handlers (session + MCP), mcp_runtime
     ├── subagent/               — general + GUI subagent engines
     └── adapters/               — CUA SDK callback extensions
