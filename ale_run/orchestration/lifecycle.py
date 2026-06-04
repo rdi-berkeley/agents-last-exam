@@ -50,8 +50,10 @@ _DEFAULT_TIMEOUT_S = 7200
 # Wall-clock ceiling for the evaluation phase. Without it, a wedged cua RPC
 # inside a task's evaluate() (e.g. a long eval whose result never returns)
 # hangs the whole unit until the episode budget — minutes-to-hours of a held
-# VM. Bound it so a stuck eval fails cleanly instead.
-_EVAL_TIMEOUT_S = 3600
+# VM. Bound it so a stuck eval ends cleanly instead. Hitting this bound is
+# treated as a unit ``timeout`` (not ``failed``), so resume won't re-run it
+# (it would just time out again) — same semantics as an agent wall-clock timeout.
+_EVAL_TIMEOUT_S = 7200
 
 
 def _append_prompt_suffix(task_meta: dict[str, Any], prompt_suffix: str) -> None:
@@ -129,6 +131,7 @@ async def run_one_unit(
     sem: asyncio.Semaphore | None = None,
     cleanup_mode: str = "delete",
     prompt_suffix: str = "",
+    wall_time_s: int | None = None,
 ) -> UnitResult:
     started = time.monotonic()
     effective_cleanup_mode = cleanup_mode
@@ -203,7 +206,7 @@ async def run_one_unit(
             task_path = Path("tasks") / unit.task_path
             task_meta = TaskLoader(str(task_path)).load(unit.variant_index)
             env_spec = _build_env_spec(task_meta, unit=unit)
-            timeout_s = int(task_meta.get("timeout_s") or _DEFAULT_TIMEOUT_S)
+            timeout_s = int(wall_time_s or task_meta.get("timeout_s") or _DEFAULT_TIMEOUT_S)
 
             # Resolve the provider for THIS task's snapshot (per-snapshot
             # routing: an environment can mix backends across snapshots).
@@ -432,7 +435,9 @@ async def run_one_unit(
                     score = _extract_score(eval_out)
             except asyncio.TimeoutError:
                 eval_duration_s = round(time.monotonic() - eval_start, 4)
-                eval_status = "failed"
+                # Eval ran out of wall-clock — treat as a timeout (not a failure)
+                # so the unit status is "timeout" and resume skips it.
+                eval_status = "timeout"
                 eval_error = {
                     "type": "TimeoutError",
                     "message": f"evaluate() exceeded {_EVAL_TIMEOUT_S}s wall-clock",
@@ -487,6 +492,10 @@ async def run_one_unit(
                     "message": error_str,
                     "traceback": error_str,
                 }
+            elif eval_status == "timeout":
+                status = "timeout"
+                error_str = (eval_error or {}).get("message", "evaluation timed out")
+                error_obj = eval_error
             elif eval_status == "failed":
                 status = "failed"
                 error_str = (eval_error or {}).get("message", "evaluation failed")
