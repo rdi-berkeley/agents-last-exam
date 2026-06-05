@@ -1,0 +1,75 @@
+# openclaw_cli — OpenClaw CLI (installed from a fork tarball, not public npm),
+# run via `agent --local`. CUA bridge is the native OpenClaw plugin (not MCP).
+# Auth: API keys via auth-profiles.json.
+#   provider=openrouter → OPENROUTER_API_KEY (model prefixed openrouter/<model>);
+#   provider=direct → OPENAI_API_KEY (gpt-*) or ANTHROPIC_API_KEY (claude-*).
+#
+# Consolidated preset; `model:` is an example, every `config:` key is the
+# dataclass default (ale_run/agents/openclaw_cli/config.py).
+# Reference as:  agents: [ configs/agents/openclaw_cli.yaml ]
+
+harness: openclaw_cli
+# executor: sandbox          # only supported value (deployer default).
+
+# Example model — sugar for config.model. Dataclass default: openai/gpt-5.4.
+model: openai/gpt-5.4
+
+config:
+  # Routing: "openrouter" (default) or "direct" (provider picked by model vendor).
+  provider: openrouter
+
+  # OpenClaw's OWN internal run budget (openclaw.json timeoutSeconds +
+  # `agent --local --timeout <s>`). Distinct from the orchestration episode budget.
+  agent_timeout_s: 600
+
+  # Thinking level: off | low | medium | high.
+  thinking: high
+
+  # Vision/screenshot model. null = none; default pins it to the same id as model.
+  vision_model: openai/gpt-5.4
+
+  # Heartbeat cadence. "never" = no heartbeat messages.
+  heartbeat_every: never
+
+  # Tools denied — backend/late-binding tools whose impl needs an unloaded plugin,
+  # plus gateway-only tools that 1006-close under `agent --local` (no live gateway WS).
+  # NB: web_search/web_fetch stay denied NOT as web policy — their impl reaches for
+  # a plugin we don't load, so they'd error (justified, not a deliberate block).
+  tools_deny:
+    - web_search
+    - web_fetch
+    - image_generate
+    - video_generate
+    - music_generate
+    - memory_search
+    - sessions_yield
+    - sessions_list
+    - sessions_history
+    - sessions_spawn
+    - sessions_send
+    - cron
+
+  # Plugins allowed. The resolved auth provider is appended at write time, so it
+  # need not be listed. memory-core gives the harmless memory_get file reader.
+  plugins_allow:
+    - cua
+    - openrouter
+    - memory-core
+
+  # Plugins explicitly denied. Default: none.
+  plugins_deny: []
+
+  # OpenClaw fork tarball location inside the sandbox.
+  tarball_path: /opt/ale/openclaw-fork.tgz
+
+  # GitHub Release URL for the fork tarball — fallback when tarball_path is absent.
+  tarball_url: ""
+
+  # CUA plugin source dir inside the sandbox.
+  cua_plugin_path: /opt/ale/openclaw-cua-plugin
+
+  # Git URL to clone the CUA plugin from when cua_plugin_path is missing.
+  cua_plugin_repo: https://github.com/cua-verse/openclaw.git
+
+  # Branch to clone for the CUA plugin source.
+  cua_plugin_branch: agenthle

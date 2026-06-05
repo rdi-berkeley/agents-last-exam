@@ -315,7 +315,10 @@ class Terminus2Deployer(BaseAgentDeployer):
         if cfg.api_base:
             argv += ["--api-base", cfg.api_base]
         if cfg.max_turns is not None:
-            argv += ["--max-turns", str(cfg.max_turns)]
+            # -1 (or any value < 0) = unlimited; terminus_2 has no native
+            # unlimited sentinel, so translate to a large finite cap.
+            n = 100_000 if cfg.max_turns < 0 else cfg.max_turns
+            argv += ["--max-turns", str(n)]
         if not cfg.record_terminal_session:
             argv.append("--no-recording")
         return argv

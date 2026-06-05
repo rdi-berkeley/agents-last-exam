@@ -1,0 +1,46 @@
+# droid — Factory.ai `droid` CLI (closed-source binary), run headless on the sandbox.
+# Auth: FACTORY_API_KEY sentinel (byok-noop) satisfies the CLI's auth gate; actual
+# model calls route via OpenRouter using OPENROUTER_API_KEY (BYOK customModels entry).
+#
+# Consolidated preset; `model:` is an example, every `config:` key is the
+# dataclass default (ale_run/agents/droid/config.py).
+# Reference as:  agents: [ configs/agents/droid.yaml ]
+
+harness: droid
+# executor: sandbox          # only supported value (deployer default).
+
+# Example model — sugar for config.model. Dataclass default: anthropic/claude-opus-4.7.
+model: anthropic/claude-opus-4.7
+
+config:
+  # Routing. "openrouter" is the only route the deployer implements (BYOK
+  # customModels → openrouter.ai/api/v1 + OPENROUTER_API_KEY).
+  provider: openrouter
+
+  # --reasoning-effort: off | none | low | medium | high.
+  reasoning_effort: high
+
+  # Bypass droid's permission gate (headless).
+  skip_permissions_unsafe: true
+
+  # Per-request output-token cap on OpenRouter ("no client-side limit" choice;
+  # higher values can 400 on the first call).
+  max_output_tokens: 128000
+
+  # BYOK wire protocol for the customModels entry.
+  byok_provider: generic-chat-completion-api
+
+  # Deny-only policy: only disabled tools are configured (no allow list). These
+  # are interactive / platform tools that don't fit headless runs. WebSearch is
+  # intentionally kept ENABLED — internet is allowed.
+  disabled_tools:
+    - squad-board
+    - slack_post_message
+    - store_agent_readiness_report
+    - GenerateDroid
+    - ProposeMission
+    - StartMissionRun
+    - EndFeatureRun
+    - DismissHandoffItems
+    - ExitSpecMode
+    - AskUser

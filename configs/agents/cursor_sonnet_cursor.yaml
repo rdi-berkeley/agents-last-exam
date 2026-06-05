@@ -1,6 +1,0 @@
-# Agent preset: cursor_sonnet_cursor
-# harness=cursor_cli model=claude-4.6-sonnet-medium
-# Referenced from an experiment as:  agents: [ ../configs/agents/cursor_sonnet_cursor.yaml ]
-
-harness: cursor_cli
-model: claude-4.6-sonnet-medium

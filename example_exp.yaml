@@ -25,7 +25,7 @@ name: my_experiment
 secret_file: secret/.env                          # KEY=value pairs
 
 agents:
-  - configs/agents/cc_sonnet_or_t3.yaml           # add more lines to run a matrix
+  - configs/agents/claude_code.yaml               # add more lines to run a matrix
 environment: configs/environments/environment.yaml
 
 tasks: selected_tasks/helloworld.txt

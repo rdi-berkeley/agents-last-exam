@@ -325,7 +325,7 @@ class HermesDeployer(BaseAgentDeployer):
                 "context_length": cfg.context_length,
             },
             "agent": {
-                "max_turns": int(cfg.max_turns or 100_000),
+                "max_turns": (100_000 if cfg.max_turns is None or cfg.max_turns < 0 else int(cfg.max_turns)),
                 "verbose": False,
                 "reasoning_effort": "medium",
             },
@@ -468,7 +468,7 @@ class HermesDeployer(BaseAgentDeployer):
             "-Q",
             f"--provider {provider_arg}",
             f'--model "{cfg.model}"',
-            f"--max-turns {int(cfg.max_turns or 100_000)}",
+            f"--max-turns {(100_000 if cfg.max_turns is None or cfg.max_turns < 0 else int(cfg.max_turns))}",
             "--yolo",
             "--accept-hooks",
             "--ignore-rules",

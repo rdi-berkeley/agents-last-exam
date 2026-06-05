@@ -1,0 +1,31 @@
+# cursor_cli — Cursor's `cursor-agent` CLI, run headless on the sandbox.
+# Auth: CURSOR_API_KEY (Cursor's own backend). BYOK / OpenRouter routing are NOT
+# supported by cursor-agent, so provider is fixed to "cursor".
+# Model ids use Cursor's catalog names (e.g. claude-4.6-sonnet-medium,
+# claude-opus-4-7-thinking-high, gpt-5.5-high, composer-2.5).
+#
+# Consolidated preset; every `config:` key is the dataclass default
+# (ale_run/agents/cursor_cli/config.py).
+# Reference as:  agents: [ configs/agents/cursor_cli.yaml ]
+
+harness: cursor_cli
+# executor: sandbox          # only supported value (deployer default).
+
+# Example model (sugar for config.model). Dataclass DEFAULT is "" = "auto" — the
+# deployer omits --model and cursor-agent picks its own Composer model. A pinned
+# Sonnet catalog name can hit per-model Cursor account quotas; "auto" avoids that.
+# Set a concrete catalog name only when you need a specific model.
+model: claude-4.6-sonnet-medium
+
+config:
+  # Routing provider. Hard-wired to "cursor" (BYOK/OpenRouter unsupported). The
+  # deployer does not branch on it; present for parity / explicitness.
+  provider: cursor
+
+  # Pinned cursor-agent version (Cursor's date-hash scheme); installs this exact
+  # build so all environments converge on one version.
+  cursor_version: "2026.05.28-a70ca7c"
+
+  # Permission deny patterns for cli-config.json. Supports Shell(...), Read(...),
+  # Write(...), WebFetch(...), Mcp(server, tool). Default: none denied.
+  disabled_tools: []

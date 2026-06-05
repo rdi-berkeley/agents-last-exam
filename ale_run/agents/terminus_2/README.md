@@ -67,7 +67,7 @@ agent:
   model: anthropic/claude-sonnet-4.6   # OpenRouter-native id
   config:
     timeout_s: 3600                    # outer wall-clock budget
-    max_turns: 100000                  # cap LLM episodes
+    max_turns: -1                      # -1 = unlimited (deployer maps to 100000)
     provider: openrouter               # or "direct"
     record_terminal_session: true      # set false to skip asciinema
     api_base: null                     # optional LiteLLM base url override

@@ -1,8 +1,0 @@
-# Agent preset: codex_gpt54_direct
-# harness=codex model=gpt-5.4
-# Referenced from an experiment as:  agents: [ ../configs/agents/codex_gpt54_direct.yaml ]
-
-harness: codex
-model: gpt-5.4
-config:
-  provider: direct

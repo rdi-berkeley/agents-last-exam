@@ -1,8 +1,0 @@
-# Agent preset: cc_sonnet_or_t120
-# harness=claude_code model=claude-sonnet-4-6
-# Referenced from an experiment as:  agents: [ ../configs/agents/cc_sonnet_or_t120.yaml ]
-
-harness: claude_code
-model: claude-sonnet-4-6
-config:
-  max_turns: 120

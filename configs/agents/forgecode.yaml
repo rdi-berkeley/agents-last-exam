@@ -1,0 +1,29 @@
+# forgecode — tailcallhq/forge agent CLI (single musl binary), run headless (-p).
+# Auth: forge reads its key from env. OpenRouter → ANTHROPIC_API_KEY set to the
+# OpenRouter key + ANTHROPIC_BASE_URL=openrouter.ai/api/v1. forge.toml [session]
+# pins provider_id + model_id so multi-key envs can't route to the wrong vendor.
+#
+# Consolidated preset; `model:` is an example, every `config:` key is the
+# dataclass default (ale_run/agents/forgecode/config.py).
+# Reference as:  agents: [ configs/agents/forgecode.yaml ]
+
+harness: forgecode
+# executor: sandbox          # only supported value (deployer default).
+
+# Example model — sugar for config.model. Dataclass default: anthropic/claude-sonnet-4.6.
+model: anthropic/claude-sonnet-4.6
+
+config:
+  # Routing: "openrouter" or "direct" (the model prefix picks the env var for direct).
+  provider: openrouter
+
+  # Pinned forge release tag (no "v" prefix). Pinned so forge's agent mode doesn't
+  # self-update to latest on startup (also disabled at runtime via [updates]).
+  forge_version: "2.13.0"
+
+  # Sampling temperature written into forge.toml. null = omit (forge default).
+  temperature: 0.7
+
+  # Reserved placeholder — forge has no config-driven disable-list; rendered only
+  # as a comment in forge.toml. Default: none.
+  disabled_tools: []

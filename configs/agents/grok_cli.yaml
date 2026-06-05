@@ -1,0 +1,59 @@
+# grok_cli — xAI Grok CLI, run headless on the sandbox (Node needed only for the
+# CUA MCP bridge). A fork bundle / native binary adds OpenRouter fixes (provider
+# switching, image-injection middleware, disabledTools, model-info resolution).
+# Auth: provider=openrouter → OPENROUTER_API_KEY (sets GROK_BASE_URL) ;
+#       provider=direct → GROK_API_KEY (native xAI).
+#
+# Consolidated preset; `model:` is an example, every `config:` key is the
+# dataclass default (ale_run/agents/grok_cli/config.py).
+# Reference as:  agents: [ configs/agents/grok_cli.yaml ]
+
+harness: grok_cli
+# executor: sandbox          # only supported value (deployer default).
+
+# Example model — sugar for config.model. Dataclass default: x-ai/grok-4.3.
+model: x-ai/grok-4.3
+
+config:
+  # Routing. "openrouter": native name mapped to its OpenRouter id + OPENROUTER_API_KEY.
+  # "direct": native model name + GROK_API_KEY.
+  provider: openrouter
+
+  # Tool-call loop cap. -1 ≡ unlimited (deployer maps -1 → 100000; grok-cli has no
+  # native no-cap mode).
+  max_tool_rounds: -1
+
+  # Linux fork bundle (grok-bundle.js) downloaded from a GitHub Release and launched
+  # via Bun (carries OpenRouter fixes). "" = use the stock grok binary, no bundle.
+  bundle_url: ""
+
+  # Windows fork grok.exe (self-contained, same OpenRouter fixes; Bun-built on the
+  # win VM). Used on Windows instead of bundle_url. "" = use stock grok.exe (debug only).
+  win_binary_url: https://github.com/cua-verse/grok-cli/releases/download/v0.1.1-agenthle/grok-x86_64-pc-windows.exe
+
+  # Tools dropped over OpenRouter: 12 computer_* (need the unpublished agent-desktop
+  # binary) + 9 xAI-only / payment / lsp tools unavailable via OpenRouter.
+  disabled_tools:
+    - computer_snapshot
+    - computer_screenshot
+    - computer_click
+    - computer_mouse_move
+    - computer_type
+    - computer_press
+    - computer_scroll
+    - computer_launch
+    - computer_list_windows
+    - computer_focus_window
+    - computer_wait
+    - computer_get
+    # search_web/search_x stay disabled NOT as web policy — they are xAI
+    # Responses-API tools that simply don't exist over OpenRouter (would error).
+    - search_web
+    - search_x
+    - generate_image
+    - generate_video
+    - wallet_info        # xAI payment / wallet (no wallet on benchmark VMs)
+    - wallet_history
+    - fetch_payment_info
+    - paid_request
+    - lsp                # no language server running on VMs

@@ -1,0 +1,50 @@
+# claude_code — Anthropic's Claude Code CLI, run headless (`-p`) on the sandbox.
+# Auth: API keys come from the operator's shell env (never this file).
+#   provider=openrouter → OPENROUTER_API_KEY ;  provider=direct → ANTHROPIC_API_KEY.
+#
+# One consolidated preset for the claude_code agent. `model:` is an example you
+# change per run; every key under `config:` is set to its dataclass default
+# (ale_run/agents/claude_code/config.py) so the default of each knob is visible.
+# Reference from an experiment as:  agents: [ configs/agents/claude_code.yaml ]
+
+harness: claude_code
+# executor: sandbox          # only supported value (deployer default); runs inside the eval VM.
+
+# Example model — sugar for config.model. Dataclass default: anthropic/claude-opus-4.6.
+model: anthropic/claude-sonnet-4.6
+
+config:
+  # Routing provider. "openrouter": ANTHROPIC_BASE_URL→openrouter, AUTH_TOKEN=OPENROUTER_API_KEY. 
+  # "direct": ANTHROPIC_API_KEY against anthropic.com.
+  provider: openrouter
+
+  # Custom Anthropic-compatible base URL; overrides the provider's default. null = use provider default.
+  base_url: null
+
+  # Run-loop ceiling. -1 ≡ unlimited (deployer omits --max-turns when < 0).
+  max_turns: -1
+
+  # Hard USD spend cap for the run. null = no cap.
+  max_budget_usd: null
+
+  # Bypass all tool-permission prompts (required for headless runs).
+  dangerously_skip_permissions: true
+
+  # Extended-thinking token budget (MAX_THINKING_TOKENS env). 31999 = the
+  # default-high "ultrathink" cap; lower (e.g. 8000) to cut cost, 0 to disable.
+  max_thinking_tokens: 31999
+
+  # Built-in CC tools that deadlock or corrupt state headless — passed as
+  # repeated --disallowedTools. Default drops interactive / session-mutating tools.
+  disabled_tools:
+    - EnterPlanMode       # plan mode waits for a human accept
+    - ExitPlanMode
+    - EnterWorktree       # mutate session CWD with persistent side effects
+    - ExitWorktree
+    - AskUserQuestion     # pure user-interaction tool, no headless equivalent
+    - TaskOutput          # background-task lifecycle (no running task id headless)
+    - TaskStop
+    - RemoteTrigger       # needs a logged-in claude.ai account
+
+  # npm spec installed when `claude` is not already on PATH; otherwise the version of record.
+  cli_version: "@anthropic-ai/claude-code@2.1.85"

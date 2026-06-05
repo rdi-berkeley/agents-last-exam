@@ -299,8 +299,7 @@ class DroidDeployer(BaseAgentDeployer):
             argv.extend(["--reasoning-effort", cfg.reasoning_effort])
         if cfg.disabled_tools:
             argv.extend(["--disabled-tools", ",".join(cfg.disabled_tools)])
-        if cfg.enabled_tools:
-            argv.extend(["--enabled-tools", ",".join(cfg.enabled_tools)])
+        # Deny-only tool policy: no --enabled-tools allow list.
         return argv
 
     def _build_env(self, cfg: DroidConfig) -> dict[str, str]:

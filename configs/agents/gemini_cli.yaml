@@ -1,0 +1,52 @@
+# gemini_cli — Google's Gemini CLI (cua-verse/gemini-cli#agenthle fork), headless.
+# Auth: provider=openrouter → OPENROUTER_API_KEY (the fork maps bare gemini-* names
+#   to google/gemini-* on the OpenRouter request and forwards tool-result content
+#   correctly, so native file tools work). provider=google → GEMINI_API_KEY / GOOGLE_API_KEY.
+#
+# Consolidated preset; `model:` is an example, every `config:` key is the
+# dataclass default (ale_run/agents/gemini_cli/config.py).
+# Reference as:  agents: [ configs/agents/gemini_cli.yaml ]
+
+harness: gemini_cli
+# executor: sandbox          # only supported value (deployer default).
+
+# Example model — sugar for config.model. Dataclass default: gemini-3.1-pro-preview.
+# Keep the bare gemini-* id; the fork maps it to google/gemini-* over OpenRouter.
+model: gemini-3.1-pro-preview
+
+config:
+  # Routing: "openrouter" (default) or "google".
+  provider: openrouter
+
+  # Tool-approval mode. "yolo" = auto-approve (headless).
+  approval_mode: yolo
+
+  # maxSessionTurns in settings.json. -1 = unbounded (wall-clock timeout is the real cap).
+  max_session_turns: -1
+
+  # Deny-only policy: only disabled tools are configured (no allow list). All
+  # tools stay available except those listed here. Web tools (google_web_search,
+  # web_fetch) are intentionally kept ENABLED — internet is allowed. Disabled =
+  # persistent-state / interactive / tracker tools that don't fit headless runs.
+  disabled_tools:
+    - save_memory
+    - activate_skill
+    - get_internal_docs
+    - write_todos
+    - ask_user
+    - enter_plan_mode
+    - exit_plan_mode
+    - update_topic
+    - complete_task
+    - tracker_create_task
+    - tracker_update_task
+    - tracker_get_task
+    - tracker_list_tasks
+    - tracker_add_dependency
+    - tracker_visualize
+
+  # npm package the deployer installs (fork tarball carrying the OpenRouter fixes).
+  npm_package: https://github.com/cua-verse/gemini-cli/releases/download/v0.38.1-agenthle/google-gemini-cli-0.38.1.tgz
+
+  # Cheaper model used for context compression (OPENROUTER_COMPRESSION_MODEL).
+  compression_model: google/gemini-3-flash-preview

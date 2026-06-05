@@ -31,10 +31,10 @@ while still using a real sandbox VM.
 name: local_agent_demo
 
 # `agents:` is a list of paths under configs/agents/; each file is a complete
-# agent preset (harness + model + a config: block). The host-side OpenClaw
-# harness ships several presets — pick one, e.g.:
+# agent preset (harness + model + a config: block). One consolidated preset per
+# harness ships there — pick one, e.g.:
 agents:
-  - configs/agents/openclaw_sonnet_or.yaml         # add more lines to run a matrix
+  - configs/agents/openclaw_cli.yaml               # add more lines to run a matrix
 
 # `environment:` is a single path under configs/environments/. The provider
 # lives inside that file (static_dev.yaml sets `provider: static`).
@@ -43,11 +43,11 @@ environment: configs/environments/static_dev.yaml
 tasks: selected_tasks/helloworld.txt
 ```
 
-See the openclaw presets under [`configs/agents/`](../configs/agents/)
-(`openclaw_sonnet_or.yaml`, `openclaw_sonnet_direct.yaml`,
-`openclaw_gpt54_direct.yaml`) for the harness wiring; each one's `config:`
-block carries the supported knobs (`max_turns`, `timeout_s`,
-`disabled_tools`, `thinking_level`, etc.). To target your own VM, copy a
+See the consolidated preset [`configs/agents/openclaw_cli.yaml`](../configs/agents/openclaw_cli.yaml)
+(host-side native OpenClaw lives in [`ale_claw.yaml`](../configs/agents/ale_claw.yaml))
+for the harness wiring; each preset's `config:` block shows every supported
+knob at its default (`max_turns`, `disabled_tools`, `thinking_level`, etc.)
+with a comment. To target your own VM, copy a
 `configs/environments/*.yaml` and set the provider's `endpoint:`/`image:`.
 
 API keys for `ale_claw` come from your shell env (or `secret/.env`):

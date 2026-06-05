@@ -44,10 +44,11 @@ class Terminus2Config:
     # prepends ``openrouter/`` before handing it to LiteLLM.
     model: str = "anthropic/claude-sonnet-4.6"
 
-    # agenthle terminus_2_openrouter.yaml: max_turns: 100000 (direct: 200).
-    # terminus_2 has no ``unlimited`` sentinel; default high so the wall-clock
-    # budget is the real cap.
-    max_turns: int | None = 100_000
+    # Turn cap. ``-1`` = unlimited, the project-wide convention. terminus_2 has
+    # no native unlimited sentinel, so the deployer translates ``-1`` (or any
+    # value < 0) to ``100_000`` before passing ``--max-turns`` — wall-clock is
+    # then the real cap.
+    max_turns: int | None = -1
 
     # Provider routing: "openrouter" (default) | "direct".
     provider: str = "openrouter"

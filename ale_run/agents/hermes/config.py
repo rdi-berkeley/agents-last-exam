@@ -14,9 +14,10 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 # Toolset ids match hermes-agent/toolsets.py::TOOLSETS plus runtime-registered
-# ``mcp-<server>`` ids.  See the old hermes_openrouter.yaml for the rationale
-# behind each enable/disable decision; both lists together cover every known
-# id so an audit can spot anything that was never explicitly classified.
+# ``mcp-<server>`` ids. hermes is enable-only: ``--toolsets`` lists exactly the
+# toolsets to turn on, and anything not listed is off. There is no deny list
+# (the harness has no disable flag), so unlike other agents hermes carries an
+# allow list rather than a deny list — by harness constraint, not preference.
 DEFAULT_TOOLSETS: tuple[str, ...] = (
     # Always-on core
     "terminal",
@@ -36,46 +37,6 @@ DEFAULT_TOOLSETS: tuple[str, ...] = (
     "mcp-cua",
 )
 
-DEFAULT_DISABLED_TOOLSETS: tuple[str, ...] = (
-    # Subsumed by other toolsets
-    "search",
-    # Require external API keys / hardware we don't ship
-    "image_gen",
-    "rl",
-    "tts",
-    "moa",
-    # Don't apply to single-shot benchmark runs
-    "session_search",
-    "clarify",
-    # Platform integrations not available on benchmark VMs
-    "messaging",
-    "homeassistant",
-    "kanban",
-    "discord",
-    "discord_admin",
-    "yuanbao",
-    "feishu_doc",
-    "feishu_drive",
-    "spotify",
-    # Composite presets we deliberately don't use
-    "debugging",
-    "safe",
-    "hermes-cli",
-    "hermes-acp",
-    "hermes-api-server",
-    "hermes-cron",
-    "hermes-telegram",
-    "hermes-discord",
-    "hermes-whatsapp",
-    "hermes-slack",
-    "hermes-signal",
-    "hermes-bluebubbles",
-    "hermes-homeassistant",
-    "hermes-email",
-    "hermes-mattermost",
-)
-
-
 @dataclass
 class HermesConfig:
     """Tunables for :class:`HermesDeployer`.
@@ -91,10 +52,12 @@ class HermesConfig:
 
     # agenthle hermes_openrouter.yaml: anthropic/claude-sonnet-4.6.
     model: str = "anthropic/claude-sonnet-4.6"
-    max_turns: int = 100_000
-    """Hermes has no ``-1 = unlimited`` sentinel for ``--max-turns``.
-    ``IterationBudget.consume`` does ``if used >= max_total: stop``.
-    We default to 100_000 so wall-clock ``timeout_s`` is the real cap."""
+    max_turns: int = -1
+    """Turn cap. ``-1`` = unlimited, the project-wide convention. Hermes itself
+    has no unlimited sentinel (``IterationBudget.consume`` does
+    ``if used >= max_total: stop``), so the deployer translates ``-1`` (or any
+    value < 0) to ``100_000`` before passing ``--max-turns`` — wall-clock is then
+    the real cap."""
 
     # Sonnet 4.6 full 1M-token context window.
     context_length: int = 1_000_000
@@ -107,9 +70,10 @@ class HermesConfig:
     # Provider routing
     provider: str = "openrouter"
 
-    # Toolset configuration
+    # Toolset configuration. hermes is enable-only (the harness exposes no deny
+    # flag), so this allow list is the sole tool-control knob — by harness
+    # constraint, not a departure from the project's deny-only convention.
     toolsets_enabled: tuple[str, ...] = DEFAULT_TOOLSETS
-    toolsets_disabled: tuple[str, ...] = DEFAULT_DISABLED_TOOLSETS
 
     # Prepend a keepalive preamble to every prompt so the agent knows not
     # to end the chat process early when it schedules background work.

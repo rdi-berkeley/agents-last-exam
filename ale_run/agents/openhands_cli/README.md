@@ -64,7 +64,6 @@ agent:
     timeout_s: 600
     cli_version: "1.15.1"
     disable_condenser: false
-    max_iterations: 100000
     extra_envs: {}
 ```
 
@@ -74,7 +73,6 @@ agent:
 | `timeout_s` | Wall-clock cap; the deployer terminates the process on overrun |
 | `cli_version` | Version of `openhands-cli` to install from PyPI |
 | `disable_condenser` | Sets `OPENHANDS_DISABLE_CONDENSER=1` to suppress the `LLMSummarizingCondenser` |
-| `max_iterations` | OpenHands AgentBudget cap (set huge; wall-clock owns termination) |
 | `extra_envs` | Optional dict of extra env vars exported to the runner |
 
 ## See also

@@ -16,28 +16,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-# Native filesystem tools are kept enabled. The agenthle fork forwards their
-# tool-result content correctly over OpenRouter, so the agent can read/write
-# files directly rather than routing everything through run_shell_command.
-_ALLOWED_TOOLS = (
-    "run_shell_command",
-    "write_file",
-    "read_file",
-    "list_directory",
-    "glob",
-    "grep_search",
-    "replace",
-    "read_many_files",
-    "list_background_processes",
-    "read_background_output",
-)
-
-# Only web / persistent-state / interactive / tracker tools are disabled —
-# they don't fit headless benchmark runs. Matches agenthle's
-# GEMINI_DEFAULT_DISABLED_TOOLS.
+# Deny-only tool policy: we list ONLY the tools to disable and never an allow
+# list (an allow+deny pair is confusing, and the full per-agent tool inventory
+# is hard to pin down). Native filesystem tools therefore stay enabled — the
+# agenthle fork forwards their tool-result content correctly over OpenRouter.
+#
+# Persistent-state / interactive / tracker tools are disabled (they don't fit
+# headless benchmark runs). Web tools (google_web_search, web_fetch) are
+# intentionally left ENABLED: the benchmark allows internet, so web access is
+# harmonized to "on" across agents that can support it.
 _DISABLED_TOOLS = (
-    "google_web_search",
-    "web_fetch",
     "save_memory",
     "activate_skill",
     "get_internal_docs",
@@ -77,7 +65,6 @@ class GeminiCliConfig:
     # timeout is the real cap). Written into settings.json as maxSessionTurns.
     max_session_turns: int = -1
 
-    allowed_tools: tuple[str, ...] = _ALLOWED_TOOLS
     disabled_tools: tuple[str, ...] = _DISABLED_TOOLS
     npm_package: str = "https://github.com/cua-verse/gemini-cli/releases/download/v0.38.1-agenthle/google-gemini-cli-0.38.1.tgz"
     compression_model: str = "google/gemini-3-flash-preview"

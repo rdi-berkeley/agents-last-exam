@@ -1,0 +1,76 @@
+# ale_claw — native OpenClaw harness driving the VM through the MCP substrate
+# (host-side agent; non-GUI tools route through the vm_mcp_server bridge). Uses
+# litellm internally. Auth: keys live in the operator's shell env, read directly
+# by litellm — OPENROUTER_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY.
+#
+# Consolidated preset; `model:` is an example, every `config:` key is the
+# dataclass default (ale_run/agents/ale_claw/config.py).
+# Reference as:  agents: [ configs/agents/ale_claw.yaml ]
+
+harness: ale_claw
+# Executor: deployer default is "local" (host-side); "docker" adds process/fs/env
+# isolation via the same code path. Supported: local | docker.
+executor: local
+
+# Example model (LiteLLM id) — sugar for config.model. Dataclass default:
+# openrouter/anthropic/claude-sonnet-4.6. OpenRouter routes via the vendored
+# unified_loop (registered for the openrouter/.* regex).
+model: openrouter/anthropic/claude-sonnet-4.6
+
+config:
+  # Hard ceiling on the run loop (mapped to OpenClaw's max_steps).
+  max_turns: 100
+
+  # ---- substrate transport ----
+  # How non-GUI tools (read/write/edit/exec) reach the VM. "mcp" = via the
+  # vm_mcp_server bridge (default); "session" = legacy direct session RPC (debug).
+  substrate_transport: mcp
+
+  # How the GUI `computer` tool reaches the VM. null = follow substrate_transport
+  # (so GUI is mcp by default). "mcp" requires substrate_transport=mcp; "session"
+  # uses the cua RemoteDesktopSession handler.
+  gui_transport: null
+
+  # ---- model variants ----
+  # Model for compaction + memory_flush. null → lightweight_model if set, else model.
+  summary_model: null
+  # Model for the delegate_gui subagent. null → lightweight_model if set, else main.
+  gui_model: null
+  # Optional cheap-sibling model exposed to delegate tools (no auto-magic lookup).
+  lightweight_model: null
+
+  # ---- loop control ----
+  # Truncate replay-message history when restoring a transcript. null = unlimited.
+  max_history_turns: null
+
+  # If true, the main agent has no `computer` tool — all GUI goes through delegate_gui.
+  # Mutually exclusive with disable_delegate_gui.
+  disable_main_computer: false
+  # If true, no GUI subagent — the main agent uses its own `computer`.
+  disable_delegate_gui: false
+
+  # Tools dropped from the assembled tool list (matched by BaseTool.name). Defaults
+  # to web_search because BRAVE_API_KEY is rarely provisioned; set to [] to re-enable
+  # (and export BRAVE_API_KEY).
+  disabled_tools:
+    - web_search
+
+  # ---- thinking levels (off | low | medium | high) ----
+  # Base thinking level. null → resolved-default for the model.
+  thinking_level: null
+  # Memory-flush thinking. null → inherit thinking_level.
+  flush_thinking_level: null
+  # Compaction-rebuild thinking. null → inherit thinking_level.
+  compaction_thinking_level: null
+  # Vision/screenshot summarization thinking. Default off (cost).
+  vision_thinking_level: "off"
+  # delegate_gui subagent thinking. Default off.
+  gui_thinking_level: "off"
+
+  # ---- image retention ----
+  # "openclaw" (last N completed turns; reduces cache thrash) or "cua" (last N images by count).
+  image_retention_mode: openclaw
+
+  # ---- documentation ----
+  # Source upstream commit for the vendored harness/ tree (surfaced via deployer.version).
+  upstream_version: "openclaw-cua@a830cae2"

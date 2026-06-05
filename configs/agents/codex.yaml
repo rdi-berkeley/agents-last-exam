@@ -1,0 +1,40 @@
+# codex — OpenAI Codex CLI (installed from npm), run headless on the sandbox.
+# An optional patched native binary (GitHub Release) replaces the vendor binary
+# to fix the Windows apply_patch.bat corruption bug.
+# Auth: provider=openrouter → OPENROUTER_API_KEY ; provider=direct → OPENAI_API_KEY.
+#
+# Consolidated preset; `model:` is an example, every `config:` key is the
+# dataclass default (ale_run/agents/codex/config.py).
+# Reference as:  agents: [ configs/agents/codex.yaml ]
+
+harness: codex
+# executor: sandbox          # only supported value (deployer default).
+
+# Example model — sugar for config.model. Dataclass default: openai/gpt-5.4.
+model: openai/gpt-5.4
+
+config:
+  # Routing. "openrouter": config.toml model_provider=openrouter + OPENROUTER_API_KEY.
+  # "direct": direct OpenAI via OPENAI_API_KEY.
+  provider: openrouter
+
+  # Codex sandbox policy. danger-full-access is the only meaningful option for
+  # headless eval on an already-isolated VM.
+  sandbox_mode: danger-full-access
+
+  # Bypass all interactive approval prompts (headless exec).
+  yolo: true
+
+  # model_reasoning_effort → Responses-API reasoning.effort. off|low|medium|high.
+  reasoning_effort: high
+
+  # npm package version to install (@openai/codex@<version>).
+  codex_version: "0.114.0"
+
+  # Patched native binary (Linux musl x86-64). Downloaded and swapped over npm's
+  # bundled binary when set. "" = skip replacement, use npm's binary.
+  patched_binary_url: https://github.com/cua-verse/codex/releases/download/v0.114.0-agenthle/codex
+
+  # Patched Windows binary (codex.exe, x86_64-pc-windows-msvc) — used instead of
+  # patched_binary_url on Windows. "" = skip, use npm's bundled codex.exe.
+  patched_binary_url_windows: https://github.com/cua-verse/codex/releases/download/v0.114.0-agenthle/codex-x86_64-pc-windows-msvc.exe

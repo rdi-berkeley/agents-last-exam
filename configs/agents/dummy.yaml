@@ -1,13 +1,42 @@
-# Agent preset: dummy — no-LLM pipeline smoke agent.
-# Scans each task prompt for input/output paths, checks inputs exist on the
-# eval VM, writes dummy.json into the output dir. Spends no model tokens.
+# dummy — no-LLM pipeline smoke agent. Scans each task prompt for input/output
+# paths, checks inputs exist on the eval VM, then pulls the task's positive
+# reference output (output_test_pos) from GCS straight into the output dir —
+# simulating a correct answer. Exercises orchestration + sandbox + data staging +
+# output pull + scorer end-to-end without spending model tokens.
 #
-# Referenced from an experiment as:  agents: [ configs/agents/dummy.yaml ]
+# Consolidated preset; every `config:` key is the dataclass default
+# (ale_run/agents/dummy/config.py).
+# Reference as:  agents: [ configs/agents/dummy.yaml ]
 
 harness: dummy
+# Executor: deployer default is "local" (runs on the host). Supported: local | docker.
 executor: local
+
+# Unused — the dummy agent makes no model calls. Present so a model: line doesn't
+# surprise anyone. Dataclass default: "none".
+model: none
+
 config:
-  # Record missing inputs but still complete the run, so one broken task
-  # doesn't mask the rest of the sweep. Flip to true to hard-fail on a
-  # missing input.
+  # GCS bucket holding per-task data. Positive ref output is
+  # <bucket>/<domain>/<task>/<variant>/output_test_pos.
+  data_bucket: gs://ale-data-all
+
+  # Name of the positive-output reference dir to pull from GCS.
+  pos_subdir: output_test_pos
+
+  # Seconds to wait for the eval VM's cua-server to become responsive.
+  connect_timeout_s: 120
+
+  # Per-output-dir `gsutil rsync` timeout (seconds).
+  pull_timeout_s: 900
+
+  # If true, a missing input flips the run to failed. Default false: record the
+  # miss but still complete, so one broken task doesn't mask the rest of the sweep.
   fail_on_missing_input: false
+
+  # If true, when no output_test_pos is found on GCS still write a small marker
+  # into the output dir (proves it's writable). Default false: leave it clean.
+  write_marker_when_no_pos: false
+
+  # Marker file name used when write_marker_when_no_pos is true.
+  marker_filename: dummy.json

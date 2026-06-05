@@ -191,7 +191,7 @@ host). PRs welcome to flesh this out.
    environment: configs/environments/my_provider_default.yaml
    tasks: selected_tasks/helloworld.txt
    agents:
-     - configs/agents/openclaw_sonnet_or.yaml   # host-side agent — easy to debug
+     - configs/agents/ale_claw.yaml   # host-side agent — easy to debug
    ```
 3. Verify the run completes through Phase 0 → 6 (see
    [`ale_run/orchestration/lifecycle.py`](../ale_run/orchestration/lifecycle.py)).

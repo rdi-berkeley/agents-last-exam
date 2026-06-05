@@ -1,8 +1,0 @@
-# Agent preset: grok_grok41fast_or
-# harness=grok_cli model=x-ai/grok-4.1-fast
-# Referenced from an experiment as:  agents: [ ../configs/agents/grok_grok41fast_or.yaml ]
-
-harness: grok_cli
-model: x-ai/grok-4.1-fast
-config:
-  max_tool_rounds: 400

@@ -1,0 +1,32 @@
+# openhands_cli — the official `openhands-cli` pip package (LiteLLM internally),
+# run headless. The deployer writes ~/.openhands/.env (LLM_MODEL / LLM_API_KEY /
+# LLM_BASE_URL) and passes --override-with-envs.
+# Auth: provider=openrouter → OPENROUTER_API_KEY ; provider=direct → ANTHROPIC_API_KEY.
+#
+# Consolidated preset; `model:` is an example, every `config:` key is the
+# dataclass default (ale_run/agents/openhands_cli/config.py).
+# Reference as:  agents: [ configs/agents/openhands_cli.yaml ]
+
+harness: openhands_cli
+# executor: sandbox          # only supported value (deployer default).
+
+# Example model (LiteLLM id) — sugar for config.model. Dataclass default:
+# openrouter/anthropic/claude-sonnet-4.6. For OpenRouter prefix with openrouter/
+# (the deployer also adds it when provider=openrouter and it's missing).
+model: openrouter/anthropic/claude-sonnet-4.6
+
+config:
+  # Routing. "openrouter": LiteLLM model carries openrouter/ prefix, LLM_BASE_URL=
+  # openrouter, key=OPENROUTER_API_KEY. "direct": model as-is, key=ANTHROPIC_API_KEY.
+  provider: openrouter
+
+  # openhands pip package version to install.
+  cli_version: "1.16.0"
+
+  # When true, sets OPENHANDS_DISABLE_CONDENSER=1 to suppress the
+  # LLMSummarizingCondenser (useful when condensation triggers provider-shape errors).
+  disable_condenser: false
+
+  # Free-form passthrough env vars exported to the runner (e.g. LITELLM_LOG: DEBUG).
+  # Keys here override anything the deployer would otherwise compute. Default: none.
+  extra_envs: {}

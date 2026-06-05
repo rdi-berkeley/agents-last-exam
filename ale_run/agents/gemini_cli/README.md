@@ -82,8 +82,7 @@ class GeminiCliConfig:
     model: str = "gemini-3.1-pro-preview"
     provider: str = "openrouter"  # "openrouter" | "google"
     approval_mode: str = "yolo"
-    allowed_tools: tuple[str, ...] = _ALLOWED_TOOLS
-    disabled_tools: tuple[str, ...] = _DISABLED_TOOLS
+    disabled_tools: tuple[str, ...] = _DISABLED_TOOLS  # deny-only; no allow list
     npm_package: str = ".../v0.38.1-agenthle/google-gemini-cli-0.38.1.tgz"
     compression_model: str = "google/gemini-3-flash-preview"
 ```

@@ -1,9 +1,0 @@
-# Agent preset: openclaw_gpt54_direct
-# harness=openclaw_cli model=gpt-5.4
-# Referenced from an experiment as:  agents: [ ../configs/agents/openclaw_gpt54_direct.yaml ]
-
-harness: openclaw_cli
-model: gpt-5.4
-config:
-  provider: direct
-  tarball_url: https://github.com/cua-verse/openclaw/releases/download/v2026.4.26-agenthle/openclaw-2026.4.26.tgz

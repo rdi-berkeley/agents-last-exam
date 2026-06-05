@@ -1,6 +1,0 @@
-# Agent preset: codex_gpt54_or
-# harness=codex model=openai/gpt-5.4
-# Referenced from an experiment as:  agents: [ ../configs/agents/codex_gpt54_or.yaml ]
-
-harness: codex
-model: openai/gpt-5.4

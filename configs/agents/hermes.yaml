@@ -1,0 +1,51 @@
+# hermes — Nous Research Hermes agent (cua-verse/hermes-agent#agenthle fork),
+# Linux-only. The fork carries MCP ImageContent multimodal forwarding + tool-result
+# truncation guards. Auth: OPENROUTER_API_KEY (routed through OpenRouter).
+#
+# Consolidated preset; `model:` is an example, every `config:` key is the
+# dataclass default (ale_run/agents/hermes/config.py).
+# Reference as:  agents: [ configs/agents/hermes.yaml ]
+
+harness: hermes
+# executor: sandbox          # only supported value (deployer default).
+
+# Example model — sugar for config.model. Dataclass default: anthropic/claude-sonnet-4.6.
+model: anthropic/claude-sonnet-4.6
+
+config:
+  # Provider routing (defaults to openrouter).
+  provider: openrouter
+
+  # Turn cap. -1 = unlimited (project-wide convention). Hermes has no native
+  # unlimited sentinel, so the deployer translates -1 → 100000 internally.
+  max_turns: -1
+
+  # Model context window (Sonnet 4.6 = full 1M tokens).
+  context_length: 1000000
+
+  # Compression (tuned for 1M context + multi-MB screenshots).
+  compression_threshold: 0.85        # fraction of context that triggers compression
+  compression_target_ratio: 0.20     # compress down to this fraction
+  compression_protect_last_n: 8      # never compress the last N turns
+
+  # Prepend a keepalive preamble so the agent doesn't end the chat early when it
+  # schedules background work.
+  keepalive_preamble: true
+
+  # Toolsets turned on (hermes-agent toolsets.py ids + runtime mcp-<server> ids).
+  # hermes is enable-only: the harness has no deny flag, so this allow list is the
+  # sole tool-control knob (an exception to the project's deny-only convention, by
+  # harness constraint). Anything not listed here is off.
+  toolsets_enabled:
+    - terminal           # always-on core
+    - file
+    - skills
+    - todo
+    - memory
+    - web                # network research (benchmark allows internet)
+    - vision
+    - browser            # local Chromium via Playwright (no BROWSERBASE_API_KEY)
+    - code_execution     # long-run optimizations
+    - delegation
+    - cronjob
+    - mcp-cua            # ALE bridge

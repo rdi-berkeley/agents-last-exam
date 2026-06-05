@@ -53,10 +53,6 @@ class OpenHandsCliConfig:
     to suppress the LLMSummarizingCondenser.  Useful when condensation
     triggers provider-shape errors."""
 
-    max_iterations: int = 100_000
-    """OpenHands AgentBudget iteration cap.  Set very high because
-    wall-clock ``timeout_s`` is the real termination cap."""
-
     extra_envs: dict[str, str] = field(default_factory=dict)
     """Free-form passthrough env vars exported to the runner script
     (e.g. ``LITELLM_LOG=DEBUG``).  Keys here override anything the

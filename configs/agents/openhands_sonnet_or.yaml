@@ -1,6 +1,0 @@
-# Agent preset: openhands_sonnet_or
-# harness=openhands_cli model=anthropic/claude-sonnet-4-6
-# Referenced from an experiment as:  agents: [ ../configs/agents/openhands_sonnet_or.yaml ]
-
-harness: openhands_cli
-model: anthropic/claude-sonnet-4-6

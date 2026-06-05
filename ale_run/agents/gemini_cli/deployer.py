@@ -105,6 +105,23 @@ class GeminiCliDeployer(BaseAgentDeployer):
         home = os.path.expanduser("~")
         local_prefix = os.path.join(home, ".local")
         gemini_path = shutil.which("gemini")
+        # Sandbox entry runs WITHOUT a login shell, so ~/.local may not be on
+        # PATH and shutil.which("gemini") misses an image-baked fork under our
+        # prefix — which would force a needless reinstall every run. Fall back
+        # to the exact shim our installer drops (Linux: <prefix>/bin/gemini;
+        # Windows: npm puts it directly in <prefix>). This keeps the skip path
+        # identical on Windows and Linux: a pre-baked fork at ~/.local is
+        # detected and skipped on both.
+        if not (gemini_path and gemini_path.startswith(local_prefix)):
+            for cand in (
+                os.path.join(local_prefix, "bin", "gemini"),
+                os.path.join(local_prefix, "gemini.cmd"),
+                os.path.join(local_prefix, "gemini.ps1"),
+                os.path.join(local_prefix, "gemini"),
+            ):
+                if os.path.isfile(cand):
+                    gemini_path = cand
+                    break
         # Force-correct a pre-baked gemini that wasn't installed by us this run:
         # the win/linux images may carry an old tarball with the buggy
         # OpenRouter converter, and --version can't distinguish it. Reinstall
@@ -296,8 +313,8 @@ class GeminiCliDeployer(BaseAgentDeployer):
         task_data_root = getattr(self.executor.sandbox, "task_data_root", "")
         if task_data_root:
             argv.append(f"--include-directories={task_data_root}")
-        if cfg.allowed_tools:
-            argv.append(f"--allowed-tools={','.join(cfg.allowed_tools)}")
+        # Deny-only tool policy: no --allowed-tools allow list. Everything is
+        # available except what `disabled_tools` excludes (settings.json "exclude").
         return argv
 
     def _build_env(self, cfg: GeminiCliConfig) -> dict[str, str]:

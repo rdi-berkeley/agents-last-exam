@@ -1,0 +1,32 @@
+# terminus_2 — harbor's tmux-driven ReAct agent (cua-verse/harbor#agenthle fork),
+# Linux-only (needs tmux + asciinema + POSIX). The deployer pip-installs the fork
+# at install() time. YAML carries the OpenRouter-native vendor/model id; for
+# openrouter mode the deployer prepends openrouter/ before handing it to LiteLLM.
+# Auth: provider=openrouter → OPENROUTER_API_KEY ; provider=direct → vendor key.
+#
+# Consolidated preset; `model:` is an example, every `config:` key is the
+# dataclass default (ale_run/agents/terminus_2/config.py).
+# Reference as:  agents: [ configs/agents/terminus_2.yaml ]
+
+harness: terminus_2
+# executor: sandbox          # only supported value (deployer default).
+
+# Example model — sugar for config.model. Dataclass default: anthropic/claude-sonnet-4.6.
+model: anthropic/claude-sonnet-4.6
+
+config:
+  # Routing: "openrouter" (default) | "direct".
+  provider: openrouter
+
+  # Turn cap. -1 = unlimited (project-wide convention). terminus_2 has no native
+  # unlimited sentinel, so the deployer translates -1 → 100000 internally.
+  max_turns: -1
+
+  # Record the tmux/terminal session (asciinema) for replay.
+  record_terminal_session: true
+
+  # Custom LiteLLM api_base override. null = use the provider default.
+  api_base: null
+
+  # Sampling temperature.
+  temperature: 0.7

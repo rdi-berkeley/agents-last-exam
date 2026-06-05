@@ -1,5 +1,0 @@
-# Agent preset: cursor_auto_cursor
-# harness=cursor_cli model=(deployer default)
-# Referenced from an experiment as:  agents: [ ../configs/agents/cursor_auto_cursor.yaml ]
-
-harness: cursor_cli

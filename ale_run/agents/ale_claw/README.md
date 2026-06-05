@@ -70,7 +70,7 @@ ALE Claw runs as an ALE agent (`harness: ale_claw`). Point an agent config at it
 and run an experiment:
 
 ```yaml
-# configs/agents/ale_claw_or.yaml
+# configs/agents/ale_claw.yaml
 harness: ale_claw
 model: openrouter/anthropic/claude-sonnet-4.6
 config:

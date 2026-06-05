@@ -1,6 +1,0 @@
-# Agent preset: gemini_g31flashlite_or
-# harness=gemini_cli model=google/gemini-3.1-flash-lite
-# Referenced from an experiment as:  agents: [ ../configs/agents/gemini_g31flashlite_or.yaml ]
-
-harness: gemini_cli
-model: google/gemini-3.1-flash-lite
