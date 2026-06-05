@@ -97,7 +97,6 @@ ALLOWED_TOOL_NAMES = frozenset({
 # Tools explicitly excluded (even if passed in).
 EXCLUDED_TOOL_NAMES = frozenset({
     "computer",
-    "milestone",
     "delegate_general",
     "delegate_gui",
     "subagents",

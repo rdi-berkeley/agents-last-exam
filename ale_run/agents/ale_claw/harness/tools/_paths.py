@@ -18,7 +18,7 @@ from typing import Optional
 
 
 def _is_windows_path(path: str) -> bool:
-    """Detect Windows-style absolute paths (mirrors milestone.py:95)."""
+    """Detect Windows-style absolute paths."""
     return bool(
         re.match(r"^[A-Za-z]:[\\/]", path)
         or path.startswith("\\\\")

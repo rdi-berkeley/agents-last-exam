@@ -157,7 +157,7 @@ def build_tools(
     registry: SubagentRegistry | None = None,
     parent_session_dir: Any = None,
     default_model: str | None = None,
-    lightweight_model: str | None = None,
+    auxiliary_model: str | None = None,
     thinking_params: dict[str, Any] | None = None,
     gui_thinking_params: dict[str, Any] | None = None,
     disable_main_computer: bool = False,
@@ -171,7 +171,7 @@ def build_tools(
 ) -> list:
     """Assemble the canonical tool list for the OpenClaw agent.
 
-    Returns [Computer, MilestoneTool, AnalyzeImageTool, ReadFileTool,
+    Returns [Computer, AnalyzeImageTool, ReadFileTool,
              WriteFileTool, EditFileTool, ExecTool, WebSearchTool, WebFetchTool,
              MemorySearchTool, MemoryGetTool] by default. ``MemoryWriteTool``
     is no longer exposed to the main agent — its journaling role is covered
@@ -196,7 +196,7 @@ def build_tools(
             land at ``<parent_session_dir>/subagents/<run_id>/transcript.jsonl``.
         default_model: Default model string for ``DelegateGeneralTool``
             (falls back to the model used for normal turns).
-        lightweight_model: Optional cheaper/faster sibling exposed alongside
+        auxiliary_model: Optional cheaper/faster sibling exposed alongside
             ``default_model`` as the second enum option on
             ``DelegateGeneralTool.model`` (e.g. ``openrouter/openai/gpt-5.4-mini``
             when the default is ``openrouter/openai/gpt-5.4``). When ``None``
@@ -221,7 +221,7 @@ def build_tools(
             agent construction.
         workspace_root: Absolute path on the VM that bounds read/write/edit
             file access. When ``None``, path policy is permissive
-            (matches MilestoneTool / AnalyzeImageTool behavior).
+            (matches AnalyzeImageTool behavior).
         host_workspace_root: Absolute path on the local host that bounds
             ``target='host'`` file access. When ``None`` (or missing/invalid),
             only ``target='vm'`` is registered and the agent never sees a
@@ -232,9 +232,7 @@ def build_tools(
             ``resolveAdaptiveReadMaxBytes``).
     """
     from .analyze_image import AnalyzeImageTool
-    from .milestone import MilestoneTool
 
-    milestone_tool = MilestoneTool(session.interface)
     analyze_image_tool = AnalyzeImageTool(
         session.interface,
         model=summary_model,
@@ -295,7 +293,6 @@ def build_tools(
 
     tools: list = [
         computer,
-        milestone_tool,
         analyze_image_tool,
         read_tool,
         write_tool,
@@ -316,7 +313,7 @@ def build_tools(
             summary_model=summary_model or default_model or "",
             parent_session_dir=parent_session_dir,
             thinking_params=thinking_params,
-            lightweight_model=lightweight_model,
+            auxiliary_model=auxiliary_model,
         )
         gui_tool_kwargs: dict[str, Any] = {
             "registry": registry,
@@ -399,7 +396,7 @@ class ToolLoggingCallback(AsyncCallbackHandler):
     def __init__(self) -> None:
         self._start_times: dict[str, float] = {}
 
-    # --- Function calls (memory tools, milestone) ---
+    # --- Function calls (memory tools) ---
 
     async def on_function_call_start(self, item: dict[str, Any]) -> None:
         call_id = item.get("call_id", "unknown")

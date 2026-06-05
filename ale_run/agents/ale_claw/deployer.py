@@ -217,7 +217,7 @@ class AleClawDeployer(BaseAgentDeployer):
 
         # ---- 3. Model resolution + context window ----
         resolved_model = resolve_model(cfg.model)
-        summary_model = cfg.summary_model or cfg.lightweight_model or cfg.model
+        summary_model = cfg.summary_model or cfg.auxiliary_model or cfg.model
         resolved_summary_model = (
             resolved_model if summary_model == cfg.model
             else resolve_model(summary_model)
@@ -263,7 +263,7 @@ class AleClawDeployer(BaseAgentDeployer):
             registry=registry,
             parent_session_dir=session_mgr.task_dir,
             default_model=cfg.model,
-            lightweight_model=cfg.lightweight_model,
+            auxiliary_model=cfg.auxiliary_model,
             thinking_params=thinking_api_params,
             gui_thinking_params=gui_thinking_params,
             disable_main_computer=cfg.disable_main_computer,

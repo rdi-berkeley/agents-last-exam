@@ -57,7 +57,7 @@ def _make_general_tool(
     default_model: str = "anthropic/claude-sonnet-4-20250514",
     summary_model: str = "anthropic/claude-haiku-4-5-20251001",
     thinking_params: dict | None = None,
-    lightweight_model: str | None = None,
+    auxiliary_model: str | None = None,
 ) -> DelegateGeneralTool:
     return DelegateGeneralTool(
         registry=registry or SubagentRegistry(),
@@ -67,7 +67,7 @@ def _make_general_tool(
         summary_model=summary_model,
         parent_session_dir=parent_session_dir or Path("/tmp/fake-session"),
         thinking_params=thinking_params,
-        lightweight_model=lightweight_model,
+        auxiliary_model=auxiliary_model,
     )
 
 
@@ -151,7 +151,7 @@ class TestDelegateGeneralTool:
 
         _run(_scenario())
 
-    def test_accepted_custom_max_steps_and_lightweight_model(self, tmp_path):
+    def test_accepted_custom_max_steps_and_auxiliary_model(self, tmp_path):
         registry = SubagentRegistry()
 
         async def _scenario():
@@ -165,7 +165,7 @@ class TestDelegateGeneralTool:
                 registry=registry,
                 parent_session_dir=tmp_path,
                 default_model="openrouter/openai/gpt-5.4",
-                lightweight_model="openrouter/openai/gpt-5.4-mini",
+                auxiliary_model="openrouter/openai/gpt-5.4-mini",
             )
             with patch(
                 "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_general_subagent",
@@ -200,7 +200,7 @@ class TestDelegateGeneralTool:
                 registry=registry,
                 parent_session_dir=tmp_path,
                 default_model="openrouter/openai/gpt-5.4",
-                lightweight_model="openrouter/openai/gpt-5.4-mini",
+                auxiliary_model="openrouter/openai/gpt-5.4-mini",
             )
             with patch(
                 "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_general_subagent",
@@ -223,7 +223,7 @@ class TestDelegateGeneralTool:
         tool = _make_general_tool(
             parent_session_dir=tmp_path,
             default_model="openrouter/openai/gpt-5.4",
-            lightweight_model="openrouter/openai/gpt-5.4-mini",
+            auxiliary_model="openrouter/openai/gpt-5.4-mini",
         )
         model_schema = tool.parameters["properties"]["model"]
         assert model_schema["type"] == "string"
@@ -233,11 +233,11 @@ class TestDelegateGeneralTool:
         ]
         assert "gpt-5.4-mini" in model_schema["description"]
 
-    def test_model_param_schema_single_option_when_no_lightweight(self, tmp_path):
+    def test_model_param_schema_single_option_when_no_auxiliary_model(self, tmp_path):
         tool = _make_general_tool(
             parent_session_dir=tmp_path,
             default_model="openrouter/openai/gpt-5.4",
-            lightweight_model=None,
+            auxiliary_model=None,
         )
         model_schema = tool.parameters["properties"]["model"]
         assert model_schema["enum"] == ["openrouter/openai/gpt-5.4"]
