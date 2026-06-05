@@ -44,6 +44,10 @@ class GrokCliDeployer(BaseAgentDeployer):
     default_executor: ClassVar[str] = "sandbox"
     supported_executors: ClassVar[frozenset[str]] = frozenset({"sandbox"})
     hot_artifacts: ClassVar[tuple[str, ...]] = ("transcript.jsonl", "stderr.log")
+    # Sidecar marker dropped next to a downloaded fork grok.exe so install()
+    # can confidently skip the re-download on later runs (proves the binary is
+    # our fork build, not a stale stock grok that happens to sit there).
+    _WIN_FORK_MARKER: ClassVar[str] = ".agenthle-fork"
 
     @property
     def version(self) -> str | None:
@@ -106,6 +110,14 @@ class GrokCliDeployer(BaseAgentDeployer):
             )
         if str(grok_bin_dir) not in os.environ.get("PATH", ""):
             os.environ["PATH"] = str(grok_bin_dir) + os.pathsep + os.environ.get("PATH", "")
+        # Drop a sidecar marker recording the source URL so a later install()
+        # can skip this download (the marker proves grok.exe is our fork build).
+        try:
+            (grok_bin_dir / self._WIN_FORK_MARKER).write_text(
+                binary_url, encoding="utf-8",
+            )
+        except OSError:
+            pass
         logger.info("grok_cli: installed fork Windows binary at %s (%d bytes)",
                     dest, dest.stat().st_size)
         return str(dest)
@@ -122,9 +134,31 @@ class GrokCliDeployer(BaseAgentDeployer):
             # PATH never shadows the fork build. Empty url = debug-only
             # fallback to whatever 'grok' is already on PATH.
             if cfg.win_binary_url:
-                logger.info("grok_cli: installing fork Windows binary from %s",
-                            cfg.win_binary_url)
-                grok_path = await self._auto_install_cli_windows(cfg.win_binary_url)
+                # Skip the ~MB re-download when our fork grok.exe is already
+                # baked. The sidecar marker (written by
+                # _auto_install_cli_windows) proves it's our build, so a stale
+                # stock grok can't be mistaken for the fork; a clean/reverted VM
+                # lacks the marker and falls through to a fresh download.
+                home = os.path.expanduser("~")
+                grok_bin = os.path.join(home, ".grok", "bin")
+                dest = os.path.join(grok_bin, "grok.exe")
+                marker = os.path.join(grok_bin, self._WIN_FORK_MARKER)
+                if (os.path.isfile(dest)
+                        and os.path.getsize(dest) >= 1_000_000
+                        and os.path.isfile(marker)):
+                    if grok_bin not in os.environ.get("PATH", ""):
+                        os.environ["PATH"] = (
+                            grok_bin + os.pathsep + os.environ.get("PATH", "")
+                        )
+                    grok_path = dest
+                    logger.info(
+                        "grok_cli: fork grok.exe already baked at %s — skipping download",
+                        dest,
+                    )
+                else:
+                    logger.info("grok_cli: installing fork Windows binary from %s",
+                                cfg.win_binary_url)
+                    grok_path = await self._auto_install_cli_windows(cfg.win_binary_url)
             else:
                 grok_path = shutil.which("grok") or shutil.which("grok.exe")
                 logger.warning(
