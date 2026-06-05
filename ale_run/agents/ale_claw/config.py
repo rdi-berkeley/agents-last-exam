@@ -46,16 +46,17 @@ class AleClawConfig:
 
     # ---- model variants ----
     summary_model: str | None = None
-    """Model for compaction + memory_flush. None → ``lightweight_model`` if set,
+    """Model for compaction + memory_flush. None → ``auxiliary_model`` if set,
     else ``model``. Cheaper sibling for cost savings."""
 
     gui_model: str | None = None
-    """Model for the ``delegate_gui`` subagent. None → ``lightweight_model``
+    """Model for the ``delegate_gui`` subagent. None → ``auxiliary_model``
     if set, else falls back to main."""
 
-    lightweight_model: str | None = None
-    """Optional cheap-sibling model exposed to delegate tools. ALE convention:
-    no auto-magic sibling lookup; caller opts in explicitly."""
+    auxiliary_model: str | None = None
+    """Optional cheaper sibling model offered to subagents, and the fallback for
+    ``summary_model`` / ``gui_model`` when those are unset. Caller opts in
+    explicitly; there is no automatic sibling lookup."""
 
     # ---- loop control ----
     max_history_turns: int | None = None

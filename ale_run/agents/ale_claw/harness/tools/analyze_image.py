@@ -67,7 +67,7 @@ def _is_remote_path(path: str) -> bool:
     slashes and agents frequently emit forward-slash form (easier to
     escape in JSON tool-args).
 
-    Same heuristic as MilestoneTool._is_windows_path().
+    Same heuristic as ``_paths._is_windows_path``.
     """
     return bool(
         re.match(r"^[A-Za-z]:[\\/]", path)
