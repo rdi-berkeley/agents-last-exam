@@ -1,7 +1,7 @@
 {
   "taskId": "demo/hello_win",
-  "title": "Demo: Acme Order Entry (GUI wizard, Windows)",
-  "summary": "Windows counterpart of demo/hello — identical task and data, only OS conventions differ (E:\\agenthle paths, .cmd launcher). The agent drives a multi-step web form (input\\app.html) in Chrome via screenshots/clicks/typing, entering data from input\\order.json, to obtain an in-browser confirmation code, then writes it to output\\result.txt.",
+  "title": "Demo: Acme Code Generator (GUI) — Windows",
+  "summary": "Minimal GUI demo. The agent opens a single-screen web app (input\\app.html) in Chrome, types the Order ID from input/order.json, clicks Generate Code, reads the in-browser confirmation code and writes it to output\\result.txt. Exercises the input/software/reference/output surface and the desktop GUI bridge in a few steps. Windows counterpart of demo/hello; identical except OS conventions.",
   "category": "demo",
   "vm": {
     "snapshot": "cpu-free",

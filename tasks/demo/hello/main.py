@@ -66,24 +66,21 @@ class TaskConfig(LinuxTaskConfig):
     @property
     def task_description(self) -> str:
         return (
-            "Acme Order Entry — a GUI task. You must use the desktop GUI "
-            "(screenshots, mouse clicks, keyboard typing) to drive a web app; "
-            "the answer cannot be obtained from files alone.\n\n"
-            f"1. Open the order-entry app: run `bash {self.launcher_path}` to "
-            f"launch Chrome on it, or open {self.app_path} in Chrome yourself.\n"
-            f"2. Read {self.order_path} for the customer, order ID, line items "
-            "(name / quantity / unit price) and shipping method to enter.\n"
-            "3. In the app, click \"Start Order\", then complete each step with "
-            "GUI actions: type the customer name and order ID; for EACH item "
-            "type its name, quantity and unit price and click \"+ Add item\"; "
-            "choose the shipping method; then click \"Calculate & Confirm\".\n"
+            "Acme Code Generator — a GUI task. Use the desktop GUI (screenshot, "
+            "click, type) to generate a confirmation code in a web app; the "
+            "answer cannot be obtained from files alone.\n\n"
+            f"1. Open the app: run `bash {self.launcher_path}` to launch Chrome "
+            f"on it, or open {self.app_path} in Chrome yourself.\n"
+            f"2. Read {self.order_path} to get the Order ID.\n"
+            "3. In the app: click the \"Order ID\" field, type the Order ID, "
+            "then click \"Generate Code\".\n"
             "4. The app displays a confirmation code (CONF-...). Read it from "
             "the screen.\n"
-            f"5. Write that confirmation code, exactly, on a single line, to "
+            f"5. Write that code, exactly, on a single line, to "
             f"{self.result_path}.\n\n"
             f"See {self.instructions_path} for the same steps. The code is "
-            "computed by the app from the values you type, so the order data "
-            "must be entered correctly through the GUI."
+            "computed by the app from the Order ID you type, so you must use "
+            "the GUI."
         )
 
     def to_metadata(self) -> dict:
