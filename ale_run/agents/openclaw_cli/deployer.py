@@ -28,6 +28,7 @@ from ale_run.base_interface import (
     AgentRunResult,
     BaseAgentDeployer,
     ContentPart,
+    ImageSource,
     Observation,
     StepMetrics,
     ToolCall,
@@ -938,8 +939,23 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                         parts.append(ContentPart(type="text", text=content))
                     elif isinstance(content, list):
                         for c in content:
-                            if isinstance(c, dict) and c.get("type") == "text":
+                            if not isinstance(c, dict):
+                                continue
+                            if c.get("type") == "text":
                                 parts.append(ContentPart(type="text", text=c.get("text", "")))
+                            elif c.get("type") == "image" and c.get("data"):
+                                # openclaw/CUA returns MCP-style image blocks:
+                                # {"type":"image","data":"<base64>","mimeType":...}.
+                                # Keep them so persist_screenshots() can extract
+                                # them to screenshots/ and rewrite to path refs.
+                                parts.append(ContentPart(
+                                    type="image",
+                                    image=ImageSource(
+                                        type="base64",
+                                        media_type=c.get("mimeType", "image/png"),
+                                        data=c.get("data"),
+                                    ),
+                                ))
                     results.append(ToolResult(
                         tool_call_id=block.get("tool_use_id") or block.get("call_id", ""),
                         content=parts,

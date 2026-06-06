@@ -33,6 +33,7 @@ from ale_run.base_interface import (
     AgentRunResult,
     BaseAgentDeployer,
     ContentPart,
+    ImageSource,
     Observation,
     StepMetrics,
     ToolCall,
@@ -673,6 +674,35 @@ class ForgecodeDeployer(BaseAgentDeployer):
                 )],
             )
 
+    @staticmethod
+    def _image_part_from_forge(img: dict[str, Any]) -> ContentPart | None:
+        """Build an image ContentPart from a forgecode image value.
+
+        Shape: ``{"url": "data:image/png;base64,<payload>", "mime_type": ...}``
+        (CUA screenshot) or a plain ``{"url": "https://..."}``. Returns ``None``
+        when no usable url is present (caller falls back to a text placeholder).
+        persist_screenshots() later moves the inline base64 to screenshots/.
+        """
+        url = img.get("url")
+        if not isinstance(url, str) or not url:
+            return None
+        media_type = img.get("mime_type") or "image/png"
+        if url.startswith("data:"):
+            marker = "base64,"
+            idx = url.find(marker)
+            if idx == -1:
+                return None
+            data = url[idx + len(marker):]
+            # Prefer the media type embedded in the data URL when present.
+            header = url[5:idx]
+            if header and ";" in header:
+                media_type = header.split(";", 1)[0] or media_type
+            return ContentPart(
+                type="image",
+                image=ImageSource(type="base64", media_type=media_type, data=data),
+            )
+        return ContentPart(type="image", image=ImageSource(type="url", url=url))
+
     @classmethod
     def _consume_tool_result(
         cls, result: dict[str, Any], builder: TrajectoryBuilder,
@@ -680,22 +710,36 @@ class ForgecodeDeployer(BaseAgentDeployer):
         """Process a tool result entry from the dump."""
         output = result.get("output") or {}
         chunks: list[str] = []
+        image_parts: list[ContentPart] = []
         for v in output.get("values") or []:
             if not isinstance(v, dict):
                 continue
             if "text" in v and isinstance(v["text"], str):
                 chunks.append(v["text"])
             elif "image" in v and isinstance(v["image"], dict):
-                chunks.append("[image]")
+                # forgecode/CUA stores screenshots as a data: URL:
+                # {"image": {"url": "data:image/png;base64,...", "mime_type": ...}}.
+                # Keep them so persist_screenshots() can extract them instead of
+                # collapsing to "[image]".
+                img = v["image"]
+                part = cls._image_part_from_forge(img)
+                if part is not None:
+                    image_parts.append(part)
+                else:
+                    chunks.append("[image]")
             else:
                 chunks.append(json.dumps(v)[:200])
 
+        content: list[ContentPart] = []
+        if chunks:
+            content.append(ContentPart(type="text", text="\n".join(chunks)))
+        content.extend(image_parts)
         builder.add_step(
             source="environment",
             observation=Observation(results=[
                 ToolResult(
                     tool_call_id=result.get("call_id") or result.get("id") or "",
-                    content=[ContentPart(type="text", text="\n".join(chunks))],
+                    content=content,
                     is_error=bool(output.get("is_error")),
                 ),
             ]),
