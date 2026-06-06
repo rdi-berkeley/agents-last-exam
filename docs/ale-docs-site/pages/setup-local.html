@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VMware / QEMU — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>VMware / QEMU</h1>
+    <p class="lede">
+      Run tasks on your own hardware instead of the cloud. Planned, not yet
+      shipped.
+    </p>
+    <div class="note todo">
+      <div class="note-title">Roadmap</div>
+      Local <strong>VMware</strong> and <strong>QEMU</strong> providers are
+      planned — boot the same sandbox images on your own machine to run and debug
+      tasks without GCP. Until they land, Google Cloud is the supported provider.
+      As an interim, the <code>static</code> provider can wrap a VM you bring up by
+      hand, with output pulled back over <code>local</code>.
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

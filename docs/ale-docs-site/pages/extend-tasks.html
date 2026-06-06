@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Add a task — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Add a task</h1>
+    <p class="lede">
+      A task is a two-file package. Copy <code>tasks/demo/hello/</code> (Linux) or
+      <code>hello_win/</code> (Windows) and edit — they cover the whole
+      input / reference / output surface in ~250 lines. The
+      <a href="/pages/arch-taskdata.html">Task spec &amp; data staging</a> page
+      covers the concepts.
+    </p>
+    <pre><code>tasks/&lt;domain&gt;/&lt;task&gt;/
+├── task_card.json     # metadata + the VM it needs
+└── main.py            # load() / start() / evaluate()</code></pre>
+
+    <h2>task_card.json</h2>
+    <table>
+      <thead><tr><th>Field</th><th>Value</th></tr></thead>
+      <tbody>
+        <tr><td><code>taskId</code></td><td><code>&lt;domain&gt;/&lt;task&gt;</code> — must match the folder path.</td></tr>
+        <tr><td><code>category</code></td><td>The top-level domain.</td></tr>
+        <tr><td><code>vm.snapshot</code></td><td>Which image to boot: <code>cpu-free-ubuntu</code> (Linux), <code>cpu-free</code> (Windows), <code>gpu-free</code>, <code>cpu-license</code>, <code>gpu-license</code>.</td></tr>
+        <tr><td><code>vm.{vcpus,memory_gb,disk_gb}</code></td><td>Sizing hints, resolved against the snapshot's capacity pool.</td></tr>
+        <tr><td><code>vm.timeout_s</code></td><td>Per-variant wall budget (provision + setup + agent + eval). Allow ~2× the agent's time.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>main.py — three hooks</h2>
+    <table>
+      <thead><tr><th>Hook</th><th>Runs</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td><code>load()</code></td><td>at discovery</td><td>Returns one <code>cb.Task</code> per variant — each carries the prompt and the metadata the other hooks read back.</td></tr>
+        <tr><td><code>start(cfg, session)</code></td><td>on the fresh VM</td><td>Stage the workspace: create dirs, write the <code>input/</code> files and helper scripts.</td></tr>
+        <tr><td><code>evaluate(cfg, session)</code></td><td>after the agent</td><td>Score the output against the reference; return <code>list[float]</code> (usually <code>[score]</code> in [0, 1]).</td></tr>
+      </tbody>
+    </table>
+    <p>
+      All sandbox I/O goes through <code>session</code> (run a command, read/write
+      a file, screenshot, …) — the full surface is
+      <code>docs/SESSION_API.md</code>.
+    </p>
+    <div class="note warn">
+      <div class="note-title">Two rules that bite</div>
+      <strong>Hide the reference.</strong> The agent must not see <code>reference/</code>
+      during <code>start()</code> — the framework stages it only at eval time. End
+      <code>start()</code> with a "reference correctly hidden" check.
+      <strong>Never raise from <code>evaluate()</code> on missing output</strong> —
+      return <code>[0.0]</code>; raise only on infrastructure failures.
+    </div>
+    <p>
+      Other conventions: keep <code>start()</code> idempotent (wipe
+      <code>output/</code> + <code>reference/</code> first, in case of a reused
+      VM); put per-variant data in a <code>VARIANTS</code> list and read it from
+      <code>cfg.metadata</code>; use <code>\r\n</code> in expected text for Windows
+      tasks.
+    </p>
+
+    <h2>Shipping task data</h2>
+    <table>
+      <thead><tr><th>Pattern</th><th>For</th><th>How</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Inline in <code>start()</code></strong></td><td>prompts, small JSON, scripts (&lt; a few hundred KB)</td><td>Just <code>session.write_file(…)</code> — what <code>demo/hello</code> does, zero image work.</td></tr>
+        <tr><td><strong>Baked into the image</strong></td><td>datasets, checkpoints, large binaries</td><td>Place <code>input/</code> + <code>software/</code> + an encrypted <code>reference.7z</code> under <code>&lt;task_data_root&gt;/&lt;domain&gt;/&lt;task&gt;/&lt;variant&gt;/</code>; set <code>task_data_source: baked_in_sandbox</code> (or a <code>gs://</code> bucket to stage per run).</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Discover &amp; test</h2>
+    <p>
+      No registry — the loader picks up any <code>tasks/&lt;domain&gt;/&lt;task&gt;/main.py</code>
+      with the three hooks. Verify and smoke-test:
+    </p>
+    <pre><code>uv run python -m ale_run list | grep &lt;domain&gt;/&lt;task&gt;
+uv run python -m ale_run run my_exp.yaml --task &lt;domain&gt;/&lt;task&gt; --dry-run
+uv run python -m ale_run run my_exp.yaml --task &lt;domain&gt;/&lt;task&gt;</code></pre>
+    <p>When it's stable, add it to a curated list under <code>selected_tasks/</code> and open a PR.</p>
+    <div class="note">
+      <div class="note-title">No code? Submit a workflow</div>
+      Domain experts can submit a task idea (description, reference, rubric) through
+      the contributor program at
+      <a href="https://agenthle.org/submit">agenthle.org/submit</a>; qualifying
+      submissions become co-authored task packages.
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

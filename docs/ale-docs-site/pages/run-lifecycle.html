@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The run lifecycle — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>The run lifecycle</h1>
+    <p class="lede">
+      The clearest way into the architecture is to watch one run from start to
+      finish. This page is that walkthrough — the whole system in motion. The
+      rest of the section then takes each piece apart, and every phase below
+      links to where it's decomposed.
+    </p>
+
+    <h2>From experiment to runs</h2>
+    <p>
+      <code>python -m ale_run run &lt;exp.yaml&gt;</code> loads the config —
+      resolving the secret file and <code>${env:VAR}</code> references — then
+      pairs every agent with every task. Each agent–task pair is one
+      <strong>run</strong>, and runs proceed with bounded concurrency.
+      <code>--dry-run</code> lists them without booting anything;
+      <code>--agent</code> and <code>--task</code> narrow the set.
+    </p>
+
+    <h2>The phases of a run</h2>
+    <p>
+      Every run goes through the same sequence. The environment tracks which
+      phase it's in, and each transition is written to the event log — so a
+      failure is always pinned to a phase.
+    </p>
+    <div class="diagram">  ① provision         boot the sandbox, open a session
+  ② stage inputs      copy the task's input onto the sandbox; run task setup
+  ③ agent run         install + launch the agent; tail its logs as it works
+  ④ evaluate          stage the hidden reference, then grade the output → score
+  ⑤ collect & record  pull the agent's output and logs; build the trajectory
+  ⑥ cleanup           the provider releases the sandbox (delete / stop / keep)</div>
+
+    <h3>① Provision</h3>
+    <p>
+      The <a href="/pages/arch-environment.html">provider</a> boots a sandbox for
+      the task's snapshot and opens a session. The resulting
+      <code>SandboxHandle</code> is the I/O surface every later phase uses.
+    </p>
+
+    <h3>② Stage inputs &amp; set up</h3>
+    <p>
+      The task's input data is staged onto the sandbox — from the image or a
+      bucket, per the environment's
+      <a href="/pages/arch-taskdata.html">data source</a> — and the task's
+      <code>start</code> hook builds the workspace. The hidden reference is
+      deliberately <em>not</em> staged here.
+    </p>
+
+    <h3>③ Run the agent</h3>
+    <p>
+      The agent now runs to completion. An agent is packaged as a
+      <strong>deployer</strong> — a small piece of code that knows how to install
+      it, launch it on a prompt, and read its logs back — and an
+      <a href="/pages/arch-executor-deployer.html">executor</a> decides where that
+      deployer runs: inside the sandbox, or beside it. The executor calls
+      <code>install()</code> then <code>launch(prompt)</code> and waits, bounded
+      by the task's time limit. For in-sandbox runs, the agent's logs are tailed
+      off as it works, so an interrupted run still leaves a partial trace.
+    </p>
+
+    <h3>④ Evaluate</h3>
+    <p>
+      Now that the agent is done, the hidden reference is staged and decrypted —
+      kept out of the agent's reach until exactly this point — and the task's
+      <code>evaluate</code> hook scores the output against it, producing the run's
+      score.
+    </p>
+
+    <h3>⑤ Collect &amp; record</h3>
+    <p>
+      The agent's output files and its raw work directory are pulled off the
+      sandbox and kept verbatim, and the deployer's <code>parse_artifacts()</code>
+      reads the agent's native logs into a uniform
+      <a href="/pages/data-artifacts.html">trajectory</a>. These steps and the
+      grading above overlap in practice; their exact order isn't significant.
+    </p>
+
+    <h3>⑥ Cleanup</h3>
+    <p>
+      The <a href="/pages/arch-environment.html">provider</a> releases the sandbox
+      according to <code>cleanup_mode</code>: <code>delete</code> (default),
+      <code>stop</code>, or <code>keep</code> for debugging.
+    </p>
+
+    <h2>What a run leaves behind</h2>
+    <p>
+      Each run writes a timestamped directory — its score, trajectory, event log,
+      and the raw artifacts — detailed in
+      <a href="/pages/data-artifacts.html">Trajectories &amp; artifacts</a>. One
+      property matters at the lifecycle level: the event log is appended and
+      flushed line by line, so the trace survives even if a run is killed
+      mid-phase.
+    </p>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

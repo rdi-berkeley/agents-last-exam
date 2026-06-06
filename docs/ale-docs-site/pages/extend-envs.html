@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Add an environment — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Add an environment</h1>
+    <p class="lede">
+      A new backend — another cloud, a hypervisor, your own hardware — is a
+      <strong>Provider</strong> that can produce a live sandbox the framework can
+      drive. See <a href="/pages/arch-environment.html">Sandbox &amp; provider</a>
+      for the concepts.
+    </p>
+
+    <h2>Implement the Provider contract</h2>
+    <pre><code>class MyProvider(Provider):
+    async def acquire(self, spec: SandboxSpec) -&gt; SandboxHandle: ...   # bring one up
+    async def release(self, sandbox, *, mode="delete"): ...           # delete | stop | keep
+    def open_session(self, sandbox) -&gt; RemoteDesktopSession: ...       # a live cua session
+
+    async def heartbeat(self, sandbox): ...          # optional: refresh leases mid-run
+    async def cancel_external(self, sandbox): ...    # optional: kill in-flight ops on SIGINT</code></pre>
+    <table>
+      <thead><tr><th>Method</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td><code>acquire(spec)</code></td><td>Boot a sandbox for <code>spec</code> (its <code>snapshot</code>, OS, sizing, GPU) and return a populated <code>SandboxHandle</code>.</td></tr>
+        <tr><td><code>release(…, mode)</code></td><td>Tear down per <code>mode</code>. Honor <code>keep</code> — debugging relies on it.</td></tr>
+        <tr><td><code>open_session()</code></td><td>Return a <code>RemoteDesktopSession</code> wired to <code>sandbox.endpoint</code>; the framework threads it into the task hooks.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      The <code>SandboxHandle</code> must carry <code>id</code>,
+      <code>endpoint</code>, <code>os</code>, and the VM-side paths
+      (<code>work_dir_base</code>, <code>task_data_root</code>, <code>node</code>,
+      <code>python</code>, <code>mcp_server_dir</code>) — inherit them from the
+      image registry via <code>image.sandbox_paths()</code>.
+    </p>
+
+    <h2>Two shapes</h2>
+    <table>
+      <thead><tr><th>Shape</th><th>Reference</th><th>Copy it for…</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Full lifecycle</strong> — boot &amp; tear down a VM</td><td><code>providers/gcloud.py</code></td><td>another cloud API (AWS, Azure, OCI).</td></tr>
+        <tr><td><strong>Wrap an endpoint</strong> — no lifecycle, point at an existing VM</td><td><code>providers/static.py</code></td><td>bring-your-own VM (VMware, Proxmox, bare metal, a local box running cua-server).</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Register it</h2>
+    <p>
+      Add the provider to the dispatch in <code>orchestration/factory.py</code>,
+      then ship an env config that names it plus its knobs; an experiment wires it
+      in by path:
+    </p>
+    <pre><code># configs/environments/my_provider.yaml
+provider: my_provider
+region: us-west2
+# … snapshots: { ... }  (snapshot → image map, as in environment.yaml)</code></pre>
+
+    <h2>Images</h2>
+    <p>
+      If your sandbox bakes things at the standard paths, reuse an existing image
+      family from <code>environments/images/</code>; otherwise add one (declaring
+      <code>os</code>, the work/data roots, and the <code>node</code> /
+      <code>python</code> / <code>mcp_server_dir</code> paths).
+    </p>
+    <div class="note">
+      <div class="note-title">Staying on GCP? Just swap the image</div>
+      To run a different OS or toolset on the existing provider, you don't need new
+      code — point a snapshot's <code>image:</code> at your custom image in the
+      env config. Tasks asking for that snapshot boot it instead.
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

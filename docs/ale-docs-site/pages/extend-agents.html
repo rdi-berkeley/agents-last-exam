@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Add an agent — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Add an agent</h1>
+    <p class="lede">
+      An agent is a <strong>deployer</strong>: a Python class that installs,
+      launches, and reads back one harness. It does all its work through the
+      handle the framework hands it, so the same code runs on any image and any
+      OS. This page is how to write one — the
+      <a href="/pages/arch-executor-deployer.html">Agents &amp; executor</a> page
+      has the concepts.
+    </p>
+
+    <h2>The one rule: read from the sandbox, never hardcode</h2>
+    <p>
+      A deployer is constructed with one argument, <code>self.executor</code>, and
+      everything it needs hangs off that. The discipline that makes a deployer
+      portable: read binary paths, the OS, and the work dir from the handle and
+      branch on the OS — never write <code>"node"</code> or a literal path.
+    </p>
+    <table>
+      <thead><tr><th>From <code>self.executor</code></th><th>What it is</th></tr></thead>
+      <tbody>
+        <tr><td><code>.config</code></td><td>Your agent's config dataclass (model + knobs).</td></tr>
+        <tr><td><code>.work_dir</code></td><td>A scratch dir for this run's artifacts (transcript, prompt, logs).</td></tr>
+        <tr><td><code>.env</code></td><td>Framework env vars (API keys, the MCP bridge URL).</td></tr>
+        <tr><td><code>.sandbox</code></td><td>The <code>SandboxHandle</code> — below.</td></tr>
+      </tbody>
+    </table>
+    <table>
+      <thead><tr><th>From <code>self.executor.sandbox</code></th><th>What it is</th></tr></thead>
+      <tbody>
+        <tr><td><code>.os</code> / <code>.is_linux</code></td><td>Branch on this for every path/command.</td></tr>
+        <tr><td><code>.node</code> / <code>.python</code></td><td>Absolute paths to the runtimes baked in the image.</td></tr>
+        <tr><td><code>.work_dir_base</code> / <code>.mcp_server_dir</code> / <code>.task_data_root</code></td><td>The image's path conventions.</td></tr>
+        <tr><td><code>run_command</code> · <code>write_file</code> · <code>read_file</code> · <code>mkdir</code> · <code>exists</code> · <code>upload_local_file</code> · <code>download_to_local</code></td><td>Async I/O against the VM — all OS-dispatched for you.</td></tr>
+      </tbody>
+    </table>
+    <p>So a path is built, not written:</p>
+    <pre><code>sandbox = self.executor.sandbox
+node  = sandbox.node                                   # not "node"
+entry = self._join(sandbox.mcp_server_dir, "src", "index.js",
+                   is_linux=sandbox.is_linux)          # /…/index.js  vs  C:\…\index.js
+
+@staticmethod
+def _join(*parts, is_linux):
+    sep = "/" if is_linux else "\\"
+    head, *rest = parts
+    return sep.join([head.rstrip("/\\"), *(p.strip("/\\") for p in rest)])</code></pre>
+    <div class="note">
+      <div class="note-title">async</div>
+      A deployer runs in an async context; wrap blocking calls
+      (<code>subprocess.run</code>, <code>Popen</code>) in
+      <code>await asyncio.to_thread(...)</code>. Snippets below elide that for
+      brevity.
+    </div>
+
+    <h2>install() — stage the agent</h2>
+    <p>
+      Get the harness in place and ready to run. The canonical sandbox-CLI
+      sequence (see <code>agents/claude_code/deployer.py</code>,
+      <code>agents/codex/deployer.py</code>):
+    </p>
+    <pre><code>async def install(self) -&gt; None:
+    sandbox = self.executor.sandbox
+
+    # 1. locate the CLI — install it only if the image didn't pre-bake it
+    cli = shutil.which("claude") or await self._npm_install("@anthropic-ai/claude-code")
+
+    # 2. prove it runs  (stdin=DEVNULL avoids TTY/Defender hangs on Windows)
+    subprocess.run([cli, "--version"], check=True, stdin=subprocess.DEVNULL, timeout=60)
+
+    # 3. a clean work dir for this run
+    Path(self.executor.work_dir).mkdir(parents=True, exist_ok=True)
+
+    # 4. hand the agent a GUI action space: ensure the cua MCP bridge, point the CLI at it
+    await ensure_cua_mcp_server(sandbox)                 # idempotent — no-op when pre-baked
+    mcp = {"mcpServers": {"cua": {
+        "command": sandbox.node,                         # read, don't hardcode
+        "args":    [self._join(sandbox.mcp_server_dir, "src", "index.js",
+                               is_linux=sandbox.is_linux)],
+        "env":     cua_bridge_env(self.executor),
+    }}}
+    (Path(self.executor.work_dir) / "mcp_config.json").write_text(json.dumps(mcp))</code></pre>
+    <p>
+      Common steps: probe-or-install the binary, create the work dir, ensure the
+      <a href="/pages/mcp-tools.html">cua MCP bridge</a> and write the agent's MCP
+      config, and set up auth. Most knobs (which version, whether to overlay a
+      patched binary, what to disable) come from <code>self.config</code>.
+    </p>
+
+    <h2>launch(prompt) — run it, return a result</h2>
+    <p>
+      Spawn the agent <strong>detached</strong>, poll until it exits, and return an
+      <code>AgentRunResult</code>. Detaching + polling (rather than blocking) keeps
+      the run cancellable so a SIGTERM can reap the child:
+    </p>
+    <pre><code>async def launch(self, prompt: str) -&gt; AgentRunResult:
+    wd = Path(self.executor.work_dir)
+    (wd / "prompt.txt").write_text(prompt)
+    argv, env = self._build_argv(cfg=self.config), self._build_env(cfg=self.config)
+
+    t0 = time.monotonic()
+    with open(wd/"prompt.txt","rb") as pin, open(wd/"transcript.jsonl","wb") as out, \
+         open(wd/"stderr.log","wb") as err:
+        proc = subprocess.Popen(argv, stdin=pin, stdout=out, stderr=err,
+                                env=env, cwd=str(wd), start_new_session=True)
+    try:
+        while proc.poll() is None:
+            await asyncio.sleep(2)                        # poll; stays cancellable
+    except asyncio.CancelledError:
+        proc.terminate(); proc.kill(); raise              # reap on shutdown
+
+    return AgentRunResult(
+        status   = "completed" if proc.returncode == 0 else "failed",
+        exit_code= proc.returncode,
+        duration_s = time.monotonic() - t0,
+        transcript_path = str(wd / "transcript.jsonl"),
+        stderr_path     = str(wd / "stderr.log"),
+    )</code></pre>
+    <p>
+      A <strong>host-side harness</strong> (out-of-sandbox, e.g.
+      <code>agents/ale_claw/deployer.py</code>) writes <code>launch()</code>
+      differently: instead of a subprocess it opens a session / MCP runtime to the
+      VM and drives its own agent loop in-process, writing a transcript to
+      <code>work_dir</code> at the end. Same signature, same return.
+    </p>
+
+    <h2>parse_artifacts() — logs → trajectory</h2>
+    <p>
+      A host-side <code>@classmethod</code> that runs after the framework gathers
+      <code>work_dir</code> locally. Read the agent's native transcript and emit
+      one <a href="/pages/trajectory-schema.html">trajectory</a> step per turn:
+    </p>
+    <pre><code>@classmethod
+def parse_artifacts(cls, *, work_dir, config, run_result, builder) -&gt; None:
+    t = work_dir / "transcript.jsonl"
+    if not t.exists():
+        builder.add_step(source="system", message="no transcript")   # never raise
+        return
+    for line in t.read_text(errors="replace").splitlines():
+        if not line.strip():
+            continue
+        ev = json.loads(line)
+        if ev["type"] == "assistant":
+            builder.add_step(
+                source="agent",
+                message=_text(ev),
+                tool_calls=[ToolCall(id=b["id"], name=b["name"], arguments=b["input"])
+                            for b in _tool_uses(ev)],
+                metrics=StepMetrics(input_tokens=_usage(ev, "input_tokens"), ...),
+            )
+        elif ev["type"] == "user":                        # tool results
+            builder.add_step(source="environment", observation=_obs(ev))</code></pre>
+    <p>
+      Map each agent's own format to the same schema — assistant turns become
+      <code>agent</code> steps carrying <code>ToolCall</code>s and
+      <code>StepMetrics</code>; tool results become <code>environment</code>
+      observations. On a truncated run, emit a single <code>system</code> step and
+      return — <strong>never raise</strong>.
+    </p>
+
+    <h2>Wire it in</h2>
+    <p>
+      Put a <strong>standalone config dataclass</strong> next to the deployer
+      (there is no shared base — every preset is self-describing), and set the
+      ClassVars the framework validates against:
+    </p>
+    <pre><code>@dataclass
+class MyAgentConfig:
+    name: ClassVar[str] = "my-agent"
+    model: str = "anthropic/claude-sonnet-4.6"
+    max_turns: int = 30           # only the knobs this agent consumes
+
+class MyAgentDeployer(BaseAgentDeployer):
+    default_executor    : ClassVar[str]               = "sandbox"   # or "local"
+    supported_executors : ClassVar[frozenset[str]]    = frozenset({"sandbox"})
+    hot_artifacts       : ClassVar[tuple[str, ...]]   = ("transcript.jsonl", "stderr.log")</code></pre>
+    <p>
+      <code>hot_artifacts</code> are tailed off the VM during the run, so a killed
+      run still leaves a partial trace. Register the deployer in
+      <code>orchestration/factory.py</code> (<code>_AGENT_FQNS</code>), then ship a
+      preset:
+    </p>
+    <pre><code># configs/agents/my_agent.yaml
+harness: my_agent
+model: anthropic/claude-sonnet-4.6
+config:
+  max_turns: 30</code></pre>
+    <div class="note">
+      <div class="note-title">Read two of these before you start</div>
+      <code>claude_code</code> (sandbox CLI) and <code>ale_claw</code> (host-side
+      harness) are the two shapes; <code>codex</code> / <code>grok_cli</code> show
+      the variations (fork-binary overlay, Bun runtime, NDJSON transcripts).
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

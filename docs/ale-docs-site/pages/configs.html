@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Configure & run a benchmark — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Configure &amp; run a benchmark</h1>
+    <p class="lede">
+      With the cloud <a href="/pages/setup-gcp.html">provisioned</a>, a run is
+      just three config files wired together: an experiment picks <strong>which
+      agents</strong>, <strong>which environment</strong>, and <strong>which
+      tasks</strong>. This page walks each one, the two kinds of API key, and the
+      launch command.
+    </p>
+
+    <h2>The experiment file</h2>
+    <p>
+      An experiment only wires things together — it references the agent and
+      environment configs by path and carries run-level knobs. Copy
+      <code>example_exp.yaml</code> and edit:
+    </p>
+    <pre><code>name: ale_run                                   # names the output folder
+
+secret_file: secret/.env                        # API keys (loaded before parsing)
+
+agents:                                         # one path per agent — list several to run a matrix
+  - configs/agents/claude_code.yaml
+environment: configs/environments/environment.yaml
+tasks: selected_tasks/unlicensed/near-term.txt  # a task list (a tier, here)
+
+output:
+  root: .logs                                   # host-side run logs
+concurrency: 8                                  # units (agent × task) in flight at once
+cleanup_mode: delete                            # delete | stop | keep the VMs after each run</code></pre>
+    <table>
+      <thead><tr><th>Field</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>agents</code></td><td>Paths under <code>configs/agents/</code>. Several entries → every agent runs over every task.</td></tr>
+        <tr><td><code>environment</code></td><td>Exactly one path under <code>configs/environments/</code>.</td></tr>
+        <tr><td><code>tasks</code></td><td>A task-list file under <code>selected_tasks/</code> — see <a href="#tasks">Configure the tasks</a> below.</td></tr>
+        <tr><td><code>concurrency</code></td><td>How many agent×task units run at once — caps live VMs and LLM rate.</td></tr>
+        <tr><td><code>cleanup_mode</code></td><td><code>delete</code> for batch runs; <code>keep</code> to leave a VM up for debugging.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Configure the environment</h2>
+    <p>
+      A task declares which <strong>snapshot</strong> it needs in its task card,
+      and the environment config
+      (<code>configs/environments/environment.yaml</code>) maps each snapshot to a
+      backend — provider, image, and connection. ALE's tasks span five snapshots:
+    </p>
+    <table>
+      <thead><tr><th>Snapshot</th><th>OS · GPU · license</th><th>Image</th></tr></thead>
+      <tbody>
+        <tr><td><code>cpu-free-ubuntu</code></td><td>Linux — the bulk of tasks</td><td><code>ale-ubuntu22</code></td></tr>
+        <tr><td><code>cpu-free</code></td><td>Windows</td><td><code>ale-win10</code></td></tr>
+        <tr><td><code>cpu-license</code></td><td>Windows · licensed</td><td><code>ale-win10</code></td></tr>
+        <tr><td><code>gpu-free</code></td><td>Windows · GPU</td><td><code>ale-win10</code></td></tr>
+        <tr><td><code>gpu-license</code></td><td>Windows · GPU · licensed</td><td><code>ale-win10</code></td></tr>
+      </tbody>
+    </table>
+    <p>
+      Every Windows variant folds onto a single image (<code>ale-win10</code>), so
+      two images cover all five. <strong>Leave the <code>snapshots:</code> block
+      exactly as shipped</strong> — it already maps each snapshot to the right
+      image and pulls your project and key in through <code>${env:…}</code>. (As
+      you add your own providers or images, configure these however you like.)
+    </p>
+    <p>The fields below the snapshots are the ones worth knowing:</p>
+    <pre><code>task_data_source: baked_in_sandbox    # task data is baked into the images — nothing to fetch
+gcs_sa_key: secret/gcp_key.json       # the SA key from GCP setup — already in place
+output_path: local                    # ← the one field to change for batch runs (below)</code></pre>
+    <div class="note">
+      <div class="note-title">output_path — strongly prefer the bucket</div>
+      <p>
+        <code>local</code> pulls each task's output off the sandbox over its cua
+        computer-server (port 5000) — slow and, with large artifacts, fragile on a
+        remote VM, so not recommended there. (Natural for a <em>local</em> sandbox,
+        handy once the VMware / QEMU providers land.)
+      </p>
+      <p>
+        The <strong>GCS bucket</strong> uploads VM-side, straight to storage —
+        faster and robust at scale, and already created during
+        <a href="/pages/setup-gcp.html">GCP setup</a>:
+      </p>
+      <pre><code>output_path: gs://&lt;GCP_PROJECT&gt;-ale-results</code></pre>
+      <p>
+        Each run lands at <code>gs://&lt;GCP_PROJECT&gt;-ale-results/&lt;run_id&gt;/output/</code>,
+        keyed by run id — pull any run back with <code>gsutil -m cp -r</code> on its
+        prefix, or script a whole sweep.
+      </p>
+    </div>
+
+    <h2>Configure the agents</h2>
+    <p>
+      Every agent ships a template under <code>configs/agents/</code> with each
+      knob set to its default, so the tunable surface is visible at a glance. A
+      preset is three things — the harness, the model, and an agent-specific
+      <code>config</code> block:
+    </p>
+    <pre><code># configs/agents/claude_code.yaml
+harness: claude_code
+model: anthropic/claude-sonnet-4.6
+config:
+  provider: openrouter        # openrouter → OPENROUTER_API_KEY ; direct → ANTHROPIC_API_KEY
+  max_turns: -1               # -1 = unlimited
+  # … agent-specific knobs, all shown at their defaults</code></pre>
+    <p>
+      The <code>config</code> fields differ per agent — that's why each has its
+      own template. List several agent files under the experiment's
+      <code>agents:</code> to sweep a matrix (every agent over every task).
+    </p>
+
+    <h2 id="tasks">Configure the tasks</h2>
+    <p><code>tasks:</code> points at a list under <code>selected_tasks/</code>:</p>
+    <table>
+      <thead><tr><th>List</th><th>What it is</th></tr></thead>
+      <tbody>
+        <tr><td><code>full/{near-term,full-spectrum,last-exam}.txt</code></td><td>The full benchmark, split by difficulty tier.</td></tr>
+        <tr><td><code>unlicensed/…</code></td><td>The same tiers minus tasks needing licensed software — runs on the published images as-is.</td></tr>
+        <tr><td><code>linux_only.txt</code></td><td>The Linux-only subset (no GUI desktop).</td></tr>
+        <tr><td><code>helloworld.txt</code></td><td>A single demo task.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Tiers: <strong>near-term</strong> (cheapest, partly solvable today),
+      <strong>full-spectrum</strong> (one task per subdomain),
+      <strong>last-exam</strong> (the hardest). A <code>.txt</code> list is one
+      task path per line; a <code>.yaml</code> list adds per-task variant control.
+    </p>
+    <div class="note todo">
+      <div class="note-title">Licensed tasks — TODO</div>
+      A few tasks need commercial software re-activated on the image. That setup
+      guide is still to come; until then, use the <strong>unlicensed</strong> lists.
+    </div>
+
+    <h2>Keys: agents vs judges</h2>
+    <p>Two separate sets of keys, for two separate jobs.</p>
+    <ul>
+      <li>
+        <strong>Agent keys — <code>secret/.env</code>.</strong> Used to <em>run</em>
+        the agents. The reference presets route through OpenRouter, so set
+        <code>OPENROUTER_API_KEY</code>. A provider's official key
+        (<code>ANTHROPIC_API_KEY</code>, …) is only used when an agent's config
+        sets <code>provider: direct</code>.
+        <pre><code>OPENROUTER_API_KEY=sk-or-...
+GCP_PROJECT=&lt;your project&gt;             # read by the env config (${env:GCP_PROJECT})
+GCP_SA_KEY=secret/gcp_key.json         # read by the env config (${env:GCP_SA_KEY})</code></pre>
+      </li>
+      <li>
+        <strong>Judge keys — <code>secret/eval_time/</code>.</strong> Used to
+        <em>grade</em>. Some tasks score their output with an LLM/VLM judge; those
+        keys live per-service here and load automatically at scoring time. Copy the
+        template and fill it:
+        <pre><code>cp secret/eval_time/openai.env.example secret/eval_time/openai.env   # then add the key</code></pre>
+        <strong>Required for judge-scored tasks</strong> — without it those tasks
+        can't be evaluated. A task's <code>task_card.json</code>
+        <code>evaluatorCredentials</code> names which file it needs.
+      </li>
+    </ul>
+
+    <h2>Run it</h2>
+    <pre><code>uv run python -m ale_run run my_exp.yaml --dry-run   # validate the agent × task matrix
+uv run python -m ale_run run my_exp.yaml             # run it</code></pre>
+    <p>
+      <code>--dry-run</code> prints the matrix without booting anything. The real
+      run boots sandboxes (bounded by <code>concurrency</code>), runs each agent,
+      grades it, and tears the VMs down. Each unit writes a scored, replayable
+      record — its layout is covered in
+      <a href="/pages/data-artifacts.html">Trajectories &amp; artifacts</a>.
+    </p>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
