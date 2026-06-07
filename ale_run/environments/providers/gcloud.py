@@ -256,6 +256,17 @@ class SnapshotConfig:
     image: str          # GCE image name (= framework Image-registry family)
     gpu: str | None     # accelerator type; None for CPU snapshots
     zones: tuple[str, ...]   # zones to try, in order, on capacity errors
+    resolution: tuple[int, int] | None = None
+    """Windows display resolution (w, h) to force after the VM boots. None
+    leaves the image/driver default. Applied in acquire() for Windows snapshots
+    only (Linux X picks its own size). If the configured mode is not supported
+    by the VM's display adapter, acquire() FAILS the run (no silent fallback;
+    the error lists the supported modes).
+
+    Supported modes (verified on live GCE Windows VMs): non-GPU adapters go up
+    to 1920x1440 (e.g. 1024x768, 1280x800, 1920x1080); GPU VMs (nvidia-l4-vws /
+    GRID) are a superset up to 7680x4320. 1024x768 and 1920x1080 work on both.
+    The operator-facing list lives in the environment yaml comment."""
 
     @property
     def os(self) -> str:
@@ -298,7 +309,30 @@ def _build_snapshot_config(raw: Any) -> SnapshotConfig:
     zones = tuple(raw.get("zones") or ())
     if not zones:
         raise KeyError(f"snapshot {image!r} missing required `zones`")
-    return SnapshotConfig(image=str(image), gpu=raw.get("gpu"), zones=zones)
+    return SnapshotConfig(
+        image=str(image), gpu=raw.get("gpu"), zones=zones,
+        resolution=_parse_resolution(raw.get("resolution"), image),
+    )
+
+
+def _parse_resolution(raw: Any, image: str) -> tuple[int, int] | None:
+    """Parse a snapshot ``resolution`` value: ``[w, h]`` or ``"WxH"``. None ok."""
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        parts = raw.lower().replace(" ", "").split("x")
+    elif isinstance(raw, (list, tuple)):
+        parts = list(raw)
+    else:
+        raise TypeError(
+            f"snapshot {image!r} resolution must be [w, h] or 'WxH', got {raw!r}"
+        )
+    if len(parts) != 2:
+        raise ValueError(f"snapshot {image!r} resolution must have 2 values, got {raw!r}")
+    try:
+        return (int(parts[0]), int(parts[1]))
+    except (TypeError, ValueError):
+        raise ValueError(f"snapshot {image!r} resolution values must be ints, got {raw!r}")
 
 
 def _build_provider_config(raw: dict[str, Any]) -> GcloudProviderConfig:
@@ -468,17 +502,31 @@ async def _try_create_in_zone(
             )
             return False, "", last_stderr, zone
 
-        if attempt < _GCP_MAX_RETRIES_TRANSIENT and _is_transient_error(stderr):
-            delay = _GCP_TRANSIENT_BASE_DELAY * (2 ** (attempt - 1))
-            logger.warning(
-                "VM create transient error (attempt %d/%d): %s — retrying in %ds",
-                attempt,
-                _GCP_MAX_RETRIES_TRANSIENT,
-                stderr[:200],
-                delay,
-            )
-            await asyncio.sleep(delay)
-            continue
+        if _is_transient_error(stderr):
+            # Ambiguous outcome (esp. ConnectionError / RemoteDisconnected): the
+            # create request may have actually succeeded on GCP even though the
+            # local gcloud CLI errored before getting the response. Reconcile:
+            # if the VM materialised, delete it — otherwise it leaks forever (no
+            # handle/name is ever tracked, so neither acquire's cleanup nor the
+            # run's finally can ever remove it), and a same-name retry would hit
+            # "already exists". Do this whether or not we retry.
+            if await _vm_exists(name, zone, project):
+                logger.warning(
+                    "VM create reported a transient error but %s exists — deleting "
+                    "the ambiguously-created VM (zone=%s) to avoid a leak", name, zone,
+                )
+                await _delete_vm(name, zone, project)
+            if attempt < _GCP_MAX_RETRIES_TRANSIENT:
+                delay = _GCP_TRANSIENT_BASE_DELAY * (2 ** (attempt - 1))
+                logger.warning(
+                    "VM create transient error (attempt %d/%d): %s — retrying in %ds",
+                    attempt,
+                    _GCP_MAX_RETRIES_TRANSIENT,
+                    stderr[:200],
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                continue
 
         return False, "", last_stderr, zone
     return False, "", last_stderr, zone
@@ -577,6 +625,16 @@ def _summarize_cua_response(data: dict | None) -> str:
     return json.dumps(data, default=str)[:300]
 
 
+async def _vm_exists(name: str, zone: str, project: str) -> bool:
+    """True if instance ``name`` exists in ``zone`` (used to reconcile an
+    ambiguous create where the local CLI errored but GCP may have built the VM)."""
+    rc, _, _ = await _run_gcloud(
+        "compute", "instances", "describe", name,
+        f"--zone={zone}", "--format=value(name)", project=project,
+    )
+    return rc == 0
+
+
 async def _delete_vm(name: str, zone: str, project: str) -> bool:
     logger.info("Deleting VM %s", name)
     rc, _, stderr = await _run_gcloud(
@@ -614,6 +672,45 @@ async def _stop_vm(name: str, zone: str, project: str) -> bool:
 
 
 # ======================================================================
+# Guest script: force the Windows desktop resolution via ChangeDisplaySettingsW.
+# Authoritative by the API return code (0 = DISP_CHANGE_SUCCESSFUL) — we do NOT
+# read GetSystemMetrics to "skip if already set", because on these GCE Windows
+# VMs GetSystemMetrics can MISREPORT the real framebuffer (e.g. report 1024x768
+# while the actual display the cua server captures is 1920x1080), which would
+# wrongly skip the change. On failure we enumerate the adapter's supported modes
+# so the error message says what IS settable.
+_SET_RES_PY = """\
+import ctypes, ctypes.wintypes as wt, sys
+u = ctypes.windll.user32
+tw, th = int(sys.argv[1]), int(sys.argv[2])
+fields = [
+    ("a",ctypes.c_wchar*32),("b",wt.WORD),("c",wt.WORD),
+    ("d",wt.WORD),("e",wt.WORD),("f",wt.DWORD),
+    ("g",ctypes.c_long),("h",ctypes.c_long),
+    ("i",wt.DWORD),("j",wt.DWORD),
+    ("k",ctypes.c_short),("l",ctypes.c_short),
+    ("m",ctypes.c_short),("n",ctypes.c_short),("o",ctypes.c_short),
+    ("p",ctypes.c_wchar*32),("q",wt.WORD),("r",wt.DWORD),
+    ("w",wt.DWORD),("ht",wt.DWORD),("fl",wt.DWORD),("fr",wt.DWORD),
+]
+DM = type("DM", (ctypes.Structure,), {"_fields_": fields})
+dm = DM(); dm.d = ctypes.sizeof(dm)
+u.EnumDisplaySettingsW(None, -1, ctypes.byref(dm))
+dm.w = tw; dm.ht = th; dm.f = 0x80000 | 0x100000
+r = u.ChangeDisplaySettingsW(ctypes.byref(dm), 0)
+if r == 0:
+    print("set_ok")
+else:
+    modes = set(); i = 0
+    while True:
+        d2 = DM(); d2.d = ctypes.sizeof(d2)
+        if not u.EnumDisplaySettingsW(None, i, ctypes.byref(d2)):
+            break
+        modes.add((d2.w, d2.ht)); i += 1
+    print("failed:%d supported=%s" % (r, sorted(modes)))
+"""
+
+
 # Session bring-up: replicates simprun TaskEnv's _init_computer_skip_wait.
 # wait_cua_ready already confirmed the CUA server is healthy, so we skip
 # the fragile Computer.wait_for_ready() that breaks under concurrency.
@@ -773,6 +870,14 @@ class GcloudProvider(Provider):
             if not ready:
                 raise RuntimeError(f"CUA server at {cua_url} did not become ready")
 
+            # Force the Windows display resolution if the snapshot configures one
+            # (Linux X picks its own size, so we never touch it). No silent
+            # fallback: if the configured mode isn't supported by this VM's
+            # display adapter, this raises → the post-create cleanup below deletes
+            # the VM and the run fails, surfacing the misconfiguration loudly.
+            if image.os == "windows" and snap.resolution is not None:
+                await self._set_windows_resolution(cua_url, snap.resolution)
+
             # The VM's baked gsutil is unauthenticated. Inject the GCS SA key so
             # in-VM staging (stage_reference) and gs:// pulls authenticate; surface
             # the key path + billing project via metadata so gsbucket's _gsutil
@@ -813,6 +918,39 @@ class GcloudProvider(Provider):
             except Exception as de:  # noqa: BLE001
                 logger.error("acquire: could not delete leaked VM %s: %s", name, de)
             raise
+
+    @staticmethod
+    async def _set_windows_resolution(
+        cua_url: str, resolution: tuple[int, int],
+    ) -> None:
+        """Force the Windows framebuffer to ``resolution`` (w, h).
+
+        Raises RuntimeError if the mode can't be applied (no silent fallback):
+        the caller is inside acquire()'s post-create try, so the raise deletes
+        the VM and fails the run. The error includes the adapter's supported
+        modes when the requested one is rejected (DISP_CHANGE_BADMODE).
+        """
+        from cua_bench.computers.remote import RemoteDesktopSession
+
+        w, h = resolution
+        remote_path = r"C:\agenthle\_set_resolution.py"
+        session = RemoteDesktopSession(api_url=cua_url, os_type="windows")
+        _init_computer_skip_wait(session)
+        await session.run_command(
+            r"cmd /c if not exist C:\agenthle mkdir C:\agenthle", check=False,
+        )
+        await session.write_file(remote_path, _SET_RES_PY)
+        res = await session.run_command(
+            f'python "{remote_path}" {w} {h}', check=False,
+        )
+        out = (res.get("stdout") or "").strip() if isinstance(res, dict) else ""
+        if "set_ok" in out:
+            logger.info("gcloud: set Windows resolution to %dx%d", w, h)
+            return
+        err = out or (res.get("stderr") if isinstance(res, dict) else "") or "no output"
+        raise RuntimeError(
+            f"gcloud: could not set Windows resolution {w}x{h} — {err}"
+        )
 
     @staticmethod
     async def _inject_gcs_credentials(

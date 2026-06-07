@@ -1,0 +1,15 @@
+# ============================================================================
+# static_win_dev.yaml — DEV ONLY. Attach to the running Windows dev VM.
+# ============================================================================
+# Static provider: connects to the already-running cua-server on the Windows
+# dev box. No provisioning, no teardown. OS must match the tasks (Windows).
+provider: static
+
+endpoint: http://34.134.146.181:5000   # dev Windows VM cua-server
+image: ale-win10                      # Windows path-conventions + cua port :5000
+cleanup_on_release: false             # never tear down a box we didn't create
+
+# Task input data is baked into E:\agenthle on the image; outputs are pulled
+# back to the local run dir (no GCS bucket involved).
+task_data_source: baked_in_sandbox
+output_path: local

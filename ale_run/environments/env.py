@@ -86,12 +86,10 @@ class ALEEnv(Environment[Action, Observation, State]):
         self._current_phase = PHASE_ENV_START
         self._sandbox = await self._provider.acquire(self._spec)
         self._session = self._provider.open_session(self._sandbox)
-        # Windows-only: force the framebuffer to a known size so GUI tasks
-        # see a deterministic screen. Linux X server picks its own size.
-        if self._sandbox.os == "windows":
-            await _set_windows_resolution(
-                self._sandbox, has_gpu=self._spec.gpu is not None,
-            )
+        # Display resolution is a provider concern now: the gcloud provider forces
+        # the Windows framebuffer to the snapshot's configured `resolution` inside
+        # acquire() (and fails the run if the mode is unsupported). Linux is left
+        # at the X server's own size.
         return Observation()
 
     async def reset_session(self) -> Any:
@@ -174,58 +172,3 @@ async def _force_close_session(session: Any) -> None:
     except (asyncio.TimeoutError, Exception) as e:
         logger.debug("session.close failed/timed out: %s", e)
 
-
-# ============================================================================
-# Windows framebuffer prep
-# ============================================================================
-
-_EXPECTED_RESOLUTION = {True: (1920, 1080), False: (1024, 768)}
-
-_SET_RES_PY = """\
-import ctypes, ctypes.wintypes as wt, sys
-u = ctypes.windll.user32
-cur_w, cur_h = u.GetSystemMetrics(0), u.GetSystemMetrics(1)
-tw, th = int(sys.argv[1]), int(sys.argv[2])
-if (cur_w, cur_h) == (tw, th):
-    print("already_ok"); sys.exit(0)
-fields = [
-    ("a",ctypes.c_wchar*32),("b",wt.WORD),("c",wt.WORD),
-    ("d",wt.WORD),("e",wt.WORD),("f",wt.DWORD),
-    ("g",ctypes.c_long),("h",ctypes.c_long),
-    ("i",wt.DWORD),("j",wt.DWORD),
-    ("k",ctypes.c_short),("l",ctypes.c_short),
-    ("m",ctypes.c_short),("n",ctypes.c_short),("o",ctypes.c_short),
-    ("p",ctypes.c_wchar*32),("q",wt.WORD),("r",wt.DWORD),
-    ("w",wt.DWORD),("ht",wt.DWORD),("fl",wt.DWORD),("fr",wt.DWORD),
-]
-DM = type("DM", (ctypes.Structure,), {"_fields_": fields})
-dm = DM(); dm.d = ctypes.sizeof(dm)
-u.EnumDisplaySettingsW(None, -1, ctypes.byref(dm))
-dm.w = tw; dm.ht = th; dm.f = 0x80000 | 0x100000
-r = u.ChangeDisplaySettingsW(ctypes.byref(dm), 0)
-print("set_ok" if r == 0 else f"failed:{r}")
-"""
-
-
-async def _set_windows_resolution(sandbox, *, has_gpu: bool) -> None:
-    """Force the Windows sandbox framebuffer to a known size.
-
-    Best-effort: failure logs a warning but doesn't fail reset_async —
-    the tested agent can usually solve at default resolution too.
-    """
-    target_w, target_h = _EXPECTED_RESOLUTION[has_gpu]
-    remote_path = r"C:\Users\User\_set_resolution.py"
-    try:
-        await sandbox.write_file(remote_path, _SET_RES_PY)
-        result = await sandbox.run_command(
-            f'python "{remote_path}" {target_w} {target_h}', timeout=20,
-        )
-        out = (result.stdout or "").strip()
-        if "set_ok" in out:
-            logger.info("display resolution set to %dx%d", target_w, target_h)
-        elif "already_ok" in out:
-            logger.info("display resolution already %dx%d", target_w, target_h)
-        else:
-            logger.warning("display resolution change result: %s", out)
-    except Exception as e:
-        logger.warning("failed to set display resolution: %s", e)

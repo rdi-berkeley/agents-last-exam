@@ -14,6 +14,31 @@
 # Linux tasks in Docker, Windows/GPU on GCloud VMs). Each snapshot block is
 # self-contained: there is no shared top-level `providers:` section — gcloud
 # connection fields are repeated on each gcloud snapshot (repetition is fine).
+#
+# ---------------------------------------------------------------------------
+# resolution (per Windows snapshot, optional) — forces the Windows desktop
+# framebuffer to a fixed size so GUI tasks render deterministically. Form:
+# `resolution: [w, h]` or `resolution: "WxH"`. Linux snapshots ignore it (X
+# picks its own size). Set it INSIDE the snapshot block as a sibling of
+# `image:` (NOT inside the `gcloud:` block). The gcloud provider applies it at
+# acquire() time; if the mode is not supported by that VM's display adapter the
+# RUN FAILS (no silent fallback) and the error lists the supported modes.
+#
+# Resolutions GCE Windows supports (verified by EnumDisplaySettings on live
+# VMs — pick one of these or the run fails):
+#   • non-GPU VMs (basic display adapter) — up to 1920x1440, 25 modes:
+#       640x480 800x480 800x600 832x624 960x640 1024x600 1024x768 1152x864
+#       1152x870 1280x720 1280x760 1280x768 1280x800 1280x960 1280x1024
+#       1360x768 1366x768 1400x1050 1440x900 1600x900 1600x1200 1680x1050
+#       1920x1080 1920x1200 1920x1440
+#   • GPU VMs (nvidia-l4-vws / NVIDIA GRID) — a SUPERSET, up to 8K:
+#       all of the above plus 2048x1536 2560x1440 2560x1600 3840x2160
+#       3840x2400 4096x2160 5120x2880 7680x4320
+# 1024x768 and 1920x1080 work on both. A freshly-booted VM exposes the full
+# list; a long-idle VM can degrade to 640x480-only, so build/test on fresh VMs.
+# (Windows GetSystemMetrics may misreport the live size — trust the actual
+# screenshot / cua get_screen_size, which always match the real framebuffer.)
+# ---------------------------------------------------------------------------
 
 snapshots:
 
@@ -38,6 +63,7 @@ snapshots:
   cpu-free:                   # Windows, no GPU, no license
     provider: gcloud
     image: ale-win10
+    resolution: [1024, 768]    # see resolution note above; unsupported mode -> run fails
     gcloud:
       project: ${env:GCP_PROJECT}
       service_account_key: ${env:GCP_SA_KEY}
@@ -49,6 +75,7 @@ snapshots:
   cpu-license:                # Windows requiring a licensed image
     provider: gcloud
     image: ale-win10
+    resolution: [1024, 768]    # see resolution note above; unsupported mode -> run fails
     gcloud:
       project: ${env:GCP_PROJECT}
       service_account_key: ${env:GCP_SA_KEY}
@@ -60,6 +87,7 @@ snapshots:
   gpu-free:                   # Windows + GPU
     provider: gcloud
     image: ale-win10
+    resolution: [1920, 1080]    # see resolution note above; unsupported mode -> run fails
     gcloud:
       project: ${env:GCP_PROJECT}
       service_account_key: ${env:GCP_SA_KEY}
@@ -72,6 +100,7 @@ snapshots:
   gpu-license:                # Windows + GPU, licensed
     provider: gcloud
     image: ale-win10
+    resolution: [1920, 1080]    # see resolution note above; unsupported mode -> run fails
     gcloud:
       project: ${env:GCP_PROJECT}
       service_account_key: ${env:GCP_SA_KEY}
