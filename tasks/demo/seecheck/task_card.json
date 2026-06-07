@@ -1,0 +1,13 @@
+{
+  "taskId": "demo/seecheck",
+  "title": "Demo: Can the agent see the screen?",
+  "summary": "Minimal vision-bridge smoke test. setup() renders a unique SCREEN CODE onto the desktop wallpaper. The agent must take a single screenshot, read the code off the screen, and write it to output/result.txt. The code exists only as pixels, so a pass proves screenshot images actually reach the model.",
+  "category": "demo",
+  "vm": {
+    "snapshot": "cpu-free-ubuntu",
+    "vcpus": 4,
+    "memory_gb": 16,
+    "disk_gb": 200,
+    "timeout_s": 600
+  }
+}
