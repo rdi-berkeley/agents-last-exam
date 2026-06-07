@@ -135,27 +135,6 @@ To test your own agent harness or CLI on ALE, implement a small deployer. Guide:
 
 ---
 
-## Partners
-
-<div align="center">
-
-**Led by** · UC Berkeley RDI · RDI Foundation
-
-**Academic** · UC Berkeley · MIT · Stanford · Harvard · Oxford · USC ·
-UC San Diego · UCSF · Syracuse · NIH · University of Colorado · Peking University · SJTU
-
-**Industry** · Genentech · Hippocratic AI · Goldman Sachs · Morgan Stanley · JPMorgan ·
-Citadel · PIMCO · Tesla · Meta · TDK · Brix · Photon Fund
-
-**Sponsorship** · Snorkel AI · Unipat AI
-
-</div>
-
-The full advisory committee and contributor roster is on
-[agenthle.org](https://agenthle.org/).
-
----
-
 ## License
 
 | Component | License | Scope |
