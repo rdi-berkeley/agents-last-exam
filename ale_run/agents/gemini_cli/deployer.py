@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -19,6 +20,7 @@ from ale_run.base_interface import (
     AgentRunResult,
     BaseAgentDeployer,
     ContentPart,
+    ImageSource,
     Observation,
     StepMetrics,
     ToolCall,
@@ -32,6 +34,59 @@ logger = logging.getLogger(__name__)
 
 _POLL_INTERVAL_S = 2.0
 _TERM_GRACE_S = 2.0
+
+_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
+
+
+def _expected_version(npm_package: str) -> str | None:
+    """Parse the fork version from the configured tarball URL/path.
+
+    The release asset is named ``google-gemini-cli-<version>.tgz``, so the
+    version is the single source of truth in ``npm_package``. Returns ``None``
+    for non-versioned specs (e.g. a ``github:owner/repo#branch`` git spec), in
+    which case install falls back to location-based detection only.
+    """
+    m = re.search(r"-(\d+\.\d+\.\d+)\.tgz(?:$|[?#])", npm_package)
+    return m.group(1) if m else None
+
+
+def _installed_version(gemini_path: str) -> str | None:
+    """Best-effort ``gemini --version`` → ``X.Y.Z``; ``None`` if unreadable."""
+    try:
+        probe = subprocess.run(
+            [gemini_path, "--version"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return None
+    m = _VERSION_RE.search((probe.stdout or "") + (probe.stderr or ""))
+    return m.group(1) if m else None
+
+
+def _find_gemini_shim(local_prefix: str) -> str | None:
+    """Resolve the gemini executable, preferring our ``~/.local`` install.
+
+    The sandbox entry runs WITHOUT a login shell, so ``~/.local`` may not be on
+    PATH and ``shutil.which('gemini')`` misses both an image-baked fork under
+    our prefix AND a copy we just installed. npm drops the shim at
+    ``<prefix>/bin/gemini`` on Linux and directly in ``<prefix>`` on Windows
+    (``gemini.cmd`` / ``gemini.ps1`` / ``gemini``); ``shutil.which`` does not
+    reliably find the Windows ``.cmd`` shim from this process. Fall back to the
+    exact shim paths so detection AND post-install resolution behave identically
+    on Windows and Linux.
+    """
+    p = shutil.which("gemini")
+    if p and p.startswith(local_prefix):
+        return p
+    for cand in (
+        os.path.join(local_prefix, "bin", "gemini"),
+        os.path.join(local_prefix, "gemini.cmd"),
+        os.path.join(local_prefix, "gemini.ps1"),
+        os.path.join(local_prefix, "gemini"),
+    ):
+        if os.path.isfile(cand):
+            return cand
+    return p
 
 _YOLO_POLICY = """\
 # AgentHLE headless yolo policy — allow all tools, deny ask_user.
@@ -104,54 +159,58 @@ class GeminiCliDeployer(BaseAgentDeployer):
 
         home = os.path.expanduser("~")
         local_prefix = os.path.join(home, ".local")
-        gemini_path = shutil.which("gemini")
-        # Sandbox entry runs WITHOUT a login shell, so ~/.local may not be on
-        # PATH and shutil.which("gemini") misses an image-baked fork under our
-        # prefix — which would force a needless reinstall every run. Fall back
-        # to the exact shim our installer drops (Linux: <prefix>/bin/gemini;
-        # Windows: npm puts it directly in <prefix>). This keeps the skip path
-        # identical on Windows and Linux: a pre-baked fork at ~/.local is
-        # detected and skipped on both.
-        if not (gemini_path and gemini_path.startswith(local_prefix)):
-            for cand in (
-                os.path.join(local_prefix, "bin", "gemini"),
-                os.path.join(local_prefix, "gemini.cmd"),
-                os.path.join(local_prefix, "gemini.ps1"),
-                os.path.join(local_prefix, "gemini"),
-            ):
-                if os.path.isfile(cand):
-                    gemini_path = cand
-                    break
-        # Force-correct a pre-baked gemini that wasn't installed by us this run:
-        # the win/linux images may carry an old tarball with the buggy
-        # OpenRouter converter, and --version can't distinguish it. Reinstall
-        # the configured fork tarball into ~/.local and prefer it.
+        gemini_path = _find_gemini_shim(local_prefix)
+        # Decide whether to (re)install the configured fork tarball. Reinstall
+        # when ANY of:
+        #   • gemini is not found at all, or
+        #   • it is baked OUTSIDE our prefix (an image-baked copy we can't trust
+        #     to be the configured fork), or
+        #   • its --version is STALE vs the version encoded in npm_package.
+        # The stale check is what lets a fork code change ship: bump the tarball
+        # version and the next run detects the image's older copy and upgrades,
+        # even when the prior copy already lives under ~/.local. (Before version
+        # bumping, all fork variants reported the same version and could not be
+        # distinguished — hence the older location-only heuristic.)
         baked = bool(gemini_path) and not gemini_path.startswith(local_prefix)
-        if not gemini_path or baked:
-            if baked:
+        expected = _expected_version(cfg.npm_package)
+        installed = (
+            await asyncio.to_thread(_installed_version, gemini_path)
+            if gemini_path else None
+        )
+        stale = bool(expected and installed and installed != expected)
+        if not gemini_path or baked or stale:
+            if stale:
                 logger.info(
-                    "gemini_cli: pre-baked gemini at %s — reinstalling configured "
-                    "fork tarball to override (converter fix)", gemini_path,
+                    "gemini_cli: installed version %s != expected %s — "
+                    "reinstalling configured fork tarball", installed, expected,
+                )
+            elif baked:
+                logger.info(
+                    "gemini_cli: pre-baked gemini at %s (outside %s) — "
+                    "reinstalling configured fork tarball to override",
+                    gemini_path, local_prefix,
                 )
             else:
                 logger.info("gemini_cli: 'gemini' not on PATH, installing via npm …")
             await self._auto_install_cli(cfg.npm_package)
-            gemini_path = shutil.which("gemini")
+            gemini_path = _find_gemini_shim(local_prefix)
             if not gemini_path:
                 raise RuntimeError(
                     "GeminiCliDeployer: 'gemini' still not found after npm install"
                 )
-        self._gemini_path = gemini_path
-
-        try:
-            probe = await asyncio.to_thread(
-                subprocess.run,
-                [gemini_path, "--version"],
-                capture_output=True, text=True, timeout=30,
+            installed = await asyncio.to_thread(_installed_version, gemini_path)
+            if expected and installed and installed != expected:
+                logger.warning(
+                    "gemini_cli: post-install version %s still != expected %s",
+                    installed, expected,
+                )
+        else:
+            logger.info(
+                "gemini_cli: reusing installed gemini %s (version %s)",
+                gemini_path, installed or "unknown",
             )
-        except subprocess.TimeoutExpired as e:
-            raise RuntimeError(f"gemini --version timed out: {e}")
-        logger.info("gemini_cli: CLI ok — %s", (probe.stdout or "").strip())
+        self._gemini_path = gemini_path
+        logger.info("gemini_cli: CLI ok — version %s", installed or "unknown")
 
         wd = Path(self.executor.work_dir)
         wd.mkdir(parents=True, exist_ok=True)
@@ -463,12 +522,32 @@ class GeminiCliDeployer(BaseAgentDeployer):
         error = event.get("error")
         raw = error if error else output
         text = raw if isinstance(raw, str) else json.dumps(raw)
+        content: list[ContentPart] = [ContentPart(type="text", text=text)]
+
+        # Inline media the tool returned to the model (e.g. the CUA `screenshot`
+        # PNG). The fork surfaces these as a `media` array on the TOOL_RESULT
+        # event ([{mime_type, data?, uri?}]); `output` is only the
+        # `[Image: image/png]` placeholder. Keep them as image ContentParts so
+        # persist_screenshots() writes them to screenshots/.
+        for m in event.get("media") or []:
+            if not isinstance(m, dict):
+                continue
+            data, uri = m.get("data"), m.get("uri")
+            media_type = m.get("mime_type") or "image/png"
+            if data:
+                img = ImageSource(type="base64", media_type=media_type, data=data)
+            elif uri:
+                img = ImageSource(type="url", media_type=media_type, url=uri)
+            else:
+                continue
+            content.append(ContentPart(type="image", image=img))
+
         builder.add_step(
             source="environment",
             observation=Observation(results=[
                 ToolResult(
                     tool_call_id=event.get("tool_id", ""),
-                    content=[ContentPart(type="text", text=text)],
+                    content=content,
                     is_error=bool(error),
                 ),
             ]),
