@@ -40,8 +40,10 @@ the fork release `cua-verse/grok-cli` `v0.1.1-agenthle`
 **Direct xAI** uses the native xAI API and requires `GROK_API_KEY`. Uses the
 stock binary.
 
-**OpenRouter** requires `OPENROUTER_API_KEY` and the fork bundle (set
-`bundle_url` in config). The fork switches from `@ai-sdk/xai` to
+**OpenRouter** requires `OPENROUTER_API_KEY` and the fork bundle. `bundle_url`
+now **defaults** to the `v0.1.1-agenthle` `grok-bundle.js` (do not blank it —
+the stock Linux binary ZodErrors on OpenRouter's streamed tool-call deltas and
+times out). The fork switches from `@ai-sdk/xai` to
 `@ai-sdk/openai` with `compatibility: "compatible"` for custom base URLs,
 forces the Chat Completions API, and passes model IDs through unchanged so
 provider-prefixed names like `x-ai/grok-3` reach OpenRouter as-is. It also
@@ -52,7 +54,8 @@ fixes MCP `CallToolResult` serialization in NDJSON output.
 When `bundle_url` is set in `GrokCliConfig`, the deployer:
 1. Downloads the bundle JS file via curl during `install()`
 2. Places it at `~/.grok/bin/grok-bundle.js`
-3. At launch, uses `node grok-bundle.js --prompt ...` instead of `grok --prompt ...`
+3. At launch, uses `bun grok-bundle.js --prompt ...` instead of `grok --prompt ...`
+   (the bundle uses `bun:sqlite`; Bun is auto-installed if missing)
 
 The bundle provides:
 - Provider switching (`@ai-sdk/openai` for custom base URLs)
@@ -120,7 +123,7 @@ agent:
 | `max_tool_rounds` | Passed to `--max-tool-rounds` flag (-1 = unlimited, mapped to 100000) |
 | `timeout_s` | Wall-clock budget for the episode |
 | `disabled_tools` | Tool names to remove before the agent runs. Written to `user-settings.json` as `disabledTools`. Defaults to 22 tools unavailable via OpenRouter. |
-| `bundle_url` | Linux: URL to download the fork bundle JS. Empty = use stock binary. |
+| `bundle_url` | Linux: URL to download the fork bundle JS, launched via Bun. Defaults to the `v0.1.1-agenthle` `grok-bundle.js` (required for OpenRouter). Empty = stock binary, which ZodErrors on OpenRouter streams — debug only. |
 | `win_binary_url` | Windows: URL of the fork `grok.exe` (carries the OpenRouter fixes). Empty = debug-only fallback to stock grok on PATH. |
 
 ## Logs
@@ -134,7 +137,7 @@ agent:
 
 ## Execution
 
-The deployer spawns the grok command (or `node bundle.js`) as a subprocess
+The deployer spawns the grok command (or `bun grok-bundle.js`) as a subprocess
 with stdin=DEVNULL, capturing stdout as NDJSON and stderr as a log file.
 Polled for completion with a configurable timeout.
 
