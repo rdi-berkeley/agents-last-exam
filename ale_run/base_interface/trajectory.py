@@ -16,12 +16,19 @@ and written separately — never inline base64 in the JSON.
 """
 from __future__ import annotations
 
+import base64
+import binascii
+import logging
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from typing import Any, Literal
+from pathlib import Path
+from typing import Any, Iterator, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+logger = logging.getLogger(__name__)
 
 
 SCHEMA_VERSION = "ALE-v1.0"
@@ -334,3 +341,142 @@ class TrajectoryBuilder:
         self._traj.final_metrics = m
         self._traj.ended_at = _now_iso()
         return self._traj
+
+
+# =============================================================================
+# Screenshot persistence — base64 captures → on-disk PNGs + relative refs.
+#
+# The framework promise (see :class:`ImageSource` docstring + LOG_SPEC §"Sub-
+# shapes"): inline base64 image captures never survive into the persisted
+# ``trajectory.json``. Before the writer serialises, every capture is written
+# to ``<run_dir>/screenshots/NNNN.<ext>`` and its reference rewritten to
+# ``type="path"`` with a path **relative to the run dir** (e.g.
+# ``screenshots/0000.png``).
+#
+# Ported from agenthle ``orchestration/external/base.py::save_screenshots_from_log``,
+# generalised for the ATIF schema:
+#   * the agenthle convention — a transient ``_screenshot_b64`` on a step's
+#     ``extra`` dict (still emitted by e.g. the openhands deployer) — and
+#   * inline ``ImageSource(type="base64", data=...)`` ContentParts anywhere in
+#     a step's ``message`` or ``observation`` content.
+# Both are handled, sub-agent trajectories are walked recursively, and a single
+# run-wide counter keeps filenames unique across the whole episode.
+# =============================================================================
+
+# media_type → file extension. Defaults to ``png`` for anything unrecognised.
+_MEDIA_EXT: dict[str, str] = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/webp": "webp",
+    "image/gif": "gif",
+}
+
+
+def _ext_for(media_type: str | None) -> str:
+    return _MEDIA_EXT.get((media_type or "").strip().lower(), "png")
+
+
+def _strip_data_url(b64: str) -> str:
+    """Return the raw base64 payload from an optional ``data:...;base64,`` URL."""
+    if b64.startswith("data:"):
+        marker = "base64,"
+        idx = b64.find(marker)
+        if idx != -1:
+            return b64[idx + len(marker):]
+    return b64
+
+
+def _decode_b64(b64: str) -> bytes:
+    """Tolerant base64 decode: strip any data-URL prefix + fix missing padding."""
+    payload = _strip_data_url(b64).strip()
+    payload += "=" * (-len(payload) % 4)  # restore stripped padding
+    return base64.b64decode(payload)
+
+
+def _iter_steps(traj: "Trajectory") -> Iterator["Step"]:
+    """Yield every step in *traj*, descending into sub-agent trajectories."""
+    yield from traj.steps
+    for sub in traj.subagent_trajectories:
+        yield from _iter_steps(sub)
+
+
+def persist_screenshots(trajectory: "Trajectory", run_dir: str | Path) -> int:
+    """Move inline base64 image captures to disk; rewrite refs to relative paths.
+
+    Mutates *trajectory* in place and writes ``<run_dir>/screenshots/NNNN.<ext>``.
+    Returns the number of screenshots written. Pure framework helper — call it
+    once, after the trajectory is finalized and before it is serialised.
+
+    Capture forms handled (per step, in walk order):
+
+    1. ``ImageSource`` with inline ``data`` (``type != "path"``) inside any
+       ``message`` or ``observation`` ContentPart → the bytes are written out
+       and the source is rewritten to ``type="path"``, ``path="screenshots/
+       NNNN.<ext>"``, ``data=None`` (relative to *run_dir*).
+    2. A transient ``step.extra["_screenshot_b64"]`` → written out, the key
+       dropped, and ``extra["screenshot_index"]`` + ``extra["screenshot_path"]``
+       set so existing agenthle-style tooling and the relative-path consumers
+       both resolve it.
+
+    Decode/write failures for a single capture are logged and skipped — they
+    never abort persistence of the rest of the trajectory.
+    """
+    run_dir = Path(run_dir)
+    pending: list[tuple[str, str]] = []  # (relative_path, raw_b64)
+
+    def _take(b64: str, media_type: str | None) -> str:
+        rel = f"screenshots/{len(pending):04d}.{_ext_for(media_type)}"
+        pending.append((rel, b64))
+        return rel
+
+    def _rewrite_content(content: Any) -> None:
+        if not isinstance(content, list):
+            return
+        for part in content:
+            if not isinstance(part, ContentPart):
+                continue
+            img = part.image
+            if part.type != "image" or img is None:
+                continue
+            if img.data and img.type != "path":
+                rel = _take(img.data, img.media_type)
+                img.type = "path"
+                img.path = rel
+                img.data = None
+
+    for step in _iter_steps(trajectory):
+        # 1. inline ImageSource base64 in message + observation content
+        _rewrite_content(step.message)
+        if step.observation is not None:
+            for result in step.observation.results:
+                _rewrite_content(result.content)
+        # 2. agenthle ``_screenshot_b64`` convention on step.extra
+        b64 = step.extra.pop("_screenshot_b64", None)
+        if b64:
+            idx = len(pending)
+            rel = _take(b64, "image/png")
+            step.extra["screenshot_index"] = idx
+            step.extra["screenshot_path"] = rel
+
+    if not pending:
+        return 0
+
+    screenshots_dir = run_dir / "screenshots"
+    screenshots_dir.mkdir(parents=True, exist_ok=True)
+
+    written = 0
+
+    def _write_one(item: tuple[str, str]) -> bool:
+        rel, b64 = item
+        try:
+            (run_dir / rel).write_bytes(_decode_b64(b64))
+            return True
+        except (binascii.Error, ValueError, OSError) as e:
+            logger.warning("persist_screenshots: failed to write %s: %s", rel, e)
+            return False
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        written = sum(pool.map(_write_one, pending))
+
+    return written

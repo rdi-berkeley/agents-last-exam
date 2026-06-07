@@ -30,6 +30,7 @@ from ale_run.base_interface import (
     AgentRunResult,
     BaseAgentDeployer,
     ContentPart,
+    ImageSource,
     Observation,
     StepMetrics,
     ToolCall,
@@ -697,32 +698,49 @@ class CodexDeployer(BaseAgentDeployer):
             result_data = item.get("result")
             error_data = item.get("error")
             result_text = ""
+            image_parts: list[ContentPart] = []
             if error_data:
                 result_text = str(error_data)
             elif result_data:
                 if isinstance(result_data, dict):
                     content_blocks = result_data.get("content", [])
-                    parts = []
+                    text_chunks: list[str] = []
                     for block in (
                         content_blocks if isinstance(content_blocks, list) else []
                     ):
                         if isinstance(block, dict):
                             if block.get("type") == "text":
-                                parts.append(block.get("text", ""))
-                            elif block.get("type") == "image":
-                                parts.append("[image]")
-                    result_text = (
-                        "\n".join(parts) if parts else json.dumps(result_data)[:500]
-                    )
+                                text_chunks.append(block.get("text", ""))
+                            elif block.get("type") == "image" and block.get("data"):
+                                # MCP/CUA screenshot block (flat shape):
+                                # {"type":"image","data":"<base64>","mimeType":...}.
+                                # Keep it so persist_screenshots() can extract it
+                                # instead of collapsing to "[image]".
+                                image_parts.append(ContentPart(
+                                    type="image",
+                                    image=ImageSource(
+                                        type="base64",
+                                        media_type=block.get("mimeType", "image/png"),
+                                        data=block.get("data"),
+                                    ),
+                                ))
+                    if text_chunks:
+                        result_text = "\n".join(text_chunks)
+                    elif not image_parts:
+                        result_text = json.dumps(result_data)[:500]
                 else:
                     result_text = str(result_data)[:500]
-            if result_text or item.get("status") == "completed":
+            if result_text or image_parts or item.get("status") == "completed":
+                tr_content: list[ContentPart] = []
+                if result_text:
+                    tr_content.append(ContentPart(type="text", text=result_text))
+                tr_content.extend(image_parts)
                 builder.add_step(
                     source="environment",
                     observation=Observation(results=[
                         ToolResult(
                             tool_call_id=item_id,
-                            content=[ContentPart(type="text", text=result_text)],
+                            content=tr_content,
                             is_error=bool(error_data),
                         ),
                     ]),

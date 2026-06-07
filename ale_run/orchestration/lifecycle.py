@@ -33,6 +33,7 @@ from ..base_interface import (
     Provider,
     Trajectory,
     TrajectoryBuilder,
+    persist_screenshots,
 )
 from ..environments.env import ALEEnv
 from ..executors import DockerExecutor, LocalExecutor, SandboxExecutor
@@ -476,6 +477,15 @@ async def run_one_unit(
                     else "failed"
                 )
                 trajectory = builder.finalize(reward=score, status=traj_status)
+                # Move inline base64 screenshots to <run_dir>/screenshots/NNNN.png
+                # and rewrite refs to relative-path form BEFORE serialising —
+                # the JSON must never carry inline base64 (LOG_SPEC ImageSource).
+                try:
+                    n_shots = persist_screenshots(trajectory, writer.run_dir)
+                    if n_shots:
+                        writer.emit_event("screenshots_persisted", count=n_shots)
+                except Exception as e:
+                    logger.warning("persist_screenshots failed for %s: %s", unit.slug, e)
                 writer.write_trajectory(trajectory)
 
             # ============================================================

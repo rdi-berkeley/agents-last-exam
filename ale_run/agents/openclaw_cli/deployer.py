@@ -28,6 +28,7 @@ from ale_run.base_interface import (
     AgentRunResult,
     BaseAgentDeployer,
     ContentPart,
+    ImageSource,
     Observation,
     StepMetrics,
     ToolCall,
@@ -938,8 +939,23 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                         parts.append(ContentPart(type="text", text=content))
                     elif isinstance(content, list):
                         for c in content:
-                            if isinstance(c, dict) and c.get("type") == "text":
+                            if not isinstance(c, dict):
+                                continue
+                            if c.get("type") == "text":
                                 parts.append(ContentPart(type="text", text=c.get("text", "")))
+                            elif c.get("type") == "image" and c.get("data"):
+                                # openclaw/CUA returns MCP-style image blocks:
+                                # {"type":"image","data":"<base64>","mimeType":...}.
+                                # Keep them so persist_screenshots() can extract
+                                # them to screenshots/ and rewrite to path refs.
+                                parts.append(ContentPart(
+                                    type="image",
+                                    image=ImageSource(
+                                        type="base64",
+                                        media_type=c.get("mimeType", "image/png"),
+                                        data=c.get("data"),
+                                    ),
+                                ))
                     results.append(ToolResult(
                         tool_call_id=block.get("tool_use_id") or block.get("call_id", ""),
                         content=parts,
@@ -956,15 +972,45 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                     message="\n".join(p for p in text_parts if p),
                 )
         elif role == "toolResult":
-            output = event.get("output") or message.get("output", "")
-            call_id = event.get("tool_use_id") or event.get("call_id", "")
+            # openclaw emits tool results as their own message (role
+            # "toolResult") with flat content blocks — text plus, for cua
+            # screenshots, an {type:"image", data, mimeType} block. The previous
+            # code read a non-existent top-level `output` field, which dropped
+            # both the text AND the image, so persist_screenshots() never saw
+            # the screenshot and screenshots/ stayed empty. Parse the content
+            # blocks and keep image blocks as image ContentParts.
+            parts: list[ContentPart] = []
+            for block in content_blocks:
+                if not isinstance(block, dict):
+                    continue
+                btype = block.get("type", "")
+                if btype == "text":
+                    parts.append(ContentPart(type="text", text=block.get("text", "")))
+                elif btype == "image" and block.get("data"):
+                    parts.append(ContentPart(
+                        type="image",
+                        image=ImageSource(
+                            type="base64",
+                            media_type=block.get("mimeType", "image/png"),
+                            data=block.get("data"),
+                        ),
+                    ))
+            if not parts:
+                # Back-compat: a flat string output on the event/message.
+                out = event.get("output") or message.get("output", "")
+                parts = [ContentPart(type="text", text=str(out))]
+            call_id = (
+                message.get("toolCallId")
+                or event.get("tool_use_id")
+                or event.get("call_id", "")
+            )
             builder.add_step(
                 source="environment",
                 observation=Observation(results=[
                     ToolResult(
                         tool_call_id=call_id,
-                        content=[ContentPart(type="text", text=str(output))],
-                        is_error=bool(event.get("is_error")),
+                        content=parts,
+                        is_error=bool(message.get("isError") or event.get("is_error")),
                     ),
                 ]),
             )

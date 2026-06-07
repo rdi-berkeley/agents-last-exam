@@ -32,6 +32,7 @@ from ale_run.base_interface import (
     AgentRunResult,
     BaseAgentDeployer,
     ContentPart,
+    ImageSource,
     Observation,
     StepMetrics,
     ToolCall,
@@ -487,8 +488,32 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
                     parts.append(ContentPart(type="text", text=content))
                 elif isinstance(content, list):
                     for c in content:
-                        if isinstance(c, dict) and c.get("type") == "text":
+                        if not isinstance(c, dict):
+                            continue
+                        ctype = c.get("type")
+                        if ctype == "text":
                             parts.append(ContentPart(type="text", text=c.get("text", "")))
+                        elif ctype == "image":
+                            # MCP/cua tool results return screenshots as Anthropic
+                            # image blocks: {"type":"image","source":{"type":
+                            # "base64","media_type":"image/png","data":"..."}}.
+                            # Keep them as inline ImageSource so persist_screenshots
+                            # writes them to screenshots/ and rewrites to path refs.
+                            src = c.get("source") or {}
+                            if src.get("type") == "base64" and src.get("data"):
+                                parts.append(ContentPart(
+                                    type="image",
+                                    image=ImageSource(
+                                        type="base64",
+                                        media_type=src.get("media_type", "image/png"),
+                                        data=src.get("data"),
+                                    ),
+                                ))
+                            elif src.get("type") == "url" and src.get("url"):
+                                parts.append(ContentPart(
+                                    type="image",
+                                    image=ImageSource(type="url", url=src.get("url")),
+                                ))
                 results.append(ToolResult(
                     tool_call_id=block.get("tool_use_id") or "",
                     content=parts,

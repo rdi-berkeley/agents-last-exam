@@ -58,6 +58,7 @@ from .trajectory import (
     ToolResult,
     Trajectory,
     TrajectoryBuilder,
+    persist_screenshots,
 )
 
 __all__ = [
@@ -92,4 +93,5 @@ __all__ = [
     "ToolResult",
     "Trajectory",
     "TrajectoryBuilder",
+    "persist_screenshots",
 ]

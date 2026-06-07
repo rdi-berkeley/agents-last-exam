@@ -34,6 +34,7 @@ from ale_run.base_interface import (
     AgentRunResult,
     BaseAgentDeployer,
     ContentPart,
+    ImageSource,
     Observation,
     StepMetrics,
     ToolCall,
@@ -603,8 +604,31 @@ class CursorCliDeployer(BaseAgentDeployer):
                     parts.append(ContentPart(type="text", text=content))
                 elif isinstance(content, list):
                     for c in content:
-                        if isinstance(c, dict) and c.get("type") == "text":
+                        if not isinstance(c, dict):
+                            continue
+                        ctype = c.get("type")
+                        if ctype == "text":
                             parts.append(ContentPart(type="text", text=c.get("text", "")))
+                        elif ctype == "image":
+                            # cursor uses the same stream-json/Anthropic shape as
+                            # claude_code: {"type":"image","source":{"type":
+                            # "base64"|"url",...}}. Keep MCP/CUA screenshots so
+                            # persist_screenshots() can write them out.
+                            src = c.get("source") or {}
+                            if src.get("type") == "base64" and src.get("data"):
+                                parts.append(ContentPart(
+                                    type="image",
+                                    image=ImageSource(
+                                        type="base64",
+                                        media_type=src.get("media_type", "image/png"),
+                                        data=src.get("data"),
+                                    ),
+                                ))
+                            elif src.get("type") == "url" and src.get("url"):
+                                parts.append(ContentPart(
+                                    type="image",
+                                    image=ImageSource(type="url", url=src.get("url")),
+                                ))
                 results.append(ToolResult(
                     tool_call_id=block.get("tool_use_id") or "",
                     content=parts,
@@ -645,12 +669,18 @@ class CursorCliDeployer(BaseAgentDeployer):
                 )],
             )
         elif subtype == "completed":
-            text, is_error = cls._render_tool_result(body.get("result"))
+            text, is_error, image_parts = cls._render_tool_result(
+                body.get("result")
+            )
+            content: list[ContentPart] = []
+            if text or not image_parts:
+                content.append(ContentPart(type="text", text=text))
+            content.extend(image_parts)
             builder.add_step(
                 source="environment",
                 observation=Observation(results=[ToolResult(
                     tool_call_id=call_id,
-                    content=[ContentPart(type="text", text=text)],
+                    content=content,
                     is_error=is_error,
                 )]),
             )
@@ -674,22 +704,64 @@ class CursorCliDeployer(BaseAgentDeployer):
         return None, {}
 
     @staticmethod
-    def _render_tool_result(result: object) -> tuple[str, bool]:
-        """Flatten a Composer tool ``result`` into ``(text, is_error)``.
+    def _render_tool_result(result: object) -> tuple[str, bool, list[ContentPart]]:
+        """Flatten a Composer tool ``result`` into ``(text, is_error, images)``.
 
         Variants observed: ``success`` (ok), ``error`` (``errorMessage``),
         ``failure`` (shell non-zero exit, has ``stderr``/``exitCode``).
+
+        A successful MCP tool (e.g. the cua ``screenshot`` tool) returns
+        ``success.content`` as a list of blocks — ``{"text":{"text":…}}`` and
+        ``{"image":{"data":"<base64>","mimeType":…}}``. Without pulling the
+        image blocks out, the whole base64 was JSON-dumped into a text part and
+        persist_screenshots() never saw a screenshot.
         """
+        image_parts: list[ContentPart] = []
         if not isinstance(result, dict):
-            return ("" if result is None else json.dumps(result)), False
+            return ("" if result is None else json.dumps(result)), False, image_parts
         if "error" in result and isinstance(result["error"], dict):
-            return result["error"].get("errorMessage") or json.dumps(result["error"]), True
+            return (
+                result["error"].get("errorMessage") or json.dumps(result["error"]),
+                True,
+                image_parts,
+            )
         if "failure" in result and isinstance(result["failure"], dict):
-            return json.dumps(result["failure"]), True
+            return json.dumps(result["failure"]), True, image_parts
         if "success" in result:
             succ = result["success"]
-            return (json.dumps(succ) if not isinstance(succ, str) else succ), False
-        return json.dumps(result), False
+            if isinstance(succ, dict) and isinstance(succ.get("content"), list):
+                text_chunks: list[str] = []
+                for c in succ["content"]:
+                    if not isinstance(c, dict):
+                        continue
+                    txt = c.get("text")
+                    if isinstance(txt, dict):
+                        text_chunks.append(str(txt.get("text", "")))
+                    elif isinstance(txt, str):
+                        text_chunks.append(txt)
+                    img = c.get("image")
+                    if isinstance(img, dict) and img.get("data"):
+                        image_parts.append(ContentPart(
+                            type="image",
+                            image=ImageSource(
+                                type="base64",
+                                media_type=img.get("mimeType")
+                                or img.get("mime_type")
+                                or "image/png",
+                                data=img.get("data"),
+                            ),
+                        ))
+                return (
+                    "\n".join(t for t in text_chunks if t),
+                    False,
+                    image_parts,
+                )
+            return (
+                json.dumps(succ) if not isinstance(succ, str) else succ,
+                False,
+                image_parts,
+            )
+        return json.dumps(result), False, image_parts
 
     @staticmethod
     def _consume_result(event: dict, builder: TrajectoryBuilder) -> None:
