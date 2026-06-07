@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trajectories & artifacts — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Trajectories &amp; artifacts</h1>
+    <p class="lede">
+      Every agent logs differently. ALE normalizes them all into one trajectory
+      schema, and writes each run as a fixed set of files you can read without
+      ever opening the agent's native format.
+    </p>
+
+    <h2>One record for every agent</h2>
+    <p>
+      ALE runs agents end to end, so it can't assume a shared step format — each
+      harness emits its own transcript. The common record is the
+      <strong>trajectory</strong> — an ordered list
+      of <code>Step</code>s, each with:
+    </p>
+    <ul>
+      <li>a <strong>source</strong> — <code>user</code>, <code>agent</code>, or <code>environment</code>;</li>
+      <li>a <strong>message</strong> and optional <strong>reasoning</strong>;</li>
+      <li><strong>tool calls</strong> the agent made, and the <strong>observation</strong> (tool results) that came back;</li>
+      <li><strong>metrics</strong> — tokens, cost, and duration for that step.</li>
+    </ul>
+    <p>
+      Message and observation content can be multimodal: any image the agent saw
+      is saved to disk and referenced by a <strong>relative path</strong> in the
+      trajectory — never inlined as base64.
+    </p>
+    <p>
+      Per-step token, cost, and duration metrics sum into the trajectory's
+      <code>final_metrics</code> totals. Every field is specified in
+      <a href="/pages/trajectory-schema.html">the trajectory schema</a>.
+    </p>
+
+    <h2>How the normalization happens</h2>
+    <p>
+      Each agent's deployer owns the translation, in <code>parse_artifacts()</code>.
+      <code>claude_code</code>, for instance, reads its stream-JSON
+      <code>transcript.jsonl</code> line by line: assistant events become agent
+      steps carrying their tool calls, tool results become environment
+      observations, and per-message usage is summed (and reconciled against the
+      run's reported total) into the final metrics. A different agent parses a
+      different format — the output schema is identical.
+    </p>
+
+    <h2>What a run writes</h2>
+    <p>
+      Each run lands in a timestamped directory under the output root, keyed by
+      agent, model, and task:
+    </p>
+    <div class="diagram">.logs/&lt;experiment&gt;/&lt;run_id&gt;/&lt;agent&gt;/&lt;model&gt;/&lt;task&gt;/v&lt;variant&gt;/&lt;timestamp&gt;/
+├── events.jsonl       append-only phase log, flushed per line — survives a kill
+├── run.json           metadata, final score, termination, usage totals
+├── trajectory.json    the ALE-v1.0 trajectory
+├── screenshots/       images the agent saw — referenced by path from the trajectory
+├── eval_result.json   grader status, score, duration
+├── origin_log/        the agent's raw work dir, pulled verbatim from the VM
+└── output/            files the agent produced (when output is collected)</div>
+    <table>
+      <thead><tr><th>File</th><th>Written</th><th>Holds</th></tr></thead>
+      <tbody>
+        <tr><td><code>events.jsonl</code></td><td>Throughout the run</td><td>One JSON object per phase event. The authoritative trace.</td></tr>
+        <tr><td><code>run.json</code></td><td>Once, at the end</td><td>The run's summary: agent/task identity, status, score, why it ended, usage.</td></tr>
+        <tr><td><code>trajectory.json</code></td><td>Once, at the end</td><td>The normalized step-by-step record.</td></tr>
+        <tr><td><code>screenshots/</code></td><td>At finalize</td><td>Images the agent saw, moved out of the trajectory and referenced by relative path.</td></tr>
+        <tr><td><code>eval_result.json</code></td><td>Once, at the end</td><td>The grader's verdict in isolation.</td></tr>
+        <tr><td><code>origin_log/</code></td><td>After the agent finishes</td><td>Unedited native transcripts and scratch files.</td></tr>
+        <tr><td><code>output/</code></td><td>After the agent finishes</td><td>The agent's produced files, when the environment collects them.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <div class="note-title">See a real one</div>
+      A complete recorded run lives in <code>sample_run/</code> in the repo —
+      walked through in <a href="/pages/sample-run.html">Anatomy of a run</a>.
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Task spec & data staging — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Task spec &amp; data staging</h1>
+    <p class="lede">
+      Curated real-world inputs, a hidden reference answer, and a grader that
+      can't be gamed. The data is what makes an ALE task more than a prompt — and
+      keeping the answer out of the agent's reach is a first-class design concern.
+    </p>
+
+    <p>
+      A task is a two-file package: a card of metadata plus <code>load</code> /
+      <code>start</code> / <code>evaluate</code> hooks. The full schema is for
+      authors (see <a href="/pages/extend-tasks.html">Add a task</a>); what
+      matters architecturally is the data a task moves onto the sandbox and how
+      that data is graded — the subject of this page.
+    </p>
+
+    <h2>What a task carries</h2>
+    <p>
+      Beyond its instructions, a task ships two kinds of data, collected and
+      validated by domain experts so that the inputs plus the prompt determine a
+      gradeable result:
+    </p>
+    <table>
+      <thead><tr><th>Kind</th><th>Visible to the agent?</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><strong>input</strong></td><td>Yes — staged before the run</td><td>The materials the task starts from.</td></tr>
+        <tr><td><strong>reference</strong></td><td>No — the answer key</td><td>The ground truth the grader scores against.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      (A few tasks also drop in a small amount of task-specific software, but most
+      rely on what the image already provides.)
+    </p>
+
+    <h2>Where the data comes from</h2>
+    <p>
+      The data can reach the VM two ways, chosen by the environment's
+      <code>task_data_source</code>:
+    </p>
+    <ul>
+      <li><strong>Baked into the image</strong> — the default. Inputs and a
+      reference archive already sit on disk; nothing is fetched at run time.</li>
+      <li><strong>Pulled per task from a public bucket</strong> — point
+      <code>task_data_source</code> at a <code>gs://</code> prefix and each task
+      syncs just its own data when it runs. This is how someone building their
+      own sandbox gets the data without rebaking an image. (A Hugging Face
+      source is stubbed for the future.)</li>
+    </ul>
+
+    <h2>Keeping the answer hidden</h2>
+    <p>
+      A real risk with output-graded tasks: an agent that goes looking could
+      simply read the reference off the disk. ALE blocks that two ways at once.
+    </p>
+    <p>
+      <strong>Encryption at rest.</strong> A baked-in reference ships as a
+      password-protected archive (<code>reference.7z</code>), opaque while the
+      agent is working. It is decrypted only at grading time. The password is a
+      shared barrier — enough to stop the agent reading the key in passing, not a
+      cryptographic secret.
+    </p>
+    <p>
+      <strong>Timing.</strong> The reference isn't even present during the run.
+      Inputs are staged before the agent starts; the reference is staged only
+      <em>after</em> it finishes, in a dedicated phase, and the bucket path wipes
+      and re-syncs it fresh so no partial state lingers. Tasks assert the
+      reference is unreadable during setup and fail loudly if it leaks.
+    </p>
+    <div class="diagram">  stage inputs        agent runs            stage reference     grade
+  ──────────────▶ │ ─────────────────▶ │ ──────────────────▶ │ ────────▶
+  input + software│  reference absent   │  reference unlocked  │  evaluate()
+                  │  (encrypted / not    │  / decrypted         │  reads both
+                  │   yet present)       │                      │</div>
+
+    <h2>Grading</h2>
+    <p>
+      Once the reference is available, the task's <code>evaluate</code> hook
+      reads the agent's output alongside it and returns a list of scores. Two
+      styles of grader are used:
+    </p>
+    <ul>
+      <li><strong>Deterministic</strong> — exact or structural comparison
+      (files, values, parsed content). Most tasks.</li>
+      <li><strong>Judge-based</strong> — an LLM or VLM scores outputs that need
+      semantic or visual judgment (e.g. an OpenAI vision judge, a Gemini video
+      judge). A task declares which judge credentials it needs in its
+      <code>evaluatorCredentials</code>; the keys live in
+      <code>secret/eval_time/</code> and load automatically at grading time.</li>
+    </ul>
+    <p>
+      The grader runs as part of the task slot, host-side, after the agent is
+      gone — so even judge-based scoring never touches the agent's run.
+    </p>
+
+    <div class="note">
+      <div class="note-title">Authoring a task</div>
+      This page is the data and grading <em>architecture</em>. The step-by-step
+      for writing a task package — the <code>task_card.json</code> schema and the
+      <code>load</code> / <code>start</code> / <code>evaluate</code> hooks — is in
+      <a href="/pages/extend-tasks.html">Add a task</a>, with the VM-side calls in
+      <code>docs/SESSION_API.md</code>.
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

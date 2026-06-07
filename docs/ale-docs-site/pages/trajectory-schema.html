@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trajectory schema (ALE-v1.0) — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Trajectory schema (ALE-v1.0)</h1>
+    <p class="lede">
+      The canonical record ALE emits for every run. Each agent's deployer
+      translates its native logs into this shape, so every run reads the same way
+      regardless of the harness underneath. This page is the field-by-field
+      specification.
+    </p>
+
+    <h2>Conventions</h2>
+    <ul>
+      <li><code>schema_version</code> is the constant string <code>"ALE-v1.0"</code>.</li>
+      <li>Timestamps are ISO-8601 UTC with microseconds, e.g. <code>2026-06-05T03:11:48.520000Z</code>.</li>
+      <li>Objects reject unknown keys. The only open maps are the explicit <code>extra</code> fields on <code>Trajectory</code>, <code>Step</code>, and <code>AgentInfo</code> — the escape hatch for agent-specific metadata.</li>
+      <li>Images are referenced by <strong>relative path</strong> under the run directory; the framework moves any captured image to <code>screenshots/</code> before the trajectory is written (see <a href="#imagesource">ImageSource</a>).</li>
+      <li>"Req" below: <strong>yes</strong> = no default, must be present; <strong>no</strong> = defaulted/optional. Types use <code>|</code> for unions and <code>[]</code> for arrays.</li>
+    </ul>
+
+    <h2>Trajectory</h2>
+    <p>The top-level object: one complete episode.</p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>schema_version</code></td><td><code>"ALE-v1.0"</code></td><td>yes</td><td>Format version (constant).</td></tr>
+        <tr><td><code>episode_id</code></td><td><code>string</code></td><td>yes</td><td>Unique id for this episode.</td></tr>
+        <tr><td><code>agent</code></td><td><a href="#agentinfo"><code>AgentInfo</code></a></td><td>yes</td><td>Which agent produced the trajectory.</td></tr>
+        <tr><td><code>task_path</code></td><td><code>string</code></td><td>yes</td><td>The task this run is for (run context).</td></tr>
+        <tr><td><code>variant_index</code></td><td><code>integer</code></td><td>yes</td><td>Which task variant (run context).</td></tr>
+        <tr><td><code>instruction</code></td><td><code>string</code></td><td>no</td><td>The prompt handed to the agent. Default <code>""</code>.</td></tr>
+        <tr><td><code>steps</code></td><td><a href="#step"><code>Step[]</code></a></td><td>no</td><td>The ordered interaction. Default <code>[]</code>.</td></tr>
+        <tr><td><code>final_metrics</code></td><td><a href="#finalmetrics"><code>FinalMetrics</code></a> | null</td><td>no</td><td>Trajectory-wide totals and outcome (set at finalize).</td></tr>
+        <tr><td><code>started_at</code></td><td><code>string</code></td><td>no</td><td>When the episode began (ISO-8601).</td></tr>
+        <tr><td><code>ended_at</code></td><td><code>string</code> | null</td><td>no</td><td>When it ended.</td></tr>
+        <tr><td><code>subagent_trajectories</code></td><td><code>Trajectory[]</code></td><td>no</td><td>Full nested traces of any sub-agents the agent spawned. Default <code>[]</code>.</td></tr>
+        <tr><td><code>continued_trajectory_ref</code></td><td><code>string</code> | null</td><td>no</td><td>When an episode is split across files, the relative path of the previous chunk. Walk the chain back until <code>null</code>, then concatenate steps.</td></tr>
+        <tr><td><code>extra</code></td><td><code>object</code></td><td>no</td><td>Agent-specific metadata that doesn't fit the standard shape. Default <code>{}</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="agentinfo">AgentInfo</h2>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>name</code></td><td><code>string</code></td><td>yes</td><td>Agent identifier, e.g. <code>"claude-code"</code>, <code>"ale-claw"</code>.</td></tr>
+        <tr><td><code>version</code></td><td><code>string</code> | null</td><td>no</td><td>CLI version or commit.</td></tr>
+        <tr><td><code>model</code></td><td><code>string</code> | null</td><td>no</td><td>The LLM id the agent used.</td></tr>
+        <tr><td><code>extra</code></td><td><code>object</code></td><td>no</td><td>Agent-specific metadata.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="step">Step</h2>
+    <p>One turn in the interaction. Its shape varies by <code>source</code>.</p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>step_id</code></td><td><code>integer</code> (≥ 1)</td><td>yes</td><td>Ordinal position, starting at 1.</td></tr>
+        <tr><td><code>timestamp</code></td><td><code>string</code></td><td>no</td><td>When the step occurred (ISO-8601).</td></tr>
+        <tr><td><code>source</code></td><td><code>"system" | "user" | "agent" | "environment"</code></td><td>yes</td><td>Who produced the step (see below).</td></tr>
+        <tr><td><code>message</code></td><td><code>string</code> | <a href="#contentpart"><code>ContentPart[]</code></a> | null</td><td>no</td><td>Text, or multimodal content.</td></tr>
+        <tr><td><code>reasoning</code></td><td><code>string</code> | null</td><td>no</td><td>The agent's reasoning trace, when exposed.</td></tr>
+        <tr><td><code>tool_calls</code></td><td><a href="#toolcall"><code>ToolCall[]</code></a></td><td>no</td><td>Tools the agent invoked this step. Default <code>[]</code>.</td></tr>
+        <tr><td><code>observation</code></td><td><a href="#observation"><code>Observation</code></a> | null</td><td>no</td><td>The environment's response.</td></tr>
+        <tr><td><code>metrics</code></td><td><a href="#stepmetrics"><code>StepMetrics</code></a> | null</td><td>no</td><td>LLM accounting for this step.</td></tr>
+        <tr><td><code>extra</code></td><td><code>object</code></td><td>no</td><td>Step-specific metadata (e.g. <code>screenshot_index</code>, <code>screenshot_path</code>). Default <code>{}</code>.</td></tr>
+      </tbody>
+    </table>
+    <p>The four <code>source</code> values carry different fields:</p>
+    <ul>
+      <li><code>user</code> — an instruction or human turn; <code>message</code> is set.</li>
+      <li><code>agent</code> — model output; some combination of <code>message</code>, <code>reasoning</code>, and <code>tool_calls</code>, with <code>metrics</code> recording the call's tokens and cost.</li>
+      <li><code>environment</code> — the environment's reply; <code>observation</code> is set (tool results or a state update).</li>
+      <li><code>system</code> — a system prompt or framework note (cancellation, timeout, …).</li>
+    </ul>
+
+    <h2 id="toolcall">ToolCall</h2>
+    <p>A single tool invocation emitted by the agent within a step.</p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td><code>string</code></td><td>no</td><td>Unique call id; a later <code>ToolResult</code> references it. Auto-generated (<code>call_…</code>) if absent.</td></tr>
+        <tr><td><code>name</code></td><td><code>string</code></td><td>yes</td><td>Tool name.</td></tr>
+        <tr><td><code>arguments</code></td><td><code>object</code></td><td>no</td><td>Arguments passed. Default <code>{}</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="observation">Observation</h2>
+    <p>
+      The environment's response to one or more tool calls. <code>results</code>
+      align with the <code>tool_calls</code> of the <strong>previous</strong> step,
+      matched by id. A pure state update (no preceding call) may leave
+      <code>results</code> empty and carry content on the step's <code>message</code>.
+    </p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>results</code></td><td><a href="#toolresult"><code>ToolResult[]</code></a></td><td>no</td><td>One result per preceding tool call. Default <code>[]</code>.</td></tr>
+        <tr><td><code>error</code></td><td><code>string</code> | null</td><td>no</td><td>An environment-level error, if any.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="toolresult">ToolResult</h2>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>tool_call_id</code></td><td><code>string</code></td><td>yes</td><td>The <code>ToolCall.id</code> this answers.</td></tr>
+        <tr><td><code>content</code></td><td><a href="#contentpart"><code>ContentPart[]</code></a></td><td>no</td><td>The result — text and/or image. Default <code>[]</code>.</td></tr>
+        <tr><td><code>is_error</code></td><td><code>boolean</code></td><td>no</td><td>Whether the tool failed. Default <code>false</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="contentpart">ContentPart</h2>
+    <p>One piece of structured content: either text or an image.</p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>type</code></td><td><code>"text" | "image"</code></td><td>yes</td><td>Which kind of content.</td></tr>
+        <tr><td><code>text</code></td><td><code>string</code> | null</td><td>cond.</td><td>Set when <code>type = "text"</code>.</td></tr>
+        <tr><td><code>image</code></td><td><a href="#imagesource"><code>ImageSource</code></a> | null</td><td>cond.</td><td>Set when <code>type = "image"</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="imagesource">ImageSource</h2>
+    <p>
+      A reference to an image. <code>path</code> is preferred. Inline base64
+      (<code>data</code>) is accepted from deployers but discouraged for long
+      episodes — the framework moves captured base64 to
+      <code>screenshots/NNNN.png</code> and rewrites the reference to
+      <code>type = "path"</code> before the trajectory is persisted.
+    </p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>type</code></td><td><code>"path" | "url" | "base64"</code></td><td>no</td><td>How the image is referenced. Default <code>"path"</code>.</td></tr>
+        <tr><td><code>path</code></td><td><code>string</code> | null</td><td>cond.</td><td>Relative path under the run dir.</td></tr>
+        <tr><td><code>url</code></td><td><code>string</code> | null</td><td>cond.</td><td>Remote URL.</td></tr>
+        <tr><td><code>data</code></td><td><code>string</code> | null</td><td>cond.</td><td>Inline base64 (transient — moved to disk).</td></tr>
+        <tr><td><code>media_type</code></td><td><code>string</code></td><td>no</td><td>MIME type. Default <code>"image/png"</code>.</td></tr>
+        <tr><td><code>alt_text</code></td><td><code>string</code> | null</td><td>no</td><td>Optional description.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="stepmetrics">StepMetrics</h2>
+    <p>Per-step LLM accounting. Every field is optional — populate what the agent reports.</p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>input_tokens</code></td><td><code>integer</code> | null</td><td>no</td><td>Prompt tokens.</td></tr>
+        <tr><td><code>output_tokens</code></td><td><code>integer</code> | null</td><td>no</td><td>Generated tokens.</td></tr>
+        <tr><td><code>cache_read_tokens</code></td><td><code>integer</code> | null</td><td>no</td><td>Prompt tokens served from cache.</td></tr>
+        <tr><td><code>cache_creation_tokens</code></td><td><code>integer</code> | null</td><td>no</td><td>Tokens written to cache.</td></tr>
+        <tr><td><code>cost_usd</code></td><td><code>float</code> | null</td><td>no</td><td>This step's API cost.</td></tr>
+        <tr><td><code>duration_ms</code></td><td><code>integer</code> | null</td><td>no</td><td>Wall-clock for this step.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="finalmetrics">FinalMetrics</h2>
+    <p>
+      Trajectory-wide totals plus the outcome. The token, cost, and duration
+      totals are summed from per-step <code>StepMetrics</code>;
+      <code>reward</code> and <code>status</code> are <strong>not</strong> rolled
+      up from steps — they are filled in by the grader and the runner at the end.
+    </p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>total_steps</code></td><td><code>integer</code></td><td>no</td><td>Number of steps. Default <code>0</code>.</td></tr>
+        <tr><td><code>total_input_tokens</code></td><td><code>integer</code></td><td>no</td><td>Sum of step input tokens.</td></tr>
+        <tr><td><code>total_output_tokens</code></td><td><code>integer</code></td><td>no</td><td>Sum of step output tokens.</td></tr>
+        <tr><td><code>total_cache_read_tokens</code></td><td><code>integer</code></td><td>no</td><td>Sum of cache reads.</td></tr>
+        <tr><td><code>total_cache_creation_tokens</code></td><td><code>integer</code></td><td>no</td><td>Sum of cache writes.</td></tr>
+        <tr><td><code>total_cost_usd</code></td><td><code>float</code></td><td>no</td><td>Sum of step costs. Default <code>0.0</code>.</td></tr>
+        <tr><td><code>total_duration_ms</code></td><td><code>integer</code></td><td>no</td><td>Total wall-clock.</td></tr>
+        <tr><td><code>reward</code></td><td><code>float</code> | null</td><td>no</td><td>The grader's score, set at evaluation. Not a step metric.</td></tr>
+        <tr><td><code>status</code></td><td><code>"completed" | "timeout" | "failed"</code></td><td>no</td><td>How the run ended. Default <code>"completed"</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <div class="note-title">Where this lives</div>
+      The Pydantic models are in <code>ale_run/base_interface/trajectory.py</code>;
+      deployers populate them via <code>TrajectoryBuilder</code>. How a run's files
+      fit together is covered in
+      <a href="/pages/data-artifacts.html">Trajectories &amp; artifacts</a>.
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

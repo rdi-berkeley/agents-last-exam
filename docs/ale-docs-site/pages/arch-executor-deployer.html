@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agents & executor — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Agents &amp; executor</h1>
+    <p class="lede">
+      The agent slot — what gets evaluated, and how it plugs in. ALE keeps this
+      flexible by splitting the job in two: a <strong>deployer</strong> says
+      <em>what</em> to do to run an agent; an <strong>executor</strong> decides
+      <em>where</em> it runs. Pick a shape, write a small deployer, and you're in.
+    </p>
+
+    <h2>Generalist CUA-agents: CLI + GUI</h2>
+    <p>
+      Existing agent benchmarks tend to pick one surface. Terminal-Bench's
+      Terminus drives a pure tmux terminal, with no GUI at all; OSWorld-style
+      suites go the other way, handing the model only a native GUI action space —
+      no terminal, no APIs or other tools. ALE deliberately needs both at once.
+    </p>
+    <p>
+      The reason is the work itself. A terminal is the most efficient interface
+      for an LLM, and ever more software exposes one — so CLI control is the right
+      default where it exists. But much real professional software either has no
+      terminal at all, or exposes one whose commands and APIs cover far less than
+      its GUI does — so the GUI is often the only complete way in. And many
+      deliverables only count
+      when they're produced <em>through</em> the application a professional
+      actually uses — so a human can open, inspect, and edit the result — rather
+      than synthesized wholesale by the model. Covering real workflows therefore
+      takes an agent that can do both: what the paper calls a
+      <strong>Generalist CUA-agent</strong>.
+    </p>
+
+    <h2>Two shapes of agent</h2>
+    <p>
+      A second axis is <em>where</em> the harness runs relative to the sandbox.
+    </p>
+
+    <h3>In-sandbox</h3>
+    <p>
+      The agent runs <em>inside</em> the VM. Its CLI is injected into the
+      freshly-booted sandbox at launch — the published images pre-bake it to skip
+      the install and start faster — which gives it a native terminal and
+      filesystem. On top of that, ALE adds the <strong>GUI</strong> through the cua
+      MCP bridge so the same agent can also see the screen and click. The whole
+      agent lives in the machine; ALE launches it and lets it work. This is the
+      simplest path for the many harnesses that are already CLIs (Claude Code,
+      Codex, …).
+    </p>
+
+    <h3>Out-of-sandbox</h3>
+    <p>
+      The agent's runtime stays <em>outside</em> the VM — in ALE's own process, or
+      a container — and drives the machine remotely. With no native foothold
+      inside, it reaches in through <strong>two MCP bridges: one CLI-based
+      (shell, files), one GUI</strong>. Everything else — its memory, sub-agents,
+      context management — runs alongside, host-side, never entering the VM.
+      <a href="https://github.com/rdi-berkeley/agents-last-exam">ALE-Claw</a> is
+      the in-tree reference.
+    </p>
+
+    <h2>The deployer: what to do</h2>
+    <p>
+      Whichever shape, an agent is added as a <strong>deployer</strong> — a small
+      Python class (<code>BaseAgentDeployer</code>) with three methods:
+    </p>
+    <ul>
+      <li><code>install()</code> — stage the agent <em>and apply its configuration</em>: fetch or locate its CLI, wire in the model and tool knobs from the agent config, set up its MCP servers, check the API key.</li>
+      <li><code>launch(prompt)</code> — run the agent to completion and return an <code>AgentRunResult</code>.</li>
+      <li><code>parse_artifacts()</code> — read the agent's native logs into a uniform <a href="/pages/data-artifacts.html">trajectory</a>.</li>
+    </ul>
+    <p>
+      The discipline that makes the split work: a deployer is plain Python that
+      does all its I/O through a handle it's given, and <strong>never asks where
+      it runs</strong>. Write it once; the executor decides the rest.
+    </p>
+
+    <h2>The executor: where it runs</h2>
+    <p>
+      The executor is that handle. It carries the work dir, the sandbox
+      coordinates, the agent's config, and its environment, and runs the deployer
+      on the substrate that matches the agent's shape:
+    </p>
+    <table>
+      <thead><tr><th>Agent shape</th><th>Executor</th><th>Runs the deployer…</th></tr></thead>
+      <tbody>
+        <tr><td>In-sandbox</td><td><code>sandbox</code></td><td>Inside the VM itself.</td></tr>
+        <tr><td rowspan="2">Out-of-sandbox</td><td><code>local</code></td><td>In ALE's own Python process, on your host.</td></tr>
+        <tr><td><code>docker</code></td><td>In a local container.</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <div class="note-title">Why docker</div>
+      <code>docker</code> walls the agent's runtime off from your host, so an agent
+      reaching for the filesystem touches the container, not your real working
+      files — safer than running it directly with <code>local</code>.
+    </div>
+
+    <h2>The MCP control surface</h2>
+    <p>
+      Two bridges make up the action space ALE exposes over the machine:
+    </p>
+    <table>
+      <thead><tr><th>Bridge</th><th>Action space</th></tr></thead>
+      <tbody>
+        <tr><td><strong>CLI</strong><div class="sub">vm_mcp_server</div></td><td>Run shell commands, read / write / list files, drive interactive PTY sessions — a thin set of system primitives, not opinionated tools.</td></tr>
+        <tr><td><strong>GUI</strong><div class="sub">cua_mcp_server</div></td><td>Screenshot, click, type, scroll, drag, key-press — the desktop actions that turn a screen into an action space.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Full per-tool parameters and return shapes:
+      <a href="/pages/mcp-tools.html">MCP tools</a>.
+    </p>
+    <p>
+      An out-of-sandbox agent reaches the machine entirely through these two; an
+      in-sandbox agent already has a native shell, so it takes only the GUI bridge.
+      Either way, an agent can consume a bridge at two levels:
+    </p>
+    <ul>
+      <li><strong>As add-ons</strong> — mount the bridges' tools straight onto the agent's existing action space.</li>
+      <li><strong>As a substrate</strong> — build your own richer tools on top of them. ALE-Claw does this: its thick <code>read</code> / <code>write</code> / <code>edit</code> / <code>exec</code> / <code>computer</code> tools route through the bridges, with paging, truncation, and recovery layered on.</li>
+    </ul>
+    <div class="note">
+      <div class="note-title">No MCP? Plugins instead</div>
+      Delivery adapts to the harness. Where an agent speaks MCP, ALE wires these in
+      as MCP servers; OpenClaw, which can't load MCP, receives the same action
+      space as a native plugin — same tools, different packaging.
+    </div>
+
+    <h2>Why this stays flexible</h2>
+    <p>
+      Adding an agent is therefore small and composable: write a deployer, pick
+      where it runs, and — if it's out-of-sandbox — decide how it consumes the two
+      MCPs. The pieces mix freely. You could take an in-sandbox CLI like Claude
+      Code, run it <em>out</em> of the sandbox, and hand it the two MCP bridges in
+      place of a native shell — the deployer doesn't change, only the executor and
+      transport do. That separation is what lets very different agents drop into
+      one evaluation harness without special-casing any of them.
+    </p>
+
+    <div class="note">
+      <div class="note-title">Related</div>
+      The record each run leaves behind — the uniform trajectory and raw logs — is
+      its own subject: <a href="/pages/data-artifacts.html">Trajectories &amp; artifacts →</a>
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sandbox & provider — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Sandbox &amp; provider</h1>
+    <p class="lede">
+      The environment slot is where a task runs: a sandbox, provisioned on
+      demand. This page covers what a sandbox is, how providers bring one up,
+      and the single surface every other layer uses to reach into it.
+    </p>
+
+    <h2>A sandbox is a whole computer</h2>
+    <p>
+      ALE's unit of environment is a <strong>sandbox</strong>: a complete Windows
+      or Linux operating system, with the real applications installed and the
+      task's files on disk — a desktop the agent actually operates. 感觉这里原来那段没啥意义，
+    <h2>Providers boot the sandbox</h2>
+    <p>
+      A <code>Provider</code> owns a sandbox's lifecycle through three calls:
+      <code>acquire</code> (bring one up and wait until it answers),
+      <code>open_session</code> (return a live control session), and
+      <code>release</code> (delete, stop, or keep it). Three are implemented:
+    </p>
+    <table>
+      <thead><tr><th>Provider</th><th>Backs the sandbox with</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td><code>gcloud</code></td><td>An ephemeral GCE VM from a published image</td><td>The production path — many sandboxes in parallel for leaderboard runs.</td></tr>
+        <tr><td><code>docker</code></td><td>An ephemeral container from an image</td><td>Cheaper and faster, for tasks that need no GUI desktop.</td></tr> 这个描述不对，docker 先不在文档里提及好了；
+        <tr><td><code>static</code></td><td>A sandbox you already have, at a fixed address</td><td>Debugging, or wrapping a VMware / local VM you brought up by hand.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      As virtual machines are heavy to deploy, ALE 主要使用 google cloud 来 provide L1 层的虚拟机，which is a stable and friendly platform to run tasks. 我们未来也会支持其他云平台，如 AWS, Azure, etc. 以及用于本地 debug 测试的基于 VMware，QEMU的 provider，但这对本地机器也提出了更高的需求，也很难 scalably support hundreds of tasks running in parallel.
+      尽管 Docker 是非常好的沙箱，然而其更适合于 coding， daily simple tasks 等不需要完整系统环境的场景，更无法满足诸多生产领域中任务对于 Windows 系统的依赖。
+    </p>
+
+    <h2>The SandboxHandle: one way in</h2>
+    <p>
+      Everything that touches the sandbox — staging task data, installing an
+      agent, a task's grader — goes through the <code>SandboxHandle</code> the
+      provider returns. It is a thin async surface (<code>run_command</code>,
+      <code>read_file</code>, <code>write_file</code>, uploads, ranged downloads)
+      plus the sandbox's coordinates: its endpoint, its OS, and the image's path
+      conventions. No layer reaches the sandbox any other way. 这里应该说一下我们使用trycua 【https://github.com/trycua/cua】提供的 cua-server 来给不同系统提供一个统一的远程控制接口，并基于此套接口去manipulate computers。give them credits for providing such a powerful and easy to use computer control package. 
+      
+
+    </p>
+
+    <h2>cua: the control server inside the sandbox</h2>
+    <p>
+      The handle isn't magic — it's an HTTP client. Each image runs a
+      <strong>cua computer-server</strong> (from the open-source
+      <a href="https://github.com/trycua/cua">trycua/cua</a> project): a small
+      server that exposes the sandbox's shell, filesystem, and GUI over HTTP. The
+      <code>SandboxHandle</code> and the task-side session are both clients of it.
+    </p>
+    <div class="diagram">  framework host                          sandbox
+  ┌───────────────┐                       ┌─────────────────────────┐
+  │ SandboxHandle │ ───── HTTP /cmd ─────▶ │  cua computer-server     │
+  │   (+ session) │ ◀──── results ──────── │  shell · files · GUI     │
+  └───────────────┘                       └─────────────────────────┘</div>
+    <p>
+      <code>open_session()</code> returns a <code>RemoteDesktopSession</code> —
+      the richer client task authors use during setup and grading (screenshots,
+      clicks, window control, in-sandbox Python). Its full surface is the
+      <code>docs/SESSION_API.md</code>. The server's port is
+      declared per image (5000 on the GCE images, 8000 on the kasm container), so
+      nothing in the framework hard-codes it.
+    </p>
+
+    <h2>The image: what's already on the sandbox</h2>
+    <p>
+      A provider boots from an <strong>image</strong>, and the image is where
+      realism is pre-paid. Published images carry the OS, the cua server, the
+      agent CLIs that run in-sandbox, the Node and Python runtimes, the
+      <a href="/pages/arch-executor-deployer.html">GUI MCP bridge</a>, and — for many
+      tasks — the task data itself. An image registry
+      (<code>environments/images/</code>) records each image's paths and port so
+      the rest of the framework stays image-agnostic.
+    </p>
+    <div class="note">
+      <div class="note-title">Related</div>
+      How a task's <em>data</em> reaches the sandbox — and how the answer key
+      stays hidden — is its own subject:
+      <a href="/pages/arch-taskdata.html">Task spec &amp; data staging →</a>
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

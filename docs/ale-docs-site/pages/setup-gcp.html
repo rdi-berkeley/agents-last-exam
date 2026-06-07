@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Set up Google Cloud — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Set up Google Cloud</h1>
+    <p class="lede">
+      One-time provisioning to run ALE at benchmark scale on Google Cloud: a
+      project, a service account, the two sandbox images, networking, and a
+      results bucket. About 20 minutes, mostly waiting on the image copies. The
+      next page wires up an experiment.
+    </p>
+
+    <div class="note warn">
+      <div class="note-title">Free trial runs Linux only</div>
+      The full benchmark spans <strong>Linux and Windows</strong> tasks, and a
+      Google Cloud <strong>free trial cannot create Windows VMs</strong>. To run
+      the whole benchmark, activate a <strong>full billing account</strong>
+      (Console → Billing → <em>Activate full account</em>; your $300 credit still
+      applies). The Linux-only subset runs fine on the trial.
+    </div>
+
+    <h2>Before you start</h2>
+    <ul>
+      <li>A Google Cloud account.</li>
+      <li>The <a href="https://docs.cloud.google.com/sdk/docs/install-sdk">gcloud CLI</a> installed, then signed in: <code>gcloud auth login</code>.</li>
+    </ul>
+    <p>
+      Clone the repository and install. <code>--all-packages</code> is required:
+      it pulls in each agent's dependencies <em>and</em> the task-side evaluation
+      package (<code>tasks/pyproject.toml</code>) used to grade locally — plain
+      <code>uv sync</code> installs neither.
+    </p>
+    <pre><code>git clone git@github.com:rdi-berkeley/agents-last-exam.git
+cd agents-last-exam
+uv sync --all-packages --extra dev</code></pre>
+
+    <h2>Provision the project</h2>
+    <p>
+      Edit the two variables at the top, then paste the block. It creates the
+      project, links billing, enables APIs, makes a service account with a key,
+      copies both images, sets up the network, and creates the results bucket.
+    </p>
+    <pre><code># ─── edit these ────────────────────────────────────────────────
+export GCP_PROJECT="ale-$(whoami)-$(date +%s | tail -c 5)"   # unique, lowercase, ≤30 chars
+export GCP_REGION="us-central1"                              # keep within the env config's zones
+# ───────────────────────────────────────────────────────────────
+export GCP_SA_NAME="ale-runner"
+export GCP_SA_EMAIL="${GCP_SA_NAME}@${GCP_PROJECT}.iam.gserviceaccount.com"
+export GCP_BUCKET="${GCP_PROJECT}-ale-results"
+
+cd <path-to>/agents-last-exam          # from the repo root
+
+# 1. project + billing + APIs
+gcloud projects create "$GCP_PROJECT" --name="ALE"
+gcloud config set project "$GCP_PROJECT"
+gcloud billing accounts list
+read -p "billing-account ID from the list above: " BILLING_ID
+gcloud billing projects link "$GCP_PROJECT" --billing-account="$BILLING_ID"
+gcloud services enable compute.googleapis.com storage.googleapis.com
+
+# 2. service account + roles + JSON key
+gcloud iam service-accounts create "$GCP_SA_NAME" --display-name="ALE runner"
+for role in compute.instanceAdmin.v1 compute.networkUser iam.serviceAccountUser \
+            storage.objectViewer serviceusage.serviceUsageConsumer ; do
+  gcloud projects add-iam-policy-binding "$GCP_PROJECT" \
+    --member="serviceAccount:$GCP_SA_EMAIL" --role="roles/$role" --condition=None
+done
+mkdir -p secret
+gcloud iam service-accounts keys create secret/gcp_key.json --iam-account="$GCP_SA_EMAIL"
+
+# 3. copy BOTH published images (Linux + Windows) into your project (~3 min each)
+for img in ale-ubuntu22 ale-win10 ; do
+  gcloud compute images create "$img" \
+    --source-image="$img" --source-image-project=agenthle-488519
+done
+
+# 4. network + firewall (cua-server is on tcp:5000; RDP is optional, for Windows debug)
+gcloud compute networks create ale-vpc --subnet-mode=auto
+gcloud compute firewall-rules create ale-allow-cua --network=ale-vpc \
+  --direction=INGRESS --allow=tcp:5000 --source-ranges=0.0.0.0/0
+gcloud compute firewall-rules create ale-allow-rdp --network=ale-vpc \
+  --direction=INGRESS --allow=tcp:3389 --source-ranges=0.0.0.0/0
+
+# 5. results bucket for batch output, with write access for the runner
+gcloud storage buckets create "gs://$GCP_BUCKET" \
+  --project="$GCP_PROJECT" --location="$GCP_REGION" --uniform-bucket-level-access
+gcloud storage buckets add-iam-policy-binding "gs://$GCP_BUCKET" \
+  --member="serviceAccount:$GCP_SA_EMAIL" --role="roles/storage.objectAdmin"
+</code></pre>
+    <p>
+      Every command is idempotent except <code>gcloud projects create</code>; if a
+      step fails, fix it and re-run just that step. Keep the bucket name
+      <code>gs://&lt;GCP_PROJECT&gt;-ale-results</code> handy — you'll point the
+      environment config at it on the next page.
+    </p>
+
+    <h2>Notes</h2>
+    <ul>
+      <li><strong>Region / zones.</strong> The gcloud snapshots in
+      <code>configs/environments/environment.yaml</code> list fixed fallback
+      zones (<code>us-central1</code> / <code>us-east1</code>, plus
+      <code>us-west1</code> for Linux). Keep <code>GCP_REGION</code> within those,
+      or edit the <code>zones:</code> lists to match.</li>
+      <li><strong>Cost cap.</strong> A full-benchmark run of a frontier agent
+      costs single-digit dollars per task and hours of wall-clock. Set a budget
+      alert under Console → Billing → <em>Budgets &amp; alerts</em> — alert-only
+      (GCP won't auto-stop), but it catches a runaway sweep.</li>
+      <li><strong>Licensed tasks.</strong> A handful of tasks need commercial
+      software pre-installed on a custom image. Until that image is published, run
+      the <strong>unlicensed</strong> track, which uses the images above as-is.</li>
+    </ul>
+
+    <div class="note">
+      <div class="note-title">Next</div>
+      Provisioning done. Wire an experiment — environment, agents, keys, and the
+      run command: <a href="/pages/configs.html">Configure &amp; run a benchmark →</a>
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

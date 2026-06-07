@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Add an environment — ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Add an environment</h1>
+    <p class="lede">
+      A new backend — another cloud, or your own hardware — is a
+      <strong>Provider</strong>: it boots a sandbox and hands the framework a live
+      cua-server endpoint. Today <code>gcloud</code> and <code>static</code> ship;
+      more are on the way.
+    </p>
+
+    <h2>Roadmap</h2>
+    <ul>
+      <li><strong>Local — VMware &amp; QEMU.</strong> Boot the sandbox images on your own machine to run and debug tasks without the cloud.</li>
+      <li><strong>More clouds — Azure, AWS, Aliyun.</strong> The same ephemeral-VM lifecycle on other providers, for capacity and region choice.</li>
+    </ul>
+
+    <div class="note">
+      <div class="note-title">Want one sooner?</div>
+      Implement the small <code>Provider</code> contract (<code>acquire</code> /
+      <code>release</code> / <code>open_session</code>) and copy a reference —
+      <code>providers/gcloud.py</code> (boot a VM) or
+      <code>providers/static.py</code> (wrap an existing endpoint, e.g. a VM you
+      brought up by hand). The contract is on
+      <a href="/pages/arch-environment.html">Sandbox &amp; provider</a>.
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
