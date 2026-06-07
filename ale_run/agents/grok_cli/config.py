@@ -27,6 +27,15 @@ _DEFAULT_WIN_BINARY_URL = (
     "v0.1.1-agenthle/grok-x86_64-pc-windows.exe"
 )
 
+# Linux fork bundle (grok-bundle.js) on the same tag. Carries the OpenRouter
+# fixes — partial-stream tool-call accumulation + image-injection middleware.
+# Without it the stock Linux grok rejects OpenRouter's streamed tool_call
+# deltas (ZodError) and loops to timeout, and never sees screenshots.
+_DEFAULT_BUNDLE_URL = (
+    "https://github.com/cua-verse/grok-cli/releases/download/"
+    "v0.1.1-agenthle/grok-bundle.js"
+)
+
 _NATIVE_TO_OPENROUTER: dict[str, str] = {
     "grok-4-1-fast-reasoning": "x-ai/grok-4.1-fast",
     "grok-4-1-fast-non-reasoning": "x-ai/grok-4.1-fast",
@@ -120,7 +129,7 @@ class GrokCliConfig:
     max_tool_rounds: int = -1
     disabled_tools: tuple[str, ...] = _DISABLED_TOOLS_OPENROUTER
 
-    bundle_url: str = ""
+    bundle_url: str = _DEFAULT_BUNDLE_URL
     """URL to download the pre-built fork bundle (grok-bundle.js) from a
     GitHub Release.  When non-empty the deployer downloads the bundle and
     launches it via ``bun <bundle_path> --prompt ...`` instead of the

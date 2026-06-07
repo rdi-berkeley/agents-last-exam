@@ -24,8 +24,10 @@ config:
   max_tool_rounds: -1
 
   # Linux fork bundle (grok-bundle.js) downloaded from a GitHub Release and launched
-  # via Bun (carries OpenRouter fixes). "" = use the stock grok binary, no bundle.
-  bundle_url: ""
+  # via Bun (carries OpenRouter fixes: partial-stream tool-call accumulation +
+  # image-injection middleware). "" = stock grok binary, which on OpenRouter
+  # ZodErrors on streamed tool_call deltas and loops to timeout — do not use.
+  bundle_url: https://github.com/cua-verse/grok-cli/releases/download/v0.1.1-agenthle/grok-bundle.js
 
   # Windows fork grok.exe (self-contained, same OpenRouter fixes; Bun-built on the
   # win VM). Used on Windows instead of bundle_url. "" = use stock grok.exe (debug only).

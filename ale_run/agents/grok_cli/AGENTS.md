@@ -1,6 +1,12 @@
 # Grok CLI Integration Notes
 
-> ## ⚠️ KNOWN ISSUES (tool_smoke, 2026-05-29)
+> ## ✅ LINUX/OPENROUTER STATUS (verified 2026-06-06)
+>
+> Linux grok_cli over OpenRouter now works end to end. Verified on a Linux dev
+> VM: `demo/tool_smoke` **8/8 (score 1.0)** and `demo/seecheck` **1.0** (reads a
+> code off a screenshot). The two historical blockers below are resolved; the
+> fix for both was to actually **run the fork bundle** (`bundle_url` is now a
+> non-empty default — see below), launched via Bun.
 >
 > **1. OpenRouter model prefix — FIXED.** `native_to_openrouter_model()` used to
 > force an `x-ai/` prefix on any model that didn't already start with `x-ai/`,
@@ -10,16 +16,22 @@
 > form (contains `/`) is passed through unchanged; only bare names get the
 > `x-ai/` default.
 >
-> **2. Fork bundle crashes on background-process tools — OPEN (deferred).**
-> After the prefix fix, grok_cli on Linux (bun fork bundle) still scores 0.0 on
-> `demo/tool_smoke`: when the agent exercises a background-process tool
-> (e.g. `bash` with `background:true`, `process_logs`, `process_stop`) the
-> bundle dies with **`Fatal: write after end`** (writing to an already-closed
-> stream), rc=1, killing the whole CLI mid-run before it can write the report.
-> Root cause is in the fork bundle's background-process / stream handling — a
-> code fix in `cua-verse/grok-cli`, not a config change. **Deferred; revisit
-> later.** The Windows path uses the native `grok.exe` (not the bun bundle), so
-> it may not reproduce identically — check the win10 tool_smoke result.
+> **2. Config did not wire the Linux fork bundle — FIXED (2026-06-06).** The
+> root cause of "Linux grok scores 0.0" was a config gap, not (only) a code bug:
+> `bundle_url` defaulted to `""`, so the deployer ran the **stock** Linux grok.
+> The stock binary ZodErrors on OpenRouter's streamed `tool_call` deltas
+> (partial chunks omit `id`/`type`/`function.name`), retries ~900× and times out
+> with no output. Windows was already wired to the fork via `win_binary_url`;
+> Linux was not. Fixed by defaulting `bundle_url` to the `v0.1.1-agenthle`
+> `grok-bundle.js` (`_DEFAULT_BUNDLE_URL` in `config.py`, mirrored in
+> `configs/agents/grok_cli.yaml`).
+>
+> **3. Fork bundle "Fatal: write after end" on background-process tools —
+> RESOLVED.** A 2026-05-29 note had this OPEN: with the fork bundle, background
+> tools (`bash background:true`, `process_logs`, `process_stop`) crashed the CLI
+> mid-run. Re-verified 2026-06-06 with the `v0.1.1-agenthle` bundle launched via
+> **Bun** (`bun <bundle>`, not `node`): `demo/tool_smoke` passes 8/8 with zero
+> `write after end`. Considered resolved; reopen if it recurs on a real task.
 
 ## Source And Fork
 
@@ -64,10 +76,11 @@ curl -fsSL https://grok.com/install.sh | bash
 
 Fork bundle (required for OpenRouter):
 
-The deployer supports downloading a pre-built JS bundle from a GitHub Release
-via the `bundle_url` config field. When set, `install()` downloads the bundle
-to `~/.grok/bin/grok-bundle.js` and `_build_argv()` launches it via
-`node grok-bundle.js --prompt ...` instead of the stock `grok` binary.
+The deployer downloads a pre-built JS bundle from a GitHub Release via the
+`bundle_url` config field (now a non-empty default). `install()` downloads the
+bundle to `~/.grok/bin/grok-bundle.js` and `_build_argv()` launches it via
+`bun grok-bundle.js --prompt ...` (the bundle uses `bun:sqlite`; Bun is
+auto-installed) instead of the stock `grok` binary.
 
 To build the bundle from source:
 
