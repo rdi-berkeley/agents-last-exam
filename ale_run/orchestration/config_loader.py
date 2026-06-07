@@ -471,7 +471,13 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
             # split the block into provider-wide creds vs per-snapshot routing
             gcloud_creds.update({k: knobs[k] for k in _GCLOUD_CRED_KEYS if k in knobs})
             routing = {k: v for k, v in knobs.items() if k not in _GCLOUD_CRED_KEYS}
-            gcloud_snaps[str(tag)] = {"image": str(image), **routing}
+            snap_entry = {"image": str(image), **routing}
+            # `resolution` is a snapshot-level display knob (sibling of image),
+            # not inside the gcloud: creds/routing block — carry it through so the
+            # provider can force the Windows framebuffer.
+            if entry.get("resolution") is not None:
+                snap_entry["resolution"] = entry["resolution"]
+            gcloud_snaps[str(tag)] = snap_entry
         elif kind == "docker":
             # docker carries just the image NAME + sizing knobs; the provider
             # resolves the container ref + port from the Image entry. Multiple
