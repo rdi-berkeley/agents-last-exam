@@ -11,8 +11,9 @@ Shape:
   ``configs/agents/``. Each referenced file is a full agent preset
   (``harness`` + ``model`` + ``config``). Listing more than one runs the
   agent matrix (every agent over every task). ``agent: <path>`` is accepted
-  as the single-agent shorthand. The agent's ``id`` defaults to the preset
-  filename stem so two presets of the same harness don't collide.
+  as the single-agent shorthand. The agent's ``id`` (which names the
+  agent-level output dir) defaults to the ``harness`` name; set ``id:``
+  explicitly to disambiguate two presets of the same harness.
 * ``environment: <path>`` — a single path to an environment yaml under
   ``configs/environments/``. The file carries ``provider:`` plus its
   provider-specific knobs. Exactly one environment per experiment.
@@ -308,7 +309,7 @@ def _build_artifacts(raw: dict[str, Any]) -> ArtifactsSpec:
 # Shape of an agent config yaml (configs/agents/<preset>.yaml):
 #   harness | class : str          — registry shortcut OR fqdn
 #   model            : str          — sugar → config.model
-#   id               : str | None   — defaults to the preset filename stem
+#   id               : str | None   — agent-level dir name; defaults to harness
 #   executor         : str | None   — vm | local | docker (deployer default if None)
 #   config           : dict         — passed verbatim to the deployer Config
 _AGENT_TOP_KEYS = frozenset({"harness", "class", "model", "id", "executor", "config"})
@@ -345,9 +346,11 @@ def _build_agent_from_path(path: Any, *, base_dir: Path) -> AgentSpec:
     if (m := raw.get("model")) is not None:
         config["model"] = m
 
-    # Default the agent id to the preset filename stem so two presets of the
-    # same harness in one `agents:` matrix get distinct, readable ids.
-    agent_id = raw.get("id") or resolved.stem
+    # Default the agent id to the harness name so the agent-level output dir is
+    # named after the harness (`harness:`/`class:`), not the preset filename.
+    # An explicit `id:` still wins — use it to disambiguate two presets of the
+    # same harness in one `agents:` matrix.
+    agent_id = raw.get("id") or cls
 
     executor = raw.get("executor")
     if executor is not None and not isinstance(executor, str):
@@ -468,7 +471,13 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
             # split the block into provider-wide creds vs per-snapshot routing
             gcloud_creds.update({k: knobs[k] for k in _GCLOUD_CRED_KEYS if k in knobs})
             routing = {k: v for k, v in knobs.items() if k not in _GCLOUD_CRED_KEYS}
-            gcloud_snaps[str(tag)] = {"image": str(image), **routing}
+            snap_entry = {"image": str(image), **routing}
+            # `resolution` is a snapshot-level display knob (sibling of image),
+            # not inside the gcloud: creds/routing block — carry it through so the
+            # provider can force the Windows framebuffer.
+            if entry.get("resolution") is not None:
+                snap_entry["resolution"] = entry["resolution"]
+            gcloud_snaps[str(tag)] = snap_entry
         elif kind == "docker":
             # docker carries just the image NAME + sizing knobs; the provider
             # resolves the container ref + port from the Image entry. Multiple

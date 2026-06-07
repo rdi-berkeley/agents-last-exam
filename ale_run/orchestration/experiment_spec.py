@@ -25,9 +25,9 @@ class AgentSpec:
     """One agent entry. Multiple AgentSpecs in an experiment ⇒ matrix.
 
     Attributes:
-        id: short user-chosen label, used as the top folder in the output
-            tree (e.g. ``"cc_sonnet"``). Lets a single experiment run
-            multiple config-variants of the same class.
+        id: short label naming the agent-level folder in the output tree.
+            Defaults to the harness name (``class_``); set an explicit ``id``
+            to run multiple config-variants of the same class side by side.
         class_: either a shortcut (``"claude_code"``) registered in
             ``ale.runner.factory.AGENT_REGISTRY``, or a fully-qualified
             Deployer class path (e.g. ``"my_pkg.MyDeployer"``).
