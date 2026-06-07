@@ -66,5 +66,5 @@ class GeminiCliConfig:
     max_session_turns: int = -1
 
     disabled_tools: tuple[str, ...] = _DISABLED_TOOLS
-    npm_package: str = "https://github.com/cua-verse/gemini-cli/releases/download/v0.38.3-agenthle/google-gemini-cli-0.38.3.tgz"
+    npm_package: str = "https://github.com/cua-verse/gemini-cli/releases/download/v0.38.8-agenthle/google-gemini-cli-0.38.8.tgz"
     compression_model: str = "google/gemini-3-flash-preview"

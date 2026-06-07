@@ -20,6 +20,7 @@ from ale_run.base_interface import (
     AgentRunResult,
     BaseAgentDeployer,
     ContentPart,
+    ImageSource,
     Observation,
     StepMetrics,
     ToolCall,
@@ -521,12 +522,32 @@ class GeminiCliDeployer(BaseAgentDeployer):
         error = event.get("error")
         raw = error if error else output
         text = raw if isinstance(raw, str) else json.dumps(raw)
+        content: list[ContentPart] = [ContentPart(type="text", text=text)]
+
+        # Inline media the tool returned to the model (e.g. the CUA `screenshot`
+        # PNG). The fork surfaces these as a `media` array on the TOOL_RESULT
+        # event ([{mime_type, data?, uri?}]); `output` is only the
+        # `[Image: image/png]` placeholder. Keep them as image ContentParts so
+        # persist_screenshots() writes them to screenshots/.
+        for m in event.get("media") or []:
+            if not isinstance(m, dict):
+                continue
+            data, uri = m.get("data"), m.get("uri")
+            media_type = m.get("mime_type") or "image/png"
+            if data:
+                img = ImageSource(type="base64", media_type=media_type, data=data)
+            elif uri:
+                img = ImageSource(type="url", media_type=media_type, url=uri)
+            else:
+                continue
+            content.append(ContentPart(type="image", image=img))
+
         builder.add_step(
             source="environment",
             observation=Observation(results=[
                 ToolResult(
                     tool_call_id=event.get("tool_id", ""),
-                    content=[ContentPart(type="text", text=text)],
+                    content=content,
                     is_error=bool(error),
                 ),
             ]),

@@ -46,7 +46,7 @@ config:
     - tracker_visualize
 
   # npm package the deployer installs (fork tarball carrying the OpenRouter fixes).
-  npm_package: https://github.com/cua-verse/gemini-cli/releases/download/v0.38.3-agenthle/google-gemini-cli-0.38.3.tgz
+  npm_package: https://github.com/cua-verse/gemini-cli/releases/download/v0.38.8-agenthle/google-gemini-cli-0.38.8.tgz
 
   # Cheaper model used for context compression (OPENROUTER_COMPRESSION_MODEL).
   compression_model: google/gemini-3-flash-preview
