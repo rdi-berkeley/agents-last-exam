@@ -2,7 +2,7 @@
    Site information architecture — single source of truth.
    Reader journey: Introduction (overview + architecture: how ALE works) →
    Run experiments (provision + configure + run the benchmark) →
-   Build on ALE → Reference → About.
+   Build on ALE → Reference.
    An item may carry `children` for one level of nesting. `draft: true` = stub.
    ========================================================================= */
 window.ALE_NAV = [
@@ -40,12 +40,6 @@ window.ALE_NAV = [
     items: [
       { href: "/pages/trajectory-schema.html",     title: "Trajectory schema" },
       { href: "/pages/mcp-tools.html",             title: "MCP tools" },
-    ],
-  },
-  {
-    label: "About",
-    items: [
-      { href: "/pages/about.html",                 title: "About & licensing", draft: true },
     ],
   },
 ];

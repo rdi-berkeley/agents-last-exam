@@ -33,10 +33,12 @@
     localStorage.setItem("ale-theme", cur);
     setThemeIcon();
   }
+  var SUN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  var MOON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
   function setThemeIcon() {
     var dark = document.documentElement.getAttribute("data-theme") === "dark";
     var el = document.getElementById("theme-icon");
-    if (el) el.textContent = dark ? "☀" : "☾";
+    if (el) el.innerHTML = dark ? SUN_SVG : MOON_SVG;
   }
 
   // ---- sidebar ----
@@ -51,7 +53,6 @@
   function buildSidebar() {
     var html = '' +
       '<a class="brand" href="/index.html">' +
-        '<span class="mark">ALE</span>' +
         '<span><span class="title">Agents\' Last Exam</span><br>' +
         '<span class="subtitle">Framework documentation</span></span>' +
       '</a>';
@@ -144,8 +145,52 @@
     scrim.addEventListener("click", function () { sb.classList.remove("open"); scrim.classList.remove("show"); });
 
     setThemeIcon();
+    addCopyButtons();
     initScrollSpy();
   });
+
+  // ---- copy buttons on code blocks ----
+  var COPY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  var CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  function addCopyButtons() {
+    var pres = document.querySelectorAll(".article pre");
+    pres.forEach(function (pre) {
+      if (pre.parentNode && pre.parentNode.classList.contains("code-wrap")) return;
+      var wrap = document.createElement("div");
+      wrap.className = "code-wrap";
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+
+      var btn = document.createElement("button");
+      btn.className = "copy-btn";
+      btn.type = "button";
+      btn.setAttribute("aria-label", "Copy code");
+      btn.innerHTML = COPY_SVG + '<span>Copy</span>';
+      wrap.appendChild(btn);
+
+      btn.addEventListener("click", function () {
+        var text = (pre.querySelector("code") || pre).innerText;
+        var done = function () {
+          btn.classList.add("copied");
+          btn.innerHTML = CHECK_SVG + '<span>Copied</span>';
+          setTimeout(function () {
+            btn.classList.remove("copied");
+            btn.innerHTML = COPY_SVG + '<span>Copy</span>';
+          }, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text); done(); });
+        } else { fallbackCopy(text); done(); }
+      });
+    });
+  }
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta);
+  }
 
   // ---- scrollspy ----
   function initScrollSpy() {

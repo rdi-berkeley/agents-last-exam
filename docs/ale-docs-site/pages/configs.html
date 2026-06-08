@@ -6,7 +6,7 @@
   <title>Configure & run a benchmark — ALE Docs</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/style.css" />
 </head>
 <body>
@@ -78,7 +78,7 @@ cleanup_mode: delete                            # delete | stop | keep the VMs a
     <pre><code>task_data_source: baked_in_sandbox    # task data is baked into the images — nothing to fetch
 gcs_sa_key: secret/gcp_key.json       # the SA key from GCP setup — already in place
 output_path: local                    # ← the one field to change for batch runs (below)</code></pre>
-    <div class="note">
+    <div class="note" id="output-path">
       <div class="note-title">output_path — strongly prefer the bucket</div>
       <p>
         <code>local</code> pulls each task's output off the sandbox over its cua
@@ -138,8 +138,13 @@ config:
     </p>
     <div class="note todo">
       <div class="note-title">Licensed tasks — TODO</div>
-      A few tasks need commercial software re-activated on the image. That setup
-      guide is still to come; until then, use the <strong>unlicensed</strong> lists.
+      Seven tasks (listed in
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/selected_tasks/licensed.txt">selected_tasks/licensed.txt</a>)
+      need commercial software with an active license. For copyright reasons the
+      published <code>ale-win10</code> image ships that software <em>installed but
+      not licensed</em>, so these tasks cannot run on it as-is. A guide for
+      supplying your own licenses is still to come; until then, use the
+      <strong>unlicensed</strong> lists.
     </div>
 
     <h2>Keys: agents vs judges</h2>
@@ -157,13 +162,12 @@ GCP_SA_KEY=secret/gcp_key.json         # read by the env config (${env:GCP_SA_KE
       </li>
       <li>
         <strong>Judge keys — <code>secret/eval_time/</code>.</strong> Used to
-        <em>grade</em>. Some tasks score their output with an LLM/VLM judge; those
-        keys live per-service here and load automatically at scoring time. Copy the
-        template and fill it:
+        <em>grade</em>. Five tasks score their output with an OpenAI LLM/VLM
+        judge; the key loads automatically at scoring time. Copy the template and
+        fill it:
         <pre><code>cp secret/eval_time/openai.env.example secret/eval_time/openai.env   # then add the key</code></pre>
-        <strong>Required for judge-scored tasks</strong> — without it those tasks
-        can't be evaluated. A task's <code>task_card.json</code>
-        <code>evaluatorCredentials</code> names which file it needs.
+        Without it those five tasks can't be evaluated. Every other task grades
+        deterministically and needs no judge key.
       </li>
     </ul>
 

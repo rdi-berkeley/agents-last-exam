@@ -6,16 +6,34 @@
   <title>Setup Environment Provider — ALE Docs</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;480;560;620;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/style.css" />
 </head>
 <body>
   <article class="article">
     <h1>Setup Environment Provider</h1>
     <p class="lede">
-      A provider boots the sandbox each task runs in. Set one up, then
+      A provider boots the sandbox each task runs in. Set one up here, then
       <a href="/pages/configs.html">configure a run</a>.
     </p>
+    <p>
+      Standing up the environment that serves the sandbox is the heaviest,
+      most error-prone part of any agent benchmark — and ALE asks more of it
+      than most. Tasks ship real, large professional software and their input
+      data, and a single run can stretch for hours, so the platform also has to
+      scale out across many sandboxes at once. ALE intends to make the process as 
+      easy and straightforward as possible. Google Cloud is the supported
+      path today with 300 USD credit that's friendly enough to get you started; 
+      more cloud backends, plus a local path for debugging and
+      development on your own hardware, are on the roadmap.
+    </p>
+
+    <p>Whichever provider you pick, clone and install first:</p>
+    <pre><code>git clone git@github.com:rdi-berkeley/agents-last-exam.git
+cd agents-last-exam
+uv sync --all-packages</code></pre>
+
+    <h2>Pick a provider</h2>
     <div class="card-grid">
       <a class="card" href="/pages/setup-gcp.html">
         <div class="k">Supported</div>

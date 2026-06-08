@@ -2,7 +2,7 @@
 
 This guide assumes **you have never used Google Cloud before**. Total time
 is about 20 minutes. Costs: new Google Cloud accounts get **$300 in free
-trial credits** (90 days); one `demo/hello_win` run costs roughly $0.05 of
+trial credits** (90 days); one `demo/hello` run costs roughly $0.05 of
 that.
 
 The walkthrough has two kinds of steps:
@@ -76,27 +76,26 @@ You're done with manual setup.
 
 Copy this whole block into your terminal **after editing the two
 variables at the top**. It creates a project, enables APIs, makes a
-service account, copies the sandbox image, sets up networking, and
+service account, copies the two sandbox images, sets up networking, and
 creates a results bucket for optional GCS output upload.
 
 ```bash
 # ─── EDIT THESE TWO LINES ──────────────────────────────────────────────
-export GCP_PROJECT="ale-$(whoami)-$(date +%s | tail -c 5)"   # any unique id, lowercase, ≤30 chars
-export GCP_REGION="us-west1"                                  # change if you prefer another region
+export GCP_PROJECT="ale-$(whoami)"                            # must be globally unique; change if taken
+export GCP_REGION="us-central1"                               # keep within the env config's zones
 # ───────────────────────────────────────────────────────────────────────
 
-export GCP_ZONE="${GCP_REGION}-b"
 export GCP_SA_NAME="ale-runner"
 export GCP_SA_EMAIL="${GCP_SA_NAME}@${GCP_PROJECT}.iam.gserviceaccount.com"
-export GCP_RESULTS_BUCKET="${GCP_PROJECT}-ale-results"
+export GCP_BUCKET="${GCP_PROJECT}-ale-results"
 
 cd <path-to>/agents-last-exam       # ← run from the repo root
 
 # 3a. Create the project and make it default.
-gcloud projects create "${GCP_PROJECT}" --name="ALE Workspace"
+gcloud projects create "${GCP_PROJECT}" --name="ALE"
 gcloud config set project "${GCP_PROJECT}"
 
-# 3b. Link billing to the project (REQUIRED — even with free credits).
+# 3b. Link billing to the project (REQUIRED, even with free credits).
 #     Lists your billing accounts; pick the one with credits attached.
 gcloud billing accounts list
 read -p "Paste billing-account ID from the list above: " BILLING_ID
@@ -105,14 +104,11 @@ gcloud billing projects link "${GCP_PROJECT}" --billing-account="${BILLING_ID}"
 # 3c. Enable the APIs we need.
 gcloud services enable compute.googleapis.com storage.googleapis.com
 
-# 3d. Create the service account + download a JSON key.
-gcloud iam service-accounts create "${GCP_SA_NAME}" \
-  --display-name="ALE runner"
+# 3d. Create a service account + JSON key for in-VM gsutil (Cloud Storage only;
+#     VMs themselves are created under your own `gcloud auth login`).
+gcloud iam service-accounts create "${GCP_SA_NAME}" --display-name="ALE storage access"
 
 for role in \
-    roles/compute.instanceAdmin.v1 \
-    roles/compute.networkUser \
-    roles/iam.serviceAccountUser \
     roles/storage.objectViewer \
     roles/serviceusage.serviceUsageConsumer ; do
   gcloud projects add-iam-policy-binding "${GCP_PROJECT}" \
@@ -124,39 +120,32 @@ mkdir -p secret
 gcloud iam service-accounts keys create secret/gcp_key.json \
   --iam-account="${GCP_SA_EMAIL}"
 
-# 3e. Copy the published sandbox image into your project (~3 min).
-gcloud compute images create ale-unified-v1 \
-  --source-image=ale-unified-v1 \
-  --source-image-project=agenthle-488519
+# 3e. Copy both published sandbox images (Linux + Windows) into your project (~3 min each).
+for img in ale-ubuntu22 ale-win10 ; do
+  gcloud compute images create "${img}" \
+    --source-image="${img}" --source-image-project=agenthle-488519
+done
 
-# 3f. Create a VPC and firewall rules.
+# 3f. Create a VPC and firewall rules (cua-server is on tcp:5000; RDP 3389 is optional).
 gcloud compute networks create ale-vpc --subnet-mode=auto
 
 gcloud compute firewall-rules create ale-allow-cua \
   --network=ale-vpc --direction=INGRESS \
   --allow=tcp:5000 --source-ranges=0.0.0.0/0
-
-# (Optional) open RDP if you want to debug Windows guests:
 gcloud compute firewall-rules create ale-allow-rdp \
   --network=ale-vpc --direction=INGRESS \
   --allow=tcp:3389 --source-ranges=0.0.0.0/0
 
-# 3g. Results bucket for optional GCS output upload (artifacts_path.output_path).
-if ! gcloud storage buckets describe "gs://${GCP_RESULTS_BUCKET}" \
-    --project="${GCP_PROJECT}" >/dev/null 2>&1; then
-  gcloud storage buckets create "gs://${GCP_RESULTS_BUCKET}" \
-    --project="${GCP_PROJECT}" \
-    --location="${GCP_REGION}" \
-    --uniform-bucket-level-access
-fi
-gcloud storage buckets add-iam-policy-binding "gs://${GCP_RESULTS_BUCKET}" \
-  --member="serviceAccount:${GCP_SA_EMAIL}" \
-  --role="roles/storage.objectAdmin"
+# 3g. Results bucket for optional GCS output upload (environment.yaml output_path).
+gcloud storage buckets create "gs://${GCP_BUCKET}" \
+  --project="${GCP_PROJECT}" --location="${GCP_REGION}" --uniform-bucket-level-access
+gcloud storage buckets add-iam-policy-binding "gs://${GCP_BUCKET}" \
+  --member="serviceAccount:${GCP_SA_EMAIL}" --role="roles/storage.objectAdmin"
 
 echo
 echo "✓ GCP project ready: ${GCP_PROJECT}"
 echo "✓ Service account key: $(pwd)/secret/gcp_key.json"
-echo "✓ Results bucket: gs://${GCP_RESULTS_BUCKET}"
+echo "✓ Results bucket: gs://${GCP_BUCKET}"
 ```
 
 If a step fails, fix it and re-run only that step — every command is
@@ -175,24 +164,24 @@ Open `secret/.env` and paste your LLM API key and the GCP values from
 Step 3:
 
 ```dotenv
-# Pick one (claude-code auto-routes OPENROUTER through Anthropic):
-ANTHROPIC_API_KEY=sk-ant-...
-# OR
+# The default claude_code preset routes through OpenRouter, so set this:
 OPENROUTER_API_KEY=sk-or-...
+# (To call Anthropic directly instead, set `provider: direct` in
+#  configs/agents/claude_code.yaml and fill ANTHROPIC_API_KEY.)
 
 GCP_PROJECT=<the value of $GCP_PROJECT from step 3>
 GCP_SA_KEY=secret/gcp_key.json
 ```
 
-You can leave `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `BRAVE_API_KEY` blank
-— they're only used by other agents.
+Leave `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `BRAVE_API_KEY` blank unless
+a config you run actually uses them.
 
 ---
 
 ## Step 5 — ⌨️ Run the demo
 
 ```bash
-uv sync --extra dev
+uv sync --all-packages
 uv run python -m ale_run run example_exp.yaml --dry-run   # validates config
 uv run python -m ale_run run example_exp.yaml             # real run
 ```
@@ -203,10 +192,10 @@ is ~30 s. A successful run prints:
 ```
 agent                 task                                      var  status      score     dur
 ----------------------------------------------------------------------------------------------
-claude_code           demo/hello_win                              0  completed    1.00   42.3s
+claude_code           demo/hello                                  0  completed    1.00   42.3s
 ```
 
-Artifacts land in `.logs/my_experiment/<run_id>/`. The runner deletes the
+Artifacts land in `.logs/ale/my_experiment/<run_id>/`. The runner deletes the
 VM on exit (success or failure). If the process is killed mid-run,
 clean up leftovers:
 
@@ -229,17 +218,15 @@ If you set `GCP_REGION` to something else in Step 3, also edit the
 `configs/environments/*.yaml` and point your experiment's `environment:`
 at it).
 
-### Image / machine-type compatibility
+### Images and the free trial
 
-- `ale-unified-v1` is a **Windows** image. The Linux demo `demo/hello`
-  needs a Linux image (see the `cpu-free-ubuntu` snapshot tag in the env
-  config). Use `demo/hello_win` for now.
-- `c4-*` / `m4-*` / `x4-*` machine families require **all** disks to be
-  `hyperdisk-balanced`. The default config uses `e2-standard-4` which
-  is fine. If you switch to `c4-standard-4`, also set
-  `data_disk_type: hyperdisk-balanced` in the env config.
-- For CPU-only demo runs, `e2-*` and `n1-*` are cheapest. `g2-*` adds
-  GPU but costs ~10× more.
+- The demo `demo/hello` is a **Linux** task and boots `ale-ubuntu22`, so it
+  runs on a free-trial account.
+- The rest of the benchmark is mostly **Windows** (`demo/hello_win` and most
+  real tasks) and boots `ale-win10`. A free trial **cannot create Windows
+  VMs**; activate a full billing account first (your $300 credit still
+  applies). The env config maps each snapshot to its image in
+  [`configs/environments/environment.yaml`](../configs/environments/environment.yaml).
 
 ### Per-task GCS-staged data (optional)
 
