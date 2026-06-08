@@ -7,11 +7,13 @@
 
 *Challenge and measure AI agents on economically valuable, real-world tasks.*
 
-[![Website](https://img.shields.io/badge/agents--last--exam.org-1a1a1a?style=for-the-badge&logo=googlechrome&logoColor=white)](https://agents-last-exam.org/)
-[![Leaderboard](https://img.shields.io/badge/leaderboard-live-3a3a3a?style=for-the-badge)](https://agenthle.org/leaderboard)
-[![License: Apache-2.0](https://img.shields.io/badge/software-Apache--2.0-3a3a3a?style=for-the-badge)](LICENSE)
-[![License: CC BY 4.0](https://img.shields.io/badge/data-CC--BY--4.0-3a3a3a?style=for-the-badge)](LICENSE-DATA)
-[![Mailing list](https://img.shields.io/badge/news-subscribe-3a3a3a?style=for-the-badge)](https://groups.google.com/g/agenthle-news)
+[![Website](https://img.shields.io/badge/agents--last--exam.org-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://agents-last-exam.org/)
+[![arXiv](https://img.shields.io/badge/arXiv-2606.05405-B31B1B?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2606.05405)
+[![Hugging Face](https://img.shields.io/badge/Hugging%20Face-ALE-FF9D00?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/agents-last-exam)
+[![Leaderboard](https://img.shields.io/badge/leaderboard-live-10B981?style=for-the-badge&logo=tensorflow&logoColor=white)](https://agenthle.org/leaderboard)
+[![License: Apache-2.0](https://img.shields.io/badge/software-Apache--2.0-D22128?style=for-the-badge&logo=apache&logoColor=white)](LICENSE)
+[![License: CC BY 4.0](https://img.shields.io/badge/data-CC--BY--4.0-EF9421?style=for-the-badge&logo=creativecommons&logoColor=white)](LICENSE-DATA)
+[![Mailing list](https://img.shields.io/badge/news-subscribe-7C3AED?style=for-the-badge&logo=gmail&logoColor=white)](https://groups.google.com/g/agenthle-news)
 
 Led by **[UC Berkeley RDI](https://rdi.berkeley.edu/)** × **RDI Foundation**
 
@@ -40,9 +42,7 @@ O\*NET / SOC 2018 (the U.S. federal occupational taxonomy).
 
 This repository is the **open evaluation framework**: the `ale_run` toolkit that
 provisions sandboxes, runs agents, and grades them, plus **150 reference tasks**
-across 55 industries (the current public subset of a 1,500+ task corpus) and two
-reference agent harnesses. The full corpus, live leaderboard, and contributor
-program live at **[agenthle.org](https://agenthle.org/)**.
+across 55 industries (the current public subset of a 1,500+ task corpus) and two reference agent harnesses.
 
 ---
 
@@ -146,9 +146,17 @@ To test your own agent harness or CLI on ALE, implement a small deployer. Guide:
 
 ## Citation
 
-If you use ALE in published work, please cite the benchmark; citation metadata
-comes with the v1 paper release. Until then, link to
-[agenthle.org](https://agenthle.org/) and this repository.
+If you use ALE in published work, please cite the paper
+([arXiv:2606.05405](https://arxiv.org/abs/2606.05405)):
+
+```bibtex
+@article{sun2026agentslastexam,
+  title   = {Agents' Last Exam},
+  author  = {Sun, Yiyou and Han, Xinyang and Zhang, Weichen and Pang, Yuanbo and Wang, Tianyu and Cao, Yuhan and Huang, Yixiao and Duroiu, Chris and Zhang, Haoyun and Lin, Jeffrey and Zhang, Weishu and Zeng, Tyler and Yan, Ying and Liu, Bo and Wen, Hanson and Xu, Mingyang and Liu, Xiaoyuan and Chen, Zimeng and Shi, Weiyan and Dsouza, Amanda and Chen, Vincent Sunn and Song, Dawn and Bryant, Patrick and Boettiger, Carl and Rangan, Yamini and Rothenberg, Bradley and Steinfeld, Kyle and Rao, Arvind and Schneider, Tapio and Yannakakis, Georgios and Zanna, Laure and Ozbay, Kaan and Sim, Ida and Zohdi, Tarek and Karniadakis, George Em and Gallant, Jack and Head-gordon, Teresa and others},
+  journal = {arXiv preprint arXiv:2606.05405},
+  year    = {2026}
+}
+```
 
 <div align="center">
 
