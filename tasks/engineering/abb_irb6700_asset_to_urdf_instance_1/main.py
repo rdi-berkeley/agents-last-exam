@@ -107,6 +107,7 @@ You are reconstructing a robot URDF on a Linux VM.
 - Mesh assets: `{self.input_meshes_dir}`
 - Structural metadata: `{self.input_metadata_dir}`
 - Task brief: `{self.input_task_brief}`
+- Reference meshes under the staged `meshes/` directory.
 
 ## What You Must Do
 1. Read `{self.input_task_brief}`.
@@ -117,7 +118,6 @@ You are reconstructing a robot URDF on a Linux VM.
 - The file must be named `submission.urdf`.
 - The file must be valid XML/URDF.
 - Preserve the required link names, joint names, kinematic tree, joint limits, mimic rules, and auxiliary frames.
-- Reference meshes under the staged `meshes/` directory.
 - Do not place the final answer anywhere outside `{self.remote_output_dir}`.
 """
 
