@@ -52,10 +52,10 @@
   }
   function buildSidebar() {
     var html = '' +
-      '<a class="brand" href="/index.html">' +
+      '<div class="brand">' +
         '<span><span class="title">Agents\' Last Exam</span><br>' +
         '<span class="subtitle">Framework documentation</span></span>' +
-      '</a>';
+      '</div>';
     (window.ALE_NAV || []).forEach(function (g) {
       html += '<div class="nav-group"><div class="label">' + g.label + '</div>';
       g.items.forEach(function (it) {

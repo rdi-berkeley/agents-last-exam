@@ -111,7 +111,7 @@ and context management alongside. ALE-Claw is the reference:
 
 > Deeper dives into the system design (the sandbox and providers, the
 > executor/deployer split, task data and grading, the trajectory format) live in
-> the docs site: [docs/ale-docs-site/](docs/ale-docs-site/) (run its `serve.py`).
+> the docs site: [agents-last-exam.org/docs](https://agents-last-exam.org/docs).
 
 ---
 
@@ -122,8 +122,8 @@ Past the demo, ALE ships curated task lists across three difficulty tiers
 environment, and a task list, with outputs pushed to a GCS bucket.
 
 The step-by-step (provider setup, configuring an experiment, choosing task lists)
-is in the docs site at [docs/ale-docs-site/](docs/ale-docs-site/), under **Run
-experiments**. Browse tasks and results at the
+is in the docs site under **[Run
+experiments](https://agents-last-exam.org/docs?p=pages/providers.html)**. Browse tasks and results at the
 [tasks gallery](https://agenthle.org/demo).
 
 ---
@@ -131,7 +131,7 @@ experiments**. Browse tasks and results at the
 ## Build on ALE
 
 To test your own agent harness or CLI on ALE, implement a small deployer. Guide:
-[docs/ale-docs-site/](docs/ale-docs-site/), under **Build on ALE → Add an agent**.
+[**Build on ALE → Add an agent**](https://agents-last-exam.org/docs?p=pages/add-agent.html).
 
 ---
 
