@@ -1,0 +1,99 @@
+{
+  "taskId": "visual_media/object_generation",
+  "title": "Object Generation",
+  "summary": "Complete a partially built 3D object in Blender using staged reference views and export the required scene and OBJ bundle.",
+  "category": "visual_media",
+  "software": [
+    "Blender"
+  ],
+  "taskPrompt": "You are a 3D artist using Blender.\n\nYour task is to complete one specific static object variant from a partial Blender scene.\n\nSelected variant:\n- `Toilet Object Generation` (`toilet`)\n\nAgent-visible inputs:\n- Partial Blender scene: `object_generation_toilet\\input\\partial.blend` containing the preserved scaffold and unchanged parts for this variant\n- Input manifest: `object_generation_toilet\\input\\manifest.json` with the required exported part/object naming for this variant\n- Whole-object reference images: `object_generation_toilet\\input\\scene_reference_images` showing the full target object from multiple views\n- Missing-part detail/context references: `object_generation_toilet\\input\\parts` showing the missing geometry and placement cues\n\nRequired submission:\n- Save the finished Blender scene to `object_generation_toilet\\output\\submission\\final.blend`\n- Export the final object bundle as OBJ parts into `object_generation_toilet\\output\\submission\\objects`\n- Export one OBJ for every required part/object name listed in the input manifest\n\nRequirements:\n- Reconstruct the missing geometry for this selected variant only\n- Keep alignment with the staged partial scaffold and reference views\n- Preserve the expected part/object naming from the input manifest\n- Produce a coherent final object with a convincing final rendered look",
+  "agentMustDo": [
+    "`Toilet Object Generation` (`toilet`)",
+    "Partial Blender scene: `E:\\agenthle\\visual_media\\object_generation\\object_generation_toilet\\input\\partial.blend` containing the preserved scaffold and unchanged parts for this variant",
+    "Input manifest: `E:\\agenthle\\visual_media\\object_generation\\object_generation_toilet\\input\\manifest.json` with the required exported part/object naming for this variant",
+    "Whole-object reference images: `E:\\agenthle\\visual_media\\object_generation\\object_generation_toilet\\input\\scene_reference_images` showing the full target object from multiple views",
+    "Missing-part detail/context references: `E:\\agenthle\\visual_media\\object_generation\\object_generation_toilet\\input\\parts` showing the missing geometry and placement cues",
+    "Save the finished Blender scene to `E:\\agenthle\\visual_media\\object_generation\\object_generation_toilet\\output\\submission\\final.blend`",
+    "Export the final object bundle as OBJ parts into `E:\\agenthle\\visual_media\\object_generation\\object_generation_toilet\\output\\submission\\objects`",
+    "Export one OBJ for every required part/object name listed in the input manifest",
+    "Reconstruct the missing geometry for this selected variant only",
+    "Keep alignment with the staged partial scaffold and reference views",
+    "Preserve the expected part/object naming from the input manifest",
+    "Produce a coherent final object with a convincing final rendered look"
+  ],
+  "inputFiles": [
+    {
+      "name": "partial.blend",
+      "format": "blend",
+      "path": "input/partial.blend",
+      "description": "input/partial.blend containing the preserved scaffold and unchanged geometry for the selected variant"
+    },
+    {
+      "name": "manifest.json",
+      "format": "json",
+      "path": "input/manifest.json",
+      "description": "input/manifest.json listing the expected exported part/object names for the selected variant"
+    },
+    {
+      "name": "scene_reference_images",
+      "format": "directory",
+      "path": "input/scene_reference_images/",
+      "description": "input/scene_reference_images/ with multi-view whole-object reference images"
+    },
+    {
+      "name": "*.png",
+      "format": "png",
+      "path": "input/parts/<part>/detail/*.png",
+      "description": "input/parts/<part>/detail/*.png with missing-part detail views"
+    },
+    {
+      "name": "*.png",
+      "format": "png",
+      "path": "input/parts/<part>/context/*.png",
+      "description": "input/parts/<part>/context/*.png with missing-part placement cues"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "final.blend",
+      "format": "blend",
+      "path": "output/submission/final.blend",
+      "description": "output/submission/final.blend"
+    },
+    {
+      "name": "*.obj",
+      "format": "obj",
+      "path": "output/submission/objects/*.obj",
+      "description": "output/submission/objects/*.obj"
+    }
+  ],
+  "evaluation": "- final rendered result quality matters more than UV-specific implementation details\n- hidden `reference/` data is evaluator-side only\n- object-bundle checks are lightweight and mainly confirm a usable submission exists\n- the selected variant, input manifest, and staged reference views define the concrete object scope; this is not an open-ended freeform modeling task",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:26:33.611138Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/object_generation/task_card.json"
+      },
+      "rationale": "The task involves creating a 3D object in Blender, which fits within the 3D, Animation & Interactive Media subdomain."
+    }
+  }
+}

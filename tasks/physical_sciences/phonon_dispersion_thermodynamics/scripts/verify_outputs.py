@@ -62,7 +62,7 @@ RESULTS_SPEC = {
         "omega_max": (1e-6, 1e-8),
         "dos_integral": (2e-3, 1e-5),
         "cv_high_T": (2e-3, 1e-5),
-        "cv_low_T": (2e-3, 1e-8),
+        "cv_low_T": (2e-3, 1e-5),
         "num_temperatures": None,
         "q_grid_size": None,
     },

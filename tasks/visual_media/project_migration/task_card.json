@@ -9,7 +9,7 @@
   "taskPrompt": "Goal: Migrate a Cubase project to this computer by replacing all missing/invalid VST plugins with equivalent ones from the available plugins, then export stems and a mixdown.\n\nSoftware:\n- Cubase: \\software\\Cubase.lnk\n\nInput:\n- Cubase project: \\input\\project.cpr\n\nBefore you begin:\n1. Generate the list of VST3 plugins installed on this VM and save it to `\\output\\available_vsts.txt`. In PowerShell:\n   `$roots = @('C:\\Program Files\\Common Files\\VST3','C:\\Program Files (x86)\\Common Files\\VST3'); $items = @(); foreach ($r in $roots) { if (Test-Path $r) { $items += Get-ChildItem -Path $r -Recurse -Filter *.vst3 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name } }; ($items | Sort-Object -Unique) | Out-File -FilePath '\\output\\available_vsts.txt' -Encoding ascii`\n2. Open the Cubase project at `\\input\\project.cpr` using the Cubase shortcut at `\\software\\Cubase.lnk` (e.g. double-click the .lnk, or `Start-Process '\\software\\Cubase.lnk'`).\n\nSteps:\n1. When the \"Missing Plugins\" dialog appears, note all unavailable VST plugins.\n2. For each track with a missing VST instrument or effect:\n   a. Open the track's instrument or insert slot.\n   b. Replace the missing VST with a functionally equivalent one from the available plugins listed in `\\output\\available_vsts.txt`.\n   c. Choose a preset or patch that best approximates the original sound character (e.g., replace a missing string library with an available string patch).\n3. Play back the project and verify all tracks produce audible, artifact-free audio.\n4. Export stems: for each track/channel as organized in the project (do NOT split or reorganize tracks — export exactly as the project defines them), solo it and export audio mixdown (WAV, 44.1 kHz or higher) to \\output\\stems\\<track_name>.wav\n5. Save the migrated project to \\output\\migrated_project.cpr\n6. Take a screenshot of the Cubase MixConsole or arrange view showing all tracks with their replaced plugins visible:\n   save_milestone_screenshot(path=\"\\output\\overview.png\", description=\"Cubase project with replaced plugins\")\n\nOutput files (all saved to \\output):\n- migrated_project.cpr: Cubase project with all missing VSTs replaced.\n- stems/: Per-track solo WAV exports (one per track).\n- overview.png: Screenshot of MixConsole or arrange view.\n",
   "agentMustDo": [
     "Open `input/project.cpr` in Cubase from `software/Cubase.lnk`.",
-    "Replace each missing or invalid VST with a functionally equivalent installed plugin from `input/available_vsts.txt`.",
+    "Replace each missing or invalid VST with a functionally equivalent installed plugin from the agent-generated `output/available_vsts.txt` list.",
     "Verify the migrated project plays back with audible, artifact-free tracks.",
     "Export one WAV stem per project-defined track or channel to `output/stems/`.",
     "Save `output/migrated_project.cpr` and capture `output/overview.png` from Cubase."
@@ -20,12 +20,6 @@
       "format": "CPR",
       "path": "input/project.cpr",
       "description": "The broken Cubase session that opens with missing plugins on the target VM."
-    },
-    {
-      "name": "Available VST list",
-      "format": "TXT",
-      "path": "input/available_vsts.txt",
-      "description": "Agent-visible list of installed VST plugins that can be used as replacements."
     }
   ],
   "referenceFiles": [

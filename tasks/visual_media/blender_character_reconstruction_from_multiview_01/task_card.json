@@ -1,0 +1,123 @@
+{
+  "taskId": "visual_media/blender_character_reconstruction_from_multiview_01",
+  "title": "Blender Character Reconstruction From Multiview",
+  "summary": "Reconstruct a stylized full-body character in Blender from five fixed clay reference views plus scale/orientation metadata, then save the scene and export the required deliverables under the exact submission layout.",
+  "category": "visual_media",
+  "software": [
+    "Blender"
+  ],
+  "taskPrompt": "You are a 3D artist using Blender on a Windows VM.\n\nReconstruct the provided stylized character from the staged multiview references.\n\nAgent-visible input:\n- Modeling brief: `base\\input\\modeling_brief.md`\n- Scale/orientation guide: `base\\input\\scale_orientation_guide.json`\n- Validation camera guide: `base\\input\\validation_views.json`\n- Views: `view_front.png`, `view_side.png`, `view_back.png`, `view_front_three_quarter.png`, `view_back_three_quarter.png`\n- Blender launcher: `base\\software\\open_blender.bat`\n\nRequired submission under `base\\output\\submission`:\n- `final.blend`\n- `reconstructed_character.glb`\n- `reconstructed_character.obj`\n- `modeling_report.md`\n\nRequirements:\n- Preserve the major full-body silhouette, proportions, and component structure.\n- Match the coordinate and scale guidance from `scale_orientation_guide.json`.\n- Treat the five staged views as the visual target.\n- Write the required deliverables only under the designated `output/submission/` path.\n",
+  "agentMustDo": [
+    "Open Blender through the staged launcher and reconstruct the stylized full-body character from the five staged clay reference views.",
+    "Use `scale_orientation_guide.json` to keep the character upright, centered, and scaled to the intended world-space frame.",
+    "Use `validation_views.json` as the fixed camera/render contract that the final geometry must satisfy.",
+    "Save `final.blend` and export `reconstructed_character.glb`, `reconstructed_character.obj`, and `modeling_report.md` under `output/submission/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "modeling_brief.md",
+      "format": "Markdown",
+      "path": "input/modeling_brief.md",
+      "description": "High-level modeling objective, required components, allowed simplifications, and required output files."
+    },
+    {
+      "name": "scale_orientation_guide.json",
+      "format": "JSON",
+      "path": "input/scale_orientation_guide.json",
+      "description": "Visible world-space orientation, bounding-box, centering, and scale tolerances."
+    },
+    {
+      "name": "validation_views.json",
+      "format": "JSON",
+      "path": "input/validation_views.json",
+      "description": "Visible fixed camera, lighting, and render settings for the five validation views."
+    },
+    {
+      "name": "view_*.png",
+      "format": "PNG images",
+      "path": "input/",
+      "description": "Five clay-rendered multiview targets: front, side, back, front-three-quarter, and back-three-quarter."
+    },
+    {
+      "name": "open_blender.bat",
+      "format": "BAT launcher",
+      "path": "software/open_blender.bat",
+      "description": "Stable agent-visible Blender launcher that opens the system install at C:\\Softwares\\Blender-5.0.1\\blender.exe."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "final.blend",
+      "format": "Blender scene",
+      "path": "output/submission/final.blend",
+      "description": "Saved Blender scene for the reconstructed character."
+    },
+    {
+      "name": "reconstructed_character.glb",
+      "format": "GLB",
+      "path": "output/submission/reconstructed_character.glb",
+      "description": "Required exported GLB deliverable."
+    },
+    {
+      "name": "reconstructed_character.obj",
+      "format": "OBJ",
+      "path": "output/submission/reconstructed_character.obj",
+      "description": "Required exported OBJ deliverable and the authoritative geometry artifact for the current evaluator."
+    },
+    {
+      "name": "modeling_report.md",
+      "format": "Markdown",
+      "path": "output/submission/modeling_report.md",
+      "description": "Required short modeling report deliverable."
+    }
+  ],
+  "outputContracts": [
+    {
+      "name": "modeling_brief.md",
+      "format": "Markdown",
+      "path": "input/modeling_brief.md",
+      "description": "Visible contract for required outputs, required visible components, and forbidden shortcuts."
+    },
+    {
+      "name": "scale_orientation_guide.json",
+      "format": "JSON",
+      "path": "input/scale_orientation_guide.json",
+      "description": "Visible contract for world-space alignment, bounding-box fit, and scale tolerances."
+    },
+    {
+      "name": "validation_views.json",
+      "format": "JSON",
+      "path": "input/validation_views.json",
+      "description": "Visible contract for the fixed five-view render setup used by the evaluator."
+    }
+  ],
+  "evaluation": "**Hard gate behavior**\n- Missing or empty `final.blend`, `reconstructed_character.glb`, `reconstructed_character.obj`, or `modeling_report.md` yields `0.0`.\n- `final.blend` must open successfully in headless Blender.\n- The documented submission layout is enforced: outputs must live under `output/submission/`.\n\n**Scoring method**\n- The evaluator ensures Blender `5.0.1` is available at `C:\\Softwares\\Blender-5.0.1\\blender.exe` and renders five fixed clay views from the submitted OBJ using the visible `validation_views.json` contract.\n- `reconstructed_character.obj` is the authoritative geometry artifact for fixture discrimination.\n- Final score combines geometry similarity (`55%`), render similarity (`35%`), and world-space bounding-box similarity (`10%`).\n- Current reviewed pass threshold: `0.8`.\n\n**Reviewed fixture behavior**\n- Positive fixture: `0.9999592870260285`\n- Negative fixture: `0.30713274039132843`",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-free",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:26:03.324332Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/blender_character_reconstruction_from_multiview_01/task_card.json"
+      },
+      "rationale": "The task involves 3D character modeling and reconstruction using Blender."
+    }
+  }
+}

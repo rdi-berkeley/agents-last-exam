@@ -1,0 +1,79 @@
+{
+  "taskId": "visual_media/human_mesh_animation_reproduction",
+  "title": "Human Mesh Animation Reproduction",
+  "summary": "Rig and animate a provided human mesh in Blender so its exported per-frame OBJ sequence matches the motion in a reference video.",
+  "category": "visual_media",
+  "software": [
+    "Blender"
+  ],
+  "taskPrompt": "You are a 3D artist using Blender 4.3 on a Windows VM.\n\nRig and animate the provided human mesh so it matches the motion shown in the reference video.\n\nAgent-visible inputs:\n- Mesh: `base\\input\\character.obj`\n- Material sidecar: `base\\input\\character.mtl`\n- Reference motion video: `base\\input\\reference.mp4`\n\nRequired submission:\n- Save the Blender scene to `base\\output\\submission\\final.blend`\n- Export exactly 60 OBJ frames to `base\\output\\submission\\mesh_seq`\n- Use frame names `frame_0001.obj` through `frame_0060.obj`\n\nRequirements:\n- Animate at 30 fps.\n- Export frames 1..60 inclusive.\n- Preserve the character identity, proportions, topology, and overall geometry while reproducing the motion.",
+  "agentMustDo": [
+    "Rig and animate `input/character.obj` so the motion matches `input/reference.mp4`.",
+    "Work at 30 fps and export exactly 60 OBJ frames for frames 1 through 60 inclusive.",
+    "Save the authored Blender file as `output/submission/final.blend`.",
+    "Export `output/submission/mesh_seq/frame_0001.obj` through `frame_0060.obj`."
+  ],
+  "inputFiles": [
+    {
+      "name": "character.obj",
+      "format": "OBJ mesh",
+      "path": "input/character.obj",
+      "description": "Unrigged human mesh that the agent must animate"
+    },
+    {
+      "name": "character.mtl",
+      "format": "MTL material",
+      "path": "input/character.mtl",
+      "description": "Material sidecar for the input mesh"
+    },
+    {
+      "name": "reference.mp4",
+      "format": "MP4 video",
+      "path": "input/reference.mp4",
+      "description": "Reference motion video the agent must reproduce"
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "final.blend",
+      "format": "Blender scene",
+      "path": "output/submission/final.blend",
+      "description": "Saved Blender scene containing the authored animation"
+    },
+    {
+      "name": "mesh_seq",
+      "format": "OBJ sequence",
+      "path": "output/submission/mesh_seq/",
+      "description": "Exactly 60 OBJ files exported for frames 1 through 60"
+    }
+  ],
+  "evaluation": "**Hard gate conditions**\n- `final.blend` is missing, empty, or cannot be opened by the approved Blender runtime on the target VM.\n- `mesh_seq/` does not contain exactly 60 OBJ files.\n- Any expected frame `frame_0001.obj` through `frame_0060.obj` is missing or unreadable.\n\n**Scoring method**\n- The evaluator compares each submitted frame against the hidden reference frame for the same timestep.\n- It computes a symmetric Chamfer distance over sampled mesh surfaces when triangle data is available.\n- Distances are normalized by a single bbox diagonal derived from `input/character.obj`.\n- Final score is `exp(-40 * mean_ncd)`.\n\n**Current reviewed fixture behavior**\n- Positive fixture: `1.0`\n- Negative fixture: `0.0001573736288949276`\n- Empty/default output: `0.0`",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:26:21.380127Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/human_mesh_animation_reproduction/task_card.json"
+      },
+      "rationale": "The task involves rigging and animating a 3D human mesh, which fits within 3D animation and interactive media."
+    }
+  }
+}

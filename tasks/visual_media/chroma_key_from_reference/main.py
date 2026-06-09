@@ -144,7 +144,7 @@ class ChromaTaskConfig(GeneralTaskConfig):
     @property
     def task_description(self) -> str:
         return rf"""
-Goal: Remove the green-screen background from the source clip, create a new Resolve project yourself, composite the correct foreground subject into the intended target scene indicated by the first-frame target screenshot, and export the finished composite video.
+Goal: Isolate the foreground subject from the source composite clip and produce a video of that subject on a flat green-screen background, matching the look of the green target plate preview.
 
 Remote workspace:
 - Task folder: {self.task_dir}
@@ -155,16 +155,15 @@ Software:
 
 Inputs (already on remote desktop):
 - Input assets live under: {self.task_dir}\input
-- Foreground source clip with green background: {self.remote_input_video}
-- First-frame target screenshot / disambiguation hint: {self.remote_input_hint_image}
+- Source composite clip — the foreground subject already merged with its scene background: {self.remote_input_video}
+- Green target plate preview — a frame showing the expected look of the isolated subject on a flat green background: {self.remote_input_hint_image}
 
 What to do:
 - Create a new Resolve project and import the task assets from the task folder.
-- Key out the green background from the foreground source clip.
-- Build the composite yourself in Resolve so the result matches the intended target scene shown by the first-frame screenshot.
-- Use the screenshot to determine which foreground subject to preserve and how the finished composite should look in placement, scale, and overall composition.
-- Treat the screenshot as a visual specification for the background scene, framing, and composition that your final render should match.
-- Do not export the untouched source clip and do not leave visible green-screen background in the final render.
+- Matte/roto the foreground subject out of the source composite clip — separate the subject from its merged scene background.
+- Replace every non-subject pixel with a flat green (#00FF00) background so the result matches the green target plate preview.
+- Do NOT keep any of the original scene background pixels in the final render — the only non-subject region of any output frame must be solid green.
+- The final video must show only the isolated foreground subject on a solid green background, for every frame.
 
 Output:
 - Export/render to: {self.remote_output_video}

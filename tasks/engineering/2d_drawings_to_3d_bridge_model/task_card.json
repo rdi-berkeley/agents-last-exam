@@ -1,0 +1,139 @@
+{
+  "taskId": "engineering/2d_drawings_to_3d_bridge_model",
+  "title": "Bridge The Gap — Bridge + Site 3D Model",
+  "summary": "Extend an existing 3D site model (terrain + surrounding buildings) by adding a bridge designed in the supplied posters. Output must contain BOTH the unchanged site AND the new bridge geometry. The model is exported as model.obj plus model.3dm; an image-only multimodal LLM judge scores 12 rendered views (4 elevations + 2 sections + 4 axons + 2 plans) against a hidden reference.",
+  "category": "engineering",
+  "software": [
+    "Rhino 8"
+  ],
+  "taskPrompt": "You are a BIM modeler using Rhino 8 to add a bridge design to an existing 3D site model.\n\nThis is NOT a build-from-scratch task. The site (terrain + surrounding buildings) already exists — you must place the bridge into it and preserve the rest of the site unchanged.\n\n## Inputs\nAll input materials are under:\n  E:\\agenthle\\engineering\\2d_drawings_to_3d_bridge_model\\base\\input\n\nRequired files:\n- README.md — natural-language task brief (open this first)\n- output_contract.json — machine-readable spec (file names, formats, coordinate convention, required geometry components)\n- reference_documents/Posters.pdf — design posters with plans, sections, axonometric of the bridge\n- 3D Snapshot.png — rendered preview of the finished site + bridge\n- site_model/3D Model_Site.{obj,3dm,dwg} — the EXISTING site you extend\n\n## Software\nOpen Rhino 8 via:\n  E:\\agenthle\\engineering\\2d_drawings_to_3d_bridge_model\\base\\software\\Rhino 8.lnk\n\n## What You Must Do\n1. Read README.md and output_contract.json.\n2. Open site_model/3D Model_Site.3dm in Rhino. It defines the world coordinate frame — do not move, rotate, or rescale it.\n3. Add the bridge: deck, structural supports (piers/abutments), railings/parapet, and a plausible connection to the existing terrain at both ends. Use Posters.pdf for form, deck level, support locations.\n4. Export the combined geometry to:\n   - E:\\agenthle\\engineering\\2d_drawings_to_3d_bridge_model\\base\\output\\model.obj (Wavefront OBJ ASCII)\n   - E:\\agenthle\\engineering\\2d_drawings_to_3d_bridge_model\\base\\output\\model.3dm (Rhino 5.0+ native)\n   Both files must contain the original site AND the new bridge geometry.\n\n## Hard Constraints\n- Do NOT output any `.dwg` file (evaluator cannot read DWG; forbidden).\n- Units = meters. World coordinates inherited from the supplied site model.\n- The site geometry in your output must remain visually identical to the input site model — the evaluator scores you on that preservation in addition to bridge correctness.\n- The evaluator will render 12 canonical views from your model.obj and compare them to a hidden reference using a multimodal LLM judge.\n",
+  "agentMustDo": [
+    "Read input/README.md and input/output_contract.json to understand the brief, the required filenames, and the coordinate convention.",
+    "Open Rhino 8 via the staged software/Rhino 8.lnk shortcut.",
+    "Open input/site_model/3D Model_Site.3dm in Rhino to inherit the world coordinate frame and the existing terrain + surrounding buildings.",
+    "Add the bridge geometry (deck, piers/abutments, railing/parapet, terrain connection at both ends) from the Posters PDF without moving the existing site.",
+    "Export to output/model.obj (Wavefront OBJ ASCII, >=10000 vertices, includes both site and bridge) and output/model.3dm. Do not produce any .dwg output."
+  ],
+  "inputFiles": [
+    {
+      "name": "README.md",
+      "format": "Markdown",
+      "path": "input/README.md",
+      "description": "Natural-language task brief that mirrors the prompt and lists the required bridge components."
+    },
+    {
+      "name": "output_contract.json",
+      "format": "JSON",
+      "path": "input/output_contract.json",
+      "description": "Machine-readable spec — required filenames, magic-byte gates, coordinate convention, units, forbidden patterns, and the list of evaluator view names."
+    },
+    {
+      "name": "3D Snapshot.png",
+      "format": "PNG",
+      "path": "input/3D Snapshot.png",
+      "description": "Rendered preview of the finished bridge + site — use as a form-check reference."
+    },
+    {
+      "name": "reference_documents/Posters.pdf",
+      "format": "PDF",
+      "path": "input/reference_documents/Posters.pdf",
+      "description": "Design posters with plans, sections, and axonometric of the bridge."
+    },
+    {
+      "name": "site_model/3D Model_Site.obj",
+      "format": "Wavefront OBJ",
+      "path": "input/site_model/3D Model_Site.obj",
+      "description": "Existing site geometry (terrain + surrounding buildings). The OBJ defines the world coordinate frame the bridge must inherit."
+    },
+    {
+      "name": "site_model/3D Model_Site.3dm",
+      "format": "Rhino 3DM",
+      "path": "input/site_model/3D Model_Site.3dm",
+      "description": "Same site model in Rhino native format — open this in Rhino to start the work."
+    },
+    {
+      "name": "site_model/3D Model_Site.dwg",
+      "format": "DWG",
+      "path": "input/site_model/3D Model_Site.dwg",
+      "description": "Same site model in AutoCAD format — provided for reference; the agent does NOT need to output DWG."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "eval_config.json",
+      "format": "JSON",
+      "path": "reference/eval_config.json",
+      "description": "Per-instance LLM-judge configuration — 8 binary YES/NO questions about bridge deck, supports, railing, terrain connection, site preservation; pass threshold 0.5; render units m, source up-axis Y; list of 12 view names."
+    },
+    {
+      "name": "reference_renders_v1/*.png",
+      "format": "PNG",
+      "path": "reference/reference_renders_v1/",
+      "description": "12 frozen 2048x2048 reference renders (2 plans + 4 elevations + 2 sections + 4 corner axonometrics). plan_hall_first / plan_hall_second are intentionally absent — the bridge mesh has only one detected horizontal slab below the dominant terrain peak, so floor-driven plan cuts yield 2 plans rather than 4. See PITFALLS.md."
+    },
+    {
+      "name": "reference_renders_colored_v1/*.png",
+      "format": "PNG",
+      "path": "reference/reference_renders_colored_v1/",
+      "description": "Diagnostic-only colored re-renders of the same 12 views using a per-task COLOR_MAP (Asphalt → dark gray, Beton → concrete light, Marble → cream, Farbe grün/grau/weiß → green/gray/off-white). Not used by the scorer."
+    },
+    {
+      "name": "color_map.json",
+      "format": "JSON",
+      "path": "reference/color_map.json",
+      "description": "Per-task override for the renderer's COLOR_MAP. Substring-matched against material names in the OBJ. Used only by the diagnostic colored render path; not by scoring."
+    },
+    {
+      "name": "reference_obj/3D Model_Bridge and Site.{obj,3dm,dwg}",
+      "format": "OBJ + 3DM + DWG",
+      "path": "reference/reference_obj/",
+      "description": "Archival copy of the submitter's reference 3D model. The OBJ is the source the reference renders were generated from."
+    }
+  ],
+  "evaluation": {
+    "type": "image_only_vlm_judge",
+    "description": "Evaluator renders 12 canonical views of the agent's model.obj on the orchestrator with Blender 4.2.4 headless (units=m, source up-axis=Y, 1024px / 32 samples matching the frozen reference render settings), then submits each of 8 binary YES/NO judge questions to the configured multimodal LLM with all 12 reference/candidate image pairs as context (each image downsampled to <=1024px so the per-request payload stays under the 50 MB API cap). Final score = yes_count / question_count.",
+    "passThreshold": 0.5,
+    "fixtureScores": {
+      "output_test_pos": "1.0 (8/8 YES — the byte-identical reference OBJ as the candidate; reference and candidate are rendered by the identical current render_human_views.py at 1024/32, so a perfect submission reproduces every view exactly)",
+      "output_test_neg": "0.0 (0/8 YES — a decimated (149k-vertex) up-axis-flattened OBJ collapses to degenerate single-line silhouettes; renders cleanly in 11/12 views and the multimodal judge rejects every view. Decimation replaces the original full 1.5M-vertex flattened mesh, which stalled the renderer and only reached 0.0 via the Blender-failure hard gate.)"
+    },
+    "hardGates": [
+      "output/model.obj missing or 0 bytes -> 0.0",
+      "output/model.obj fewer than 10000 vertices -> 0.0 (bridge must contain both site and bridge geometry)",
+      "output/model.3dm missing or 0 bytes -> 0.0",
+      "output/model.3dm missing the Rhino magic header -> 0.0",
+      "Any *.dwg file present under output/ -> 0.0",
+      "Blender headless renderer fails on the agent's mesh -> 0.0"
+    ]
+  },
+  "vm": {
+    "snapshot": "gpu-license",
+    "machineType": "g2-standard-16",
+    "project": "sunblaze-4",
+    "zone": "us-east1-c",
+    "name": "agenthle-dev-gpu-licensed",
+    "osType": "windows"
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.3",
+    "subdomain_code": "civil_geo",
+    "subdomain_name": "Civil, Architectural & Geospatial Engineering",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-28T19:54:53.200234Z",
+      "source": {
+        "submission_id": "576a5d2c-6154-4012-8450-bf60c2c7c273",
+        "fields": [
+          "task_description",
+          "task_short_name",
+          "industry_domain",
+          "software_and_version"
+        ]
+      },
+      "rationale": "The task involves architectural design and modeling of a bridge within a site context."
+    }
+  }
+}

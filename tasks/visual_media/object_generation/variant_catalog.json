@@ -1,0 +1,162 @@
+[
+  {
+    "task_tag": "toilet",
+    "display_name": "Toilet Object Generation",
+    "remote_task_dir_name": "object_generation_toilet",
+    "multipart_sample_ratio": 0.2,
+    "multipart_min_samples": 3,
+    "multipart_max_samples": 8
+  },
+  {
+    "task_tag": "cooking_pot",
+    "display_name": "Cooking Pot Object Generation",
+    "remote_task_dir_name": "object_generation_cooking_pot",
+    "multipart_sample_ratio": 0.2,
+    "multipart_min_samples": 3,
+    "multipart_max_samples": 8
+  },
+  {
+    "task_tag": "muji_paper_bag",
+    "display_name": "MUJI Paper Bag Object Generation",
+    "remote_task_dir_name": "object_generation_muji_paper_bag",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "object_generation_leather_backpack",
+    "display_name": "Leather Backpack Object Generation",
+    "remote_task_dir_name": "object_generation_leather_backpack",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_lab_equipment_h",
+    "display_name": "Secret Labs Lab Equipment H Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_lab_equipment_h",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_quantum_computer_a",
+    "display_name": "Secret Labs Quantum Computer A Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_quantum_computer_a",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_server_b",
+    "display_name": "Secret Labs Server B Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_server_b",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_generator_a",
+    "display_name": "Secret Labs Generator A Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_generator_a",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_fusebox_c",
+    "display_name": "Secret Labs FuseBox C Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_fusebox_c",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_cnc_a",
+    "display_name": "Secret Labs CNC A Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_cnc_a",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_computer_console_e",
+    "display_name": "Secret Labs Computer Console E Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_computer_console_e",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_tank_b",
+    "display_name": "Secret Labs Tank B Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_tank_b",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_microscope_a",
+    "display_name": "Secret Labs Microscope A Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_microscope_a",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_control_cabinet_d",
+    "display_name": "Secret Labs Control Cabinet D Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_control_cabinet_d",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_cabinet_g",
+    "display_name": "Secret Labs Cabinet G Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_cabinet_g",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_board_a",
+    "display_name": "Secret Labs Board A Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_board_a",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_electronics_c",
+    "display_name": "Secret Labs Electronics C Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_electronics_c",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_computer_b",
+    "display_name": "Secret Labs Computer B Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_computer_b",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_barrell_a",
+    "display_name": "Secret Labs Barrell A Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_barrell_a",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  },
+  {
+    "task_tag": "secret_labs_mask_a",
+    "display_name": "Secret Labs Mask A Object Generation",
+    "remote_task_dir_name": "object_generation_secret_labs_mask_a",
+    "multipart_sample_ratio": 1.0,
+    "multipart_min_samples": 1,
+    "multipart_max_samples": 1
+  }
+]

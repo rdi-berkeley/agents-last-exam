@@ -1,0 +1,96 @@
+{
+  "taskId": "visual_media/atlas_outpost_graybox_navigation",
+  "title": "Atlas Outpost Graybox Navigation",
+  "taskName": "Atlas Outpost Graybox Navigation",
+  "summary": "Finish a Windows GPU Blender/Godot graybox level blockout so the exported Atlas Outpost layout supports the required visible navigation routes and review constraints.",
+  "category": "visual_media",
+  "software": [
+    "Blender 4.5.1 LTS",
+    "Godot Engine 4.6.2",
+    "Python",
+    "Windows"
+  ],
+  "tags": [
+    "game-development",
+    "level-design",
+    "graybox",
+    "blender",
+    "godot",
+    "windows",
+    "gpu-license"
+  ],
+  "taskPrompt": "You are working on a Windows GPU VM.\n\n## Variant\n`base`: Atlas Outpost graybox navigation blockout\n\n## Your Task\nFinish the Atlas Outpost graybox level-design starter project. This is a level-blockout workflow: author route geometry, re-export the glTF, wire the Godot validation scene, and write the visible handoff metrics.\n\n## Input Files\n- Task prompt: `base\\input\\TASK_PROMPT.md`\n- Starter project root: `base\\input`\n- Blender blockout: `base\\input\\blender\\atlas_outpost_blockout.blend`\n- Exported glTF starter: `base\\input\\exports\\atlas_outpost_blockout.gltf`\n- Godot validation scene: `base\\input\\godot\\scenes\\atlas_outpost_validation.tscn`\n- Optional Blender launcher: `base\\software\\open_blender.bat`\n- Optional Godot launcher: `base\\software\\open_godot.bat`\n\n## What You Must Do\n1. Read `base\\input\\TASK_PROMPT.md` and the visible specs under `base\\input`.\n2. Complete the graybox route layout in the project files.\n3. Re-export `exports/atlas_outpost_blockout.gltf` and any referenced sidecar files.\n4. Update `godot/scenes/atlas_outpost_validation.tscn` with the required review markers.\n5. Fill `docs/layout_handoff.md` with the visible route metrics.\n6. Save the completed project under `base\\output` using the same relative paths as the starter.\n\n## Required Output Paths\n- `base\\output\\blender\\atlas_outpost_blockout.blend`\n- `base\\output\\exports\\atlas_outpost_blockout.gltf`\n- `base\\output\\exports\\atlas_outpost_blockout.bin` if referenced by the exported glTF\n- `base\\output\\godot\\scenes\\atlas_outpost_validation.tscn`\n- `base\\output\\docs\\layout_handoff.md`\n\n## Important\n- Keep your final deliverables under `base\\output`.\n- Do not modify `input\\` or any non-output data.\n- Do not rely on internet access.\n",
+  "agentMustDo": [
+    "Read the visible task prompt and starter project under `input/`.",
+    "Complete the Blender/Godot graybox project and exported glTF route geometry.",
+    "Update the Godot validation scene and visible handoff notes.",
+    "Save the completed project with the same relative paths under `output/`."
+  ],
+  "inputFiles": [
+    {
+      "name": "TASK_PROMPT.md",
+      "format": "Markdown",
+      "path": "input/TASK_PROMPT.md",
+      "description": "Agent-visible task brief with visible route, zone, cover, and LOS requirements."
+    },
+    {
+      "name": "atlas_outpost_blockout.blend",
+      "format": "Blender file",
+      "path": "input/blender/atlas_outpost_blockout.blend",
+      "description": "Starter graybox blockout file."
+    },
+    {
+      "name": "atlas_outpost_blockout.gltf",
+      "format": "glTF",
+      "path": "input/exports/atlas_outpost_blockout.gltf",
+      "description": "Starter exported geometry."
+    },
+    {
+      "name": "atlas_outpost_validation.tscn",
+      "format": "Godot scene",
+      "path": "input/godot/scenes/atlas_outpost_validation.tscn",
+      "description": "Starter Godot review scene."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Completed Atlas Outpost project",
+      "format": "Blender/Godot/glTF project files",
+      "path": "output/",
+      "description": "Required completed project written by the benchmarked agent."
+    }
+  ],
+  "evaluation": "The evaluator checks required output file existence, referenced glTF sidecars, route lengths and zone budgets from named glTF nodes, cover and line-of-sight facts, Godot scene markers, and visible route metrics in `docs/layout_handoff.md`. The returned benchmark score is binary: `1.0` only if the submitted project passes the hard gates and threshold, otherwise `0.0`.",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-license",
+    "os": "windows",
+    "timeout": 7200
+  },
+  "variants": [
+    "base"
+  ],
+  "taxonomy": {
+    "domain_id": "8",
+    "domain_code": "visual_media",
+    "subdomain_id": "8.1",
+    "subdomain_code": "animation_3d",
+    "subdomain_name": "3D, Animation & Interactive Media",
+    "classifier": {
+      "model": "gpt-4o-mini",
+      "classified_at": "2026-05-13T09:26:01.305631Z",
+      "source": {
+        "submission_id": "(backfill: no submission lookup)",
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "backfill",
+        "task_card_path": "tasks/visual_media/atlas_outpost_graybox_navigation/task_card.json"
+      },
+      "rationale": "The task involves level design and navigation in a game environment, which fits within 3D animation and interactive media."
+    }
+  }
+}
