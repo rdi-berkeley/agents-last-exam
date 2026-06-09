@@ -95,7 +95,10 @@ snapshots:
       network: ale-vpc
       subnet: ale-vpc
       gpu: nvidia-l4-vws
-      zones: [us-central1-a, us-central1-b]
+      # GPU (nvidia-l4-vws) fallback zones, US-first. L4 capacity is volatile
+      # and often exhausted in a single region; gcloud tries these in order and
+      # skips capacity-exhausted zones, so list several across regions.
+      zones: [us-east1-c, us-central1-a, us-central1-b, us-east1-b, us-east4-a, northamerica-northeast2-a, northamerica-northeast1-c, europe-west1-b, europe-west2-b, asia-east1-a]
 
   gpu-license:                # Windows + GPU, licensed
     provider: gcloud
@@ -108,7 +111,10 @@ snapshots:
       network: ale-vpc
       subnet: ale-vpc
       gpu: nvidia-l4-vws
-      zones: [us-central1-a, us-central1-b]
+      # GPU (nvidia-l4-vws) fallback zones, US-first. L4 capacity is volatile
+      # and often exhausted in a single region; gcloud tries these in order and
+      # skips capacity-exhausted zones, so list several across regions.
+      zones: [us-east1-c, us-central1-a, us-central1-b, us-east1-b, us-east4-a, northamerica-northeast2-a, northamerica-northeast1-c, europe-west1-b, europe-west2-b, asia-east1-a]
 
 # ---------------------------------------------------------------------------
 # Task data + output (substrate-coupled: code lives under ale_run/environments/).

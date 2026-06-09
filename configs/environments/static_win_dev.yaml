@@ -1,13 +1,20 @@
 # ============================================================================
 # static_win_dev.yaml — DEV ONLY. Attach to the running Windows dev VM.
 # ============================================================================
-# Static provider: connects to the already-running cua-server on the Windows
-# dev box. No provisioning, no teardown. OS must match the tasks (Windows).
+# The `static` provider does NOT provision anything — it connects to a box you
+# started yourself (a long-lived dev VM, a local Kasm container, ...) at a
+# fixed ip:port. Because that box is ONE fixed machine, there is no per-snapshot
+# mapping: every task runs on this single endpoint regardless of the snapshot
+# its task card asks for. You are responsible for making the box's OS match the
+# tasks you point at it (don't run a Windows task against a Linux endpoint).
+#
+# Use it to iterate fast without paying VM boot time on every run.
+
 provider: static
 
 endpoint: http://34.134.146.181:5000   # dev Windows VM cua-server
 image: ale-win10                      # Windows path-conventions + cua port :5000
-cleanup_on_release: false             # never tear down a box we didn't create
+# cleanup_on_release: false             # never tear down a box we didn't create
 
 # Task input data is baked into E:\agenthle on the image; outputs are pulled
 # back to the local run dir (no GCS bucket involved).
