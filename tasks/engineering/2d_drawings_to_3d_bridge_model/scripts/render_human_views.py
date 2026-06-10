@@ -153,7 +153,13 @@ print(f"BBOX: X[{xmin:.0f},{xmax:.0f}] Y[{ymin:.0f},{ymax:.0f}] Z[{zmin:.0f},{zm
 print(f"CENTROID: ({cx:.0f},{cy:.0f},{cz:.0f})")
 
 # ---------- Render settings ----------
-scene.render.engine = "BLENDER_EEVEE_NEXT"
+_engines = {item.identifier for item in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items}
+if "BLENDER_EEVEE_NEXT" in _engines:
+    scene.render.engine = "BLENDER_EEVEE_NEXT"
+elif "BLENDER_EEVEE" in _engines:
+    scene.render.engine = "BLENDER_EEVEE"
+else:
+    raise RuntimeError(f"No supported EEVEE engine found in {sorted(_engines)}")
 scene.render.resolution_x = args.res
 scene.render.resolution_y = args.res
 scene.render.film_transparent = False

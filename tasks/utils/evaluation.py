@@ -27,20 +27,12 @@ def eval_credentials_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "secret" / "eval_time"
 
 
-def load_eval_env(*, override: bool = True) -> list[str]:
+def load_eval_env(*, override: bool = False) -> list[str]:
     """Export every ``secret/eval_time/*.env`` (one file per service) into
     ``os.environ`` so evaluator judges/scorers find their keys no matter which
-    runner launched the eval — no fragile manual ``source`` step.
-
-    ``override=True`` by default: ``secret/eval_time/*.env`` is the authoritative
-    source for *evaluator-side* service keys and MUST win over whatever the run's
-    ``secret_file`` (e.g. ``secret/.env``, loaded with override) put into
-    ``os.environ``. Otherwise a stale ``OPENAI_API_KEY`` in ``secret/.env`` would
-    permanently shadow the per-service eval key and judges would auth with the
-    wrong credential. Pass ``override=False`` only to fill gaps without clobbering.
-
-    Only real ``*.env`` files are read (``.example`` templates are skipped).
-    Idempotent; returns the variable names it set."""
+    runner launched the eval — no fragile manual ``source`` step. Shell env wins
+    unless ``override=True``. Only real ``*.env`` files are read (``.example``
+    templates are skipped). Idempotent; returns the variable names it set."""
     d = eval_credentials_dir()
     if not d.is_dir():
         return []

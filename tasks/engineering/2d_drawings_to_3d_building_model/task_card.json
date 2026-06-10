@@ -104,7 +104,7 @@
   ],
   "evaluation": {
     "type": "image_only_vlm_judge",
-    "description": "Evaluator renders 14 canonical views of the agent's model.obj on the orchestrator with Blender 4.2.4 headless (1024px / 32 samples, matching the frozen reference render settings), then submits each of 8 binary YES/NO judge questions to the configured multimodal LLM with all 14 reference/candidate image pairs as context (each image downsampled to <=1024px so the per-request payload stays under the 50 MB API cap). Final score = yes_count / question_count.",
+    "description": "Evaluator renders 14 canonical views of the agent's model.obj on the VM with Blender headless (1024px / 32 samples, matching the frozen reference render settings), pulls only the rendered PNGs back to the orchestrator, then submits each of 8 binary YES/NO judge questions to the configured multimodal LLM with all 14 reference/candidate image pairs as context (each image downsampled to <=1024px so the per-request payload stays under the 50 MB API cap). Final score = yes_count / question_count.",
     "passThreshold": 0.5,
     "fixtureScores": {
       "output_test_pos": "1.0 (8/8 YES — the byte-identical reference OBJ as the candidate; reference and candidate are rendered by the identical current render_human_views.py at 1024/32, so a perfect submission reproduces every view exactly)",
@@ -122,7 +122,7 @@
   "vm": {
     "snapshot": "gpu-license",
     "machineType": "g2-standard-16",
-    "project": "sunblaze-4",
+    "project": "agenthle-488519",
     "zone": "us-east1-c",
     "name": "agenthle-dev-gpu-licensed",
     "osType": "windows"

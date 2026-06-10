@@ -4,8 +4,9 @@ Single-variant task. Agent receives a design poster + a 3D snapshot + an
 existing 3D Site model (terrain + surrounding buildings) and must extend
 that site model with a bridge structure shown in the posters. The output
 must contain BOTH the unchanged site AND the new bridge. Evaluation
-renders 12 canonical views of the agent's OBJ with Blender and scores
-them against the frozen reference with an image-only multimodal LLM judge.
+renders 12 canonical views of the agent's OBJ with Blender on the VM and
+scores them against the frozen reference with a local image-only
+multimodal LLM judge.
 
 Y-up, meters. See `tmp/base/eval_config.json` for the per-instance judge
 questions, units, and up-axis.
@@ -13,13 +14,14 @@ questions, units, and up-axis.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import sys
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import cua_bench as cb
 
@@ -34,12 +36,30 @@ SCRIPTS_DIR = Path(__file__).parent / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from score_outputs import evaluate_renders  # noqa: E402
+from score_outputs import DEFAULT_VIEW_NAMES, evaluate_renders  # noqa: E402
 
 DOMAIN_NAME = "engineering"
 TASK_NAME = "2d_drawings_to_3d_bridge_model"
 VARIANT_NAME = "base"
 VARIANT_LABEL = "Bridge the Gap — add a bridge to the existing site model"
+
+REQUIRED_VM_NAME = "agenthle-dev-gpu-licensed"
+REMOTE_BLENDER_CANDIDATES: tuple[str, ...] = (
+    r"C:\Program Files\Blender Foundation\Blender 4.2\blender.exe",
+    r"C:\Program Files\Blender Foundation\Blender 5.0\blender.exe",
+)
+REMOTE_EVAL_ROOT = os.environ.get(
+    "D2T3B_REMOTE_EVAL_ROOT",
+    r"C:\Users\User\AppData\Local\Temp\agenthle_eval\2d_drawings_to_3d_bridge_model",
+)
+RENDER_SCRIPT_FILES = ("render_human_views.py", "detect_floors.py")
+
+
+def _remote_child(base: str, *parts: str) -> str:
+    path = PureWindowsPath(base)
+    for part in parts:
+        path = path / part
+    return str(path)
 
 
 @dataclass
@@ -162,9 +182,118 @@ async def _log_missing(session, remote_path: str, *, tag: str, label: str) -> bo
     return False
 
 
+async def _upload_render_scripts(session: cb.DesktopSession, remote_scripts_dir: str) -> None:
+    await session.interface.create_dir(remote_scripts_dir)
+    for name in RENDER_SCRIPT_FILES:
+        await session.write_file(
+            _remote_child(remote_scripts_dir, name),
+            (SCRIPTS_DIR / name).read_text(encoding="utf-8"),
+        )
+
+
+async def _reset_remote_dir(session: cb.DesktopSession, path: str) -> None:
+    await session.run_command(f'cmd /c if exist "{path}" rmdir /s /q "{path}"', check=False)
+    await session.interface.create_dir(path)
+
+
+async def _resolve_remote_blender(session: cb.DesktopSession) -> str | None:
+    """Pick Blender on the task VM. Requires a GPU host (agenthle-dev-gpu-licensed)."""
+    override = os.environ.get("D2T3B_REMOTE_BLENDER") or os.environ.get("BLENDER_TASK_REMOTE_BLENDER")
+    if override:
+        return override
+    for path in REMOTE_BLENDER_CANDIDATES:
+        if await session.file_exists(path):
+            return path
+    listing = await session.run_command(
+        r'for /d %D in ("C:\Program Files\Blender Foundation\*") do @if exist "%D\blender.exe" echo %D\blender.exe'
+    )
+    for line in (listing.get("stdout") or "").splitlines():
+        candidate = line.strip()
+        if candidate.lower().endswith("blender.exe"):
+            return candidate
+    return None
+
+
+async def _launch_remote_blender_render(
+    session: cb.DesktopSession,
+    *,
+    blender_bin: str,
+    remote_scripts_dir: str,
+    output_obj: str,
+    candidate_dir: str,
+    render_units: str,
+    source_up_axis: str,
+    cand_res: int,
+    cand_samples: int,
+) -> None:
+    render_script = _remote_child(remote_scripts_dir, "render_human_views.py")
+    stdout_path = _remote_child(remote_scripts_dir, "blender_stdout.txt")
+    stderr_path = _remote_child(remote_scripts_dir, "blender_stderr.txt")
+    await session.run_command(
+        f'cmd /c if exist "{stdout_path}" del /f /q "{stdout_path}"',
+        check=False,
+    )
+    await session.run_command(
+        f'cmd /c if exist "{stderr_path}" del /f /q "{stderr_path}"',
+        check=False,
+    )
+    cmd = (
+        f'"{blender_bin}" --background --python "{render_script}" -- '
+        f'--obj "{output_obj}" --out "{candidate_dir}" '
+        f'--units {render_units} --source-up-axis {source_up_axis} '
+        f'--res {cand_res} --samples {cand_samples} '
+        f'1> "{stdout_path}" 2> "{stderr_path}"'
+    )
+    await session.run_command(cmd, check=False)
+
+
+async def _wait_for_render_outputs(
+    session: cb.DesktopSession,
+    *,
+    candidate_dir: str,
+    view_names: list[str],
+    timeout_sec: float = 3600.0,
+    poll_sec: float = 10.0,
+) -> bool:
+    deadline = asyncio.get_event_loop().time() + timeout_sec
+    expected = [_remote_child(candidate_dir, f"{name}.png") for name in view_names]
+    while asyncio.get_event_loop().time() < deadline:
+        ready = True
+        for path in expected:
+            if not (await session.file_exists(path) or await session.directory_exists(path)):
+                ready = False
+                break
+        if ready:
+            return True
+        await asyncio.sleep(poll_sec)
+    return False
+
+
+async def _read_text_if_exists(session: cb.DesktopSession, path: str) -> str:
+    try:
+        if not (await session.file_exists(path) or await session.directory_exists(path)):
+            return ""
+        return (await session.read_bytes(path)).decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
+async def _download_render_pngs(
+    session: cb.DesktopSession,
+    *,
+    remote_dir: str,
+    local_dir: Path,
+    view_names: list[str],
+) -> None:
+    local_dir.mkdir(parents=True, exist_ok=True)
+    for name in view_names:
+        png_bytes = await session.read_bytes(_remote_child(remote_dir, f"{name}.png"))
+        (local_dir / f"{name}.png").write_bytes(png_bytes)
+
+
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
-    """Score the agent's bridge+site model via the shared image-only judge pipeline."""
+    """Render candidate views on the VM with Blender; judge locally with the VLM."""
     meta = task_cfg.metadata
     tag = meta["variant_name"]
     output_dir = meta["remote_output_dir"]
@@ -173,7 +302,19 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     ref_config_remote = meta["reference_eval_config"]
     ref_renders_remote = meta["reference_renders_dir"]
 
-    logger.info(f"[{tag}] starting evaluation (output_dir={output_dir})")
+    logger.info(
+        f"[{tag}] starting evaluation on GPU VM ({REQUIRED_VM_NAME}); "
+        f"Blender renders remotely, VLM judge runs locally (output_dir={output_dir})"
+    )
+
+    blender_bin = await _resolve_remote_blender(session)
+    if not blender_bin:
+        logger.error(
+            f"[{tag}] Blender not found on VM — evaluator requires {REQUIRED_VM_NAME} "
+            "(EEVEE headless needs the L4 GPU display stack; CPU dev VMs are unsupported)"
+        )
+        return [0.0]
+    logger.info(f"[{tag}] using remote Blender: {blender_bin}")
 
     for path, label in [
         (output_obj, "output OBJ"),
@@ -200,58 +341,70 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
     render_units = variant_config.get("render_units", "m")
     source_up_axis = variant_config.get("render_source_up_axis", "Y")
+    view_names = list(variant_config.get("view_names") or DEFAULT_VIEW_NAMES)
+
+    remote_eval_dir = _remote_child(REMOTE_EVAL_ROOT, tag)
+    remote_scripts_dir = _remote_child(remote_eval_dir, "scripts")
+    remote_candidate_dir = _remote_child(remote_eval_dir, "candidate_renders")
+
+    await session.interface.create_dir(remote_eval_dir)
+    await _reset_remote_dir(session, remote_candidate_dir)
+    await _upload_render_scripts(session, remote_scripts_dir)
+
+    cand_res = int(os.environ.get("CAND_RES", os.environ.get("D2T3B_CAND_RES", "1024")))
+    cand_samples = int(os.environ.get("CAND_SAMPLES", os.environ.get("D2T3B_CAND_SAMPLES", "32")))
+
+    await _launch_remote_blender_render(
+        session,
+        blender_bin=blender_bin,
+        remote_scripts_dir=remote_scripts_dir,
+        output_obj=output_obj,
+        candidate_dir=remote_candidate_dir,
+        render_units=render_units,
+        source_up_axis=source_up_axis,
+        cand_res=cand_res,
+        cand_samples=cand_samples,
+    )
+
+    if not await _wait_for_render_outputs(
+        session,
+        candidate_dir=remote_candidate_dir,
+        view_names=view_names,
+    ):
+        stderr = await _read_text_if_exists(
+            session, _remote_child(remote_scripts_dir, "blender_stderr.txt")
+        )
+        stdout = await _read_text_if_exists(
+            session, _remote_child(remote_scripts_dir, "blender_stdout.txt")
+        )
+        logger.error(
+            f"[{tag}] Blender render timed out or incomplete. stdout={stdout[-2000:]} stderr={stderr[-2000:]}"
+        )
+        return [0.0]
 
     with tempfile.TemporaryDirectory(prefix=f"bridge_{tag}_") as scratch:
         scratch_p = Path(scratch)
-        local_obj = scratch_p / "agent_model.obj"
-        local_obj.write_bytes(await session.read_bytes(output_obj))
-
         local_ref_renders = scratch_p / "reference_renders"
-        local_ref_renders.mkdir()
-        ref_listing = await session.run_command(
-            f'powershell -Command "Get-ChildItem -Path \'{ref_renders_remote}\' -Filter *.png | Select-Object -ExpandProperty Name"'
-        )
-        for name in (ref_listing.get("stdout") or "").splitlines():
-            name = name.strip()
-            if not name:
-                continue
-            png_bytes = await session.read_bytes(rf"{ref_renders_remote}\{name}")
-            (local_ref_renders / name).write_bytes(png_bytes)
-
+        local_cand_renders = scratch_p / "candidate_renders"
         local_config = scratch_p / "eval_config.json"
         local_config.write_bytes(config_bytes)
 
-        cand_dir = scratch_p / "candidate_renders"
-        cand_dir.mkdir()
-        blender = os.environ.get("BLENDER_BIN", str(Path.home() / "blender" / "blender-4.2.4-linux-x64" / "blender"))
-        render_script = SCRIPTS_DIR / "render_human_views.py"
-        # Candidate must render at the SAME settings as the frozen reference so
-        # both reach the judge as pixel-comparable images. The judge downsamples
-        # everything to <=1024 anyway (score_outputs._JUDGE_MAX_EDGE), so we
-        # render natively at 1024 instead of supersampling from 2048 — the judge
-        # sees the same resolution either way, and native 1024 is ~4x faster
-        # (critical for this 1.5M-vertex ArchiCAD mesh). The frozen reference is
-        # rendered at these same 1024/32 settings. Env vars override for tuning.
-        cand_res = int(os.environ.get("CAND_RES", "1024"))
-        cand_samples = int(os.environ.get("CAND_SAMPLES", "32"))
-        cmd = [
-            blender, "--background", "--python", str(render_script), "--",
-            "--obj", str(local_obj),
-            "--out", str(cand_dir),
-            "--units", render_units,
-            "--source-up-axis", source_up_axis,
-            "--res", str(cand_res),
-            "--samples", str(cand_samples),
-        ]
-        import subprocess
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
-        if result.returncode != 0:
-            logger.error(f"[{tag}] Blender render failed: {result.stderr[-2000:]}")
-            return [0.0]
+        await _download_render_pngs(
+            session,
+            remote_dir=ref_renders_remote,
+            local_dir=local_ref_renders,
+            view_names=view_names,
+        )
+        await _download_render_pngs(
+            session,
+            remote_dir=remote_candidate_dir,
+            local_dir=local_cand_renders,
+            view_names=view_names,
+        )
 
         score_report = evaluate_renders(
             reference_render_dir=local_ref_renders,
-            candidate_render_dir=cand_dir,
+            candidate_render_dir=local_cand_renders,
             config_path=local_config,
         )
 

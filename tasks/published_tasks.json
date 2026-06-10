@@ -734,6 +734,16 @@
       "variants": [
         "base"
       ]
+    },
+    "engineering/2d_drawings_to_3d_building_model": {
+      "variants": [
+        "base"
+      ]
+    },
+    "engineering/2d_drawings_to_3d_bridge_model": {
+      "variants": [
+        "base"
+      ]
     }
   }
 }
