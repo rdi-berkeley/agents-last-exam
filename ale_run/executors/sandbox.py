@@ -84,6 +84,13 @@ _GATHER_BACKOFFS_S = (1.0, 3.0, 9.0)
 
 # Poll loop tuning (matches simprun)
 _POLL_INTERVAL_S = 10.0
+# Liveness-probe robustness: a single non-zero return from the alive-check
+# command is NOT proof the agent died — a transient cua/network transport
+# error makes the probe itself return non-zero (rc=-1) without raising. Require
+# this many CONSECUTIVE failed probes (re-probing on a short interval) before
+# declaring the sandbox gone, so one blip can't fail an already-completed run.
+_LIVENESS_MISS_THRESHOLD = 3
+_LIVENESS_REPROBE_S = 5.0
 _PID_WAIT_S = 4.5            # how long to wait for the launcher to write the PID file
 _PID_WAIT_TICK_S = 0.3
 
@@ -231,6 +238,7 @@ class SandboxExecutor(BaseExecutor):
         t0 = time.monotonic()
         deadline = t0 + timeout_s
         marker_hit = False
+        consecutive_misses = 0
         while time.monotonic() < deadline:
             try:
                 if await sb.exists(done_marker):
@@ -249,19 +257,30 @@ class SandboxExecutor(BaseExecutor):
             )
             alive = await sb.run_command(alive_cmd, timeout=60)
             if alive.returncode != 0:
-                # Process gone — give marker one more chance (race with disk flush)
+                # Give the marker one more chance (race with disk flush) first.
                 await asyncio.sleep(2)
                 if await sb.exists(done_marker):
                     marker_hit = True
                     break
-                entry_tail = await self._tail_log(entry_log)
-                return AgentRunResult(
-                    status="failed",
-                    pid=pid,
-                    duration_s=time.monotonic() - t0,
-                    error=f"sandbox process disappeared before done.marker; "
-                          f"entry log tail: {entry_tail}",
+                consecutive_misses += 1
+                logger.warning(
+                    "sandbox: liveness probe failed (rc=%s) %d/%d consecutive "
+                    "(pid=%s) — transient transport error or process gone; re-probing",
+                    alive.returncode, consecutive_misses, _LIVENESS_MISS_THRESHOLD, pid,
                 )
+                if consecutive_misses >= _LIVENESS_MISS_THRESHOLD:
+                    entry_tail = await self._tail_log(entry_log)
+                    return AgentRunResult(
+                        status="failed",
+                        pid=pid,
+                        duration_s=time.monotonic() - t0,
+                        error=f"sandbox process disappeared before done.marker "
+                              f"({_LIVENESS_MISS_THRESHOLD} consecutive probe failures); "
+                              f"entry log tail: {entry_tail}",
+                    )
+                await asyncio.sleep(_LIVENESS_REPROBE_S)
+                continue
+            consecutive_misses = 0
             await asyncio.sleep(_POLL_INTERVAL_S)
 
         duration_s = time.monotonic() - t0
