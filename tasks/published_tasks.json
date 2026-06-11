@@ -744,6 +744,26 @@
       "variants": [
         "base"
       ]
+    },
+    "visual_media/blender_character_reconstruction_from_multiview_01": {
+      "variants": [
+        "base"
+      ]
+    },
+    "visual_media/human_mesh_animation_reproduction": {
+      "variants": [
+        "base"
+      ]
+    },
+    "engineering/robotics_blender_tabletop_reconstruction": {
+      "variants": [
+        "base"
+      ]
+    },
+    "visual_media/atlas_outpost_graybox_navigation": {
+      "variants": [
+        "base"
+      ]
     }
   }
 }
