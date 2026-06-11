@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Local Docker | ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Local Docker</h1>
+    <p class="lede">
+      Run the Linux subset in a container on your own machine — no GCP, no VM.
+      Experimental and under active validation.
+    </p>
+
+    <div class="note todo">
+      <div class="note-title">Experimental</div>
+      The image and provider wiring work, but task coverage is not yet
+      validated. The sandbox images were authored for a full VM; a container
+      shares the host kernel and runs no init system, so some tasks may not be
+      completable here. See <a href="#open-risks">Open risks</a> before relying
+      on results.
+    </div>
+
+    <h2>How it works</h2>
+    <p>
+      The <code>docker</code> provider boots <code>ale-ubuntu22-docker</code>, a
+      container image whose userspace is a byte-for-byte export of the
+      <code>ale-ubuntu22</code> GCE VM's root filesystem — the same node,
+      Python venv, cua-server and pre-installed task software, at the same
+      absolute paths. On <code>acquire</code> it starts one container per run
+      unit, brings up <code>cua-server</code> on port 5000 behind a virtual X
+      display (<code>Xvfb&nbsp;:0</code>), and drives it over the same cua HTTP
+      API as a cloud VM. Task data is staged from <code>gs://ale-data-public</code>
+      with the service-account key the provider injects per container.
+    </p>
+
+    <h2>Build the image</h2>
+    <p>
+      The 275&nbsp;GB image is built locally by exporting the VM rootfs (no
+      package rebuild) and importing it as a single layer; a startup entrypoint
+      and a few container-only fixups are baked on top. The build recipe is
+      tracked in the umbrella PR — it is not yet a one-command script.
+    </p>
+
+    <h2>Configure a run</h2>
+    <p>
+      Point the Linux snapshot at the docker provider in your environment
+      config, then <a href="/pages/configure.html">configure a run</a> as usual:
+    </p>
+    <pre><code>snapshots:
+  cpu-free-ubuntu:
+    provider: docker
+    image: ale-ubuntu22-docker   # container ref + cua port come from the Image entry
+    docker:
+      cpus: 4
+      memory: 16g
+      shm_size: 1g</code></pre>
+
+    <h2 id="open-risks">Open risks</h2>
+    <p>
+      A container is not a VM. Tasks that assume a real kernel, an init system,
+      privileged operations, kernel modules, a full desktop session, or
+      hardware devices may behave differently or fail. Which tasks in the Linux
+      subset survive the move is the open question this path is being validated
+      against; expect gaps until that work lands.
+    </p>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
