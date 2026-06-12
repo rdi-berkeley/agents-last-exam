@@ -1,0 +1,17 @@
+# Docker provider + ale-ubuntu22-docker image, task data baked into the image.
+# Used to run the Linux subset locally in containers (no GCP VMs).
+snapshots:
+  cpu-free-ubuntu:
+    provider: docker
+    image: ale-ubuntu22-docker        # Image entry -> docker_image ale-ubuntu22-docker:latest, cua port 5000
+    docker:
+      cpus: 4
+      memory: 16g
+      shm_size: 1g
+
+# Task input/reference ship inside the image at /media/user/data/agenthle/<domain>/<task>/<variant>/.
+task_data_source: baked_in_sandbox
+output_path: local
+# SA key for the dummy agent's output_test_pos pull from gs://ale-data-all
+# (provider injects it; gsutil -u billing project derives from the key).
+gcs_sa_key: secret/gcp_key.json

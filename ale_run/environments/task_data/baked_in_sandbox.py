@@ -53,6 +53,16 @@ async def stage_input(
             f"{input_dir!r}, not found on sandbox. Re-bake the image."
         )
     await sandbox.mkdir(join(sandbox, base, "output"))
+    # Make baked software/ scripts executable (mirrors the gs:// staging path).
+    # The image preserves original file modes, often 0644, so tasks that exec a
+    # software wrapper (e.g. .../software/run.sh) would otherwise hit
+    # "Permission denied" under baked_in_sandbox.
+    software_dir = join(sandbox, base, "software")
+    if sandbox.is_linux and await sandbox.exists(software_dir):
+        await sandbox.run_command(
+            f"find {shell_q(sandbox, software_dir)} -type f -exec chmod +x {{}} +",
+            timeout=60,
+        )
     return {"staged": ["input"], "source": "baked_in_sandbox"}
 
 
