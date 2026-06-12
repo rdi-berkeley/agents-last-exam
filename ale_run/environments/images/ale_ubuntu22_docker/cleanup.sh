@@ -34,7 +34,7 @@ for p in /usr/local/bin/node \
          /opt/cua-server/.venv/bin/python \
          /opt/ale-run/.venv/bin/python \
          /home/user/cua_mcp_server \
-         /media/user/data/ale-data; do
+         /media/user/data/agenthle; do
   if [ -e "$p" ]; then echo "OK   $p"; else echo "MISS $p"; fail=1; fi
 done
 command -v Xvfb >/dev/null && echo "OK   Xvfb" || { echo "MISS Xvfb"; fail=1; }
