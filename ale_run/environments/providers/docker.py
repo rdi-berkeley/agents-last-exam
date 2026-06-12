@@ -61,6 +61,14 @@ class DockerProviderConfig:
                 ``task_data_source: gs://…``). When set, it is copied into each
                 container and gsutil/boto configured so gs:// staging works; the
                 key's ``project_id`` also bills requester-pays buckets.
+    privileged  Run containers with ``--privileged``. Needed for tasks whose eval
+                runs nested Docker (openroad, minikube/k8s, compose) — the baked
+                image starts a fresh inner dockerd. Under ROOTLESS docker this is
+                user-namespace-bounded (container root maps to the unprivileged
+                host user), so it does not expose the host kernel.
+    image_ref   Override the container ref to boot (default: the Image entry's
+                ``docker_image``). Lets one env config pin a specific tag, e.g.
+                a DinD-capable build, without editing the Image registry.
     """
 
     image: str = "ale-kasm"
@@ -68,6 +76,8 @@ class DockerProviderConfig:
     cpus: float = 0
     memory: str = ""
     gcs_sa_key: str = ""
+    privileged: bool = False
+    image_ref: str = ""
 
 
 def _build_provider_config(raw: dict[str, Any]) -> DockerProviderConfig:
@@ -81,6 +91,8 @@ def _build_provider_config(raw: dict[str, Any]) -> DockerProviderConfig:
         cpus=float(raw.get("cpus") or 0),
         memory=str(raw.get("memory") or ""),
         gcs_sa_key=gcs_sa,
+        privileged=bool(raw.get("privileged") or False),
+        image_ref=str(raw.get("image_ref") or ""),
     )
 
 
@@ -186,7 +198,7 @@ class DockerProvider(Provider):
         # ale-kasm, 5000 on the ubuntu22 export), and the sandbox paths.
         from ..images import get as get_image
         image = get_image(self._cfg.image)
-        container_ref = image.docker_image or _DEFAULT_CONTAINER_REF
+        container_ref = self._cfg.image_ref or image.docker_image or _DEFAULT_CONTAINER_REF
         cua_internal_port = image.cua_server_port
 
         run_args = [
@@ -201,6 +213,10 @@ class DockerProvider(Provider):
             # kasm startup script explicitly.
             "--entrypoint", _KASM_ENTRYPOINT,
         ]
+        if self._cfg.privileged:
+            # Needed for tasks whose eval runs nested Docker; under rootless
+            # docker the privileged container's root is still user-ns-bounded.
+            run_args.append("--privileged")
         if self._cfg.cpus > 0:
             run_args.extend(["--cpus", str(self._cfg.cpus)])
         if self._cfg.memory:
