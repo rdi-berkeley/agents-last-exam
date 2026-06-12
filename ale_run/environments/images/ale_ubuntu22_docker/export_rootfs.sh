@@ -9,6 +9,14 @@
 # tar's own exit code is recorded to /tmp/ale_export_tar.rc so the caller can
 # tell a benign "files changed while reading" (1) from a fatal error (2): in a
 # pipe the shell only sees zstd's status, not tar's.
+
+# Clamp out-of-range owners to root here, on the VM, so the local `docker
+# import` can be a plain stream (no per-file Python remap pass — that was the
+# ~2h bottleneck). Rootless docker maps every in-image uid through a 65536-wide
+# subuid range, so a few stray corp/LDAP-owned files (e.g. under /opt/subread,
+# uid ~629M) would otherwise fail `lchown`. Only a handful match; cheap.
+sudo find / -xdev \( -uid +65535 -o -gid +65535 \) -exec chown -h 0:0 {} + 2>/dev/null || true
+
 {
   sudo tar --numeric-owner \
     --warning=no-file-changed --warning=no-file-removed --warning=no-file-ignored \

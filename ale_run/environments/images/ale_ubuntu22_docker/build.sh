@@ -84,10 +84,13 @@ else
   echo "exported $(du -h "$TAR" | cut -f1) compressed"
 fi
 
-# --- phase 2: remap uids + docker import ------------------------------------
-log "phase 2 import: $TAR -> docker image $BASE (uid remap inline)"
+# --- phase 2: docker import --------------------------------------------------
+# Out-of-range owners were already clamped to root on the VM (export_rootfs.sh),
+# so this is a plain stream — no Python remap pass. remap_uids.py is kept as a
+# fallback for sources you cannot mutate (pipe it in here if needed).
+log "phase 2 import: $TAR -> docker image $BASE"
 docker rmi -f "$BASE" 2>/dev/null || true
-zstd -dc "$TAR" | python3 "$HERE/remap_uids.py" | docker import - "$BASE"
+zstd -dc "$TAR" | docker import - "$BASE"
 
 # --- phase 3: bake entrypoint + cleanup, commit ------------------------------
 log "phase 3 finalize: bake entrypoint + cleanup -> commit $IMAGE"
