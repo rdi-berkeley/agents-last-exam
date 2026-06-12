@@ -3,11 +3,12 @@
 Dispatched by the lifecycle on ``artifacts_path.output_path``:
 
   None         → skip; output stays on the sandbox and is lost on teardown
-  ``"local"``  → :func:`pull_to_host` (cua HTTP, one file at a time)
+  ``"local"``  → :func:`pull_to_host` (cua HTTP, files pulled concurrently)
   ``"gs://X"`` → :func:`push_to_gcs` (VM-side gsutil; nothing on host)
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import shlex
 from pathlib import Path
@@ -16,6 +17,11 @@ from typing import Any
 from ..base_interface import SandboxHandle, TaskDataSpec
 
 logger = logging.getLogger(__name__)
+
+# Max concurrent per-file downloads in pull_to_host. Each download is itself
+# chunked (see download_to_local), so this bounds the number of in-flight cua
+# RPCs, not the payload size.
+_PULL_CONCURRENCY = 8
 
 
 def _output_dir(sandbox: SandboxHandle, task_data: TaskDataSpec) -> str:
@@ -40,9 +46,11 @@ async def pull_to_host(
 
     dest_dir.mkdir(parents=True, exist_ok=True)
     sep = "/" if sandbox.is_linux else "\\"
-    files = 0
-    total_bytes = 0
-    errors: list[dict[str, str]] = []
+
+    # Materialise the directory tree first (cheap, ordering-sensitive), then
+    # download the files concurrently — one slow/large file no longer blocks the
+    # rest, and many small files no longer serialise into a long tail.
+    jobs: list[tuple[str, Path]] = []
     for entry in entries:
         rel = entry["relpath"]
         if entry.get("is_dir"):
@@ -51,7 +59,23 @@ async def pull_to_host(
         remote_path = f"{src.rstrip(sep)}{sep}{rel}"
         local_path = dest_dir / rel.replace("\\", "/")
         local_path.parent.mkdir(parents=True, exist_ok=True)
-        ok = await sandbox.download_to_local(remote_path, str(local_path), timeout=120)
+        jobs.append((remote_path, local_path))
+
+    sem = asyncio.Semaphore(_PULL_CONCURRENCY)
+
+    async def _fetch(remote_path: str, local_path: Path) -> tuple[str, Path, bool]:
+        async with sem:
+            ok = await sandbox.download_to_local(
+                remote_path, str(local_path), timeout=120,
+            )
+        return remote_path, local_path, ok
+
+    results = await asyncio.gather(*(_fetch(rp, lp) for rp, lp in jobs))
+
+    files = 0
+    total_bytes = 0
+    errors: list[dict[str, str]] = []
+    for remote_path, local_path, ok in results:
         if ok:
             files += 1
             try:
