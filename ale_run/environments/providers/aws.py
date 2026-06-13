@@ -105,6 +105,10 @@ class SnapshotConfig:
     resolution: tuple[int, int] | None = None
     """Windows display resolution (w, h) forced after boot. See gcloud's
     SnapshotConfig for the full rationale; Linux ignores it."""
+    tenancy: str = "default"
+    """EC2 placement tenancy: ``default`` (shared) or ``dedicated``. Per-snapshot
+    so one env can mix Linux (``default``) with Windows-10-client snapshots
+    (``dedicated`` — Win10 client BYOL is not licensed for shared tenancy)."""
 
     @property
     def os(self) -> str:
@@ -152,6 +156,7 @@ def _build_snapshot_config(raw: Any) -> SnapshotConfig:
     return SnapshotConfig(
         image=str(image), gpu=raw.get("gpu"), zones=zones,
         resolution=_parse_resolution(raw.get("resolution"), image),
+        tenancy=str(raw.get("tenancy") or "default"),
     )
 
 
@@ -291,6 +296,7 @@ def _build_run_args(
     key_name: str,
     iam_instance_profile: str,
     associate_public_ip: bool,
+    tenancy: str,
     snapshot_tag: str,
 ) -> list[str]:
     """``aws ec2 run-instances`` argv.
@@ -319,6 +325,8 @@ def _build_run_args(
         args += ["--key-name", key_name]
     if iam_instance_profile:
         args += ["--iam-instance-profile", f"Name={iam_instance_profile}"]
+    if tenancy and tenancy != "default":
+        args += ["--placement", f"Tenancy={tenancy}"]
     return args
 
 
@@ -329,6 +337,7 @@ async def _try_run_in_subnet(
     instance_type: str,
     subnet: str,
     cfg: AwsProviderConfig,
+    tenancy: str,
     snapshot_tag: str,
 ) -> tuple[bool, str, str]:
     """Returns (ok, stdout, stderr). On capacity error returns ok=False without
@@ -342,6 +351,7 @@ async def _try_run_in_subnet(
         key_name=cfg.key_name,
         iam_instance_profile=cfg.iam_instance_profile,
         associate_public_ip=cfg.associate_public_ip,
+        tenancy=tenancy,
         snapshot_tag=snapshot_tag,
     )
     last_stderr = ""
@@ -511,6 +521,7 @@ class AwsProvider(Provider):
                     instance_type=instance_type,
                     subnet=subnet,
                     cfg=self._cfg,
+                    tenancy=snap.tenancy,
                     snapshot_tag=spec.snapshot,
                 )
                 if ok:

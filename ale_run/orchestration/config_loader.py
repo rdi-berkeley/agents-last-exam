@@ -377,6 +377,8 @@ _AWS_CRED_KEYS = (
     "region", "security_group_ids", "security_groups", "instance_prefix",
     "key_name", "iam_instance_profile", "associate_public_ip",
 )
+# `tenancy` is intentionally NOT a cred key: it is per-snapshot routing (Linux
+# default vs Windows-client dedicated) so one env can mix both.
 
 
 def _build_environment_from_path(

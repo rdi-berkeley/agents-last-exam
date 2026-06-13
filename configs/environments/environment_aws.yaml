@@ -41,5 +41,36 @@ snapshots:
       # iam_instance_profile: ale-sandbox  # uncomment when using s3:// task data
       associate_public_ip: true
 
-  # cpu-free / cpu-license / gpu-free (Windows + GPU) — added once ale-win10 is
-  # exported and imported. Mirror the block above with the win AMI + resolution.
+  cpu-free:                   # Windows 10, no GPU. BYOL + DEDICATED tenancy.
+    provider: aws
+    image: ${env:ALE_AWS_WIN_AMI}         # ami-... minted from ale-win10.raw
+    resolution: [1024, 768]
+    aws:
+      region: ${env:AWS_REGION}
+      security_group_ids: [ "${env:ALE_AWS_SG}" ]
+      zones: [ "${env:ALE_AWS_SUBNET}" ]
+      tenancy: dedicated                  # Win10 client BYOL cannot use shared
+      associate_public_ip: true
+
+  cpu-license:                # Windows 10 requiring a licensed image (same AMI)
+    provider: aws
+    image: ${env:ALE_AWS_WIN_AMI}
+    resolution: [1024, 768]
+    aws:
+      region: ${env:AWS_REGION}
+      security_group_ids: [ "${env:ALE_AWS_SG}" ]
+      zones: [ "${env:ALE_AWS_SUBNET}" ]
+      tenancy: dedicated
+      associate_public_ip: true
+
+  gpu-free:                   # Windows 10 + GPU. BYOL + DEDICATED tenancy.
+    provider: aws
+    image: ${env:ALE_AWS_WIN_AMI}
+    resolution: [1920, 1080]
+    aws:
+      region: ${env:AWS_REGION}
+      security_group_ids: [ "${env:ALE_AWS_SG}" ]
+      zones: [ "${env:ALE_AWS_SUBNET}" ]
+      gpu: "1"                            # truthy → provider picks a GPU type
+      tenancy: dedicated
+      associate_public_ip: true
