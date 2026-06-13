@@ -21,11 +21,11 @@
       most error-prone part of any agent benchmark, and ALE asks more of it
       than most. Tasks ship real, large professional software and their input
       data, and a single run can stretch for hours, so the platform also has to
-      scale out across many sandboxes at once. ALE intends to make the process as 
-      easy and straightforward as possible. Google Cloud is the supported
-      path today with 300 USD credit that's friendly enough to get you started; 
-      more cloud backends, plus a local path for debugging and
-      development on your own hardware, are on the roadmap.
+      scale out across many sandboxes at once. ALE intends to make the process as
+      easy and straightforward as possible. Google Cloud (300 USD of free credit,
+      friendly enough to get you started) and AWS (EC2 + S3) are both supported
+      today; a local path for debugging and development on your own hardware is
+      on the roadmap.
     </p>
 
     <p>Whichever provider you pick, clone and install first:</p>
@@ -39,6 +39,11 @@ uv sync --all-packages</code></pre>
         <div class="k">Supported</div>
         <div class="t">Google Cloud</div>
         <div class="d">Ephemeral GCE VMs: the production path for batch runs.</div>
+      </a>
+      <a class="card" href="/pages/aws.html">
+        <div class="k">Supported</div>
+        <div class="t">AWS</div>
+        <div class="d">Ephemeral EC2 instances + S3. Linux ready; Windows is BYOL + dedicated.</div>
       </a>
       <a class="card" href="/pages/local.html">
         <div class="k">Planned</div>
