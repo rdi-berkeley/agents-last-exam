@@ -1,0 +1,1 @@
+{"description":"MuJoCo GL/EGL/OSMesa/GLFW render libraries","apt":"libgl1 libglib2.0-0 libegl1 libosmesa6 libglfw3 libx11-6 libxrandr2 libxinerama1 libxcursor1 libxi6","verify":"ldconfig -p | grep -E 'libGL|libEGL|libOSMesa'"}

@@ -1,0 +1,1 @@
+{"description":"GAP computational discrete algebra system (4.11.x on jammy)","apt":"gap","verify":"gap --version"}

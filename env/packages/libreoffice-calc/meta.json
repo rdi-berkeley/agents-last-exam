@@ -1,0 +1,1 @@
+{"description":"LibreOffice Calc + LD_LIBRARY_PATH shim on /usr/bin/libreoffice","provides":["/usr/bin/libreoffice"],"verify":"/usr/bin/libreoffice --version"}

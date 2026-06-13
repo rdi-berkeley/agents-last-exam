@@ -1,0 +1,1 @@
+{"description":"Pre-pull pinned openroad/orfs image (requires docker-ce + privileged sandbox)","provides":["docker image openroad/orfs@sha256:fd77.."],"verify":"docker image inspect openroad/orfs@sha256:fd7751659f976aec05129d3272186aa9112ba1a790a7f184449910af4ec4c475"}

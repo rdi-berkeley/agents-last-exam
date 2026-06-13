@@ -1,0 +1,1 @@
+{"description":"Alias /usr/bin/python -> python3.10","provides":["/usr/bin/python"],"verify":"/usr/bin/python --version"}

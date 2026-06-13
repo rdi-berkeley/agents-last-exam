@@ -1,0 +1,1 @@
+{"description":"Google Chrome stable","provides":["google-chrome"],"verify":"google-chrome --version"}
