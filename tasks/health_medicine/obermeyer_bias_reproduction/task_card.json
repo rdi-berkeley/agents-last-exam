@@ -41,5 +41,8 @@
         "subdomain_name": "Clinical Informatics & Care Operations"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

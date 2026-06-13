@@ -1,0 +1,1 @@
+{"description":"Python venv at /opt/cua-server/.venv (uv venv, py3.10)","provides":["/opt/cua-server/.venv/bin/python"],"verify":"/opt/cua-server/.venv/bin/python --version"}

@@ -1,0 +1,1 @@
+{"description":"CPython 3.10 dev headers (Python.h) for compiling C exts","apt":"python3.10-dev","verify":"test -f /usr/include/python3.10/Python.h"}

@@ -1,0 +1,1 @@
+{"description":"R + Rscript (CRAN apt, R 4.x); task R libraries installed per-task","provides":["Rscript","R"],"verify":"Rscript --version"}

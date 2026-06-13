@@ -1,0 +1,1 @@
+{"description":"FDS+Smokeview 6.10.1 at /opt/fds-smv-6.10.1","provides":["/opt/fds-smv-6.10.1/bin/fds","/opt/fds-smv-6.10.1/smvbin/smokeview"],"verify":"/opt/fds-smv-6.10.1/bin/fds"}

@@ -1,0 +1,1 @@
+{"description":"OpenCV + PyQt5(xcb) runtime system libraries","apt":"libgl1 libglib2.0-0 libegl1 libxkbcommon-x11-0 libdbus-1-3 libfontconfig1 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-cursor0 libxcb-util1","verify":"ldconfig -p | grep libxcb-xinerama"}

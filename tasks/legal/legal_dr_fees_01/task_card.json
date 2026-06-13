@@ -89,5 +89,8 @@
         "subdomain_name": "Litigation Support & Discovery"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

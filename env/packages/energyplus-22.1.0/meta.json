@@ -1,0 +1,1 @@
+{"description":"EnergyPlus 22.1.0 at /opt/energyplus-22.1.0","provides":["/opt/energyplus-22.1.0/energyplus"],"verify":"/opt/energyplus-22.1.0/energyplus --version"}

@@ -78,5 +78,12 @@
       },
       "rationale": "The task involves hardware design and verification, which fits within Semiconductor & Microelectronics Design."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "oss-cad-suite-20260422",
+    "firtool-1.138.0",
+    "sbt-1.9.9",
+    "jdk-default",
+    "python-default-3.10"
+  ]
 }

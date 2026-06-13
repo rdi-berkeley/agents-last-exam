@@ -100,5 +100,6 @@
       },
       "rationale": "The task involves audience segmentation for digital marketing purposes."
     }
-  }
+  },
+  "requiredSystemPackages": []
 }

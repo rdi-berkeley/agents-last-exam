@@ -114,5 +114,8 @@
       },
       "rationale": "The task involves building a data pipeline and cleaning data for analytics purposes."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

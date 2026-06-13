@@ -71,5 +71,8 @@
         "subdomain_name": "Compliance & Regulatory"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

@@ -70,5 +70,8 @@
         "subdomain_name": "Infrastructure Engineering & Cloud Operations"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

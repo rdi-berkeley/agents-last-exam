@@ -106,5 +106,9 @@
       },
       "rationale": "The task involves RTL-to-GDSII signoff for a semiconductor design."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "docker-ce",
+    "openroad-orfs-image"
+  ]
 }

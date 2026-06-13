@@ -1,0 +1,1 @@
+{"description":"OpenSlide C runtime library (for openslide-python)","apt":"libopenslide0","verify":"ldconfig -p | grep libopenslide"}

@@ -61,5 +61,8 @@
         "subdomain_name": null
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

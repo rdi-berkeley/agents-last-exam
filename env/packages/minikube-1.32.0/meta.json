@@ -1,0 +1,7 @@
+{
+"description": "minikube-1.32.0 at /opt/minikube-1.32.0/bin/minikube",
+"provides": [
+"/opt/minikube-1.32.0/bin/minikube"
+],
+"verify": "/opt/minikube-1.32.0/bin/minikube version"
+}

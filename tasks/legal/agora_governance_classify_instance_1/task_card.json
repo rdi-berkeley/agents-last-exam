@@ -70,5 +70,8 @@
         "subdomain_name": "Doctrinal Legal Research"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "cua-server-venv"
+  ]
 }

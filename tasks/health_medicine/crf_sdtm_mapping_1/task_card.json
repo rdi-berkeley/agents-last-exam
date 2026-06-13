@@ -91,5 +91,8 @@
       },
       "rationale": "The task involves creating a mapping specification for clinical research data."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

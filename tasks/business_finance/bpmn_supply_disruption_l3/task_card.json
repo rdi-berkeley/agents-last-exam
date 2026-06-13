@@ -121,5 +121,8 @@
       },
       "rationale": "The task involves redesigning a business process workflow related to supply chain management."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "docker-ce"
+  ]
 }

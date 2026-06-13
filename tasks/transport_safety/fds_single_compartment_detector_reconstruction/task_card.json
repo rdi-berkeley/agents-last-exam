@@ -59,5 +59,8 @@
       },
       "rationale": "The task involves fire protection engineering and reconstruction of fire safety scenarios."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "fds-smv-6.10.1"
+  ]
 }
