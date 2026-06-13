@@ -3,6 +3,20 @@
 AWS counterpart of `docs/quickstart.md` §3. Gets `ale-ubuntu22` running on EC2
 from the GCE-exported disk. Windows/GPU is a later phase.
 
+## Verified status (us-east-1, account 670060057810)
+
+Both images imported and run on EC2 (cua-server reachable on :5000, commands
+execute, baked data present):
+
+- **Linux** `ale-ubuntu22` → AMI via **import-snapshot + register-image**
+  (import-image rejects kernel 6.5.0-15). `AwsProvider` acquire→run→release
+  acceptance test passes (`tools/aws/provider_accept_test.py`).
+- **Windows** `ale-win10` → AMI via **import-image** (BYOL; passes AWS boot
+  validation). Boots to desktop, cua up, E: data drive present. Launched on
+  **shared tenancy for validation only** — license-compliant runs need
+  **dedicated tenancy**, which is gated on a new-account quota increase (AWS
+  Support case; the Dedicated-Instances vCPU limit is not API-adjustable).
+
 ## 0. Prerequisites (one-time, needs a human)
 
 - An **AWS account** (registration needs a payment method + verification —
