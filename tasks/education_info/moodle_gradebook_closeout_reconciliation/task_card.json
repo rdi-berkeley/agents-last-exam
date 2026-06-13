@@ -131,5 +131,8 @@
       },
       "rationale": "The task involves working with Moodle, an educational technology platform."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

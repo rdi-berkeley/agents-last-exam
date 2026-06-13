@@ -78,5 +78,8 @@
       },
       "rationale": "The task involves grading homework submissions in an educational context."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

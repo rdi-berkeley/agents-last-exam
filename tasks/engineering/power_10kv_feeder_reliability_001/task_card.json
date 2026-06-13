@@ -83,5 +83,8 @@
       },
       "rationale": "The task involves computing reliability indices for a power distribution feeder, fitting within Energy, Power & Nuclear Engineering."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.12"
+  ]
 }

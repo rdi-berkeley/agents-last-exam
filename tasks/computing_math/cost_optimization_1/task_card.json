@@ -96,5 +96,8 @@
       },
       "rationale": "The task focuses on cost optimization within cloud infrastructure."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

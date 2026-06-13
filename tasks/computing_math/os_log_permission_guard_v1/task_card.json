@@ -79,5 +79,8 @@
         "subdomain_name": "Software Engineering"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

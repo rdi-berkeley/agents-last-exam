@@ -102,5 +102,8 @@
       },
       "rationale": "The task involves classifying operational risk and calculating regulatory capital, which aligns with actuarial and risk modeling."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "libreoffice-calc"
+  ]
 }

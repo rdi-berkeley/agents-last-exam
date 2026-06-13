@@ -72,5 +72,8 @@
       },
       "rationale": "The task involves classifying finite abelian group extensions, which is a mathematical operations research problem."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "gap"
+  ]
 }

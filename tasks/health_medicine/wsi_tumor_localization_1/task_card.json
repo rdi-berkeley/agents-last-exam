@@ -74,5 +74,9 @@
       },
       "rationale": "The task involves tumor localization in pathology images, which falls under clinical diagnostics."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "libopenslide",
+    "python-default-3.10"
+  ]
 }

@@ -102,5 +102,8 @@
       },
       "rationale": "The task involves forecasting influenza hospitalizations, which is related to public health and epidemiology."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

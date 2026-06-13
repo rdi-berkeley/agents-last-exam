@@ -87,5 +87,6 @@
       },
       "rationale": "The task involves quantitative finance techniques for pricing American options."
     }
-  }
+  },
+  "requiredSystemPackages": []
 }

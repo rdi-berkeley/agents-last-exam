@@ -97,5 +97,8 @@
       },
       "rationale": "The task involves computing orbital transfers in aerospace engineering."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

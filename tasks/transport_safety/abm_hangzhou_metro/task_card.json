@@ -94,5 +94,8 @@
         "subdomain_name": "Aviation & Airspace Operations"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

@@ -36,5 +36,8 @@
       },
       "rationale": "The task involves software engineering for a machine learning platform."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }
