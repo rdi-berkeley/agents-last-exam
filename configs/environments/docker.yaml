@@ -13,7 +13,7 @@
 snapshots:
   cpu-free-ubuntu:
     provider: docker
-    image: ale-ubuntu22-docker     # -> ale-ubuntu22-docker:latest (from the Image registry)
+    image: ale-ubuntu22-docker     # -> agentslastexam/ale-ubuntu22-docker:latest (from the Image registry; pulls from Hub if absent)
     docker:
       shm_size: 2g
       resolution: [1024, 768]
