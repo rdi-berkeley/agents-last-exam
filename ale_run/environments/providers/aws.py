@@ -465,6 +465,21 @@ async def _terminate(instance_id: str, region: str) -> bool:
     return True
 
 
+def _parse_supported_modes(out: str) -> list[tuple[int, int]]:
+    """Extract ``(w, h)`` modes from the resolution script's
+    ``failed:<rc> supported=[(800, 600), ...]`` line."""
+    marker = "supported="
+    i = out.find(marker)
+    if i < 0:
+        return []
+    import ast
+    try:
+        val = ast.literal_eval(out[i + len(marker):].strip())
+        return [(int(a), int(b)) for a, b in val]
+    except (ValueError, SyntaxError, TypeError):
+        return []
+
+
 async def _stop(instance_id: str, region: str) -> bool:
     logger.info("Stopping instance %s", instance_id)
     rc, _, stderr = await _run_aws(
@@ -710,8 +725,16 @@ class AwsProvider(Provider):
     async def _set_windows_resolution(
         cua_url: str, resolution: tuple[int, int],
     ) -> None:
-        """Force the Windows framebuffer to ``resolution`` (w, h). Same machinery
-        as the gcloud provider; raises (no silent fallback) if unsupported."""
+        """Force the Windows framebuffer to ``resolution`` (w, h), falling back to
+        the largest supported mode if the exact one isn't available.
+
+        On EC2 the imported Windows image's display adapter exposes a *different*
+        (often smaller) mode set than GCE — e.g. a no-GPU Nitro box may only
+        offer 800x600. Hard-failing the whole run over that is wrong (it's an AWS
+        capability difference, not a misconfig), so we pick the best supported
+        mode ≤ the request (else the largest available) and LOG it loudly — a
+        logged, root-caused choice, not a silent mask. Only raise if the adapter
+        reports no settable modes at all."""
         from cua_bench.computers.remote import RemoteDesktopSession
 
         w, h = resolution
@@ -722,15 +745,35 @@ class AwsProvider(Provider):
             r"cmd /c if not exist C:\agenthle mkdir C:\agenthle", check=False,
         )
         await session.write_file(remote_path, _SET_RES_PY)
-        res = await session.run_command(
-            f'python "{remote_path}" {w} {h}', check=False,
-        )
-        out = (res.get("stdout") or "").strip() if isinstance(res, dict) else ""
+
+        async def _try(tw: int, th: int) -> str:
+            res = await session.run_command(f'python "{remote_path}" {tw} {th}', check=False)
+            return (res.get("stdout") or "").strip() if isinstance(res, dict) else ""
+
+        out = await _try(w, h)
         if "set_ok" in out:
             logger.info("aws: set Windows resolution to %dx%d", w, h)
             return
-        err = out or (res.get("stderr") if isinstance(res, dict) else "") or "no output"
-        raise RuntimeError(f"aws: could not set Windows resolution {w}x{h} — {err}")
+
+        # Parse the adapter's supported modes ("...supported=[(800, 600), ...]")
+        # and retry with the best fit instead of aborting the run.
+        modes = _parse_supported_modes(out)
+        if modes:
+            below = [m for m in modes if m[0] <= w and m[1] <= h]
+            best = max(below or modes, key=lambda m: m[0] * m[1])
+            out2 = await _try(best[0], best[1])
+            if "set_ok" in out2:
+                logger.warning(
+                    "aws: requested Windows resolution %dx%d unsupported on this "
+                    "display adapter (supported=%s) — using %dx%d instead",
+                    w, h, modes, best[0], best[1],
+                )
+                return
+        err = out or (out and "no output")
+        raise RuntimeError(
+            f"aws: could not set any Windows resolution (requested {w}x{h}); "
+            f"adapter output: {err or 'no output'}"
+        )
 
     # ------------------------------------------------------------------ release
 
