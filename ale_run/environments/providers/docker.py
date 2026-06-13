@@ -54,20 +54,45 @@ class DockerProviderConfig:
                 boot + the cua-server port + sandbox paths are read from that
                 Image's registry entry — nothing image-specific is configured here.
     shm_size    Shared memory size (default: 512m).
-    cpus        CPU limit per container (0 = unlimited).
-    memory      Memory limit per container (e.g. "8g", "" = unlimited).
+    cpus        CPU limit per container. 0 (default) = derive from the task's GCE
+                machine type (task_card ``vm.machineType``, e.g. "c4-standard-4")
+                so the container matches what gcloud would allocate. A non-zero
+                value overrides the derived value (a host-protection cap).
+    memory      Memory limit per container (e.g. "8g"). "" (default) = derive from
+                the task's GCE machine type, same as ``cpus``. A non-empty value
+                overrides (a host-protection cap).
+    resolution  Virtual display size (w, h) for the in-container Xvfb, passed via
+                ``ALE_SCREEN_RESOLUTION``. Default (1024, 768). Accepts [w, h] or
+                "WxH".
     gcs_sa_key  Host path to a GCS service-account JSON key. NOT a provider knob —
                 the loader injects it from the env-yaml top level (it travels with
                 ``task_data_source: gs://…``). When set, it is copied into each
                 container and gsutil/boto configured so gs:// staging works; the
                 key's ``project_id`` also bills requester-pays buckets.
+    privileged  Run containers with ``--privileged``. Needed for tasks whose eval
+                runs nested Docker (openroad, minikube/k8s, compose) — the baked
+                image starts a fresh inner dockerd. Under ROOTLESS docker this is
+                user-namespace-bounded (container root maps to the unprivileged
+                host user), so it does not expose the host kernel.
+    image_ref   Override the container ref to boot (default: the Image entry's
+                ``docker_image``). Lets one env config pin a specific tag, e.g.
+                a DinD-capable build, without editing the Image registry.
     """
 
     image: str = "ale-kasm"
     shm_size: str = "512m"
     cpus: float = 0
     memory: str = ""
+    resolution: tuple[int, int] | None = None
     gcs_sa_key: str = ""
+    privileged: bool = False
+    image_ref: str = ""
+    # Start the in-container nested dockerd (DinD) for tasks whose eval runs
+    # `docker run`. OFF by default: a fuse-overlayfs dockerd in every container is
+    # wasted overhead and, at concurrency, an I/O storm that starves cua startup.
+    # Only the ~4 nested-docker tasks need it (currently excluded — see the image
+    # README). When true the container gets ALE_ENABLE_DIND=1.
+    enable_dind: bool = False
 
 
 def _build_provider_config(raw: dict[str, Any]) -> DockerProviderConfig:
@@ -75,12 +100,19 @@ def _build_provider_config(raw: dict[str, Any]) -> DockerProviderConfig:
     if gcs_sa:
         from pathlib import Path as _P
         gcs_sa = str(_P(gcs_sa).expanduser().resolve())
+    from .gcloud import _parse_resolution
     return DockerProviderConfig(
         image=str(raw.get("image") or "ale-kasm"),
         shm_size=str(raw.get("shm_size") or "512m"),
         cpus=float(raw.get("cpus") or 0),
         memory=str(raw.get("memory") or ""),
+        resolution=_parse_resolution(
+            raw.get("resolution"), str(raw.get("image") or "ale-kasm")
+        ),
         gcs_sa_key=gcs_sa,
+        privileged=bool(raw.get("privileged") or False),
+        image_ref=str(raw.get("image_ref") or ""),
+        enable_dind=bool(raw.get("enable_dind") or False),
     )
 
 
@@ -186,25 +218,49 @@ class DockerProvider(Provider):
         # ale-kasm, 5000 on the ubuntu22 export), and the sandbox paths.
         from ..images import get as get_image
         image = get_image(self._cfg.image)
-        container_ref = image.docker_image or _DEFAULT_CONTAINER_REF
+        container_ref = self._cfg.image_ref or image.docker_image or _DEFAULT_CONTAINER_REF
         cua_internal_port = image.cua_server_port
 
+        res = self._cfg.resolution or (1024, 768)
         run_args = [
             "run", "-d",
             "--name", name,
             "-p", f"0:{cua_internal_port}",
             "-p", f"0:{_VNC_INTERNAL_PORT}",
             f"--shm-size={self._cfg.shm_size}",
+            # Virtual display size for the in-container Xvfb (the entrypoint reads
+            # this; falls back to its own default if unset).
+            "-e", f"ALE_SCREEN_RESOLUTION={res[0]}x{res[1]}",
+            # DinD is gated off in the entrypoint unless this is set (default off).
+            "-e", f"ALE_ENABLE_DIND={'1' if self._cfg.enable_dind else '0'}",
             # The kasm desktop entrypoint boots the X/VNC display *and* the
             # cua-server via custom_startup.sh. Some images ship a no-op CMD
             # ("sleep infinity") that never starts it, so we always invoke the
             # kasm startup script explicitly.
             "--entrypoint", _KASM_ENTRYPOINT,
         ]
-        if self._cfg.cpus > 0:
-            run_args.extend(["--cpus", str(self._cfg.cpus)])
-        if self._cfg.memory:
-            run_args.extend(["--memory", self._cfg.memory])
+        if self._cfg.privileged:
+            # Needed for tasks whose eval runs nested Docker; under rootless
+            # docker the privileged container's root is still user-ns-bounded.
+            run_args.append("--privileged")
+        # Resource sizing: translate the task-card GCE machine type
+        # (spec.machine_type, e.g. "c4-standard-4") into container --cpus/--memory
+        # so a Docker sandbox gets the same shape gcloud would give the task. A
+        # non-zero cpus / non-empty memory in the provider config overrides the
+        # derived value (a host-protection cap under single-host concurrency).
+        from .gcloud import _parse_gce_machine_type, _DEFAULT_CPU_MACHINE
+        shape = _parse_gce_machine_type(spec.machine_type or _DEFAULT_CPU_MACHINE)
+        cpus = self._cfg.cpus or (float(shape.vcpus) if shape else 0)
+        memory = self._cfg.memory or (f"{shape.memory_gb}g" if shape else "")
+        if cpus and cpus > 0:
+            run_args.extend(["--cpus", str(cpus)])
+        if memory:
+            run_args.extend(["--memory", memory])
+        logger.info(
+            "Container %s sizing: machine_type=%s -> cpus=%s memory=%s (res=%dx%d)",
+            name, spec.machine_type or f"{_DEFAULT_CPU_MACHINE}(default)",
+            cpus or "unset", memory or "unset", res[0], res[1],
+        )
         run_args.append(container_ref)
         run_args.append("--wait")
 

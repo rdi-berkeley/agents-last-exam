@@ -21,6 +21,7 @@ window.ALE_NAV = [
     items: [
       { href: "/pages/providers.html",       title: "Setup Environment Provider", children: [
         { href: "/pages/google-cloud.html",           title: "Google Cloud" },
+        { href: "/pages/local-docker.html",  title: "Local Docker" },
         { href: "/pages/local.html",         title: "VMware / QEMU" },
       ]},
       { href: "/pages/configure.html",               title: "Configure & run a benchmark" },

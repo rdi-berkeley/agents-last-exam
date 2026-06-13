@@ -494,47 +494,46 @@ def _upload_local_file_sync(sandbox: SandboxHandle, local_path: str, remote_path
     _write_binary_sync(sandbox, remote_path, content)
 
 
+_DOWNLOAD_CHUNK_BYTES = 4 * 1024 * 1024
+
+
 def _download_to_local_sync(
     sandbox: SandboxHandle, remote_path: str, local_path: str, timeout: float,
 ) -> bool:
-    """Download to a local file path. Uses ``read_text`` cmd on linux
-    (UTF-8 round-trip OK for transcripts); base64 on windows (binary-safe)."""
-    if sandbox.is_linux:
-        try:
-            with requests.post(
-                sandbox.cmd_url,
-                json={"command": "read_text", "params": {"path": remote_path}},
-                headers={"Content-Type": "application/json"},
-                timeout=timeout,
-                stream=True,
-            ) as resp:
-                data = _read_first_sse_event(resp, read_timeout=timeout)
-            if data and data.get("success"):
-                Path(local_path).write_text(
-                    data.get("content", "") or "", encoding="utf-8",
-                )
-                return True
-        except Exception as e:
-            logger.debug("read_text failed for %s: %s", remote_path, e)
-        return False
-    # Windows: chunked native read_bytes.
-    # The old path base64-encoded the WHOLE file in one powershell call and
-    # returned it as a single giant stdout over one /cmd RPC. For large outputs
-    # (e.g. a 76 MB GeoPackage → ~101 MB base64 string) that runs far past the
-    # timeout and effectively hangs the unit until the task wall-clock fires.
-    # Use the cua-server's native ``read_bytes`` command (offset/length) and
-    # stream in 1 MB chunks — the same mechanism the cua SDK uses for files
-    # > 5 MB — so each RPC carries a bounded, fast payload.
-    _CHUNK = 1024 * 1024
+    """Chunked, binary-safe download with a hard wall-clock deadline.
+
+    Streams the file in ``_DOWNLOAD_CHUNK_BYTES`` slices via the cua-server's
+    native ``read_bytes`` command (offset/length) so each RPC carries a bounded
+    payload, for BOTH linux and windows. ``timeout`` is the TOTAL budget for the
+    file, not a per-read bound.
+
+    Previously the linux path read the WHOLE file in one ``read_text`` SSE event:
+    on large outputs (a 96 MB CSV) that ran far past the per-op timeout — which
+    only bounds a single read, not the total — and effectively hung the unit
+    until the task wall-clock fired; on binary outputs (PNG, .nc, ...) the UTF-8
+    round-trip corrupted or failed them (the source of spurious download errors).
+    Windows already streamed read_bytes; this unifies both and adds the deadline.
+    """
+    import time as _time
+
+    deadline = _time.monotonic() + timeout
     try:
         offset = 0
         parts: list[bytes] = []
         while True:
+            remaining = deadline - _time.monotonic()
+            if remaining <= 0:
+                logger.debug(
+                    "download_to_local timed out for %s at offset %d (budget=%.0fs)",
+                    remote_path, offset, timeout,
+                )
+                return False
             data = _post_cmd(
                 sandbox,
                 {"command": "read_bytes",
-                 "params": {"path": remote_path, "offset": offset, "length": _CHUNK}},
-                timeout=timeout,
+                 "params": {"path": remote_path, "offset": offset,
+                            "length": _DOWNLOAD_CHUNK_BYTES}},
+                timeout=max(10.0, min(timeout, remaining)),
             )
             if data is None:
                 logger.debug("read_bytes transport error for %s at offset %d", remote_path, offset)
@@ -545,12 +544,12 @@ def _download_to_local_sync(
             raw = base64.b64decode(data.get("content_b64", "") or "")
             parts.append(raw)
             offset += len(raw)
-            if len(raw) < _CHUNK:
+            if len(raw) < _DOWNLOAD_CHUNK_BYTES:
                 break
         Path(local_path).write_bytes(b"".join(parts))
         return True
     except Exception as e:
-        logger.debug("windows chunked read_bytes download failed for %s: %s", remote_path, e)
+        logger.debug("download_to_local failed for %s: %s", remote_path, e)
         return False
 
 

@@ -1,0 +1,22 @@
+# Docker provider for the cpu-free-ubuntu (Linux, no-GPU, no-license) tasks —
+# boots the published `agentslastexam/ale-ubuntu22-docker:latest` image as a
+# local container instead of one GCE VM per task.
+#
+# Per-task cpus/memory are derived from the task card's GCE machine type by the
+# provider (c4-standard-4 -> 4 CPU / 15g, etc.); `resolution` sets the Xvfb size.
+#
+# Nested Docker (DinD) is OFF here. Only ~4 tasks (openroad, k8s_migration, bpmn
+# x2) need a docker daemon inside the sandbox, and they are currently deferred /
+# excluded. The image still ships those nested images baked in; to re-enable the
+# tasks later, add `enable_dind: true` AND `privileged: true` below (see the
+# image README "Deferred: DinD tasks").
+snapshots:
+  cpu-free-ubuntu:
+    provider: docker
+    image: ale-ubuntu22-docker     # -> agentslastexam/ale-ubuntu22-docker:latest (from the Image registry; pulls from Hub if absent)
+    docker:
+      shm_size: 2g
+      resolution: [1024, 768]
+task_data_source: baked_in_sandbox
+output_path: local
+gcs_sa_key: secret/gcp_key.json

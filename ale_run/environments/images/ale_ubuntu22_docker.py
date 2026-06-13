@@ -25,8 +25,11 @@ IMAGE = Image(
     # provisioning defaults
     default_machine_type="e2-standard-4",
 
-    # container ref the docker provider boots (locally-built export tag)
-    docker_image="ale-ubuntu22-docker:latest",
+    # Container ref the docker provider boots. Hub-qualified so a user WITHOUT a
+    # local copy auto-pulls it via `docker run` (an unqualified name would resolve
+    # to docker.io/library/... and fail). Locally-built images should be tagged
+    # with this same ref so the local copy is used instead of pulling.
+    docker_image="agentslastexam/ale-ubuntu22-docker:latest",
 
     # cua-server port (same as the GCE image)
     cua_server_port=5000,
