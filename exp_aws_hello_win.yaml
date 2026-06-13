@@ -1,0 +1,16 @@
+# AWS demo: demo/hello (Linux) with Claude Code + Sonnet, mirroring example_exp.yaml.
+name: aws_demo_hello_win
+
+secret_file: secret/.env
+
+agents:
+  - configs/agents/claude_code.yaml          # model: anthropic/claude-sonnet-4.6 (openrouter)
+environment: configs/environments/environment_aws_demo.yaml
+
+tasks: selected_tasks/aws_hello_win.txt
+
+output:
+  root: .logs/ale
+concurrency: 1
+wall_time_s: 1800
+cleanup_mode: delete

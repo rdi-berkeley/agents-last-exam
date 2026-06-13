@@ -1,0 +1,31 @@
+# environment_aws_demo.yaml — AWS demo/validation env for demo/hello[_win].
+# Same as environment_aws.yaml but the Windows snapshot uses SHARED tenancy so
+# the demo runs WITHOUT the Dedicated-Instances quota (a Support-case item).
+# NOTE: shared tenancy is for functional validation only; license-compliant
+# Windows runs must use environment_aws.yaml (tenancy: dedicated).
+
+task_data_source: baked_in_sandbox    # demo data is baked into the AMIs
+output_path: local                    # pull output to the host run dir
+
+snapshots:
+
+  cpu-free-ubuntu:                     # demo/hello (Linux)
+    provider: aws
+    image: ale-ubuntu22
+    aws:
+      region: ${env:AWS_REGION}
+      vpc: ${env:ALE_AWS_VPC}
+      security_group_ids: [ "${env:ALE_AWS_SG}" ]
+      zones: [ us-east-1a, us-east-1b, us-east-1c ]
+      associate_public_ip: true
+
+  cpu-free:                            # demo/hello_win (Windows) — SHARED tenancy (validation only)
+    provider: aws
+    image: ale-win10
+    resolution: [1024, 768]
+    aws:
+      region: ${env:AWS_REGION}
+      vpc: ${env:ALE_AWS_VPC}
+      security_group_ids: [ "${env:ALE_AWS_SG}" ]
+      zones: [ us-east-1a, us-east-1b, us-east-1c ]
+      tenancy: default

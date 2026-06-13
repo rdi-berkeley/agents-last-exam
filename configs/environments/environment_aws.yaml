@@ -60,6 +60,10 @@
 # hard-code them.
 # ============================================================================
 
+# Substrate-coupled run knobs (same place as the gcloud environment.yaml).
+task_data_source: baked_in_sandbox   # data is baked into the AMI; or s3://<bucket>
+output_path: local                   # pull output to host; or s3://<bucket>
+
 snapshots:
 
   # ── Linux, no GPU — the bulk of tasks ───────────────────────────────────

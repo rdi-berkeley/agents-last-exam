@@ -83,19 +83,37 @@ source tools/aws/.aws-env          # exports ALE_AWS_VPC, ALE_AWS_SG, ALE_BUCKET
       ways to get one:
     </p>
     <p>
-      <strong>(a) Use a published public AMI (Linux, if available in your
-      region).</strong> AWS AMIs can be made public, so others launch them
-      <em>directly with no copy</em> — as long as they are in the same region.
-      If ALE publishes <code>ale-ubuntu22</code> in your region you skip importing
-      entirely; for a different region you copy it once
-      (<code>aws ec2 copy-image</code>). This is lighter than gcloud, where every
-      image is always copied into your own project.
+      <strong>(a) Use ALE's published public AMIs.</strong> ALE publishes both
+      images as public AMIs in <code>us-east-1</code>:
     </p>
+    <pre><code># find them by owner + name (us-east-1)
+aws ec2 describe-images --region us-east-1 --owners 670060057810 \
+  --filters "Name=is-public,Values=true" --query 'Images[].[ImageId,Name]' --output table
+# ale-ubuntu22   →  current id below
+# ale-win10      →  current id below</code></pre>
     <p>
-      <strong>(b) Import it yourself (works in any region; required for
-      Windows).</strong> ALE exports the disks to
+      In <code>us-east-1</code> you launch them <em>directly, no copy</em>; for
+      another region copy once with <code>aws ec2 copy-image</code>. This is
+      lighter than gcloud, where every image is always copied into your project.
+    </p>
+    <div class="note warn">
+      <div class="note-title">Heads-up if you use ALE's public AMIs from your own account</div>
+      <strong>AMI tags are private to the owner account.</strong> Our
+      <code>ale:image-family</code> tag (which the provider's auto-lookup needs)
+      is <em>not</em> visible to you on our public AMI. So in your account either
+      (1) pin the id directly — <code>ami: ami-…</code> in the snapshot's
+      <code>aws:</code> block (the env yaml still needs <code>image:</code> for the
+      in-box paths); or (2) <code>copy-image</code> it into your account and tag
+      your copy <code>ale:image-family=ale-ubuntu22</code> (or
+      <code>ale-win10</code>), after which the family auto-lookup works for you.
+      Also note Windows is <strong>BYOL</strong>: launching it is legal only under
+      your own Microsoft VDA license, on dedicated tenancy.
+    </div>
+    <p>
+      <strong>(b) Import it yourself (any region; also how the public AMIs were
+      built).</strong> ALE exports the disks to
       <code>gs://ale-data-public/images/</code>. The scripts stream a disk into
-      your S3 import bucket and register an AMI from it:
+      your S3 import bucket and register a tagged AMI from it:
     </p>
     <pre><code># Linux — import-snapshot + register-image (boots on Nitro; ~1.5-4 h to convert)
 ./tools/aws/import_ubuntu_ami.sh
@@ -105,19 +123,12 @@ source tools/aws/.aws-env          # exports ALE_AWS_VPC, ALE_AWS_SG, ALE_BUCKET
     <p>
       Each script <strong>tags</strong> the resulting AMI with
       <code>ale:image-family=&lt;name&gt;</code>. That tag is the link the
-      provider uses: at run time it looks up the newest AMI carrying the family
-      tag, so the environment config just names the family
-      (<code>image: ale-win10</code>) and never a raw <code>ami-…</code> id. To
-      swap in a rebuilt image later, tag the new AMI the same way (newest wins)
-      or pin one explicitly with <code>ami:</code> in the config.
+      provider uses: <code>AwsProvider</code> resolves the env yaml's
+      <code>image: ale-win10</code> to the newest AMI <em>in your account</em>
+      carrying that family tag — so the config names the family, never a raw
+      <code>ami-…</code>. To swap in a rebuilt image, tag the new one the same way
+      (newest wins) or pin it with <code>ami:</code>.
     </p>
-    <div class="note">
-      <div class="note-title">Why Windows must be imported, not shared</div>
-      A public Linux AMI is fine. A Windows 10 AMI cannot be shared for others to
-      use: Windows client licensing is per-account BYOL, so every user imports
-      their own from the disk under their own Microsoft license. The import is
-      also why Windows needs the <code>vmimport</code> role from step ①.
-    </div>
 
     <h3 id="data-results">③ Task data and results buckets (S3)</h3>
     <p>
