@@ -63,7 +63,9 @@ logger = logging.getLogger(__name__)
 # back C→M (see _instance_chain); GPU has no instance fallback. Both are Nitro
 # families (required to boot an imported non-AWS image with ENA/NVMe).
 _DEFAULT_CPU_INSTANCE = "m6i.2xlarge"     # 8 vCPU / 32 GiB
-_DEFAULT_GPU_INSTANCE = "g5.2xlarge"      # 8 vCPU / 32 GiB / 1x A10G
+# g6 = NVIDIA L4, matching the GCE image's `nvidia-l4-vws` (L4) driver — the
+# closest AWS family, so the baked driver has the best chance of binding.
+_DEFAULT_GPU_INSTANCE = "g6.2xlarge"      # 8 vCPU / 32 GiB / 1x L4
 
 # Launch retry tuning.
 _AWS_MAX_RETRIES_TRANSIENT = 3
