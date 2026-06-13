@@ -824,6 +824,22 @@ async def pull_agent_output(
             writer.emit_event("output_gather_failed", transport="cua", error=str(e))
         return
 
+    # s3:// case
+    if output_path.startswith("s3://"):
+        try:
+            report = await output_pull.push_to_s3(
+                env.sandbox, task_data, run_id=run_id, bucket=output_path,
+            )
+            writer.emit_event(
+                "output_gather_done",
+                transport="s3",
+                s3_path=report.get("s3_path"),
+            )
+        except Exception as e:
+            logger.warning("push_to_s3 failed (best-effort): %s", e)
+            writer.emit_event("output_gather_failed", transport="s3", error=str(e))
+        return
+
     # gs:// case
     if not output_path.startswith("gs://"):
         # loader validates this, so reaching here would mean a bypassed path.

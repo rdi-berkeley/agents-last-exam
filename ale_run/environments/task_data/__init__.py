@@ -5,6 +5,7 @@ Three sources today, dispatched on yaml ``artifacts_path.task_data_source``:
 
   ``"baked_in_sandbox"``     image already has input/ + reference.7z baked in
   ``"gs://<bucket>"``        rsync from a GCS bucket
+  ``"s3://<bucket>"``        sync from an S3 bucket
   ``"hf://<dataset>"``       HuggingFace Hub (STUB)
 
 Each backend module exposes two coroutines:
@@ -41,12 +42,15 @@ def select(task_data_source: str):
     if task_data_source.startswith("gs://"):
         from . import gsbucket
         return gsbucket
+    if task_data_source.startswith("s3://"):
+        from . import s3bucket
+        return s3bucket
     if task_data_source.startswith("hf://"):
         from . import huggingface
         return huggingface
     raise ValueError(
         f"unknown task_data_source {task_data_source!r}: expected "
-        f"'baked_in_sandbox', 'gs://<bucket>', or 'hf://<dataset>'"
+        f"'baked_in_sandbox', 'gs://<bucket>', 's3://<bucket>', or 'hf://<dataset>'"
     )
 
 

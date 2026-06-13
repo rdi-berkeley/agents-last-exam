@@ -5,6 +5,7 @@ Dispatched by the lifecycle on ``artifacts_path.output_path``:
   None         → skip; output stays on the sandbox and is lost on teardown
   ``"local"``  → :func:`pull_to_host` (cua HTTP, one file at a time)
   ``"gs://X"`` → :func:`push_to_gcs` (VM-side gsutil; nothing on host)
+  ``"s3://X"`` → :func:`push_to_s3` (in-box aws CLI; nothing on host)
 """
 from __future__ import annotations
 
@@ -115,3 +116,33 @@ async def push_to_gcs(
             f"{(r.stderr or '')[:300]}"
         )
     return {"transport": "gcs", "gcs_path": gcs_dst}
+
+
+async def push_to_s3(
+    sandbox: SandboxHandle, task_data: TaskDataSpec, *,
+    run_id: str, bucket: str,
+) -> dict[str, Any]:
+    """``output_path == 's3://...'`` — in-box ``aws s3`` push.
+
+    Lands the env's output dir at ``<bucket>/<run_id>/output/``. Auth is the
+    instance's IAM role (AwsProvider attaches an instance profile), so there is
+    no key to inject — mirror of :func:`push_to_gcs` but credential-free.
+    """
+    src = _output_dir(sandbox, task_data)
+    s3_dst = f"{bucket.rstrip('/')}/{run_id}/output/"
+
+    if sandbox.is_linux:
+        cmd = f"aws s3 cp --recursive {shlex.quote(src)} {shlex.quote(s3_dst)}"
+    else:
+        cmd = (
+            'powershell -NoProfile -Command "'
+            f"aws s3 cp --recursive '{src}' '{s3_dst}'"
+            '"'
+        )
+    logger.info("push_to_s3: %s → %s", src, s3_dst)
+    r = await sandbox.run_command(cmd, timeout=600)
+    if r.returncode != 0:
+        raise RuntimeError(
+            f"aws s3 cp failed (rc={r.returncode}): {(r.stderr or '')[:300]}"
+        )
+    return {"transport": "s3", "s3_path": s3_dst}

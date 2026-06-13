@@ -1,0 +1,86 @@
+# ============================================================================
+# environment_aws.yaml — run ALE on AWS (EC2 + S3). AWS counterpart of
+# environment.yaml; same per-snapshot model and the SAME image-family names.
+# ============================================================================
+# Like the gcloud env, everything here is a hardcoded convention. There are NO
+# ${env:...} references: AWS credentials come from the ambient chain
+# (`aws configure` / env / instance role), and the VPC, subnets and AMIs are
+# resolved at run time by name/tag (set up once per the AWS setup docs):
+#   • image            image-FAMILY name (registry key under
+#                      ale_run/environments/images/) → resolved to the newest AMI
+#                      tagged `ale:image-family=<name>`. Pin one with `ami:`.
+#   • security_group   the firewall by NAME (gcloud analogue: `network`). The
+#                      provider resolves it to its id + the VPC it lives in; that
+#                      VPC scopes the AZ→subnet lookup.
+#   • zones            Availability-Zone names, tried in order on capacity errors.
+#   • tenancy          default | dedicated (Windows-10 client BYOL → dedicated).
+#   • gpu              truthy → a GPU instance type (g6 / NVIDIA L4).
+# ----------------------------------------------------------------------------
+
+snapshots:
+
+  cpu-free-ubuntu:            # Linux, no GPU — the bulk of tasks
+    provider: aws
+    image: ale-ubuntu22
+    aws:
+      region: us-east-1
+      security_group: ale-sandbox
+      instance_prefix: ale
+      zones: [us-east-1a, us-east-1b, us-east-1c]
+
+  cpu-free:                   # Windows, no GPU
+    provider: aws
+    image: ale-win10
+    resolution: [1024, 768]
+    aws:
+      region: us-east-1
+      security_group: ale-sandbox
+      instance_prefix: ale
+      tenancy: dedicated      # Win10 client BYOL is not licensed for shared tenancy
+      zones: [us-east-1a, us-east-1b, us-east-1c]
+
+  cpu-license:                # Windows requiring a licensed image (same family)
+    provider: aws
+    image: ale-win10
+    resolution: [1024, 768]
+    aws:
+      region: us-east-1
+      security_group: ale-sandbox
+      instance_prefix: ale
+      tenancy: dedicated
+      zones: [us-east-1a, us-east-1b, us-east-1c]
+
+  gpu-free:                   # Windows + GPU (same family; GPU is the instance type)
+    provider: aws
+    image: ale-win10
+    resolution: [1920, 1080]
+    aws:
+      region: us-east-1
+      security_group: ale-sandbox
+      instance_prefix: ale
+      gpu: nvidia-l4          # truthy → g6 (NVIDIA L4)
+      tenancy: dedicated
+      zones: [us-east-1a, us-east-1b, us-east-1c]
+
+  gpu-license:                # Windows + GPU, licensed
+    provider: aws
+    image: ale-win10
+    resolution: [1920, 1080]
+    aws:
+      region: us-east-1
+      security_group: ale-sandbox
+      instance_prefix: ale
+      gpu: nvidia-l4
+      tenancy: dedicated
+      zones: [us-east-1a, us-east-1b, us-east-1c]
+
+# ---------------------------------------------------------------------------
+# Task data + output (substrate-coupled; mirrors environment.yaml).
+# ---------------------------------------------------------------------------
+# "baked_in_sandbox" (data baked into the AMI) | "s3://<bucket>".
+task_data_source: baked_in_sandbox
+
+# Output after the run: null | "local" | "s3://<bucket>". For full benchmark
+# runs set this to your results bucket and add `iam_instance_profile: ale-sandbox`
+# to each snapshot's aws: block (the in-box aws CLI writes via the instance role).
+output_path: local

@@ -281,10 +281,11 @@ def _build_artifacts(raw: dict[str, Any]) -> ArtifactsSpec:
     output_path = raw.get("output_path")
     if output_path is not None:
         op = str(output_path).strip()
-        if op and op not in _VALID_OUTPUT_PATH_LITERALS and not op.startswith("gs://"):
+        if (op and op not in _VALID_OUTPUT_PATH_LITERALS
+                and not op.startswith("gs://") and not op.startswith("s3://")):
             raise ValueError(
                 f"artifacts_path.output_path must be null, 'local', or a "
-                f"'gs://...' bucket path; got {output_path!r}"
+                f"'gs://...'/'s3://...' bucket path; got {output_path!r}"
             )
         output_path = op or None
 
@@ -292,10 +293,11 @@ def _build_artifacts(raw: dict[str, Any]) -> ArtifactsSpec:
     tdp = str(task_data_source).strip()
     if (tdp not in _VALID_TASK_DATA_LITERALS
             and not tdp.startswith("gs://")
+            and not tdp.startswith("s3://")
             and not tdp.startswith("hf://")):
         raise ValueError(
             f"artifacts_path.task_data_source must be 'baked_in_sandbox', "
-            f"'gs://<bucket>', or 'hf://<dataset>'; got {task_data_source!r}"
+            f"'gs://<bucket>', 's3://<bucket>', or 'hf://<dataset>'; got {task_data_source!r}"
         )
 
     return ArtifactsSpec(
@@ -371,6 +373,13 @@ _ENVIRONMENT_TOP_RESERVED = frozenset({
 # per-snapshot routing fields image/zones/gpu). They are repeated on each gcloud
 # snapshot's block and reconciled here into one provider config.
 _GCLOUD_CRED_KEYS = ("project", "service_account_key", "instance_prefix", "network", "subnet")
+_AWS_CRED_KEYS = (
+    "region", "security_group", "instance_prefix",
+    "key_name", "iam_instance_profile", "associate_public_ip",
+)
+# `tenancy` and `ami` are intentionally NOT cred keys: they are per-snapshot
+# routing (tenancy: Linux default vs Windows-client dedicated; ami: optional
+# explicit AMI override) so one env can mix both.
 
 
 def _build_environment_from_path(
@@ -453,6 +462,8 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
     snapshot_kind: dict[str, str] = {}
     gcloud_snaps: dict[str, Any] = {}   # tag -> {image, gpu, zones}
     gcloud_creds: dict[str, Any] = {}   # project/sa/network/... (reconciled, last wins)
+    aws_snaps: dict[str, Any] = {}      # tag -> {image(AMI), gpu, zones(subnets)}
+    aws_creds: dict[str, Any] = {}      # region/sg/profile/... (reconciled, last wins)
     docker_cfg: dict[str, Any] | None = None
 
     for tag, entry in snapshots.items():
@@ -478,6 +489,14 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
             if entry.get("resolution") is not None:
                 snap_entry["resolution"] = entry["resolution"]
             gcloud_snaps[str(tag)] = snap_entry
+        elif kind == "aws":
+            # same split as gcloud: provider-wide creds vs per-snapshot routing.
+            aws_creds.update({k: knobs[k] for k in _AWS_CRED_KEYS if k in knobs})
+            routing = {k: v for k, v in knobs.items() if k not in _AWS_CRED_KEYS}
+            snap_entry = {"image": str(image), **routing}
+            if entry.get("resolution") is not None:
+                snap_entry["resolution"] = entry["resolution"]
+            aws_snaps[str(tag)] = snap_entry
         elif kind == "docker":
             # docker carries just the image NAME + sizing knobs; the provider
             # resolves the container ref + port from the Image entry. Multiple
@@ -515,6 +534,13 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
         gc["snapshots"] = gcloud_snaps
         _validate_provider_required("gcloud", gc, path)
         provider_specs["gcloud"] = ProviderSpec(kind="gcloud", config=gc)
+    if aws_snaps:
+        aw = dict(aws_creds)
+        aw["snapshots"] = aws_snaps
+        # No gcs_sa_key counterpart: EC2 boxes authenticate to S3 via their IAM
+        # instance profile, so nothing is injected for s3:// staging/output.
+        _validate_provider_required("aws", aw, path)
+        provider_specs["aws"] = ProviderSpec(kind="aws", config=aw)
     if docker_cfg is not None:
         dk = dict(docker_cfg)
         if gcs_sa_key:
@@ -539,6 +565,12 @@ def _validate_provider_required(provider: str, cfg: dict[str, Any], path: str = 
                     f"environment provider=gcloud missing required field `{k}`{where} "
                     f"(set it on each gcloud snapshot's `gcloud:` block)"
                 )
+    elif provider == "aws":
+        if not cfg.get("region"):
+            raise KeyError(
+                f"environment provider=aws missing required field `region`{where} "
+                f"(set it on each aws snapshot's `aws:` block)"
+            )
     elif provider == "static":
         if not cfg.get("endpoint"):
             raise KeyError(f"environment provider=static missing required field `endpoint`{where}")
