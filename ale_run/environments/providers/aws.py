@@ -667,7 +667,10 @@ class AwsProvider(Provider):
                 name, instance_id, used_instance, used_az, used_subnet, cua_url,
             )
 
-            ready = await wait_cua_ready(cua_url, snap.os)
+            # Windows first-boot on an imported image (driver init + login +
+            # cua autostart) can exceed the 10-min Linux default; give it 20.
+            cua_timeout = 1200 if snap.os == "windows" else 600
+            ready = await wait_cua_ready(cua_url, snap.os, timeout=cua_timeout)
             if not ready:
                 raise RuntimeError(f"CUA server at {cua_url} did not become ready")
 

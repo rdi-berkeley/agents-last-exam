@@ -61,8 +61,12 @@
 # ============================================================================
 
 # Substrate-coupled run knobs (same place as the gcloud environment.yaml).
-task_data_source: baked_in_sandbox   # data is baked into the AMI; or s3://<bucket>
-output_path: local                   # pull output to host; or s3://<bucket>
+# Full benchmark runs push output to an S3 results bucket (the default below) —
+# run tools/aws/setup_results_bucket.sh first (creates the bucket + the
+# ale-sandbox instance profile, exports ALE_RESULTS_BUCKET/ALE_INSTANCE_PROFILE).
+# For a quick local run instead, set output_path: local and drop iam_instance_profile.
+task_data_source: baked_in_sandbox             # baked into the AMI; or s3://<bucket>
+output_path: s3://${env:ALE_RESULTS_BUCKET}    # results land at <bucket>/<run_id>/output/
 
 snapshots:
 
@@ -73,11 +77,11 @@ snapshots:
     aws:
       region: ${env:AWS_REGION}
       vpc: ${env:ALE_AWS_VPC}
+      iam_instance_profile: ${env:ALE_INSTANCE_PROFILE}   # in-box S3 write for output push
       security_group_ids: [ "${env:ALE_AWS_SG}" ]
       zones: [ us-east-1a, us-east-1b, us-east-1c ]
       associate_public_ip: true
       # ami: ami-0123456789abcdef0   # OPTIONAL: pin one AMI, overrides the tag lookup
-      # iam_instance_profile: ale-sandbox   # OPTIONAL: only for task_data_source: s3://
 
   # ── Windows 10, no GPU. BYOL → DEDICATED tenancy ────────────────────────
   cpu-free:
@@ -87,6 +91,7 @@ snapshots:
     aws:
       region: ${env:AWS_REGION}
       vpc: ${env:ALE_AWS_VPC}
+      iam_instance_profile: ${env:ALE_INSTANCE_PROFILE}   # in-box S3 write for output push
       security_group_ids: [ "${env:ALE_AWS_SG}" ]
       zones: [ us-east-1a, us-east-1b, us-east-1c ]
       tenancy: dedicated
@@ -99,6 +104,7 @@ snapshots:
     aws:
       region: ${env:AWS_REGION}
       vpc: ${env:ALE_AWS_VPC}
+      iam_instance_profile: ${env:ALE_INSTANCE_PROFILE}   # in-box S3 write for output push
       security_group_ids: [ "${env:ALE_AWS_SG}" ]
       zones: [ us-east-1a, us-east-1b, us-east-1c ]
       tenancy: dedicated
@@ -111,6 +117,7 @@ snapshots:
     aws:
       region: ${env:AWS_REGION}
       vpc: ${env:ALE_AWS_VPC}
+      iam_instance_profile: ${env:ALE_INSTANCE_PROFILE}   # in-box S3 write for output push
       security_group_ids: [ "${env:ALE_AWS_SG}" ]
       zones: [ us-east-1a, us-east-1b, us-east-1c ]
       gpu: "1"                   # → g6.2xlarge (NVIDIA L4)
@@ -124,6 +131,7 @@ snapshots:
     aws:
       region: ${env:AWS_REGION}
       vpc: ${env:ALE_AWS_VPC}
+      iam_instance_profile: ${env:ALE_INSTANCE_PROFILE}   # in-box S3 write for output push
       security_group_ids: [ "${env:ALE_AWS_SG}" ]
       zones: [ us-east-1a, us-east-1b, us-east-1c ]
       gpu: "1"
