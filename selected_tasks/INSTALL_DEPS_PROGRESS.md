@@ -267,3 +267,18 @@ Verify-quoting fix: meta.verify R exprs must be single-quoted (`Rscript -e 'libr
 4. health_medicine/nsclc_radiomics_cox_signature_v1 — pyradiomics (pinned alpha) sdist build broken (cmatrices.h; no cp310/311 wheel).
 5. health_medicine/simglucose_safe_basal_control_instance_1 — gym==0.9.4 sdist won't build on modern setuptools.
 => ~98/105 PASS; 7 frontier tasks need user input (BGW tarball / 50GB+GUI provisioning / upstream-broken pins).
+
+## FINAL MAPPING COMPLETE — 105/105 cards have requiredSystemPackages
+PASS (validated on lean base): ~100 tasks incl. hg002 (nextflow/gatk/bwa-mem2/vep), protein_function
+  (openjdk-11; InterProScan is staged data), bias_audit/ltmle (rig legacy R), pseudotime (bioconda tradeSeq),
+  prostate_imrt/amber_three/yeast_colony (conda).
+MAPPED but verify needs external resource / has upstream-broken lock (documented, not faked):
+  - computational_materials_science, mose2_bse_absorption_soc, silicon_bse_absorption → qe-bgw-6.7.0-4.0
+    (QE6.7 conda OK; BerkeleyGW 4.0 source registration-gated → set BGW_TARBALL to finish build).
+  - scene2_resample, scene3_skullstrip_qc → neurodesk-brain-science (apptainer + multi-GB GUI .simg bundle;
+    set BRAIN_SCIENCE_BUNDLE to provision).
+  - nsclc_radiomics_cox_signature_v1 → env (python3.10-dev/build-essential) provided; its runtime_env lock
+    pins a pyradiomics alpha whose sdist is upstream-broken (cmatrices.h) — a task-data lock fix, not env.
+  - simglucose_safe_basal_control_instance_1 → env (python) provided; its lock pins gym==0.9.4 which won't
+    build on modern setuptools — task-data lock fix, not env.
+  - ct_geometry_calibration_catphan → python + build-essential (agent builds LEAP/torch at solve; no manifest).

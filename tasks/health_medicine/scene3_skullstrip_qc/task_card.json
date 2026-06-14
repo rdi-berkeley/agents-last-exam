@@ -82,5 +82,8 @@
         "subdomain_name": "Clinical Diagnostics & Imaging"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "neurodesk-brain-science"
+  ]
 }

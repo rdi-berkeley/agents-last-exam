@@ -72,5 +72,10 @@
       },
       "rationale": "The task involves computational materials science focusing on optical response in materials."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "micromamba",
+    "qe-bgw-6.7.0-4.0",
+    "python-default-3.10"
+  ]
 }
