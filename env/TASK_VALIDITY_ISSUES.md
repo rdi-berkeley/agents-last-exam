@@ -123,10 +123,20 @@ for the PyPI/Docker-Hub tasks). Do not attempt to "fix" these via env packages.
 - The RTG `vcfeval` benchmark checkpoint (0.6 of the score) needs `rtg-tools`, which is not provisioned
   (see DEV_VM_MISSING_ENV.md). Reaches ~0.4 with PATH tools + manual bcftools metrics; full 1.0 needs rtg or a hand-rolled metric.
 
-### health_medicine/scene3_skullstrip_qc — DEGRADED (prompt inconsistency)
-- Prompt names "3D Slicer 5.0.3"; `agentMustDo` + `launch_gui.sh` target **FSLeyes**. Inconsistent tool.
-  Also a GUI computer-use task that needs a desktop/X session on an otherwise headless snapshot.
-  (Bundle availability is a separate dev-VM-missing issue.)
+### health_medicine/scene3_skullstrip_qc — wrong tool in the prompt (authoritative source)
+- **Authoritative source:** the agent prompt is built from `SCENE_SPECS["scene3_skullstrip_qc"]` in
+  `tasks/psychology_neuro/_shared/cognitive_science/neuro_common.py` (via `load_single_task` → `task_description`).
+  NOT task_card.json (that's a derived copy with the same stale text).
+- **Bug:** that SceneSpec sets `software_name="3D Slicer"`, `software_version="5.0.3"`, `tool_command="Slicer"`,
+  and instruction "Open … in 3D Slicer." — but scene3 actually uses **FSLeyes (FSL 6.0.7.18)**: the bundle
+  `containers_manifest.yaml` maps scene3 → fsl (gui_command fsleyes, fsl_6.0.7.18_*.simg); `main.py`
+  `TASK_TITLE="Skull-stripping QC selection in FSLeyes"`; `run_scene.sh` launches the fsl container.
+- **Self-contradiction:** `main.py` passes `TASK_TITLE="…in FSLeyes"` while the template uses
+  `spec.software_name="3D Slicer"` → the generated prompt's title says FSLeyes but its body says 3D Slicer.
+- **Fix:** change scene3's SceneSpec to `software_name="FSLeyes"`, `software_version="1.18.1"`,
+  `tool_command="fsleyes"`, reword instruction_text — mirror the already-correct `scene5_registration_qc` spec
+  in the same file. (scene2_resample genuinely uses Slicer; no change there.)
+- Also a GUI computer-use task that needs a desktop/X session on an otherwise headless snapshot.
 
 ---
 

@@ -33,7 +33,15 @@ They are the real blockers for the CT/imaging tasks.
   wrappers (leapctype.py/leaptorch.py/etc. from the v1.26 tag) into site-packages, + pip install torch-cpu +
   numpy/scipy/scikit-image/imageio. Modest. (The tasks' wrappers `exec /usr/bin/python` and assume these are
   importable, so they must be on the system python path, not in a venv.)
-- **Recommendation:** build the `leap-cpu-torch` package (low risk). Awaiting your go-ahead.
+- **RESOLVED (vendored, approved):** there is NO installable CPU build from upstream — the release `.so` is a
+  CUDA build (needs libcufft.so.11); the supported pip/`setup.py`→`etc/build.sh` path runs cmake with a
+  `CMakeLists` that `find_package(CUDA 11.7 REQUIRED)`; and `cpu_CMakeLists.txt` is broken (64 ungated GPU
+  symbols in filtered_backprojection.cpp). So the `leap-cpu-torch` package **vendors the reference CPU
+  `libleapct.so` (LEAP 1.26, MIT) + pure-Python wrappers** in `env/packages/leap-cpu-torch/vendor/` and pip-installs
+  torch-cpu/numpy/scipy/scikit-image/imageio. Verified clean on the lean base (ldd no CUDA; CPU forward projection
+  computes). (An alternative "official-downloads-only" route — release CUDA `.so` + PyPI `nvidia-cufft-cu12`, run
+  `use_gpu=False` — was tested and computes, but spams `cudaMalloc failed` and runs the CUDA build's fallback path,
+  not the reference pure-CPU build; rejected for fidelity.)
 
 ### matRad QA micromamba env — NO GAP (verified, matches ground truth)
 - **Where:** `/home/user/.local/share/micromamba/envs/rtplan-matrad` (per-user); matRad source at `/opt/matrad-c014dc82`.
