@@ -1,0 +1,1 @@
+{"description":"LEAP 1.26 (LLNL CT projector, CPU) + CPU torch/numpy/scipy/scikit-image/imageio in system python3.10","verify":"/usr/bin/python3.10 -c \"import torch,leaptorch; from leaptorch import Projector\""}

@@ -129,5 +129,8 @@
         "subdomain_name": "HR & Project Management"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "docker-ce"
+  ]
 }

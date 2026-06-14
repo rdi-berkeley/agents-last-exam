@@ -1,0 +1,1 @@
+{"description":"pdftotext + poppler CLI (usually already in base)","apt":"poppler-utils","verify":"pdftotext -v"}

@@ -126,5 +126,10 @@
         "subdomain_name": "Public Health & Epidemiology"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "r-base-4.3.2",
+    "r-build-deps",
+    "r-libs-ltmle"
+  ]
 }

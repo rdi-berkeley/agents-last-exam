@@ -84,5 +84,10 @@
       },
       "rationale": "The task involves creating a statistical analysis plan for a clinical trial."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "r-base",
+    "r-build-deps",
+    "r-libs-healthcare-sap"
+  ]
 }

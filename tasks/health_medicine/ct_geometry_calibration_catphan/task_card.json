@@ -75,5 +75,9 @@
       },
       "rationale": "The task involves calibrating CT geometry parameters for medical imaging, which falls under clinical diagnostics."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10",
+    "build-essential"
+  ]
 }

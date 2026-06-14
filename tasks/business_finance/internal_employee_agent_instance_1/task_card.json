@@ -88,5 +88,8 @@
       },
       "rationale": "The task involves HR-related support and management."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

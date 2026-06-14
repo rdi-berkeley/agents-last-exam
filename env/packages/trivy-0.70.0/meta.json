@@ -1,0 +1,7 @@
+{
+"description": "trivy-0.70.0 at /opt/trivy-0.70.0/bin/trivy",
+"provides": [
+"/opt/trivy-0.70.0/bin/trivy"
+],
+"verify": "/opt/trivy-0.70.0/bin/trivy --version"
+}

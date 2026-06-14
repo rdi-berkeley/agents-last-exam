@@ -1,0 +1,1 @@
+{"description": "bwa-mem2 2.2.1 aligner (dispatcher + arch variants on /usr/local/bin)", "verify": "bwa-mem2 version 2>/dev/null | grep -q 2.2.1"}

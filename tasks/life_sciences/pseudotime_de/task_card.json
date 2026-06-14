@@ -76,5 +76,10 @@
       },
       "rationale": "The task involves pseudotime differential expression analysis in a scRNA-seq dataset, which falls under genomics."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10",
+    "micromamba",
+    "bioc-tradeseq-conda"
+  ]
 }

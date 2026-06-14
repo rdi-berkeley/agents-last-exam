@@ -1,0 +1,1 @@
+{"description": "R data.table for legacy R 3.5.1 (healthcare_bias_audit)", "verify": "Rscript -e 'library(data.table)'"}

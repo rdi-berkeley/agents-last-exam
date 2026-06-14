@@ -88,5 +88,8 @@
       },
       "rationale": "The task involves building a climate-emulation pipeline related to Earth and Atmospheric Sciences."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

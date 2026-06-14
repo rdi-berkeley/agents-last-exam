@@ -79,5 +79,8 @@
       },
       "rationale": "The task involves epidemiology forecasting related to public health."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

@@ -65,5 +65,9 @@
       },
       "rationale": "The task involves writing a C++ program, which falls under software engineering."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "build-essential",
+    "python-default-3.10"
+  ]
 }

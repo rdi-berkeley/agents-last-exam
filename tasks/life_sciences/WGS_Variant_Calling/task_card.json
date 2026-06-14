@@ -119,5 +119,10 @@
       },
       "rationale": "The task involves running a germline variant-calling workflow in genomics."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "bioinfo-cli",
+    "python-default-3.10",
+    "rtg-tools"
+  ]
 }

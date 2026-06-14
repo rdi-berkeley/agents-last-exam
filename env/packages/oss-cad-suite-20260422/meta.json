@@ -1,0 +1,1 @@
+{"description":"OSS CAD Suite 20260422 (yosys) at /opt/oss-cad-suite-20260422","provides":["/opt/oss-cad-suite-20260422/bin/yosys","/opt/oss-cad-suite-20260422/environment"],"verify":"/opt/oss-cad-suite-20260422/bin/yosys --version"}

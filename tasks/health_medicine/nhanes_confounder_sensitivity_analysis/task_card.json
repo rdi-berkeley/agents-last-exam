@@ -104,5 +104,8 @@
       },
       "rationale": "The task involves sensitivity analysis related to health data from NHANES."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

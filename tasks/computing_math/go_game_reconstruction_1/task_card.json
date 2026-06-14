@@ -60,5 +60,9 @@
         "subdomain_name": "Software Engineering"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "sabaki-runtime-libs",
+    "sgfmill"
+  ]
 }

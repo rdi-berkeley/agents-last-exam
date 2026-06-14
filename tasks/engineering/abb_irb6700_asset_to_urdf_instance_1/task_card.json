@@ -92,5 +92,8 @@
       },
       "rationale": "The task involves reconstructing a robot URDF, which falls under the robotics subdomain."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

@@ -84,5 +84,8 @@
         "subdomain_name": "Chemistry & Materials Computation"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

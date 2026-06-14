@@ -1,0 +1,1 @@
+{"description":"R library closure: dplyr jsonlite nlme MASS ","verify":"Rscript -e 'for(p in strsplit(\"dplyr jsonlite nlme MASS \",\" \")[[1]]) if(nzchar(p)) stopifnot(requireNamespace(p,quietly=TRUE))'"}

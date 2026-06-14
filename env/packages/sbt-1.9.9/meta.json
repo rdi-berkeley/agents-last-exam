@@ -1,0 +1,1 @@
+{"description":"sbt 1.9.9 at /opt/sbt-1.9.9 (requires jdk-default)","provides":["/opt/sbt-1.9.9/bin/sbt"],"verify":"/opt/sbt-1.9.9/bin/sbt --version"}

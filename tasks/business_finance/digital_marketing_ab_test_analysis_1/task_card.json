@@ -39,5 +39,6 @@
       },
       "rationale": "The task involves analyzing a marketing A/B test, which fits within Sales & Marketing."
     }
-  }
+  },
+  "requiredSystemPackages": []
 }

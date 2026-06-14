@@ -1,0 +1,1 @@
+{"description":"NCBI BLAST+ 2.15.0 at /opt/ncbi-blast-2.15.0 (+ /usr/local/bin)","verify":"blastp -version"}

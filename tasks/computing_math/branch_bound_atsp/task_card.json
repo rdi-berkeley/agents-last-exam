@@ -70,5 +70,8 @@
       },
       "rationale": "The task involves implementing a mathematical algorithm for solving the asymmetric traveling salesman problem."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

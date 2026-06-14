@@ -82,5 +82,8 @@
       },
       "rationale": "The task involves implementing equilibrium solvers for game theory, which falls under mathematical and operations research."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.12"
+  ]
 }

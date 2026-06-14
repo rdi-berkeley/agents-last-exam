@@ -88,5 +88,8 @@
       },
       "rationale": "The task involves regulatory compliance related to trading on the Shanghai Stock Exchange."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

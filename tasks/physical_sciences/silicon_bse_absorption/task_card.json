@@ -66,5 +66,10 @@
       },
       "rationale": "The task involves computational materials science focusing on the absorption spectrum of silicon."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "micromamba",
+    "qe-bgw-6.7.0-4.0",
+    "python-default-3.10"
+  ]
 }

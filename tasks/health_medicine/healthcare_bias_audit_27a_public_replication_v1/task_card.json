@@ -131,5 +131,10 @@
         "subdomain_name": "Public Health & Epidemiology"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10",
+    "r-base-3.5.1",
+    "r-libs-bias-audit"
+  ]
 }

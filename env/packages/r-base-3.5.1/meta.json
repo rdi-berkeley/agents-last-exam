@@ -1,0 +1,1 @@
+{"description":"R 3.5.1 via rig (legacy; -> /usr/bin/Rscript)","verify":"Rscript --version"}

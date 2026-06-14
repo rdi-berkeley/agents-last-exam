@@ -119,5 +119,8 @@
       },
       "rationale": "The task involves identifying spatial domains in transcriptomic data, which relates to cell and imaging biology."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.12"
+  ]
 }

@@ -1,0 +1,1 @@
+{"description":"Apptainer 1.3.0 (matches dev VM) for Neurodesk .simg GUI containers (scene tasks)","verify":"apptainer --version | grep -q 1.3.0"}

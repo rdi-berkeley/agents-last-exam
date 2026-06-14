@@ -1,0 +1,1 @@
+{"description":"System -dev libs to compile common CRAN/Bioconductor R packages","verify":"dpkg -s libcurl4-openssl-dev"}

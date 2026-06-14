@@ -1,0 +1,1 @@
+{"description":"Headless JRE (e.g. for sbt / JVM tools)","apt":"openjdk-17-jre-headless","verify":"java -version"}
