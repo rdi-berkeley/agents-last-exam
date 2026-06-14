@@ -344,14 +344,18 @@ Per-task data `software/` dirs fall into 4 classes (full per-task list in tmp/re
    (just ensure the /opt install path matches the wrapper exactly).
 2. **Thin wrappers → uv/system-python** (env provides python+uv): most compute/RTENV tasks. ✔ covered.
 3. **Ships REAL binaries/code in software/ (must reconstruct into clean container):**
-   - `glm_lake_calibration` — ships GLM ELF + bundled .so + vendored python_pkgs (the 8268-file count). Need a
-     package that installs GLM into the container so it runs WITHOUT the data software/. [ ] BUILD glm package.
    - `celegans_neuron_tracking` — vendored POINTS PyQt5 GUI in software/ (covered by qt-opencv-libs + the vendored
      code; ✔ but verify the GUI launches headless via Xvfb).
    - `protein_function` — interproscan wrapper+release files in software/ but the 15 GB runtime is the gap (deliv 4).
    - `basel` — ships a standalone ELF python3 in software/ (openpyxl must be inside it; ✔ via libreoffice-calc + check).
-4. **Env is task INPUT data, not software/** (no reconstruction by env): idp_ensemble_scoring (~7GB CSpred/xeisd
-   bundle under input/, variant `default/`), rgi (card.json DB), hg002 (sarek pipeline + container images).
+4. **Env is SELF-CONTAINED task data (no env package needed — verify it runs on a clean base):**
+   - `glm_lake_calibration` — VERIFIED: ships glm.bin (1.65MB) + bundled netcdf/hdf5/aec/sz in software/lib +
+     vendored python_pkgs (the 8268-file count). On the lean base `ldd` resolves ALL libs and `glm.bin` runs
+     (rc=0). glibc/libstdc++/libgomp come from the base. NO package needed; it's self-contained task data.
+     (GLM is NOT on the dev VM and AED ships no binary release; a rebuilt GLM could shift numerics vs the
+     grader reference, so using the shipped binary is the correct choice.)
+   - idp_ensemble_scoring (~7GB CSpred/xeisd bundle under input/, variant `default/`), rgi (card.json DB),
+     hg002 (sarek pipeline + container images).
 
 ## CORRECTED TALLY
 ~99/105 genuinely PASS or PASS-with-correct-env. The true remaining set needing a DECISION (not auto-fixable):
