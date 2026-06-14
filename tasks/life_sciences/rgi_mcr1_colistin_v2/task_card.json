@@ -69,5 +69,9 @@
         "subdomain_name": "Genomics & Sequence Analysis"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10",
+    "ncbi-blast-2.15.0"
+  ]
 }

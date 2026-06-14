@@ -1,0 +1,1 @@
+{"description":"bwa, samtools, bcftools, FastQC (+ MultiQC) read-mapping/variant CLIs","verify":"samtools --version; bwa 2>&1 | head -1 || true; bcftools --version"}
