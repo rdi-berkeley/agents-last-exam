@@ -94,6 +94,7 @@
     }
   },
   "requiredSystemPackages": [
+    "python-default-3.10",
     "jdk-default",
     "docker-ce",
     "micromamba",
@@ -101,7 +102,6 @@
     "gatk-picard",
     "bwa-mem2",
     "bioinfo-cli",
-    "ensembl-vep",
-    "python-default-3.10"
+    "ensembl-vep"
   ]
 }

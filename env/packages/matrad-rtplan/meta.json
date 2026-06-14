@@ -1,1 +1,1 @@
-{"description": "rtplan-matrad micromamba env (Octave 6.4) + matRad at /opt/matrad-c014dc82", "verify": "MAMBA_ROOT_PREFIX=/home/kasm-user/.local/share/micromamba /home/kasm-user/.local/bin/micromamba run -n rtplan-matrad octave --version"}
+{"description": "rtplan-matrad micromamba env (Octave 6.4) + matRad at /opt/matrad-c014dc82", "verify": "/home/kasm-user/.local/share/micromamba/envs/rtplan-matrad/bin/octave --version"}
