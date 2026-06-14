@@ -85,5 +85,8 @@
       },
       "rationale": "The task involves evaluating protein docking predictions, which falls under biomolecular structure and design."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

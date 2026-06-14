@@ -1,0 +1,1 @@
+{"description":"BEDTools 2.31.1 at /opt/bedtools-2.31.1 (built from source)","provides":["/opt/bedtools-2.31.1/bin/bedtools"],"verify":"/opt/bedtools-2.31.1/bin/bedtools --version"}

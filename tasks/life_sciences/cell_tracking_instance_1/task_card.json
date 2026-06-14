@@ -79,5 +79,8 @@
       },
       "rationale": "The task involves cell tracking and segmentation in microscopy images, which fits under cell imaging."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

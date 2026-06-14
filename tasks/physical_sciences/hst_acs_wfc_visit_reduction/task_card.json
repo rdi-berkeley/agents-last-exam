@@ -109,5 +109,8 @@
       },
       "rationale": "The task involves reducing HST ACS/WFC visit data, which is directly related to astronomy and astrophysics."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

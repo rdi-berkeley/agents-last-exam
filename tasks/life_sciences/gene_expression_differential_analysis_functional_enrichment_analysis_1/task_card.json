@@ -124,5 +124,8 @@
       },
       "rationale": "The task involves gene expression analysis and functional enrichment, which fits within genomics."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

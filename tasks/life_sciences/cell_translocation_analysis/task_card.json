@@ -107,5 +107,8 @@
       },
       "rationale": "The task involves analyzing cell microscopy images for nuclear translocation."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

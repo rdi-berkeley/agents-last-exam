@@ -73,5 +73,9 @@
       },
       "rationale": "The task involves creating a genome-browser SVG view related to genomic data."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10",
+    "google-chrome"
+  ]
 }

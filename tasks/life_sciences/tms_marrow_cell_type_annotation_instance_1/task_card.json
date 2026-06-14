@@ -78,5 +78,8 @@
         "subdomain_name": "Genomics & Sequence Analysis"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

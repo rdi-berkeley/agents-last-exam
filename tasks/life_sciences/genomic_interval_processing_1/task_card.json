@@ -89,5 +89,9 @@
       },
       "rationale": "The task involves processing genomic interval data using bioinformatics tools."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "bedtools-2.31.1",
+    "python-default-3.10"
+  ]
 }

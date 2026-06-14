@@ -201,3 +201,17 @@ standardize on 3.10 for fidelity.
   apps (LibreOffice UNO -> DeploymentException). Fix per-app by shimming its launcher to
   `unset LD_LIBRARY_PATH`. Watch for this with other bundled/ELF tools.
 - LibreOffice: install `libreoffice-calc` WITHOUT --no-install-recommends (needs ure/uno libs).
+
+## PACKAGE-MODEL WAVE 2 (PR #12, base=main): +19 PASS → 83/105
+life_sciences RTENV+: cell_tracking, cell_translocation, gene_expression_differential(pydeseq2/gseapy),
+  tcga_brca_deg, tms_marrow, spatial_transcriptomics(3.12), merfish(torch/starfish), genomic_interval(bedtools-2.31.1 built from src),
+  amber_minimization(parser-only), zdock, idp_ensemble(bundled bins data), tp53(chrome+python).
+physical_sciences RTENV: adapt_vqe, gillespie, hst_acs_wfc(astropy/photutils), molecular_structure(rdkit),
+  phonon_dispersion, exact_diag, climate_prediction(torch/xarray/lightning).
+New package: bedtools-2.31.1 (source build). Ambiguous no-runtime_env tasks → python-default-3.10
+  (libs agent-installed at solve; base has no system numpy).
+REMAINING ~22 (heavy tail): R/Bioconductor (tcga_luad, ltmle[R4.3.2], replicate_paper[R4.5.3],
+  healthcare_sap, pseudotime_de, healthcare_bias_audit[R3.5.1 legacy], public_health_mask r-libs FIX);
+  QE+BerkeleyGW ×3 (computational_materials/mose2/silicon_bse); AmberTools23; CellProfiler4.2.8(yeast_colony);
+  InterProScan(protein_function); Octave+matRad(prostate_imrt); GLM(glm_lake); bwa/gatk pipelines (WGS, hg002);
+  ncbi-blast(rgi); containers (scene2/scene3); thorny py-builds (nsclc pyradiomics, simglucose gym).

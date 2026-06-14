@@ -83,5 +83,8 @@
       },
       "rationale": "The task involves scoring IDP ensembles based on biomolecular data from NMR experiments."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }
