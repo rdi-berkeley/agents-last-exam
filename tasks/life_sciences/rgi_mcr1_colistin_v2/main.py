@@ -226,6 +226,15 @@ def load():
 @cb.setup_task(split="train")
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
+    # Materialize the agent-visible output directory. The runner stages input/
+    # straight to the visible amr_contig_annotation_instance_1 workspace, but only
+    # mkdir's the *canonical* rgi_mcr1_colistin_v2 output dir, never the visible one
+    # the prompt and grader use (remote_output_dir). The BaseTaskSetup migration
+    # dropped the original `makedirs(remote_output_dir)` here as a presumed no-op —
+    # it is not: without it the visible output/ never exists, so the agent cannot
+    # write answer.json at the path it is told to use and evaluate() hard-fails on
+    # file_exists.
+    await session.interface.create_dir(task_cfg.metadata["remote_output_dir"])
 
 
 @cb.evaluate_task(split="train")
