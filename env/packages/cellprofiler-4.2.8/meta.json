@@ -1,1 +1,1 @@
-{"description":"CellProfiler 4.2.8 conda-forge env at /opt/cellprofiler-4.2.8","verify":"test -x /opt/cellprofiler-4.2.8/bin/cellprofiler"}
+{"description":"CellProfiler 4.2.8.1 (bioconda) + openjdk env at /opt/cellprofiler-4.2.8; java on PATH + libjvm via ldconfig","verify":"QT_QPA_PLATFORM=offscreen /opt/cellprofiler-4.2.8/bin/cellprofiler --version 2>/dev/null | grep -q 4.2.8"}

@@ -335,7 +335,13 @@ Fixes to existing packages:
       solve-time pip via the wrapper, NOT baked). No change. (Earlier audit worry retracted.)
 - [ ] `qe-bgw-6.7.0-4.0` — BUILD it now using the box.com BGW source (was the #1 frontier blocker).
 - [ ] `neurodesk-brain-science` — keep the hard-block; document bundle source need (can't build without it).
-- [ ] cellprofiler / bwa-mem2 verify — upgrade presence-only → real run.
+- [x] cellprofiler / bwa-mem2 verify — upgraded presence-only → real run; BOTH had real breaks the old
+      `test -x` hid:
+      * bwa-mem2: dispatcher couldn't find its arch variants on /usr/local/bin (broke on dev/eval avx2 VMs).
+        Fixed: symlink all variants + pick the fastest that actually runs; verify now indexes a FASTA.
+      * cellprofiler: launched bin/cellprofiler aborts ("javahome" / "libjvm.so") — no JVM discoverable for the
+        direct (non-activated) wrapper. Fixed: openjdk in env + java on PATH + libjvm registered via ldconfig;
+        verify now runs `cellprofiler --version` → 4.2.8.1.
 
 ## DELIVERABLE 2 — `software/`-dir reconstruction classification
 Per-task data `software/` dirs fall into 4 classes (full per-task list in tmp/reports/b0*.md):
