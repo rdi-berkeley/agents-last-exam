@@ -144,6 +144,47 @@ def _parse_length_mm(value: str | None) -> float | None:
         return None
 
 
+def _viewbox_scale(
+    root: ET.Element, width_mm: float | None, height_mm: float | None
+) -> tuple[float, float, float, float]:
+    """mm-per-user-unit (sx, sy) and viewBox origin (min_x, min_y).
+
+    Image coordinates are expressed in the SVG user-unit grid established by the
+    root ``viewBox``, not in millimetres. Convert them to mm before any canvas
+    containment check. Falls back to CSS px (96/in) when no usable viewBox is
+    present.
+    """
+    vb = (root.attrib.get("viewBox") or "").replace(",", " ").split()
+    if len(vb) == 4 and width_mm and height_mm:
+        try:
+            min_x, min_y, vb_w, vb_h = (float(v) for v in vb)
+            if vb_w > 0 and vb_h > 0:
+                return width_mm / vb_w, height_mm / vb_h, min_x, min_y
+        except ValueError:
+            pass
+    px = 25.4 / 96.0
+    return px, px, 0.0, 0.0
+
+
+def _len_to_mm(value: str | None, scale: float) -> float | None:
+    """Explicit mm/cm are physical; px and bare numbers are user-units * scale."""
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    try:
+        if text.endswith("mm"):
+            return float(text[:-2].strip())
+        if text.endswith("cm"):
+            return float(text[:-2].strip()) * 10.0
+        if text.endswith("px"):
+            return float(text[:-2].strip()) * scale
+        return float(text) * scale  # bare == user units
+    except ValueError:
+        return None
+
+
 def _extract_svg_text(root: ET.Element) -> str:
     parts: list[str] = []
     for elem in root.iter():
@@ -224,20 +265,24 @@ def evaluate_svg_bytes(svg_bytes: bytes, spec: dict[str, Any]) -> tuple[float, d
         image = image_elements[0]
         preserve = (image.attrib.get("preserveAspectRatio") or "").strip().lower()
         details["preserve_aspect_ratio_ok"] = preserve not in {"", "none"}
-        x = _parse_length_mm(image.attrib.get("x"))
-        y = _parse_length_mm(image.attrib.get("y"))
-        w = _parse_length_mm(image.attrib.get("width"))
-        h = _parse_length_mm(image.attrib.get("height"))
+        sx, sy, min_x, min_y = _viewbox_scale(root, width_mm, height_mm)
+        x = _len_to_mm(image.attrib.get("x"), sx)
+        y = _len_to_mm(image.attrib.get("y"), sy)
+        w = _len_to_mm(image.attrib.get("width"), sx)
+        h = _len_to_mm(image.attrib.get("height"), sy)
+        # Shift by the viewBox origin (mm) so non-zero min-x/min-y grids align.
+        x0 = (x - min_x * sx) if x is not None else None
+        y0 = (y - min_y * sy) if y is not None else None
         href = _element_attr(image, "href")
         details["image_href"] = href
-        if None not in {x, y, w, h} and w and h and width_mm and height_mm:
+        if None not in {x0, y0, w, h} and w and h and width_mm and height_mm:
             details["image_inside_canvas"] = (
-                x >= 0.0
-                and y >= 0.0
+                x0 >= -1.0
+                and y0 >= -1.0
                 and w > 0.0
                 and h > 0.0
-                and x + w <= width_mm + 1.0
-                and y + h <= height_mm + 1.0
+                and x0 + w <= width_mm + 1.0
+                and y0 + h <= height_mm + 1.0
             )
 
     passed = all(
