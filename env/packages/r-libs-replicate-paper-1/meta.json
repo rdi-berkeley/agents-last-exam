@@ -1,0 +1,1 @@
+{"description":"R library closure: ggplot2 dplyr readr jsonlite ","verify":"Rscript -e 'for(p in strsplit(\"ggplot2 dplyr readr jsonlite \",\" \")[[1]]) if(nzchar(p)) stopifnot(requireNamespace(p,quietly=TRUE))'"}

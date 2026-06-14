@@ -101,5 +101,10 @@
       },
       "rationale": "The task involves biostatistics and causal inference, which are relevant to public health research."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "r-base",
+    "r-build-deps",
+    "r-libs-replicate-paper-1"
+  ]
 }

@@ -88,6 +88,8 @@
     }
   },
   "requiredSystemPackages": [
-    "r-base"
+    "r-base",
+    "r-build-deps",
+    "r-libs-public-health-mask"
   ]
 }

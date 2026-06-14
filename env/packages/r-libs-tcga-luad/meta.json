@@ -1,0 +1,1 @@
+{"description":"R library closure: survival survminer ggplot2 jsonlite dplyr tibble TCGAbiolinks","verify":"Rscript -e 'for(p in strsplit(\"survival survminer ggplot2 jsonlite dplyr tibble TCGAbiolinks\",\" \")[[1]]) if(nzchar(p)) stopifnot(requireNamespace(p,quietly=TRUE))'"}

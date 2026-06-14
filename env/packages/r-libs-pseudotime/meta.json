@@ -1,0 +1,1 @@
+{"description":"R library closure: mgcv SingleCellExperiment tradeSeq","verify":"Rscript -e 'for(p in strsplit(\"mgcv SingleCellExperiment tradeSeq\",\" \")[[1]]) if(nzchar(p)) stopifnot(requireNamespace(p,quietly=TRUE))'"}

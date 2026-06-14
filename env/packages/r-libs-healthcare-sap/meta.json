@@ -1,0 +1,1 @@
+{"description":"R library closure: gsDesign rpact survival ggplot2 rmarkdown jsonlite ","verify":"Rscript -e 'for(p in strsplit(\"gsDesign rpact survival ggplot2 rmarkdown jsonlite \",\" \")[[1]]) if(nzchar(p)) stopifnot(requireNamespace(p,quietly=TRUE))'"}

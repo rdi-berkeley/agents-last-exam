@@ -69,5 +69,8 @@
         "subdomain_name": "Earth & Atmospheric Sciences"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "python-default-3.10"
+  ]
 }

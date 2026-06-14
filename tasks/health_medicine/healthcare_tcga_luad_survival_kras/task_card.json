@@ -103,5 +103,10 @@
         "subdomain_name": "Therapeutic & Oncology Services"
       }
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "r-base",
+    "r-build-deps",
+    "r-libs-tcga-luad"
+  ]
 }
