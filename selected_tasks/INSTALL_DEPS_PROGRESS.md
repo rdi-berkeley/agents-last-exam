@@ -252,3 +252,18 @@ New packages: r-base, r-build-deps, r-libs-*, micromamba, ambertools-23, cellpro
   Needs a matched Bioc BINARY repo for the R build, or conda bioconductor-tradeseq with a conda R.
 - PASS additions: ltmle (rig R4.3.2), prostate_imrt (Octave6.4+matRad, direct-octave verify),
   yeast_colony (bioconda CellProfiler 4.2.8.1).
+
+## WAVE 4 — frontier recovery
+RECOVERED (now PASS): ltmle (rig R4.3.2), prostate_imrt (Octave6.4+matRad), yeast_colony (bioconda
+CellProfiler), healthcare_bias_audit (rig R3.5.1 + data.table), pseudotime_de (bioconda binary
+tradeSeq/SingleCellExperiment — avoids source-compile ABI fail). hg002 re-testing (nextflow bootstrap fix).
+Verify-quoting fix: meta.verify R exprs must be single-quoted (`Rscript -e 'library(x)'`).
+
+## REMAINING TRUE FRONTIER (need external resource/decision; NOT auto-completable here)
+1. physical_sciences/{computational_materials_science, mose2_bse_absorption_soc, silicon_bse_absorption}
+   — QE 6.7 (conda-forge OK) + BerkeleyGW 4.0 source is REGISTRATION-GATED (no open URL) + multi-hour build.
+2. life_sciences/protein_function_annotation_instance_1 — InterProScan 5.77 ≈ 50GB (url in task manifest).
+3. psychology_neuro/scene2_resample + health_medicine/scene3_skullstrip_qc — Neurodesk GUI apptainer images.
+4. health_medicine/nsclc_radiomics_cox_signature_v1 — pyradiomics (pinned alpha) sdist build broken (cmatrices.h; no cp310/311 wheel).
+5. health_medicine/simglucose_safe_basal_control_instance_1 — gym==0.9.4 sdist won't build on modern setuptools.
+=> ~98/105 PASS; 7 frontier tasks need user input (BGW tarball / 50GB+GUI provisioning / upstream-broken pins).
