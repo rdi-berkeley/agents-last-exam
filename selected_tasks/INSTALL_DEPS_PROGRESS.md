@@ -215,3 +215,33 @@ REMAINING ~22 (heavy tail): R/Bioconductor (tcga_luad, ltmle[R4.3.2], replicate_
   QE+BerkeleyGW ×3 (computational_materials/mose2/silicon_bse); AmberTools23; CellProfiler4.2.8(yeast_colony);
   InterProScan(protein_function); Octave+matRad(prostate_imrt); GLM(glm_lake); bwa/gatk pipelines (WGS, hg002);
   ncbi-blast(rgi); containers (scene2/scene3); thorny py-builds (nsclc pyradiomics, simglucose gym).
+
+## WAVE 3 (PR #12): R/Bioconductor + conda heavy + bioinformatics
+PASS via package model: tcga_luad (Bioc TCGAbiolinks/PPM), public_health_mask, healthcare_sap,
+  replicate_paper_1, amber_three (AmberTools23 conda), rgi (blast2.15), WGS (bioinfo-cli),
+  genomic_interval (bedtools src), glm_lake (bundled libs → python only).
+New packages: r-base, r-build-deps, r-libs-*, micromamba, ambertools-23, cellprofiler-4.2.8,
+  matrad-rtplan, ncbi-blast-2.15.0, bioinfo-cli, nextflow, gatk-picard, bwa-mem2, ensembl-vep,
+  r-base-4.5.3 / r-base-4.3.2 (rig), bedtools-2.31.1.
+
+### KEY LEARNINGS (R + conda)
+- R-version vs binary availability: PPM has CRAN/Bioc binaries only for released R minors. R 4.6 is
+  too new → tradeSeq/slingshot compile-from-source & fail. Fix: pin R 4.5.3 via rig (r-base-4.5.3).
+- conda envs created as root: chown the env + ~/.cache/mamba to 1000:0 or `micromamba run` (as uid
+  1000) fails on /home/kasm-user/.cache/mamba/proc/proc.lock.
+- cellprofiler is on **bioconda** (4.2.8.1), not conda-forge.
+
+### HARD FRONTIER — need external resource / decision (NOT auto-completable here)
+- physical_sciences/{computational_materials_science, mose2_bse_absorption_soc, silicon_bse_absorption}
+  → QE 6.7 (conda-forge ok) + **BerkeleyGW 4.0 source is REGISTRATION-GATED** (no open URL) + multi-hour
+  MPI/Fortran build. Need: a BGW 4.0 tarball (login at berkeleygw.org) → then build /opt/qe-bgw-6.7.0-4.0.
+- life_sciences/protein_function_annotation_instance_1 → InterProScan 5.77 (~50GB incl. data). Recipe in
+  task software/install_manifest.json (archive_url). Need: time/space to download ~50GB.
+- health_medicine/healthcare_bias_audit_27a_public_replication_v1 → legacy **R 3.5.1** + data.table 1.11.4
+  + task python venv (pandas1.5.3...). R 3.5.1 via rig uncertain.
+- health_medicine/nsclc_radiomics_cox_signature_v1 → pyradiomics (alpha) sdist build fails on its own
+  cmatrices.h (broken upstream packaging; no cp310 wheel). Needs a prebuilt wheel or patched build.
+- health_medicine/simglucose_safe_basal_control_instance_1 → ancient gym==0.9.4 sdist build fails on
+  modern setuptools + root hatchling "files to ship". Needs gym build pin/patch or --no-install-project.
+- psychology_neuro/{scene2_resample}, health_medicine/{scene3_skullstrip_qc} → Neurodesk GUI apptainer
+  container bundle (Slicer/FSL .simg images, computer-use). Need: apptainer + Neurodesk images (GB, GUI).
