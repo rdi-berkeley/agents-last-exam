@@ -89,10 +89,18 @@ They are the real blockers for the CT/imaging tasks.
 - **It's a portable Apptainer bundle** (`run_scene.sh <scene>` runs the GUI in its `.simg`). Reconstruction into a
   clean container = install apptainer (system, easy) + stage this 18 GB bundle at the wrapper-expected path +
   provide a GUI display (X11/VNC — these are computer-use GUI tasks).
-- **Decision needed (only the hosting question):** the bundle currently lives only on the sunblaze-4 snapshot. To
-  provision it reproducibly I'd copy the 18 GB bundle to a durable location (e.g. a GCS bucket) and have the
-  package pull + stage it. OK to copy it to a bucket (which one?), or should scene VMs just be built from this
-  brain-science snapshot directly? Tell me the hosting preference and I'll wire it up.
+- **RESOLVED (staged into task data, both buckets):** per-task split done. Each scene's `.simg` + bundle scripts
+  + scene inputs are now staged under `<task>/base/software/computer_use_benchmark_bundle/` in BOTH
+  `ale-data-all` and `ale-data-public`:
+  - `scene2_resample` (psychology_neuro): `containers/slicer_5.0.3_20221025.simg` (8.1G) + run_scene.sh +
+    smoke_test.sh + containers_manifest.yaml + `task/input/scene2_resample/`.
+  - `scene3_skullstrip_qc` (health_medicine): `containers/fsl_6.0.7.18_20250928.simg` (6.8G) + same scripts +
+    `task/input/scene3_skullstrip_qc/`.
+  Each task's `software/launch_gui.sh` was patched to resolve the bundle relative to itself (no more hardcoded
+  `/home/user/brain_science/...`). System software = `apptainer-1.3.0` (packaged + mapped). Integration-tested:
+  apptainer + patched launch_gui.sh + run_scene.sh produce the correct `apptainer exec … fsleyes …` command from
+  the staged `.simg` + inputs (GUI display is the computer-use harness's job). Source: snapshot
+  `agenthle-ubuntu-brain-science-0204` (sunblaze-4). scene3 tool name also corrected (3D Slicer → FSLeyes).
 
 ### rtg-tools (RTG `vcfeval`)
 - **Checked:** `which rtg` empty; no `*rtg*` under `/opt`.
@@ -129,7 +137,7 @@ not present, so a no-egress run would fail:
 | LEAP + torch-cpu | ct_geometry, limited_angle_ct | per-user (`/home/user/.local`), CPU build, works | **package is modest** (prebuilt .so) — recommend build; CPU is intended mode |
 | matRad QA libs (pymedphys…) | prostate_imrt | per-user `rtplan-matrad` env (octave+py+numpy+scipy only) | NO gap — matches package; QA libs are solve-time pip |
 | InterProScan 5.77 | protein_function | absent | NO gap — solve-time download by design (15 GB); only needs Java 11 (mapped) |
-| brain_science bundle + .simg | scene2, scene3 | SOURCE FOUND: snapshot `agenthle-ubuntu-brain-science-0204` (sunblaze-4), 18 GB at ~/Desktop | decision = where to HOST the 18 GB for provisioning |
+| brain_science bundle + .simg | scene2, scene3 | RESOLVED — staged per-task into both buckets (slicer→scene2, fsl→scene3) + launch_gui.sh patched + apptainer-1.3.0 mapped; integration-tested | done |
 | rtg-tools | WGS_Variant_Calling | absent | DONE — package added |
 | sgfmill | go_game | absent | DONE — package added |
 | flowable / vep / sarek / gatk images | bpmn ×2, hg002 | not pre-pulled | NO blocker (network on by default; agent/nextflow pulls). Optional: pre-pull for speed |
