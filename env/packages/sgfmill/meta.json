@@ -1,0 +1,1 @@
+{"description":"sgfmill (Python SGF parser) for the go_game grader","verify":"python3 -c \"import sgfmill\""}

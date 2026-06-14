@@ -27,13 +27,15 @@ They are the real blockers for the CT/imaging tasks.
   (from LLNL source, GPU symbols stubbed) + torch-cpu + scipy + scikit-image + imageio.** This is a heavy
   source build — flagged for a decision before I build it (don't want to guess the exact LEAP build flags).
 
-### matRad QA micromamba env
-- **Where:** `/home/user/.local/share/micromamba/envs/rtplan-matrad` (per-user), NOT `/opt`.
-- **Task:** `health_medicine/prostate_imrt_matrad_reproduction`. matRad source itself IS at `/opt/matrad-c014dc82`.
-- **Gap:** my `matrad-rtplan` package creates the env with only `octave numpy scipy`; the prompt-promised Python
-  QA libs (`pydicom`, `pymedphys`, `numba`, `matplotlib`, `scikit-image`) are NOT in that create line. Need to
-  confirm the dev-VM `rtplan-matrad` env's exact package set and mirror it (the G6 gamma/QA phase needs pymedphys).
-  **Action queued in PROGRESS.md** (this is a packaging fix, listed here because the source of truth is the per-user env).
+### matRad QA micromamba env — NO GAP (verified, matches ground truth)
+- **Where:** `/home/user/.local/share/micromamba/envs/rtplan-matrad` (per-user); matRad source at `/opt/matrad-c014dc82`.
+- **Task:** `health_medicine/prostate_imrt_matrad_reproduction`.
+- **Verified:** the dev-VM env contains **octave 6.4 + python3.10 + pip + numpy + scipy ONLY** — it does NOT
+  contain pymedphys/pydicom/numba/matplotlib/scikit-image (the only pydicom on the whole VM is inside Slicer's
+  bundled python3.9, unrelated). My `matrad-rtplan` package creates exactly `octave=6.4 numpy scipy` + python →
+  **already matches ground truth.** The QA/gamma libs are meant to be agent-installed at solve time via the
+  wrapper (`software/run_matrad.sh python -m pip install pymedphys pydicom ...`), consistent with the
+  "system software baked, Python libs at solve time" policy. No packaging change needed (earlier audit worry retracted).
 
 ### GraphST spatial env
 - **Where:** `/home/user/.local/agenthle/graphst-env/` (GraphST 1.1.1 + scanpy 1.10.4 + torch 2.11.0+cpu).

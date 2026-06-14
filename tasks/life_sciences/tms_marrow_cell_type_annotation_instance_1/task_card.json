@@ -80,6 +80,6 @@
     }
   },
   "requiredSystemPackages": [
-    "python-default-3.10"
+    "python-default-3.12"
   ]
 }

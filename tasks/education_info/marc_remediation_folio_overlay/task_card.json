@@ -106,5 +106,7 @@
       "rationale": "The task involves MARC remediation and cataloging, which are key aspects of Library & Information Science."
     }
   },
-  "requiredSystemPackages": []
+  "requiredSystemPackages": [
+    "python-default-3.12"
+  ]
 }

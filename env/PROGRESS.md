@@ -331,7 +331,8 @@ New packages:
 - [ ] `leap-cpu-torch` — ct_geometry + limited_angle. HEAVY LEAP source build → DECISION before building.
 - [ ] `torch-cpu` — dit_pipeline grader, mp_checkpoint (currently via runtime_env; confirm sufficient).
 Fixes to existing packages:
-- [ ] `matrad-rtplan` — add pydicom/pymedphys/numba/matplotlib/scikit-image to the env create line.
+- [x] `matrad-rtplan` — VERIFIED matches dev-VM ground truth (octave6.4+py3.10+numpy+scipy ONLY; QA libs are
+      solve-time pip via the wrapper, NOT baked). No change. (Earlier audit worry retracted.)
 - [ ] `qe-bgw-6.7.0-4.0` — BUILD it now using the box.com BGW source (was the #1 frontier blocker).
 - [ ] `neurodesk-brain-science` — keep the hard-block; document bundle source need (can't build without it).
 - [ ] cellprofiler / bwa-mem2 verify — upgrade presence-only → real run.

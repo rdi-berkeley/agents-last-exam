@@ -62,6 +62,7 @@
     }
   },
   "requiredSystemPackages": [
-    "sabaki-runtime-libs"
+    "sabaki-runtime-libs",
+    "sgfmill"
   ]
 }
