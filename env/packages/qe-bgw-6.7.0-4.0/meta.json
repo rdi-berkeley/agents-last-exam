@@ -1,1 +1,1 @@
-{"description":"Quantum ESPRESSO 6.7 (conda) + BerkeleyGW 4.0 at /opt/qe-bgw-6.7.0-4.0. BGW source registration-gated: set BGW_TARBALL to complete.","verify":"test -x /opt/qe-bgw-6.7.0-4.0/envs/qe-bgw/bin/pw.x"}
+{"description":"Quantum ESPRESSO 6.7 (conda) + BerkeleyGW 4.0 (cplx, built from public source) at /opt/qe-bgw-6.7.0-4.0","verify":"test -x /opt/qe-bgw-6.7.0-4.0/envs/qe-bgw/bin/pw.x && test -x /opt/qe-bgw-6.7.0-4.0/src/BerkeleyGW-4.0/bin/epsilon.cplx.x"}
