@@ -17,15 +17,23 @@ account), not in `/opt`.** Those are listed here as "per-user only" because they
 These exist and work for the `user` account, but are invisible to a fresh container and not packaged.
 They are the real blockers for the CT/imaging tasks.
 
-### LEAP (LLNL CT projector) + CPU PyTorch stack
-- **Where:** `/home/user/.local/lib/python3.10/site-packages/leaptorch.py` (+ `leapctype`), and a CPU torch in
-  `/home/user/.local/agenthle/graphst-env/` (`torch-2.11.0+cpu`). Supporting: numpy 2.2.6, scipy 1.15.3,
-  scikit-image 0.25.2, imageio 2.37.3 in the same per-user site-packages.
-- **Tasks:** `health_medicine/ct_geometry_calibration_catphan`, `health_medicine/limited_angle_ct_dps_reconstruction`.
-  Both tasks' `software/` wrappers assume `import leaptorch, torch` from system site-packages — which is empty in a clean container.
-- **Gap:** no `/opt` package, no task `software/` bundle. Needs a reproducible package: **LEAP 1.26 CPU build
-  (from LLNL source, GPU symbols stubbed) + torch-cpu + scipy + scikit-image + imageio.** This is a heavy
-  source build — flagged for a decision before I build it (don't want to guess the exact LEAP build flags).
+### LEAP (LLNL CT projector) + CPU PyTorch stack — FEASIBLE on CPU; package is modest (not a heavy build)
+- **Where on dev VM:** user `user`'s `pip install --user` site — `/home/user/.local/lib/python3.10/site-packages/`
+  has the FULL CT stack: `leapct-1.26`, `leapctype.py`, `leaptorch.py`, `libleapct.so`, `torch` (2.11.0+cpu),
+  numpy 2.2.6, scipy 1.15.3, scikit-image 0.25.2, imageio 2.37.3. (This is the standard per-user pip location
+  tied to system python3.10 — NOT a separate interpreter.)
+- **CPU verified:** `ldd libleapct.so` has NO CUDA/nvidia linkage (it's a CPU build), and a smoke
+  (`import torch, leaptorch; from leaptorch import Projector`) prints `OK 2.11.0+cpu`. LLNL's README states the
+  projectors are implemented for "multi-GPU and multi-core CPU", so CPU is a first-class mode.
+- **Feasibility:** both task machine types are CPU-only — `ct_geometry_calibration_catphan` = c4-standard-4,
+  `limited_angle_ct_dps_reconstruction` = c4-standard-16. The reference fixtures were generated with this same
+  CPU stack (torch +cpu). So CPU is the *intended* mode, not a degradation — the tasks are feasible.
+- **Packaging is NOT a heavy from-source build:** LLNL/LEAP publishes a **prebuilt `libleapct.so`** as a release
+  asset for each tag (incl. v1.26). So a `leap-cpu-torch` package = fetch the v1.26 `libleapct.so` + the pure-Python
+  wrappers (leapctype.py/leaptorch.py/etc. from the v1.26 tag) into site-packages, + pip install torch-cpu +
+  numpy/scipy/scikit-image/imageio. Modest. (The tasks' wrappers `exec /usr/bin/python` and assume these are
+  importable, so they must be on the system python path, not in a venv.)
+- **Recommendation:** build the `leap-cpu-torch` package (low risk). Awaiting your go-ahead.
 
 ### matRad QA micromamba env — NO GAP (verified, matches ground truth)
 - **Where:** `/home/user/.local/share/micromamba/envs/rtplan-matrad` (per-user); matRad source at `/opt/matrad-c014dc82`.
@@ -47,25 +55,36 @@ They are the real blockers for the CT/imaging tasks.
 
 ## 2. Genuinely absent from the dev VM entirely
 
-### InterProScan 5.77-108.0
-- **Checked:** `/opt`, `/opt/toolchains` (only `miniforge3`, `r-biostatistics`), `/media` — no `interproscan*` anywhere.
-- **Task:** `life_sciences/protein_function_annotation_instance_1`. The provisioning plan claims a Stage-4 prebake
-  at `/opt/toolchains/interproscan-5.77-108.0-fresh/`, but it is **gone** (history of disk-exhaustion-corrupted installs).
-- **Gap:** ~15 GB tool + DB. The task `software/interproscan.sh` hardcodes a task-local
-  `runtime/interproscan-5.77-108.0` path and `install_software.sh` does a ~15 GB EBI FTP download at solve time.
-- **Decision needed:** pre-bake the InterProScan runtime (and align the wrapper path) vs. guarantee the 15 GB
-  download path + disk. Do not auto-download.
+### InterProScan 5.77-108.0 — NOT a gap (solve-time download by design; verified)
+- **Re-examined the actual task files (not the provisioning doc):** the task is SELF-CONSISTENT.
+  `software/install_software.sh` downloads `interproscan-5.77-108.0-64-bit.tar.gz` from the EBI FTP
+  (`https://ftp.ebi.ac.uk/pub/software/unix/iprscan/5/5.77-108.0/...`) and extracts to `${TASK_ROOT}/runtime/
+  interproscan-5.77-108.0`; the wrapper `software/interproscan.sh` reads from that SAME path; and the task PROMPT
+  explicitly instructs: "Install InterProScan by running base/software/install_software.sh (~15 GB download,
+  requires Java 11)". The `/opt/toolchains/...-fresh/` path was only in a provisioning *doc*, not the task.
+- **So the design is:** the agent installs InterProScan itself at solve time (network is on by default). The only
+  baked dependency is **Java 11**, which is already packaged + mapped (`openjdk-11`). The earlier "decision" is
+  retracted — nothing to provision; just ensure the solve env has Java 11 (it does) and enough disk for ~15 GB.
 
-### Neurodesk `brain_science` computer-use bundle + Slicer/FSLeyes `.simg` images
-- **Checked:** `/home/user/brain_science` is **empty**; the `run_scene.sh` orchestration the scene wrappers call
-  does not exist on the dev VM. (Slicer 5.0.3 and FSLeyes 1.18.1 themselves ARE at `/opt/slicer-5.0.3` / `/opt/fsleyes-1.18.1`.)
-- **Tasks:** `psychology_neuro/scene2_resample`, `health_medicine/scene3_skullstrip_qc`. Both `launch_gui.sh`
-  scripts exec `/home/user/brain_science/computer_use_benchmark_bundle/run_scene.sh <scene>`.
-- **Gap:** the bundle (run_scene orchestration + `containers/*.simg` Neurodesk images, multi-GB) is not on the
-  dev VM and not in the task `software/`. My `neurodesk-brain-science` package install.sh correctly hard-blocks
-  (exit 3) without a supplied `$BRAIN_SCIENCE_BUNDLE`.
-- **Decision needed:** locate/obtain the brain_science bundle + Neurodesk `.simg` images (where is the source of
-  truth?). Until then scene2/scene3 cannot be reconstructed into a clean container. These are also GUI/X tasks.
+### Neurodesk `brain_science` computer-use bundle + Slicer/FSL/Workbench `.simg` images — SOURCE FOUND
+- **Source of truth (found):** GCP snapshot `agenthle-ubuntu-brain-science-0204` in project **sunblaze-4**.
+  Verified by creating a disk from it and mounting it on a probe VM. The bundle is at
+  **`/home/user/Desktop/brain_science/computer_use_benchmark_bundle/`** (NOT `/home/user/brain_science` — the
+  scene wrappers expect the latter, so deployment must move/symlink it, OR the wrapper path needs fixing).
+- **Bundle contents (18 GB total):** `run_scene.sh`, `smoke_test.sh`, `RUNME.md`, `bundle_manifest.json`,
+  `containers_manifest.yaml`, `task/{input,output}` (5 scene inputs), and `containers/`:
+  - `slicer_5.0.3_20221025.simg` (8.1 GB) — scenes scene1_roi_stats, **scene2_resample** (`Slicer`)
+  - `fsl_6.0.7.18_20250928.simg` (6.8 GB) — **scene3_skullstrip_qc**, scene5 (`fsleyes`)
+  - `connectomeworkbench_2.1.0_20251212.simg` (2.4 GB) — scene4 (`wb_view`)
+- **Confirms the scene3 "Slicer vs FSLeyes" inconsistency:** per RUNME, scene3 uses **fsl/fsleyes** (the launcher
+  is right; the card text "3D Slicer" is wrong).
+- **It's a portable Apptainer bundle** (`run_scene.sh <scene>` runs the GUI in its `.simg`). Reconstruction into a
+  clean container = install apptainer (system, easy) + stage this 18 GB bundle at the wrapper-expected path +
+  provide a GUI display (X11/VNC — these are computer-use GUI tasks).
+- **Decision needed (only the hosting question):** the bundle currently lives only on the sunblaze-4 snapshot. To
+  provision it reproducibly I'd copy the 18 GB bundle to a durable location (e.g. a GCS bucket) and have the
+  package pull + stage it. OK to copy it to a bucket (which one?), or should scene VMs just be built from this
+  brain-science snapshot directly? Tell me the hosting preference and I'll wire it up.
 
 ### rtg-tools (RTG `vcfeval`)
 - **Checked:** `which rtg` empty; no `*rtg*` under `/opt`.
@@ -99,11 +118,13 @@ not present, so a no-egress run would fail:
 
 | Item | Tasks | Dev-VM status | Class |
 |---|---|---|---|
-| LEAP + torch-cpu | ct_geometry, limited_angle_ct | per-user only (`/home/user/.local`) | needs package (heavy build) — decision |
-| matRad QA libs (pymedphys…) | prostate_imrt | per-user `rtplan-matrad` env | packaging fix queued |
-| InterProScan 5.77 | protein_function | absent | decision (15 GB) |
-| brain_science bundle + .simg | scene2, scene3 | absent (`/home/user/brain_science` empty) | decision (source unknown) |
-| rtg-tools | WGS_Variant_Calling | absent | package queued |
-| sgfmill | go_game | absent | pip (minor) |
-| flowable image | bpmn ×2 | not pulled | decision (egress/prebake) |
-| vep/sarek/gatk images | hg002 | not pulled | decision (egress/prebake) |
+| LEAP + torch-cpu | ct_geometry, limited_angle_ct | per-user (`/home/user/.local`), CPU build, works | **package is modest** (prebuilt .so) — recommend build; CPU is intended mode |
+| matRad QA libs (pymedphys…) | prostate_imrt | per-user `rtplan-matrad` env (octave+py+numpy+scipy only) | NO gap — matches package; QA libs are solve-time pip |
+| InterProScan 5.77 | protein_function | absent | NO gap — solve-time download by design (15 GB); only needs Java 11 (mapped) |
+| brain_science bundle + .simg | scene2, scene3 | SOURCE FOUND: snapshot `agenthle-ubuntu-brain-science-0204` (sunblaze-4), 18 GB at ~/Desktop | decision = where to HOST the 18 GB for provisioning |
+| rtg-tools | WGS_Variant_Calling | absent | DONE — package added |
+| sgfmill | go_game | absent | DONE — package added |
+| flowable / vep / sarek / gatk images | bpmn ×2, hg002 | not pre-pulled | NO blocker (network on by default; agent/nextflow pulls). Optional: pre-pull for speed |
+
+Net: of the original "gaps", only TWO need a real decision — **LEAP** (build the modest CPU package? recommended yes)
+and **brain_science** (where to host the 18 GB bundle). The rest dissolved on closer inspection.

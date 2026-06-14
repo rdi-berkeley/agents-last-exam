@@ -24,9 +24,12 @@ Severity legend:
   3.1.0 sdist, which self-identifies as `3.0.1a1` and is **missing its C headers (`cmatrices.h`)** → compile fails.
 - **Effect:** `uv sync` / `pip install` of the shipped manifest fails → no working radiomics env.
   Verified on lean base AND confirmed dev VM has no pyradiomics anywhere (not in /opt, /home/user, conda).
-- **Fix (task-data, needs owner sign-off):** repin to a buildable source, recommended
-  `pyradiomics @ git+https://github.com/AIM-Harvard/pyradiomics@v3.1.0` (git tree includes the C headers and
-  builds on 3.10). Alternatives: relax `requires-python` to allow 3.9 + use the cp39 wheel; or vendor a cp310 wheel.
+- **Fix (task-data, one line — VERIFIED):** in `input/runtime_env/pyproject.toml` change
+  `requires-python = ">=3.10,<3.12"` → `">=3.9,<3.10"`. pyradiomics 3.1.0 ships a prebuilt **cp39 wheel**, so on
+  python 3.9 `uv sync` installs it (and SimpleITK/lifelines/pandas/numpy/sklearn/scipy, all of which have cp39
+  wheels) with NO compile. Tested in the lean base: `uv sync --python 3.9` → `pyradiomics v3.1.0` imports incl.
+  `featureextractor`. (Alternative: `pyradiomics @ git+https://github.com/AIM-Harvard/pyradiomics@v3.1.0` on 3.10
+  — also works but needs build tools; the 3.9 repin is simpler.)
 - **Not an env-package issue** — `python-default-3.10` + `build-essential` + `python3.10-dev` are correct and present.
 
 ### computing_math/clustered_cyclic_code_circuit_level_simulation — BLOCKING (offline)
@@ -57,10 +60,15 @@ Severity legend:
 
 ---
 
-## B. Network / external-service dependencies (env cannot fix — needs an egress policy decision)
+## B. Network / external-service dependencies — NOT a blocker (sandboxes are networked by default)
 
-These are not packaging defects. Each needs live outbound network at solve time; on a network-isolated
-sandbox they are partly or fully unscoreable, and several are non-deterministic vs a hidden reference.
+UPDATE: ALE sandboxes have outbound network by default, so install scripts may fetch and these tasks CAN
+complete — there is no env/install problem here. This section is retained only as a reference of which tasks
+reach external services, and to flag the TWO with a real *determinism* caveat (live data can drift vs the
+hidden reference) — a task-design concern, not an environment one:
+  - **healthcare_tcga_luad_survival_kras** — pulls live data from GDC (api.gdc.cancer.gov); results can drift.
+  - **ff5_public_reconstruction** — yfinance/FRED with a time-sensitive reference window.
+Everything else below just needs the (default-on) network. No action required from an env standpoint.
 
 | Task | External dependency | Effect if offline |
 |---|---|---|
