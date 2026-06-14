@@ -282,3 +282,79 @@ MAPPED but verify needs external resource / has upstream-broken lock (documented
   - simglucose_safe_basal_control_instance_1 → env (python) provided; its lock pins gym==0.9.4 which won't
     build on modern setuptools — task-data lock fix, not env.
   - ct_geometry_calibration_catphan → python + build-essential (agent builds LEAP/torch at solve; no manifest).
+
+---
+
+# WAVE 5 — full per-task audit + dev-VM ground-truth reconciliation (2026-06-14)
+
+Did a deep audit of all 105 tasks (descriptions + graders + staged input + data `software/`) cross-checked
+against (a) `gs://ale-data-public` and (b) the dev VM `dev-ubuntu22` via SSH. Two new docs hold the findings:
+- **`TASK_VALIDITY_ISSUES.md`** — input contradictions / impossible pins / network deps (deliverable 3).
+- **`DEV_VM_MISSING_ENV.md`** — envs needed but absent/per-user on the dev VM (deliverable 4).
+
+## CORRECTIONS to earlier waves (these supersede stale claims above)
+- **simglucose — NOT broken.** Earlier "gym==0.9.4 won't build" was a FALSE FAILURE from stale data + wrong
+  uv invocation. Canonical bucket lock pins `simglucose==0.2.11`; it installs + runs cleanly with
+  `uv sync --frozen --no-install-project --python 3.11`. Harness was missing `--no-install-project` (now FIXED
+  in `verify_task_env.sh`) — it was trying to build the task's own `package=false` meta-project. → PASS.
+- **nsclc — CONFIRMED broken (task-data, not env).** pyradiomics==3.1.0 has no wheel for py≥3.10 + broken sdist
+  (missing `cmatrices.h`). Dev VM has no pyradiomics anywhere. Env (python3.10-dev/build-essential) is correct.
+  Fix is a runtime_env repin (git source) — see TASK_VALIDITY_ISSUES.md §A.
+- **BerkeleyGW source — NOT registration-gated.** The box.com link downloads BGW source with a browser UA
+  (`curl -sL -A "Mozilla/5.0" <link>`), AND the dev VM has `/opt/qe-bgw-6.7.0-4.0/{envs/qe-bgw, src/BerkeleyGW-4.0,
+  src/BerkeleyGW-4.0.tar.gz}`. QE+BGW ×3 are UNBLOCKED — build the qe-bgw conda env + BGW from this source.
+- **InterProScan — NOT on the dev VM.** `/opt/toolchains` has only miniforge3 + r-biostatistics; the claimed
+  `-fresh` prebake is gone. → genuine gap (DEV_VM_MISSING_ENV.md §2), 15 GB decision.
+- **brain_science bundle — NOT on the dev VM.** `/home/user/brain_science` is empty; only Slicer 5.0.3 + FSLeyes
+  are in /opt. scene2/scene3's `run_scene.sh` orchestration + Neurodesk `.simg` images are absent. → gap, source unknown.
+- **torch + LEAP — present ONLY as `/home/user/.local` per-user installs** (torch 2.11.0+cpu, leaptorch.py,
+  numpy2.2.6/scipy1.15.3/skimage0.25.2/imageio). Not in /opt, not packaged → CT tasks (ct_geometry, limited_angle)
+  need a real package (heavy LEAP CPU build) — flagged for decision in DEV_VM_MISSING_ENV.md §1.
+- **matRad QA env** lives at per-user `~/.local/share/micromamba/envs/rtplan-matrad`; my `matrad-rtplan` package
+  omits the QA libs (pydicom/pymedphys/numba/matplotlib/skimage). Packaging fix queued below.
+
+## TESTING STANDARD (raised per user)
+"Install without error" is NOT sufficient. Each package's `verify` must **exercise the software** (version +
+import + a functional smoke), and for the few that were presence-only (cellprofiler, bwa-mem2) → upgrade to a
+real run. The per-task `usability_test` commands from the audit are captured in `tmp/reports/b0*.md` and become
+the verify assertions.
+
+## DELIVERABLE 1 — package gaps to build/fix (then deep-test)
+New packages:
+- [ ] `uv-base` — declare uv as an explicit dependency (many tasks assume it; lean base HAS it, but make it a
+      checked package so the contract is explicit). Trivial.
+- [ ] `python-default-3.12` remaps — add to cards: cfr_game_theory_equilibrium, synthetic_causal_structure_inference,
+      legal_dr_fees_01, tms_marrow, marc_remediation (verify base ships python3.12).
+- [ ] `jq` — chisel_verilog_alignment_seq_1 (system jq; lean base may already have it — confirm).
+- [ ] `rtg-tools` — WGS_Variant_Calling vcfeval (self-contained Java jar release).
+- [ ] `sgfmill` (pip) — go_game grader.
+- [ ] `leap-cpu-torch` — ct_geometry + limited_angle. HEAVY LEAP source build → DECISION before building.
+- [ ] `torch-cpu` — dit_pipeline grader, mp_checkpoint (currently via runtime_env; confirm sufficient).
+Fixes to existing packages:
+- [ ] `matrad-rtplan` — add pydicom/pymedphys/numba/matplotlib/scikit-image to the env create line.
+- [ ] `qe-bgw-6.7.0-4.0` — BUILD it now using the box.com BGW source (was the #1 frontier blocker).
+- [ ] `neurodesk-brain-science` — keep the hard-block; document bundle source need (can't build without it).
+- [ ] cellprofiler / bwa-mem2 verify — upgrade presence-only → real run.
+
+## DELIVERABLE 2 — `software/`-dir reconstruction classification
+Per-task data `software/` dirs fall into 4 classes (full per-task list in tmp/reports/b0*.md):
+1. **Thin wrappers → /opt** (env already provides the /opt tool): genomic_interval→bedtools, yeast→cellprofiler,
+   mpc→energyplus, qe-bgw tasks, k8s_migration, prostate_imrt→matrad, amber→ambertools, fds. ✔ covered by packages
+   (just ensure the /opt install path matches the wrapper exactly).
+2. **Thin wrappers → uv/system-python** (env provides python+uv): most compute/RTENV tasks. ✔ covered.
+3. **Ships REAL binaries/code in software/ (must reconstruct into clean container):**
+   - `glm_lake_calibration` — ships GLM ELF + bundled .so + vendored python_pkgs (the 8268-file count). Need a
+     package that installs GLM into the container so it runs WITHOUT the data software/. [ ] BUILD glm package.
+   - `celegans_neuron_tracking` — vendored POINTS PyQt5 GUI in software/ (covered by qt-opencv-libs + the vendored
+     code; ✔ but verify the GUI launches headless via Xvfb).
+   - `protein_function` — interproscan wrapper+release files in software/ but the 15 GB runtime is the gap (deliv 4).
+   - `basel` — ships a standalone ELF python3 in software/ (openpyxl must be inside it; ✔ via libreoffice-calc + check).
+4. **Env is task INPUT data, not software/** (no reconstruction by env): idp_ensemble_scoring (~7GB CSpred/xeisd
+   bundle under input/, variant `default/`), rgi (card.json DB), hg002 (sarek pipeline + container images).
+
+## CORRECTED TALLY
+~99/105 genuinely PASS or PASS-with-correct-env. The true remaining set needing a DECISION (not auto-fixable):
+nsclc (task-data repin), clustered_cyclic (vendor quits), the 8 network/API tasks (egress policy), LEAP CT ×2
+(heavy build), interproscan (15GB), scene2/scene3 (bundle source), hg002/bpmn container images (prebake/egress).
+Next concrete actions: build qe-bgw (BGW unblocked), add rtg-tools/sgfmill/python-3.12 remaps, fix matrad-rtplan,
+deepen cellprofiler/bwa-mem2 verifies — each with in-container functional tests.

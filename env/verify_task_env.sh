@@ -35,7 +35,10 @@ if [ -n "$BASE" ]; then
   [ -z "$RTE" ] && [ -f "$BASE/input/pyproject.toml" ] && RTE="$BASE/input"
   if [ -n "$RTE" ]; then
     export UV_PROJECT_ENVIRONMENT="$BASE/output/.verify_venv" UV_CACHE_DIR="$BASE/output/.uv_cache"
-    S="uv sync --frozen --project $RTE"; [ -f "$RTE/uv.lock" ] || S="uv sync --project $RTE"
+    # --no-install-project: install only the declared dependencies, not the task's
+    # own meta-project. Many runtime_env manifests set [tool.uv] package = false and
+    # ship no source dir; building the root would falsely fail (e.g. simglucose).
+    S="uv sync --frozen --no-install-project --project $RTE"; [ -f "$RTE/uv.lock" ] || S="uv sync --no-install-project --project $RTE"
     echo "[verify] building task runtime_env: $S"
     $S >/dev/null 2>&1 || $S || fail "task runtime_env failed to build (missing system lib?)"
     echo "[verify] runtime_env built OK"
