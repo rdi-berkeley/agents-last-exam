@@ -119,16 +119,16 @@ SCENE_SPECS: dict[str, SceneSpec] = {
         scene_slug="scene3_skullstrip_qc",
         domain="health_medicine",
         description_pdf="task3.pdf",
-        software_name="3D Slicer",
-        software_version="5.0.3",
-        tool_command="Slicer",
+        software_name="FSLeyes",
+        software_version="1.18.1",
+        tool_command="fsleyes",
         launch_scene_arg="scene3_skullstrip_qc",
         instruction_text=dedent(
             """\
             Workflow 3: skull-stripping QC
 
             Goal:
-            1. Open the staged T1w image and candidate masks in 3D Slicer.
+            1. Open the staged T1w image and candidate masks in FSLeyes.
             2. Visually compare the three candidate masks for over- and under-stripping.
             3. Choose the best candidate.
             4. Save qc_result.json with the following fields:
