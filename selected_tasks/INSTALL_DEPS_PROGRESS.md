@@ -245,3 +245,10 @@ New packages: r-base, r-build-deps, r-libs-*, micromamba, ambertools-23, cellpro
   modern setuptools + root hatchling "files to ship". Needs gym build pin/patch or --no-install-project.
 - psychology_neuro/{scene2_resample}, health_medicine/{scene3_skullstrip_qc} → Neurodesk GUI apptainer
   container bundle (Slicer/FSL .simg images, computer-use). Need: apptainer + Neurodesk images (GB, GUI).
+
+### FRONTIER UPDATE
+- life_sciences/pseudotime_de: rig R 4.5.3 installs, but Bioconductor tradeSeq/slingshot/TrajectoryUtils
+  fail to source-compile (`dyn.load: lazy loading failed for TrajectoryUtils` — C++/ABI vs available R).
+  Needs a matched Bioc BINARY repo for the R build, or conda bioconductor-tradeseq with a conda R.
+- PASS additions: ltmle (rig R4.3.2), prostate_imrt (Octave6.4+matRad, direct-octave verify),
+  yeast_colony (bioconda CellProfiler 4.2.8.1).
