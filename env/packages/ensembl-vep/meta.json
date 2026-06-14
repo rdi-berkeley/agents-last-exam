@@ -1,0 +1,1 @@
+{"description":"Ensembl VEP (bioconda) at /opt/ensembl-vep (+ /usr/local/bin/vep)","verify":"test -x /opt/ensembl-vep/bin/vep"}

@@ -79,7 +79,7 @@
   },
   "requiredSystemPackages": [
     "python-default-3.10",
-    "r-base",
+    "r-base-4.5.3",
     "r-build-deps",
     "r-libs-pseudotime"
   ]

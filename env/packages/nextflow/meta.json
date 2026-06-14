@@ -1,0 +1,1 @@
+{"description":"Nextflow workflow engine (/usr/local/bin/nextflow; requires jdk-default)","verify":"nextflow -version"}

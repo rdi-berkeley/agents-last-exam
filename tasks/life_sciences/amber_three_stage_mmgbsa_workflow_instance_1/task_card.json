@@ -95,5 +95,9 @@
       },
       "rationale": "The task involves computational structural biology focusing on protein complexes."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "micromamba",
+    "ambertools-23"
+  ]
 }

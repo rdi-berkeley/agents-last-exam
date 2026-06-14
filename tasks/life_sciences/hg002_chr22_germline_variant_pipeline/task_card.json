@@ -92,5 +92,16 @@
       },
       "rationale": "The task involves germline variant calling and analysis in genomics."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "jdk-default",
+    "docker-ce",
+    "micromamba",
+    "nextflow",
+    "gatk-picard",
+    "bwa-mem2",
+    "bioinfo-cli",
+    "ensembl-vep",
+    "python-default-3.10"
+  ]
 }

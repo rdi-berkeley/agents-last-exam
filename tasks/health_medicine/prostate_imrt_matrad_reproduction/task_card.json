@@ -217,5 +217,9 @@
       },
       "rationale": "The task involves reproducing a prostate IMRT reference plan, which is directly related to therapeutic oncology."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "micromamba",
+    "matrad-rtplan"
+  ]
 }

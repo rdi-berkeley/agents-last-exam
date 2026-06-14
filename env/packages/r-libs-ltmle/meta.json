@@ -1,0 +1,1 @@
+{"description":"R library closure: abind assertthat backports bitops caTools checkmate cli cvAUC data.table digest dplyr foreach future future.apply gam generics globals glue gplots gtools isotone iterators lifecycle listenv magrittr nnls origami parallelly pillar pkgconfig progressr R6 rlang ROCR SuperLearner tibble tidyselect utf8 vctrs withr","verify":"Rscript -e 'q()'"}

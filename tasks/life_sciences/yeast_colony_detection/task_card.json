@@ -74,5 +74,9 @@
       },
       "rationale": "The task involves detecting and analyzing yeast colonies in images, which fits within cell imaging."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "micromamba",
+    "cellprofiler-4.2.8"
+  ]
 }
