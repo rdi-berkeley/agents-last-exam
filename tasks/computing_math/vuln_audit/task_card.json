@@ -1,0 +1,26 @@
+{
+  "taskId": "computing_math/vuln_audit",
+  "title": "Audit a Python service for security vulnerabilities",
+  "summary": "A small Python service contains seven planted security vulnerabilities across distinct CWE classes plus one benign module. The agent must identify each vulnerability and report it as a (file, CWE) finding, scored deterministically against a hidden ground truth with a precision gate.",
+  "category": "computing_math",
+  "software": ["python", "bandit", "semgrep", "grep"],
+  "taskPrompt": "The repo/ directory under your task directory is a small Python service. Audit it for security vulnerabilities and write your findings to output/findings.json with the schema: {\"findings\": [{\"file\": \"<file>.py\", \"cwe\": \"CWE-NNN\", \"line\": 7, \"explanation\": \"...\"}]}. Report each distinct vulnerability class once per file (a file + CWE pair). Precision matters: false positives are penalized, and not every file is vulnerable. See input/README.md for the schema and scope.",
+  "agentMustDo": [
+    "Inspect every file under input/repo/",
+    "Identify each security vulnerability and its CWE class",
+    "Write output/findings.json with one {file, cwe} entry per distinct vulnerability",
+    "Avoid false positives (do not report benign code)"
+  ],
+  "inputFiles": [
+    { "name": "repo", "format": "Python source tree", "path": "input/repo", "description": "the service to audit: 8 modules (db.py, auth.py, cmd.py, serialize.py, files.py, config.py, calc.py + benign helpers.py)" },
+    { "name": "README.md", "format": "Markdown", "path": "input/README.md", "description": "the findings.json schema and scope" }
+  ],
+  "referenceFiles": [
+    { "name": "findings.json", "format": "JSON", "path": "output/findings.json", "description": "hidden: the (file, CWE-family) ground truth that scripts/score_vuln_audit.py compares the agent's output against" }
+  ],
+  "evaluation": "Deterministic gate-and-score, no model judgment (scripts/score_vuln_audit.py). The candidate's output/findings.json is normalized to (basename, CWE-number) pairs. GATE (score 0.0 if it fails): findings.json is well-formed AND precision >= 0.5 against the hidden ground truth -- this defeats the spam-every-CWE attack (high recall with low precision still scores 0). TIERS (equal weight, one per planted vulnerability): a file is credited when the agent reports it with a CWE in that file's accepted family (e.g. MD5 password hashing accepts CWE-327/328/916; eval accepts CWE-94/95). Score equals recall over the seven planted vulnerabilities, in [0,1].",
+  "vm": { "machineType": "c4-standard-4", "snapshot": "cpu-free-ubuntu", "timeout": 1800 },
+  "variants": 1,
+  "sourceSubmissionId": "<assigned by the agents-last-exam.org/submit portal>",
+  "taxonomy": {}
+}
