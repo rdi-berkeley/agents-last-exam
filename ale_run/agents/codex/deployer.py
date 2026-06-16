@@ -1,12 +1,16 @@
-"""CodexDeployer — drives the OpenAI ``codex`` CLI (v0.114.0).
+"""CodexDeployer — drives the OpenAI ``codex`` CLI (fork build, reports 0.0.0).
 
-Installed via ``npm install -g @openai/codex@<version>``.  An optional
-patched native binary (downloaded from a GitHub Release URL) replaces
-the npm-installed vendor binary to fix the Windows ``apply_patch``
-corruption bug.
+The deployer ensures the running ``codex`` is exactly the pinned fork build
+(``CodexConfig.fork_version``): it compares ``codex --version`` and overlays the
+fork native binary from a GitHub Release when missing/stale/stock (installing
+stock from NPM first if nothing is on PATH), else skips the download. The fork =
+openai/codex ``main`` + Windows ``apply_patch.exe`` fix + OpenRouter MCP
+adaptation (see CodexConfig).
 
 OpenRouter routing: ``OPENROUTER_API_KEY`` + ``config.toml`` with
-``model_provider = "openrouter"`` and a custom model_providers block.
+``model_provider = "openrouter"`` and a custom model_providers block. Direct
+routing: ``OPENAI_API_KEY`` → ``CODEX_API_KEY`` (non-default models via a supplied
+model catalog).
 
 MCP config at ``~/.codex/config.toml``.  Headless via
 ``--dangerously-bypass-approvals-and-sandbox`` (yolo) or
@@ -97,23 +101,26 @@ class CodexDeployer(BaseAgentDeployer):
         from ale_run.agents._bootstrap import ensure_npm
         self._npm_path = await ensure_npm()
 
-        # Skip-install policy (Option B): if a ``codex`` is already present
-        # (baked into the image) USE IT, regardless of its version string. Both
-        # the ale-ubuntu22 and ale-win10 images bake the *fork* build, which
-        # reports ``codex-cli 0.0.0`` — requiring the npm-pinned semver would
-        # force a needless reinstall + GitHub re-download on every single run.
-        # We only treat a baked binary as good enough to skip the patched-binary
-        # overlay when it IS the fork; a stock build (or anything not the fork)
-        # still gets the fork overlaid below, so the running engine is always
-        # the fork — we never silently fall back to stock.
+        # Ensure the running codex is exactly the pinned fork build
+        # (cfg.fork_version), comparing `codex --version`:
+        #   * not on PATH        -> npm install stock, then overlay the fork
+        #   * present, wrong ver -> overlay the fork (download)  [e.g. a stale
+        #                           baked fork, or stock]
+        #   * present, matches   -> already current, skip the GitHub download
+        #                           (matters at concurrency × 135 tasks)
+        # We compare the FULL version string (not a 0.0.0 sentinel) so an old
+        # fork build is correctly seen as stale and replaced — there is no
+        # silent fall back to stock/old.
+        patched_url = (
+            cfg.patched_binary_url_windows if self._is_windows
+            else cfg.patched_binary_url
+        )
         codex_path = shutil.which("codex")
-        baked_is_fork = bool(codex_path) and await self._is_fork_build(codex_path)
-        if codex_path:
-            logger.info(
-                "codex: using pre-installed binary %s (fork=%s), skipping npm install",
-                codex_path, baked_is_fork,
-            )
-        else:
+        already_current = bool(codex_path) and await self._version_matches(
+            codex_path, cfg.fork_version
+        )
+        need_overlay = True
+        if not codex_path:
             logger.info(
                 "codex: not found on PATH, installing @openai/codex@%s via npm ...",
                 cfg.codex_version,
@@ -125,25 +132,30 @@ class CodexDeployer(BaseAgentDeployer):
                     "CodexDeployer: 'codex' still not found after "
                     f"npm install -g @openai/codex@{cfg.codex_version}"
                 )
+        elif already_current:
+            logger.info(
+                "codex: %s already at pinned %s, skipping overlay",
+                codex_path, cfg.fork_version,
+            )
+            need_overlay = False
+        else:
+            logger.info(
+                "codex: %s present but not at pinned %s — overlaying fork",
+                codex_path, cfg.fork_version,
+            )
         self._codex_path = codex_path
 
-        # 2. Overlay the patched fork native binary UNLESS we already have the
-        # fork. A baked fork build needs no overlay (this skips a per-run GitHub
-        # download — important at concurrency × 135 tasks); a freshly
-        # npm-installed stock build (or a non-fork baked one) gets the fork
-        # overlaid so the engine is always the fork. The Linux and Windows
-        # builds are distinct release assets, so pick the URL matching the OS.
-        if baked_is_fork:
-            logger.info("codex: baked fork build detected, skipping patched-binary overlay")
-        else:
-            patched_url = (
-                cfg.patched_binary_url_windows if self._is_windows
-                else cfg.patched_binary_url
-            )
-            if patched_url:
-                await self._replace_native_binary(patched_url)
+        # 2. Overlay the fork native binary when needed (missing/stale/stock).
+        if need_overlay:
+            if not patched_url:
+                raise RuntimeError(
+                    "codex: need the fork binary but patched_binary_url is empty "
+                    f"(running codex is not pinned {cfg.fork_version})"
+                )
+            await self._replace_native_binary(patched_url)
 
-        # 3. Verify codex --version
+        # 3. Verify codex --version is now the pinned fork (ensure latest or fail
+        # loudly — never silently run a stale build).
         try:
             probe = await asyncio.to_thread(
                 subprocess.run,
@@ -152,7 +164,13 @@ class CodexDeployer(BaseAgentDeployer):
             )
         except subprocess.TimeoutExpired as e:
             raise RuntimeError(f"codex --version timed out: {e}")
-        logger.info("codex: CLI ok -- %s", (probe.stdout or "").strip())
+        version_out = (probe.stdout or "").strip()
+        logger.info("codex: CLI ok -- %s", version_out)
+        if need_overlay and cfg.fork_version not in version_out:
+            raise RuntimeError(
+                f"codex: overlay did not yield pinned {cfg.fork_version!r} "
+                f"(got {version_out!r}); refusing to run a stale build"
+            )
 
         # 4. Prepare work directory
         wd = Path(self.executor.work_dir)
@@ -165,19 +183,6 @@ class CodexDeployer(BaseAgentDeployer):
 
         # 5. Write MCP config (config.toml) for CUA bridge
         await self._write_codex_config(cfg)
-
-    # The cua-verse fork carries no real semver and reports ``codex-cli
-    # 0.0.0``; any stock npm release reports a normal version (e.g.
-    # ``0.114.0``). We use that sentinel to recognise a baked fork build.
-    _FORK_VERSION_MARKER: ClassVar[str] = "0.0.0"
-
-    async def _is_fork_build(self, codex_path: str) -> bool:
-        """True if the codex at ``codex_path`` is our cua-verse fork build.
-
-        Used to decide whether the patched-binary overlay can be skipped (the
-        baked binary already IS the fork) — see :meth:`install` step 2.
-        """
-        return await self._version_matches(codex_path, self._FORK_VERSION_MARKER)
 
     async def _version_matches(self, codex_path: str, version: str) -> bool:
         """True if ``codex --version`` reports the pinned version string."""
@@ -341,6 +346,24 @@ class CodexDeployer(BaseAgentDeployer):
         if is_openrouter:
             preamble += 'model_provider = "openrouter"\n'
 
+        # Model catalog (models not in codex's bundled catalog). Write the shipped catalog
+        # content to ~/.codex/model_catalog.json and point config.toml at it via
+        # ``model_catalog_json`` (must be an absolute path — codex parses it as
+        # AbsolutePathBuf). The content travelled here in the serialized config
+        # (cfg.model_catalog_content), already sanitised host-side.
+        home = os.path.expanduser("~")
+        codex_config_dir = os.path.join(home, ".codex")
+        os.makedirs(codex_config_dir, exist_ok=True)
+        if cfg.model_catalog_content:
+            catalog_path = os.path.join(codex_config_dir, "model_catalog.json")
+            Path(catalog_path).write_text(cfg.model_catalog_content, encoding="utf-8")
+            toml_catalog_path = (
+                catalog_path.replace("\\", "/") if not sandbox.is_linux
+                else catalog_path
+            )
+            preamble += f'model_catalog_json = "{toml_catalog_path}"\n'
+            logger.info("codex: model catalog written to %s", catalog_path)
+
         config_toml = preamble + "\n"
 
         # MCP server config for CUA bridge. CUA_SERVER_URL points the bridge at
@@ -365,10 +388,24 @@ class CodexDeployer(BaseAgentDeployer):
                 'env_key = "OPENROUTER_API_KEY"\n'
             )
 
-        # Write config file
-        home = os.path.expanduser("~")
-        codex_config_dir = os.path.join(home, ".codex")
-        os.makedirs(codex_config_dir, exist_ok=True)
+        # Feature overrides → codex [features] map (== tool surface). Each entry
+        # force-enables (true) or force-disables (false) a codex feature; an
+        # empty map leaves codex's defaults untouched. codex's features table is
+        # a single bool map so both directions live here (e.g. enable
+        # multi_agent_v2 + disable multi_agent). Keys are validated by codex at
+        # load (unknown keys warn); see CodexConfig.feature_overrides and the
+        # codex.yaml preset for the documented headless-meaningful keys.
+        if cfg.feature_overrides:
+            config_toml += "\n[features]\n"
+            for key, val in cfg.feature_overrides.items():
+                config_toml += f"{key} = {'true' if val else 'false'}\n"
+            logger.info(
+                "codex: feature overrides -> %s",
+                ", ".join(f"{k}={'on' if v else 'off'}"
+                          for k, v in cfg.feature_overrides.items()),
+            )
+
+        # Write config file (codex_config_dir created above).
         config_path = os.path.join(codex_config_dir, "config.toml")
         Path(config_path).write_text(config_toml, encoding="utf-8")
         logger.info("codex: config written to %s", config_path)

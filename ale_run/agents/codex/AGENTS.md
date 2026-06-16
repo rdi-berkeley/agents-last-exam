@@ -103,6 +103,62 @@ NDJSON (one JSON object per line) on stdout:
 
 ---
 
+## 4b. Tool Compatibility Matrix (demo/tool_smoke)
+
+Probed by `demo/tool_smoke` (Linux) and `demo/tool_smoke_win` (Windows) on the
+re-baked dev VMs, 2026-06-15, fork `codex-cli 0.0.0-agenthle-20260614`, a
+direct-provider model. The task exercises every tool the agent is offered
+and records pass/fail per tool. Result: **Linux 32/32 tested passed (2 untested),
+Windows 26/28 passed (2 failed, 2 untested)** — all 14 GUI `mcp__cua.*` tools
+pass on both OSes.
+
+Legend: ✅ works · ❌ fails · ➖ untested (couldn't exercise) · — not offered on that OS
+
+| Tool | Linux | Win | Note |
+|---|---|---|---|
+| `functions.exec_command` | ✅ | — | one-shot shell; **Win uses `shell_command`** (`unified_exec` off on Windows) |
+| `functions.write_stdin` | ✅ | — | stdin to a persistent `unified_exec` session — Linux only |
+| `functions.shell_command` | — | ✅ | Windows shell exec (replaces exec_command/write_stdin) |
+| `functions.apply_patch` | ✅ | ✅ | **Win relies on the fork `apply_patch.exe` hardlink fix** |
+| `functions.update_plan` | ✅ | ✅ | |
+| `functions.view_image` | ✅ | ✅ | |
+| `functions.list_mcp_resources` | ✅ | ✅ | |
+| `functions.list_mcp_resource_templates` | ✅ | ✅ | |
+| `functions.read_mcp_resource` | ➖ | ➖ | untested: MCP resource list empty, no URI to read |
+| `functions.request_user_input` | ➖ | ➖ | untested: Plan-mode only + needs a human (headless) |
+| `functions.spawn_agent` | ✅ | ✅ | multi_agent_v2 sub-agent (the target model accepts it; V1 must stay disabled) |
+| `functions.wait_agent` | ✅ | ✅ | |
+| `functions.interrupt_agent` | ✅ | ✅ | |
+| `functions.list_agents` | ✅ | ✅ | |
+| `functions.send_message` | ✅ | ❌ | **❌Win**: strict "no observable return content" (child DID receive `SEND_MESSAGE_OK`) — V2-messaging/test-rule artifact, not a transport bug |
+| `functions.followup_task` | ✅ | ❌ | **❌Win**: same strict-return artifact (child returned `FOLLOWUP_TASK_OK`) |
+| `functions.create_goal` | ✅ | — | goals tools not surfaced/exercised on Windows in this run |
+| `functions.get_goal` | ✅ | — | |
+| `functions.update_goal` | ✅ | — | |
+| `mcp__cua.screenshot` | ✅ | ✅ | GUI via CUA MCP bridge |
+| `mcp__cua.click` | ✅ | ✅ | |
+| `mcp__cua.type` | ✅ | ✅ | (needs a clean desktop to verify visible effect) |
+| `mcp__cua.scroll` | ✅ | ✅ | (needs a clean desktop to verify visible effect) |
+| `mcp__cua.drag` | ✅ | ✅ | |
+| `mcp__cua.key` / `key_down` / `key_up` / `hold_key` | ✅ | ✅ | |
+| `mcp__cua.mouse_move` / `mouse_down` / `mouse_up` | ✅ | ✅ | |
+| `mcp__cua.cursor_position` | ✅ | ✅ | |
+| `mcp__cua.wait` | ✅ | ✅ | |
+| `web.run` | ✅ | ✅ | |
+| `multi_tool_use.parallel` | ✅ | ✅ | parallel tool-call wrapper |
+
+Notes:
+- Total tool count differs by OS (Linux 34, Windows 30) because `unified_exec`
+  (and its `exec_command`/`write_stdin`) is off on Windows and the goals tools
+  weren't offered there; Windows substitutes `shell_command`.
+- The only true failures are the two Windows V2-messaging tools, and they're a
+  strict scorer rule ("the call itself returned no observable payload") rather
+  than a real breakage — the sub-agent did receive/complete the work.
+- GUI (`mcp__cua.*`) tools all pass on both OSes; `type`/`scroll` only verify
+  their visible effect on a clean desktop (leftover windows can hide it).
+
+---
+
 ## 5. Config Fields
 
 | Field | Type | Default | Meaning |
