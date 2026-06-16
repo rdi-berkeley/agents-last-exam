@@ -16,13 +16,22 @@ import tempfile
 from pathlib import Path
 
 TIER_CHECKS = [
-    "step_budget",
-    "arg_coercion",
-    "error_recovery",
-    "retry_budget",
-    "unknown_tool",
-    "final_answer",
-    "loop_detection",
+    "step_budget",          # B1
+    "arg_coercion",         # B2
+    "error_recovery",       # B3
+    "retry_budget",         # B4
+    "unknown_tool",         # B5
+    "final_answer",         # B6
+    "loop_detection",       # B7
+    "batch",                # B8
+    "strict_coercion",      # B9
+    "truncation",           # B10
+    "idempotent_retry",     # B11
+    "oscillation",          # B12
+    "batch_loop_semantics", # B13
+    "coercion_corners",     # B14
+    "budget_corners",       # B15
+    "history_integrity",    # B16
 ]
 
 
