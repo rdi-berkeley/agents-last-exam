@@ -38,23 +38,12 @@ NPZ_SPECS = {
         "keys": ("temperatures", "energy", "heat_capacity", "free_energy"),
         "tolerances": {
             "temperatures": (1e-10, 1e-12),
-            # energy / free_energy validated qualitatively below — see
-            # _qualitative_thermo_checks. The submitted Verification Method
-            # carries no numeric gate for E or F, and a numeric (rtol, atol)
-            # would false-fail correct-method agents whose mesh-dependent
-            # variance is 6-11% (legitimate for a correct tetrahedron method).
-            "energy": None,
-            "heat_capacity": (5e-2, 1e-5),
-            "free_energy": None,
+            "energy": (2e-3, 1e-5),
+            "heat_capacity": (2e-3, 1e-5),
+            "free_energy": (2e-3, 1e-5),
         },
     },
 }
-
-# Floating-point slop for the qualitative monotonicity check on energy /
-# free_energy: ~5000x smaller than the smallest real adjacent diff in the
-# reference (~5e-6), so it never masks a real dip, and well above float
-# round-trip noise so it never false-trips.
-_MONOTONIC_FP_SLOP = 1e-9
 
 RESULTS_SPEC = {
     "tier1": {
@@ -71,9 +60,9 @@ RESULTS_SPEC = {
     },
     "tier3": {
         "omega_max": (1e-6, 1e-8),
-        "dos_integral": (1e-2, 1e-5),
-        "cv_high_T": (5e-2, 1e-5),
-        "cv_low_T": (5e-2, 1e-5),
+        "dos_integral": (2e-3, 1e-5),
+        "cv_high_T": (2e-3, 1e-5),
+        "cv_low_T": (2e-3, 1e-5),
         "num_temperatures": None,
         "q_grid_size": None,
     },
@@ -131,10 +120,7 @@ def _compare_npz(name: str, output_path: Path, reference_path: Path, failures: l
         return
 
     for key in expected_keys:
-        tolerance = NPZ_SPECS[name]["tolerances"][key]
-        if tolerance is None:
-            continue  # validated qualitatively after the loop (see thermodynamics.npz)
-        rtol, atol = tolerance
+        rtol, atol = NPZ_SPECS[name]["tolerances"][key]
         _compare_array(
             name,
             key,
@@ -144,70 +130,6 @@ def _compare_npz(name: str, output_path: Path, reference_path: Path, failures: l
             atol=atol,
             failures=failures,
         )
-
-    if name == "thermodynamics.npz":
-        _qualitative_thermo_checks(name, agent_payload, failures)
-
-
-def _qualitative_thermo_checks(
-    name: str,
-    agent_payload: dict[str, np.ndarray],
-    failures: list[str],
-) -> None:
-    """Validate energy and free_energy by physical self-checks rather than a
-    fixed numeric tolerance against the reference.
-
-    The submitted Verification Method gates heat capacity (5% rel error at all
-    20 temps) and the DOS integral (within 1% of 4.0) but does NOT give a
-    numeric gate for E(T) or F(T). The physical self-checks already named in
-    problem_spec.md Tier 3 are:
-
-      - E(T) monotonically increasing with T
-      - F(T) monotonically decreasing with T
-      - F(T_max) < 0 (entropy-dominated at high T)
-
-    These check the agent's own arrays for intrinsic monotonicity and sign,
-    with no comparison to reference — so a correct tetrahedron implementation
-    with mesh-dependent variance (legitimate for a correct method)
-    cannot be false-failed by a tight numeric band, while a broken or wrong-
-    method agent still trips one of the three checks.
-    """
-    energy = np.asarray(agent_payload.get("energy"))
-    free_energy = np.asarray(agent_payload.get("free_energy"))
-    temperatures = np.asarray(agent_payload.get("temperatures"))
-
-    if energy.ndim == 1 and energy.size >= 2:
-        diffs = np.diff(energy)
-        min_diff = float(diffs.min())
-        if min_diff < -_MONOTONIC_FP_SLOP:
-            idx = int(np.argmin(diffs))
-            _fail(
-                failures,
-                f"{name}:energy not monotonically increasing with T "
-                f"(min adjacent diff={min_diff:.3e} at T[{idx}]={float(temperatures[idx]):.4f} "
-                f"-> T[{idx+1}]={float(temperatures[idx+1]):.4f})",
-            )
-
-    if free_energy.ndim == 1 and free_energy.size >= 2:
-        diffs = np.diff(free_energy)
-        max_diff = float(diffs.max())
-        if max_diff > _MONOTONIC_FP_SLOP:
-            idx = int(np.argmax(diffs))
-            _fail(
-                failures,
-                f"{name}:free_energy not monotonically decreasing with T "
-                f"(max adjacent diff={max_diff:.3e} at T[{idx}]={float(temperatures[idx]):.4f} "
-                f"-> T[{idx+1}]={float(temperatures[idx+1]):.4f})",
-            )
-
-    if free_energy.ndim == 1 and free_energy.size >= 1:
-        f_at_t_max = float(free_energy[-1])
-        if f_at_t_max >= 0.0:
-            _fail(
-                failures,
-                f"{name}:free_energy at T_max is not negative "
-                f"(F(T_max={float(temperatures[-1]):.4f})={f_at_t_max:.3e}, expected < 0)",
-            )
 
 
 def _compare_scalar(
