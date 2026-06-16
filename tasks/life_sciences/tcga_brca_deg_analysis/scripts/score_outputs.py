@@ -477,11 +477,11 @@ def score_submission(
         "tool_name": lambda value: bool(str(value).strip()),
         "dataset": lambda value: "tcga" in str(value).lower() and "brca" in str(value).lower(),
         "comparison": lambda value: "tumor" in str(value).lower() and "normal" in str(value).lower(),
-        # Exact-match gate is kept, but the required value ("completed") is now documented
-        # agent-visibly: the task prompt states it and points the agent at the staged
-        # run_manifest_template.json. Accept case/whitespace variants so the gate tests
-        # "did you report completion", not exact casing.
-        "run_status": lambda value: str(value).strip().lower() == "completed",
+        # NOTE: the run_status gate was removed. It is a self-reported field with no
+        # scientific signal — it only checked whether the agent typed "completed". A
+        # correct analysis that reported a synonym ("success"/"SUCCESS") was hard-failed
+        # despite passing every substantive gate. Run completion/correctness is already
+        # covered by the manifest numeric gates + the gold-output comparison below.
         "total_genes_tested": lambda value: isinstance(value, (int, float)) and value >= 18_000,
         "significant_degs": lambda value: isinstance(value, (int, float)) and 2_000 <= value <= 7_000,
         "tumor_samples": lambda value: isinstance(value, (int, float)) and 900 <= value <= 1150,

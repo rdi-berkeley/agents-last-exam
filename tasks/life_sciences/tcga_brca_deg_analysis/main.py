@@ -116,8 +116,6 @@ Required output files:
 - `benchmark_summary.csv`
 - `run_manifest.json`
 
-The `run_manifest.json` must report `run_status = "completed"` on a successful run; start from `{self.input_dir}/run_manifest_template.json`.
-
 Do not modify input files or any non-output task directories.
 Do not ask for confirmation. Execute directly.
 """
