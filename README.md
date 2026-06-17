@@ -56,6 +56,24 @@ $300 free trial).
 project, copy the sandbox image, fill in two keys, and run your first task. You can 
 manually setup your account then hand the doc to your coding agents to finish the rest.
 
+### Roadmap
+
+Where the framework supports running sandboxes today, and what is coming next:
+
+| Platform / target | Status |
+|---|---|
+| **Google Cloud** | ✅ Done |
+| **Docker on ALE-CLI (linux-only subset)** ([guide](https://agents-last-exam.org/docs?p=pages/local-docker.html)) | ✅ Done |
+| **AWS** | 🚧 In progress (~50%) |
+| **Step-by-step env setup guide for Windows / Ubuntu** | 📋 Planned |
+| **Setup guide for licensed task** | 📋 Planned |
+| **Alibaba Cloud (Ali-Yun)** | 📋 Planned |
+| **Local VMware** | 📋 Planned |
+
+We plan to finish the remaining items in the next 1–2 months.
+
+Have a question or run into an issue? [**Join our Discord**](https://discord.gg/jsG4Th3aVt) for direct questions.
+
 ---
 
 ## How ALE works
