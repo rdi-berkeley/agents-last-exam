@@ -184,6 +184,12 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     ref_arr = np.load(io.BytesIO(ref_bytes))
     out_arr = np.load(io.BytesIO(out_bytes))
 
+    if np.array_equal(ref_arr, out_arr):
+        logger.warning(
+            "Rejected reconstruction: output is exactly identical to the reference image"
+        )
+        return [0.0]
+
     ssim_val = ssim(ref_arr, out_arr, data_range=ref_arr.max() - ref_arr.min())
     mse_val = float(np.mean((ref_arr.astype(np.float64) - out_arr.astype(np.float64)) ** 2))
 

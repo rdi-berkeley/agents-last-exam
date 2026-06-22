@@ -30,7 +30,7 @@ Context: A small game studio plans to re-implement the legacy Flash dungeon-craw
 You are doing the reference-capture pass for floors 1–3.
 
 Steps:
-1. Open `{self.game_url}` in Ruffle yourself — e.g. double-click the file in Explorer, or run `Start-Process '{self.game_url}'` in PowerShell. Wait for the title / loading screens and enter the actual game world.
+1. Open `{self.game_url}` in Ruffle yourself — e.g. double-click the file in Explorer, or run `Start-Process '{self.game_url}'` in PowerShell. Wait for the title / loading screens and enter the actual game world. If the local Ruffle software won't open the file properly, you can instead load it via the web demo at https://ruffle.rs/demo/ (upload the .swf there).
 2. Play forward through floors 1 → 3 using normal movement and interaction. No cheats and no save-state hacks — this is what a porting engineer would do to surface each floor honestly.
 3. On arrival at each new floor, capture a full-window screenshot of the game and save it to "{self.remote_output_dir}\\$FLOOR_NUMBER$.png", where $FLOOR_NUMBER$ is the integer floor index (1.png, 2.png, 3.png).
 

@@ -138,6 +138,7 @@ Remote workspace:
 Software:
 - Launch Adobe After Effects using: {self.ae_launcher}
 - The installed After Effects version may differ from the original submission; use the available AE version opened by this launcher.
+- After Effects is the intended tool, but if AE is not available in the environment, any other way to achieve the goal is welcome (the output MP4 is what gets evaluated).
 
 Visible inputs:
 - Source butterfly artwork: {self.source_image}

@@ -18,6 +18,7 @@ METRIC_COLUMN_MAP = {
     "unsubscribed_rate": "unsubscribed",
 }
 Z_975 = NormalDist().inv_cdf(0.975)
+POWER_SAMPLE_SIZE_LOWER_TOLERANCE = 2
 
 
 def parse_args() -> argparse.Namespace:
@@ -112,6 +113,15 @@ def floats_close(a: float, b: float, tol: float = 0.001) -> bool:
     return abs(a - b) <= tol
 
 
+def report_has_acceptable_sample_size(text: str, required_n: int) -> bool:
+    """Allow the small Cohen's h vs. closed-form power-analysis difference."""
+    minimum_n = max(0, required_n - POWER_SAMPLE_SIZE_LOWER_TOLERANCE)
+    return any(
+        str(candidate) in text or f"{candidate:,}" in text
+        for candidate in range(minimum_n, required_n + 1)
+    )
+
+
 def validate_results_tsv(output_path: Path, expected_stats: dict[str, dict[str, float | bool]]) -> bool:
     rows = read_csv_rows(output_path, delimiter="\t")
     if len(rows) != 4:
@@ -183,7 +193,7 @@ def validate_report_md(output_path: Path, expected_stats: dict[str, dict[str, fl
     expected_recommendation = "ship" if primary_sig and guardrail_pass else "hold"
     if expected_recommendation not in lower:
         return False
-    if str(required_n) not in text and f"{required_n:,}" not in text:
+    if not report_has_acceptable_sample_size(text, required_n):
         return False
     if "3.4" not in text and "3.40" not in text:
         return False
