@@ -2,32 +2,24 @@
 #
 # Requirements:
 #   - Linux host with Docker and /dev/kvm
-#   - Enough disk for the cached base images (currently ~295 GB Ubuntu,
-#     ~177 GB Windows in gs://ale-data-public/images/)
+#   - Enough disk for the cached Windows base image (~177 GB)
 #
 # Each run creates a small qcow2 overlay; it does not copy the full base image.
-# The first run downloads each configured gs:// image into ~/.cache/ale/qemu/images.
+# The host provider downloads each configured base disk before starting Docker.
+# `disk_source` accepts hf:// (default), gs://, or a local path.
 #
 # Initial scope is CPU-only with task data already baked into the image.
 # GPU tasks and task_data_source: local:... fail explicitly.
 snapshots:
-  cpu-free-ubuntu:
-    provider: qemu
-    image: ale-ubuntu22
-    qemu:
-      qcow2: gs://ale-data-public/images/ale-ubuntu22.qcow2
-      root: ~/.cache/ale/qemu
-      docker_image: agentslastexam/ale-qemu:0.1.0
-      shm_size: 2g
-      ready_timeout_s: 900
-
   cpu-free:
     provider: qemu
     image: ale-win10
     qemu:
-      qcow2: gs://ale-data-public/images/ale-win10.qcow2
+      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2.manifest.json
+      hf_revision: 56a0051ab0c4d94e997e58e1e86d0571ceee5661
       root: ~/.cache/ale/qemu
-      docker_image: agentslastexam/ale-qemu:0.1.0
+      runner_image: agentslastexam/ale-qemu:0.2.0
+      runner_pull_policy: missing
       shm_size: 2g
       ready_timeout_s: 900
 

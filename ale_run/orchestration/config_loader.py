@@ -493,10 +493,10 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
                 )
             docker_cfg = this
         elif kind == "qemu":
-            if not knobs.get("qcow2"):
+            if not knobs.get("disk_source"):
                 raise KeyError(
                     f"environment {path!r}: qemu snapshot {tag!r} missing "
-                    f"required `qemu.qcow2`"
+                    f"required `qemu.disk_source`"
                 )
             qemu_snaps[str(tag)] = {"image": str(image), **knobs}
         elif kind == "static":
