@@ -49,7 +49,7 @@ class AgentSpec:
 class ProviderSpec:
     """VM provider selection. ``kind`` picks the impl; ``config`` is its kwargs."""
 
-    kind: str                                    # gcloud | static | docker | (stub for tests)
+    kind: str                             # gcloud | static | docker | qemu | (stub for tests)
     config: dict[str, Any] = field(default_factory=dict)
 
 

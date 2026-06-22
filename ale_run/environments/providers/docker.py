@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
 import random
 import re
@@ -303,6 +302,7 @@ class DockerProvider(Provider):
             os=image.os,
             **image.sandbox_paths(),
             metadata={
+                "provider": "docker",
                 "container_name": name,
                 "container_id": stdout[:12],
                 "cua_port": cua_port,

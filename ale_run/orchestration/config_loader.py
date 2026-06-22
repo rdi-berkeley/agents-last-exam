@@ -456,6 +456,7 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
     gcloud_snaps: dict[str, Any] = {}   # tag -> {image, gpu, zones}
     gcloud_creds: dict[str, Any] = {}   # project/sa/network/... (reconciled, last wins)
     docker_cfg: dict[str, Any] | None = None
+    qemu_snaps: dict[str, Any] = {}
 
     for tag, entry in snapshots.items():
         if not isinstance(entry, dict):
@@ -491,6 +492,13 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
                     f"differing config is not supported ({docker_cfg} vs {this})"
                 )
             docker_cfg = this
+        elif kind == "qemu":
+            if not knobs.get("qcow2"):
+                raise KeyError(
+                    f"environment {path!r}: qemu snapshot {tag!r} missing "
+                    f"required `qemu.qcow2`"
+                )
+            qemu_snaps[str(tag)] = {"image": str(image), **knobs}
         elif kind == "static":
             raise ValueError(
                 f"environment {path!r}: `static` cannot be a per-snapshot "
@@ -522,6 +530,11 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
         if gcs_sa_key:
             dk["gcs_sa_key"] = gcs_sa_key
         provider_specs["docker"] = ProviderSpec(kind="docker", config=dk)
+    if qemu_snaps:
+        provider_specs["qemu"] = ProviderSpec(
+            kind="qemu",
+            config={"snapshots": qemu_snaps},
+        )
 
     return EnvironmentSpec(
         provider_specs=provider_specs,

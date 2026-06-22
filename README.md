@@ -64,6 +64,7 @@ Where the framework supports running sandboxes today, and what is coming next:
 |---|---|
 | **Google Cloud** | ✅ Done |
 | **Docker on ALE-CLI (linux-only subset)** ([guide](https://agents-last-exam.org/docs?p=pages/local-docker.html)) | ✅ Done |
+| **Local QEMU in Docker (Ubuntu / Windows, CPU-only)** ([guide](docs/local-qemu.md)) | 🧪 Experimental |
 | **AWS** | 🚧 In progress (~50%) |
 | **Step-by-step env setup guide for Windows / Ubuntu** | 📋 Planned |
 | **Setup guide for licensed task** | 📋 Planned |

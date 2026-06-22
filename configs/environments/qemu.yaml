@@ -1,0 +1,35 @@
+# Local full-OS sandbox provider: one QEMU VM inside Docker per ALE run.
+#
+# Requirements:
+#   - Linux host with Docker and /dev/kvm
+#   - Enough disk for the cached base images (currently ~295 GB Ubuntu,
+#     ~177 GB Windows in gs://ale-data-public/images/)
+#
+# Each run creates a small qcow2 overlay; it does not copy the full base image.
+# The first run downloads each configured gs:// image into ~/.cache/ale/qemu/images.
+#
+# Initial scope is CPU-only with task data already baked into the image.
+# GPU tasks and task_data_source: local:... fail explicitly.
+snapshots:
+  cpu-free-ubuntu:
+    provider: qemu
+    image: ale-ubuntu22
+    qemu:
+      qcow2: gs://ale-data-public/images/ale-ubuntu22.qcow2
+      root: ~/.cache/ale/qemu
+      docker_image: agentslastexam/ale-qemu:0.1.0
+      shm_size: 2g
+      ready_timeout_s: 900
+
+  cpu-free:
+    provider: qemu
+    image: ale-win10
+    qemu:
+      qcow2: gs://ale-data-public/images/ale-win10.qcow2
+      root: ~/.cache/ale/qemu
+      docker_image: agentslastexam/ale-qemu:0.1.0
+      shm_size: 2g
+      ready_timeout_s: 900
+
+task_data_source: baked_in_sandbox
+output_path: local

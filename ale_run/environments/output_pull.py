@@ -39,9 +39,12 @@ def _output_dir(sandbox: SandboxHandle, task_data: TaskDataSpec) -> str:
 def _docker_container(sandbox: SandboxHandle) -> str | None:
     """Container name iff this is a local Docker sandbox, else None.
 
-    The docker provider stamps ``container_name`` into ``metadata``; no other
-    provider does. Presence means output can be pulled with a single host-side
-    ``docker cp`` instead of streaming each file over the cua HTTP API."""
+    The direct Docker provider stamps both ``provider=docker`` and
+    ``container_name`` into metadata. The QEMU provider also has an outer
+    container, but that container does not expose the guest filesystem, so it
+    must use the normal cua download path."""
+    if sandbox.metadata.get("provider") != "docker":
+        return None
     return sandbox.metadata.get("container_name")
 
 

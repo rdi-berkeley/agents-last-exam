@@ -176,6 +176,9 @@ def build_provider(spec: "ProviderSpec") -> "Provider":
     if kind == "docker":
         from ..environments.providers.docker import DockerProvider
         return DockerProvider(spec.config)
+    if kind == "qemu":
+        from ..environments.providers.qemu import QemuProvider
+        return QemuProvider(spec.config)
     raise NotImplementedError(f"provider kind {kind!r} is not implemented")
 
 
