@@ -26,30 +26,51 @@ if ! command -v startxfce4 >/dev/null 2>&1; then
   || echo "WARN: XFCE install failed (desktop will fall back to bare Xvfb)"
 fi
 
-# --- Chrome in a container: GUI tasks (e.g. demo/hello) launch google-chrome,
-#     but the rootfs-export image breaks it two ways:
-#       1. Chrome's zygote sandbox needs user-namespace/CAP the container doesn't
-#          grant, so a bare `google-chrome` dies (zygote FATAL → defunct zombie,
-#          app never opens). It needs --no-sandbox (the container is the boundary).
-#       2. the export caught the dev VM's *running* Chrome, baking a stale
-#          ~/.config/google-chrome/SingletonLock -> <vm-host>-<pid>, which makes a
-#          fresh Chrome reject the default profile as "in use".
-#     Fix both at the image layer (so every Chrome task works, no task-data edits):
-#     drop the stale singleton locks, and shim google-chrome with the flags a
-#     container needs (--no-sandbox + skip the first-run wizard). /usr/local/bin
-#     precedes /usr/bin on PATH, so the shim wins. ---
-rm -f /home/user/.config/google-chrome/Singleton* 2>/dev/null || true
-if [ -e /usr/bin/google-chrome ]; then
-  cat > /usr/local/bin/google-chrome <<'CHROME_SHIM'
+# --- Chrome in a container: GUI tasks launch google-chrome, but the
+#     rootfs-export image breaks it. Chrome's zygote sandbox needs
+#     user-namespace/CAP the container doesn't grant, so a bare launch dies
+#     (zygote FATAL → defunct zombie, app never opens); it needs --no-sandbox
+#     (the container is the boundary). We also skip the first-run wizard and hide
+#     the "unsupported flag" infobar (--test-type).
+#     Wrap the REAL launcher (/opt/google/chrome/google-chrome) — not a PATH
+#     shim — so EVERY caller gets the flags: `google-chrome` by name, the
+#     absolute /usr/bin/google-chrome[-stable] symlinks, and the XFCE menu/dock
+#     .desktop (exo-open), which all resolve here. ---
+rm -f /usr/local/bin/google-chrome /usr/local/bin/google-chrome-stable 2>/dev/null || true  # old PATH shim
+if [ -e /opt/google/chrome/google-chrome ] && [ ! -e /opt/google/chrome/google-chrome.real ]; then
+  mv /opt/google/chrome/google-chrome /opt/google/chrome/google-chrome.real
+  cat > /opt/google/chrome/google-chrome <<'CHROME'
 #!/bin/bash
-# Container shim: a container can't run Chrome's sandbox, and we skip the
-# first-run wizard. --test-type hides the resulting "unsupported flag" infobar
-# (a docker-only artifact) so GUI tasks see the clean window the VM shows.
-exec /usr/bin/google-chrome --no-sandbox --no-first-run --no-default-browser-check --disable-gpu --test-type "$@"
-CHROME_SHIM
-  chmod +x /usr/local/bin/google-chrome
-  ln -sf /usr/local/bin/google-chrome /usr/local/bin/google-chrome-stable
+exec /opt/google/chrome/google-chrome.real --no-sandbox --no-first-run --no-default-browser-check --disable-gpu --test-type "$@"
+CHROME
+  chmod +x /opt/google/chrome/google-chrome
 fi
+
+# --- stale dev-VM runtime locks baked by the rootfs export (apps were running
+#     on the dev VM at export time): a Chrome SingletonLock and a LibreOffice
+#     .lock both point at the VM hostname, making a fresh launch think another
+#     instance owns the profile. Drop them. ---
+rm -f /home/user/.config/google-chrome/Singleton*  2>/dev/null || true
+rm -f /home/user/.config/libreoffice/*/.lock        2>/dev/null || true
+
+# --- file manager + default-application helpers: the bare XFCE install ships no
+#     file manager and no "preferred application" config, so the panel/menu
+#     category shortcuts (Web Browser / Terminal Emulator / File Manager) fail
+#     with "Failed to execute default …" / "Choose Preferred Application". Install
+#     Thunar and wire the exo-open defaults to the apps that ARE installed. ---
+if ! command -v thunar >/dev/null 2>&1; then
+  mkdir -p /var/cache/apt/archives/partial /var/lib/apt/lists/partial /var/log/apt
+  apt-get update -qq && apt-get install -y --no-install-recommends thunar \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    || echo "WARN: thunar install failed"
+fi
+install -d -o user -g user /home/user/.config/xfce4
+cat > /home/user/.config/xfce4/helpers.rc <<'HELPERS'
+TerminalEmulator=xfce4-terminal
+FileManager=thunar
+WebBrowser=google-chrome
+HELPERS
+chown user:user /home/user/.config/xfce4/helpers.rc
 
 # --- dirs excluded from the rootfs tar that the runtime needs back, with the
 #     sticky perms docker would otherwise recreate them as root:0755 ---
