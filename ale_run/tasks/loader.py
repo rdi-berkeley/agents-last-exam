@@ -221,8 +221,16 @@ class TaskLoader:
             # — TaskLoader doesn't know which provider will be used.
             task_info["image_category"] = vm_cfg.get("snapshot")
             task_info["snapshot_name"] = vm_cfg.get("snapshot")
-            if "timeout" in vm_cfg:
-                task_info["timeout_s"] = self._parse_task_timeout(vm_cfg["timeout"])
+            raw_timeout = vm_cfg.get("timeout_s", vm_cfg.get("timeout"))
+            if raw_timeout is not None:
+                task_info["timeout_s"] = self._parse_task_timeout(raw_timeout)
+            for field_name in ("vcpus", "memory_gb"):
+                raw_value = vm_cfg.get(field_name)
+                if raw_value is not None:
+                    task_info[field_name] = self._parse_positive_int(
+                        field_name,
+                        raw_value,
+                    )
             # task_card may pin a machine: validate it parses as a real GCE
             # type, then pass the raw string through. The provider prefers it
             # over its yaml fallback list (see GcloudProvider.acquire).
@@ -238,27 +246,33 @@ class TaskLoader:
                     )
         return task_info
 
-    def _parse_task_timeout(self, raw_timeout: Any) -> int:
-        if isinstance(raw_timeout, bool):
+    def _parse_positive_int(self, field_name: str, raw_value: Any) -> int:
+        if isinstance(raw_value, bool):
             raise ValueError(
-                f"task_card.json for {self.task_path} has invalid vm.timeout={raw_timeout!r}; "
-                "expected positive integer seconds"
+                f"task_card.json for {self.task_path} has invalid "
+                f"vm.{field_name}={raw_value!r}; expected positive integer"
             )
         try:
-            if isinstance(raw_timeout, float) and not raw_timeout.is_integer():
+            if isinstance(raw_value, float) and not raw_value.is_integer():
                 raise ValueError
-            timeout_s = int(raw_timeout)
+            value = int(raw_value)
         except (TypeError, ValueError):
             raise ValueError(
-                f"task_card.json for {self.task_path} has invalid vm.timeout={raw_timeout!r}; "
-                "expected positive integer seconds"
+                f"task_card.json for {self.task_path} has invalid "
+                f"vm.{field_name}={raw_value!r}; expected positive integer"
             ) from None
-        if timeout_s <= 0:
+        if value <= 0:
             raise ValueError(
-                f"task_card.json for {self.task_path} has invalid vm.timeout={raw_timeout!r}; "
-                "expected positive integer seconds"
+                f"task_card.json for {self.task_path} has invalid "
+                f"vm.{field_name}={raw_value!r}; expected positive integer"
             )
-        return timeout_s
+        return value
+
+    def _parse_task_timeout(self, raw_timeout: Any) -> int:
+        try:
+            return self._parse_positive_int("timeout_s", raw_timeout)
+        except ValueError as exc:
+            raise ValueError(f"{exc}; value is in seconds") from None
 
     def build_task_cfg(self, variant_index: int = 0) -> Any:
         module = self._load_module()

@@ -11,6 +11,8 @@ from ale_run.environments.output_pull import _docker_container
 from ale_run.environments.providers import qemu as qemu_module
 from ale_run.environments.providers.qemu import QemuProvider
 from ale_run.orchestration.config_loader import load_experiment
+from ale_run.orchestration.lifecycle import _build_env_spec
+from ale_run.tasks.loader import TaskLoader
 
 
 def _provider_config(tmp_path: Path, base_qcow2: Path) -> dict:
@@ -131,6 +133,35 @@ def test_provider_rejects_hf_revisions_sharing_one_cache_path(
 
     with pytest.raises(ValueError, match="share cache path"):
         QemuProvider(config)
+
+
+def test_demo_task_card_resources_reach_qemu_shape(tmp_path: Path) -> None:
+    task_meta = TaskLoader("tasks/demo/hello_win").load()
+    spec = _build_env_spec(task_meta)
+    base_qcow2 = tmp_path / "ale-win10.qcow2"
+    base_qcow2.write_bytes(b"qcow2")
+    config = _provider_config(tmp_path, base_qcow2)
+    config["snapshots"]["cpu-free"]["vcpus"] = 0
+    config["snapshots"]["cpu-free"]["memory_gb"] = 0
+    provider = QemuProvider(config)
+
+    assert task_meta["timeout_s"] == 1800
+    assert spec.vcpus == 4
+    assert spec.memory_gb == 16
+    assert provider._resolve_shape(provider.config.snapshots["cpu-free"], spec) == (4, 16)
+
+
+def test_qemu_shape_falls_back_to_image_default(tmp_path: Path) -> None:
+    base_qcow2 = tmp_path / "ale-win10.qcow2"
+    base_qcow2.write_bytes(b"qcow2")
+    config = _provider_config(tmp_path, base_qcow2)
+    config["snapshots"]["cpu-free"]["vcpus"] = 0
+    config["snapshots"]["cpu-free"]["memory_gb"] = 0
+    provider = QemuProvider(config)
+
+    spec = SandboxSpec(snapshot="cpu-free", os="windows")
+
+    assert provider._resolve_shape(provider.config.snapshots["cpu-free"], spec) == (4, 16)
 
 
 @pytest.mark.asyncio

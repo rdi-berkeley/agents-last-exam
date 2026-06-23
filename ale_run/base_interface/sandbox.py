@@ -37,7 +37,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, Iterable, Literal
+from typing import Any, Iterable, Literal
 
 import requests
 
@@ -65,6 +65,8 @@ class SandboxSpec:
     machine_type: str | None = None
     """Task-card ``vm.machineType`` override. None → provider uses its yaml
     fallback list. Boot disk size always comes from the image (no override)."""
+    vcpus: int | None = None
+    memory_gb: int | None = None
     gpu: str | None = None
     task_id: str = ""
     harness: str = ""
@@ -263,7 +265,6 @@ def _read_first_sse_event(
 
     cua-server replies as SSE — first data event is the result; any
     later events are progress/keepalives we don't consume here."""
-    deadline = asyncio.get_event_loop().time() + read_timeout if False else None  # placeholder; real timing in session caller
     # NOTE: requests doesn't support asyncio time loops — this function is
     # meant to be called from inside a worker thread where the host's
     # blocking read is fine. Inline timeout is enforced via the original

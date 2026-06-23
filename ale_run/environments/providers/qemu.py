@@ -1057,11 +1057,17 @@ class QemuProvider(Provider):
         snapshot: QemuSnapshotConfig,
         spec: SandboxSpec,
     ) -> tuple[int, int]:
-        from .gcloud import _DEFAULT_CPU_MACHINE, _parse_gce_machine_type
+        from ..images import get as get_image
+        from .gcloud import _parse_gce_machine_type
 
-        shape = _parse_gce_machine_type(spec.machine_type or _DEFAULT_CPU_MACHINE)
-        vcpus = snapshot.vcpus or (shape.vcpus if shape else 4)
-        memory_gb = snapshot.memory_gb or (shape.memory_gb if shape else 8)
+        default_machine_type = get_image(snapshot.image).default_machine_type
+        shape = _parse_gce_machine_type(spec.machine_type or default_machine_type)
+        vcpus = snapshot.vcpus or spec.vcpus or (shape.vcpus if shape else 4)
+        memory_gb = (
+            snapshot.memory_gb
+            or spec.memory_gb
+            or (shape.memory_gb if shape else 8)
+        )
         return vcpus, memory_gb
 
     @staticmethod
