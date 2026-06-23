@@ -111,6 +111,38 @@ rm -rf /home/user/.config/agenthle-artifacts /root/.config/agenthle-artifacts 2>
 rm -f  /home/user/.openhands/.env /home/user/.hermes/.env /home/user/.openclaw/.env 2>/dev/null || true
 rm -rf /home/user/ale-test /home/user/.ale-src 2>/dev/null || true
 
+# --- scrub dev-VM cruft: the image is a rootfs export of a shared dev VM, so it
+#     carries per-user config and other files that don't belong in the benchmark
+#     image. Remove them WITHOUT touching the prebaked agent harnesses (codex in
+#     /usr/local, openclaw, hermes/gemini/claude in ~/.local, .openclaw/.grok/
+#     .bun/.cargo/.rustup/.npm-global) or the /opt task software. ---
+#
+#   per-user config / state that shouldn't ship in a published image:
+rm -rf /home/user/.config/gcloud-agenthle-artifacts 2>/dev/null || true
+rm -f  /home/user/.netrc 2>/dev/null || true
+rm -f  /home/user/.hermes/auth.json 2>/dev/null || true
+rm -rf /home/user/.hermes/sessions 2>/dev/null || true
+rm -rf /home/user/.config/google-chrome/Default 2>/dev/null || true       # dev browser profile
+rm -f  /home/user/.config/google-chrome/Singleton* 2>/dev/null || true
+rm -f  /home/user/.bash_history /home/user/.python_history \
+       /home/user/.zsh_history /home/user/.node_repl_history /root/.bash_history 2>/dev/null || true
+rm -rf /root/.ssh 2>/dev/null || true
+#
+#   extra user accounts carried over from the shared dev VM (homes + accounts):
+for u in weichenzhang bytedance User; do userdel -r "$u" 2>/dev/null || rm -rf "/home/$u"; done
+rm -rf /home/{{your_email* 2>/dev/null || true   # a stray templated home dir
+for u in weichenzhang bytedance User; do
+  sed -i "\|^$u:|d" /etc/passwd /etc/shadow /etc/group /etc/gshadow 2>/dev/null || true
+done
+sed -i '/^{{your_email/d' /etc/passwd /etc/shadow /etc/group /etc/gshadow 2>/dev/null || true
+#
+#   benchmark-irrelevant dev cruft / build workspaces / caches / stray files:
+rm -rf /home/user/codex-build 2>/dev/null || true                  # codex BUILD dir (codex runs from /usr/local)
+rm -f  /home/user/reference.frc 2>/dev/null || true                # ~580MB stray simulation output
+rm -rf /home/user/.config/Code /home/user/.config/Sabaki 2>/dev/null || true   # dev editor / app state
+rm -rf /home/user/.agenthle_hidden_eval_assets 2>/dev/null || true # leftover per-task eval asset (no Linux task should rely on a baked home-dir copy)
+rm -rf /home/user/.cache /home/user/.npm /root/.cache 2>/dev/null || true       # package/build caches
+
 # --- sanity: paths the ale-ubuntu22-docker Image entry promises must exist ---
 echo "--- verify image-promised paths ---"
 fail=0
@@ -123,6 +155,16 @@ for p in /usr/local/bin/node \
 done
 command -v Xvfb >/dev/null && echo "OK   Xvfb" || { echo "MISS Xvfb"; fail=1; }
 command -v startxfce4 >/dev/null && echo "OK   startxfce4 (XFCE desktop)" || echo "WARN startxfce4 missing (bare Xvfb, no WM)"
+# the scrub must NOT have touched the prebaked agent harnesses
+for b in /usr/local/bin/codex /usr/local/bin/openclaw \
+         /home/user/.local/bin/claude /home/user/.local/bin/gemini /home/user/.local/bin/hermes; do
+  if [ -e "$b" ]; then echo "OK   agent: $b"; else echo "MISS agent: $b"; fail=1; fi
+done
+# the removed dev-VM files/accounts must be GONE
+for s in /home/user/.config/gcloud-agenthle-artifacts /home/user/.netrc \
+         /home/weichenzhang /home/bytedance /root/.ssh; do
+  [ -e "$s" ] && { echo "LEFTOVER (should be gone): $s"; fail=1; } || echo "OK   scrubbed: $s"
+done
 /opt/cua-server/.venv/bin/python -c "import computer_server" 2>/dev/null \
   && echo "OK   computer_server importable" \
   || echo "WARN computer_server import failed without X (expected; entrypoint starts Xvfb)"

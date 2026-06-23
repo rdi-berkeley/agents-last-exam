@@ -8,8 +8,8 @@
 #
 # Either way the SAME excludes apply, so the two paths produce identical images.
 # Drops everything a container shares with / gets from the host (kernel, init,
-# devices, logs, caches, snap/flatpak desktop bits, swap) + the task data and any
-# baked secrets (see excludes). A container only needs the userspace rootfs.
+# devices, logs, caches, snap/flatpak desktop bits, swap) + the task data and the
+# dev-VM-specific files (see excludes). A container only needs the userspace rootfs.
 #
 # tar's own exit code is recorded to /tmp/ale_export_tar.rc so the caller can
 # tell a benign "files changed while reading" (1) from a fatal error (2): in a
@@ -40,6 +40,20 @@ sudo find / -xdev \( -uid +65535 -o -gid +65535 \) -exec chown -h 0:0 {} + 2>/de
     --exclude=./home/user/.config/agenthle-artifacts \
     --exclude='./home/*/.env' --exclude='./home/*/*/.env' \
     --exclude=./root/.config/agenthle-artifacts \
+    \
+    --exclude=./home/weichenzhang --exclude=./home/bytedance \
+    --exclude=./home/User --exclude='./home/{{*' \
+    --exclude=./root/.ssh \
+    --exclude=./home/user/.config/gcloud-agenthle-artifacts \
+    --exclude=./home/user/.netrc \
+    --exclude=./home/user/.hermes/auth.json --exclude=./home/user/.hermes/sessions \
+    --exclude=./home/user/.config/google-chrome/Default \
+    --exclude='./home/*/.bash_history' --exclude='./home/*/.python_history' \
+    --exclude='./home/*/.zsh_history' --exclude=./root/.bash_history \
+    --exclude=./home/user/codex-build --exclude=./home/user/reference.frc \
+    --exclude=./home/user/.config/Code --exclude=./home/user/.config/Sabaki \
+    --exclude=./home/user/.agenthle_hidden_eval_assets \
+    --exclude=./home/user/.cache --exclude=./home/user/.npm --exclude=./root/.cache \
     -cf - -C / . 2>/tmp/ale_export_tar.err
   echo $? > /tmp/ale_export_tar.rc
 } | if [ "${ALE_EXPORT_RAW:-0}" = 1 ]; then cat; else zstd -T0 -3 -c; fi
