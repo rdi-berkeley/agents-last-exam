@@ -1,4 +1,43 @@
-"""Score clustered-cyclic code logical error-rate CSV outputs."""
+"""Score clustered-cyclic code logical error-rate CSV outputs.
+
+Scoring model (revised 2026-06-13, per task author Andy Liu):
+
+The original grader compared every ``lfr_per_round`` / ``lfr_per_round_per_qubit``
+value against a frozen benchmark reference on a log scale (``LOG_TOLERANCE``).
+That exact-value match is not appropriate for this task: the reference was
+generated on a compute cluster with a large shot budget, whereas agents are
+evaluated on a single CPU VM where the achievable shot count is much lower, so
+the absolute logical-error-rate values carry significant Monte-Carlo noise even
+for a correct implementation. Matching absolute values therefore false-fails
+correct agents.
+
+The author's guiding success criterion is a *physical invariant* that is robust
+to the absolute-scale sampling difference because it compares two codes the
+agent simulated under identical conditions:
+
+    Across physical error rates, increasing code distance suppresses the logical
+    error rate along the ladder of the three k=8 codes:
+
+        [24,8,3] (d=3)  >=  [40,8,5] (d=5)  >=  [56,8,7] (d=7).
+
+This is the standard below-threshold distance-suppression signature: a higher
+code distance suppresses logical errors more strongly. A broken decoder (the
+failure mode that motivated this task's audit) inverts or flattens it. We check
+each adjacent rung of the ladder in the sub-threshold regime, where it is both
+physically meaningful and statistically resolvable, with a noise margin so a
+correct but under-sampled agent is not false-failed. (Confirmed 2026-06-23 by a
+controlled experiment: the absolute logical-error rate is driven by the CNOT
+schedule, which the staged spec under-specifies — two valid direction-aware
+schedules of identical depth differ ~19x at p=1e-4 — but the distance-suppression
+*ordering* is invariant to that choice. The author endorsed the [56,8,7] ladder
+on 2026-06-22.)
+
+The schema, simulation-grid, declared-parameter, and internal-consistency
+checks (``p_logical == num_failures / num_shots``, the LFR formulas) are
+retained unchanged — the reference is still used to pin the required
+``(code, p_physical)`` grid and the declared integer parameters, just not the
+outcome values.
+"""
 
 from __future__ import annotations
 
@@ -28,7 +67,35 @@ EXPECTED_COLUMNS = [
 
 KEY_FIELDS = ["code", "p_physical"]
 EXACT_INT_FIELDS = ["n", "k", "d", "num_rounds", "num_shots"]
-LOG_TOLERANCE = 0.1
+
+# ---------------------------------------------------------------------------
+# Distance-suppression criterion parameters (author-specified invariant).
+#
+# The ladder: the three k=8 codes in order of increasing distance. They share
+# k=8 and the same noise/decoder pipeline, differing only in distance, so they
+# are directly comparable block-for-block. Each adjacent rung must show
+# suppression (the higher-distance code's p_logical no greater than the
+# lower-distance code's, within a noise margin) across the sub-threshold rates.
+# ---------------------------------------------------------------------------
+SUPPRESSION_LADDER = ["[24,8,3]", "[40,8,5]", "[56,8,7]"]  # d=3 -> d=5 -> d=7
+
+# Only assess the invariant where the d=3 code is still well below the
+# random-guess saturation ceiling. Above threshold both codes saturate near 1.0
+# and their ordering is pure Monte-Carlo noise.
+SUBTHRESHOLD_CEILING = 0.4
+
+# Noise margin: the d=5 rate may exceed the d=3 rate by at most this much before
+# it counts as a suppression violation. Absorbs binomial sampling error on a
+# CPU-VM shot budget; physically, sub-threshold suppression is strong (the d=5
+# rate is typically many times below the d=3 rate), so a modest margin does not
+# admit a broken/inverted decoder.
+SUPPRESSION_ABS_MARGIN = 0.02
+SUPPRESSION_REL_MARGIN = 0.25
+
+# Guards so a degenerate output (e.g. all-zeros, or a flat curve) cannot pass
+# the invariant trivially.
+MIN_SUBTHRESHOLD_POINTS = 3   # need enough resolvable sub-threshold comparisons
+MIN_SIGNAL_PLOGICAL = 0.01    # the d=3 curve must reach a real error rate somewhere
 
 
 @dataclass
@@ -134,10 +201,67 @@ def _close_numeric(actual: float, expected: float) -> bool:
     return abs(actual - expected) <= max(1e-12, abs(expected) * 1e-9)
 
 
-def _log_close(actual: float, expected: float) -> bool:
-    if actual <= 0.0 or expected <= 0.0:
-        return False
-    return abs(math.log10(actual) - math.log10(expected)) < LOG_TOLERANCE
+def _check_distance_suppression(
+    agent: dict[tuple[str, Decimal], dict[str, str]],
+    reasons: list[str],
+) -> None:
+    """Assert the author's distance-suppression invariant on the agent's output.
+
+    Walk the ladder of k=8 codes in increasing-distance order. For each adjacent
+    rung (lower-distance ``lo`` -> higher-distance ``hi``), the higher-distance
+    code must achieve a logical error rate no higher (within a noise margin) than
+    the lower-distance one across the sub-threshold physical error rates. Compares
+    the agent's own codes, sampled under identical conditions, so the check is
+    robust to the absolute-scale difference between the reference cluster run and
+    the evaluation VM (and to the under-specified CNOT schedule).
+    """
+    def curve(code: str) -> dict[Decimal, float]:
+        out: dict[Decimal, float] = {}
+        for (row_code, p_physical), row in agent.items():
+            if row_code.strip() != code:
+                continue
+            value = _parse_float(row.get("p_logical"), "p_logical", [], f"{code}:{p_physical}")
+            if value is not None:
+                out[p_physical] = value
+        return out
+
+    curves = {code: curve(code) for code in SUPPRESSION_LADDER}
+    missing = [code for code in SUPPRESSION_LADDER if not curves[code]]
+    if missing:
+        reasons.append("suppression:missing_code:" + ",".join(missing))
+        return
+
+    # Non-trivial-signal guard: the lowest-distance code must reach a real error
+    # rate somewhere, otherwise an all-zero / flat output would pass trivially.
+    base_code = SUPPRESSION_LADDER[0]
+    if max(curves[base_code].values()) < MIN_SIGNAL_PLOGICAL:
+        reasons.append("suppression:no_signal:base_curve_below_floor")
+        return
+
+    # Each adjacent rung must independently show suppression across enough
+    # resolvable sub-threshold points. "Sub-threshold" is defined by the
+    # lower-distance code of the rung still being below the saturation ceiling.
+    for lo_code, hi_code in zip(SUPPRESSION_LADDER, SUPPRESSION_LADDER[1:]):
+        lo, hi = curves[lo_code], curves[hi_code]
+        shared = sorted(set(lo) & set(hi))
+        subthreshold = [p for p in shared if lo[p] <= SUBTHRESHOLD_CEILING]
+
+        if len(subthreshold) < MIN_SUBTHRESHOLD_POINTS:
+            reasons.append(
+                f"suppression:insufficient_subthreshold_points:{lo_code}->{hi_code}:"
+                f"{len(subthreshold)}<{MIN_SUBTHRESHOLD_POINTS}"
+            )
+            continue
+
+        for p in subthreshold:
+            lo_v = lo[p]
+            hi_v = hi[p]
+            margin = max(SUPPRESSION_ABS_MARGIN, SUPPRESSION_REL_MARGIN * lo_v)
+            if hi_v > lo_v + margin:
+                reasons.append(
+                    f"distance_suppression_violated:{lo_code}->{hi_code}:p={p}:"
+                    f"hi={hi_v:.6g}>lo={lo_v:.6g}+margin={margin:.6g}"
+                )
 
 
 def score_logical_error_rates_bytes(
@@ -197,13 +321,6 @@ def score_logical_error_rates_bytes(
         lfr_per_qubit = _parse_float(
             got.get("lfr_per_round_per_qubit"), "lfr_per_round_per_qubit", reasons, row_key
         )
-        ref_lfr = _parse_float(ref.get("lfr_per_round"), "ref_lfr_per_round", reasons, row_key)
-        ref_lfr_per_qubit = _parse_float(
-            ref.get("lfr_per_round_per_qubit"),
-            "ref_lfr_per_round_per_qubit",
-            reasons,
-            row_key,
-        )
 
         if failures is not None and shots is not None:
             if failures < 0 or failures > shots:
@@ -228,14 +345,9 @@ def score_logical_error_rates_bytes(
         ):
             reasons.append(f"lfr_per_qubit_formula_inconsistent:{row_key}")
 
-        if lfr is not None and ref_lfr is not None and not _log_close(lfr, ref_lfr):
-            reasons.append(f"lfr_per_round_log_mismatch:{row_key}")
-        if (
-            lfr_per_qubit is not None
-            and ref_lfr_per_qubit is not None
-            and not _log_close(lfr_per_qubit, ref_lfr_per_qubit)
-        ):
-            reasons.append(f"lfr_per_round_per_qubit_log_mismatch:{row_key}")
+    # Author's physical-invariant criterion (replaces the absolute log-scale
+    # value match against the reference).
+    _check_distance_suppression(agent, reasons)
 
     passed = not reasons
     return LogicalErrorRateScoreResult(

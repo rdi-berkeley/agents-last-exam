@@ -15,7 +15,7 @@
   "agentMustDo": [
     "Read `input/cc_codes_quits_extraction.tex`, `input/simulation_grid.csv`, and `input/output_requirements.txt`.",
     "Install or inspect the open-source Python runtime from `input/runtime_env/pyproject.toml` or `input/requirements.txt`.",
-    "Construct and simulate the `[24,8,3]`, `[40,8,5]`, and `[54,18,3]` clustered-cyclic CSS code cases from the supplied notes.",
+    "Construct and simulate the `[24,8,3]`, `[40,8,5]`, and `[56,8,7]` clustered-cyclic CSS code cases from the supplied notes.",
     "Compute `num_failures`, `p_logical`, `lfr_per_round`, and `lfr_per_round_per_qubit` for every row in the simulation grid.",
     "Save the final CSV as `output/logical_error_rates_3codes.csv`."
   ],
@@ -53,7 +53,7 @@
       "description": "The completed logical failure-rate table."
     }
   ],
-  "evaluation": "The evaluator reads `output/logical_error_rates_3codes.csv`, verifies the exact CSV schema and simulation grid, checks declared code parameters and shot counts, checks failure-count/probability consistency, and compares the logical failure-rate columns against the benchmark reference on log scale. The positive fixture scores `1.0`; the realistic negative fixture scores `0.0`.",
+  "evaluation": "The evaluator reads `output/logical_error_rates_3codes.csv`, verifies the exact CSV schema and simulation grid, checks declared code parameters and shot counts, and checks failure-count/probability consistency (`p_logical == num_failures / num_shots` and the LFR formulas). It then asserts the physical distance-suppression invariant: across the sub-threshold physical error rates, the distance-5 code `[40,8,5]` achieves a logical error rate no higher (within a noise margin) than the distance-3 code `[24,8,3]`. The absolute logical-error-rate values are not matched against the reference, because the reference was produced with a much larger shot budget than the evaluation VM can collect; comparing two codes the agent simulated under identical conditions makes the criterion robust to that sampling difference. The positive fixture scores `1.0`; the realistic negative fixture scores `0.0`.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",
@@ -81,6 +81,5 @@
       },
       "rationale": "The task involves quantum computing concepts and simulations."
     }
-  },
-  "requiredSystemPackages": []
+  }
 }
