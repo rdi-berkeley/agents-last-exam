@@ -1,0 +1,9 @@
+{
+  "description": "Moldex3D 2025 64-bit for Windows.",
+  "os": "windows",
+  "provides": ["moldex3d", "mdxstudio"],
+  "version": "2025.0.2507.1715.5424",
+  "install_location": "C:\\Moldex3D\\2025",
+  "verify": "powershell -NoProfile -Command \"$p='C:\\Moldex3D\\2025\\Bin\\MDXStudio.exe'; if((Test-Path $p) -and ((Get-Item $p).VersionInfo.ProductVersion -eq '2025.1.2506.8697')){$true}else{throw 'missing or wrong version'}\"",
+  "note": "Commercial licensed software. The installed product reports 2025.0.2507.1715.5424; MDXStudio.exe reports 2025.1.2506.8697. No automated installer is provided."
+}

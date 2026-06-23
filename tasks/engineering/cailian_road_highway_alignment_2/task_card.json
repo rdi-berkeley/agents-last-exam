@@ -70,5 +70,8 @@
       },
       "rationale": "The task involves civil engineering design for road alignment."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "autodesk-civil-3d-2024"
+  ]
 }

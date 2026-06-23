@@ -1,0 +1,9 @@
+{
+  "description": "Steinberg Dorico 6 for Windows.",
+  "os": "windows",
+  "provides": ["dorico", "steinberg-dorico"],
+  "version": "6.2.10",
+  "install_location": "C:\\Program Files\\Steinberg\\Dorico6",
+  "verify": "powershell -NoProfile -Command \"$p='C:\\Program Files\\Steinberg\\Dorico6\\Dorico6.exe'; if((Test-Path $p) -and ((Get-Item $p).VersionInfo.ProductVersion -eq '6.2.10')){$true}else{throw 'missing or wrong version'}\"",
+  "note": "Commercial licensed software. Dorico6.exe file version is 6.2.10.6140. No automated installer is provided."
+}

@@ -1,0 +1,9 @@
+{
+  "description": "Steinberg Cubase 15 for Windows.",
+  "os": "windows",
+  "provides": ["cubase", "steinberg-cubase"],
+  "version": "15.0.20",
+  "install_location": "C:\\Program Files\\Steinberg\\Cubase 15",
+  "verify": "powershell -NoProfile -Command \"$p='C:\\Program Files\\Steinberg\\Cubase 15\\Cubase15.exe'; if((Test-Path $p) -and ((Get-Item $p).VersionInfo.ProductVersion -eq '15.0.20')){$true}else{throw 'missing or wrong version'}\"",
+  "note": "Commercial licensed software. Cubase15.exe file version is 15.0.20.226. No automated installer is provided."
+}

@@ -78,5 +78,8 @@
       },
       "rationale": "The task involves creating machining toolpaths in a manufacturing context."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "autodesk-powermill-2025"
+  ]
 }

@@ -1,0 +1,9 @@
+{
+  "description": "Rhino 8 commercial edition for Windows.",
+  "os": "windows",
+  "provides": ["rhino", "rhino-8"],
+  "version": "8.26.25349.19001",
+  "install_location": "C:\\Program Files\\Rhino 8",
+  "verify": "powershell -NoProfile -Command \"$p='C:\\Program Files\\Rhino 8\\System\\Rhino.exe'; if((Test-Path $p) -and ((Get-Item $p).VersionInfo.ProductVersion -eq '8.26.25349.19001')){$true}else{throw 'missing or wrong version'}\"",
+  "note": "Commercial licensed software. No automated installer is provided; installation and activation require a vendor-provided installer and valid entitlement."
+}

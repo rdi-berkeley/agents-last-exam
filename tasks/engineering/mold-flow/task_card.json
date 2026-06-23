@@ -84,5 +84,8 @@
       },
       "rationale": "The task involves configuring parameters and running simulations for injection molding, which falls under manufacturing."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "moldex3d-2025"
+  ]
 }

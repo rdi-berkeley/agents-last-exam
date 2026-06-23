@@ -84,5 +84,8 @@
       },
       "rationale": "The task involves transcribing music and producing audio and notation outputs."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "steinberg-dorico-6"
+  ]
 }

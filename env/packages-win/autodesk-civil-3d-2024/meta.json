@@ -1,0 +1,9 @@
+{
+  "description": "Autodesk Civil 3D 2024 with the Civil 3D 2024.4.6 update for Windows.",
+  "os": "windows",
+  "provides": ["civil-3d", "autodesk-civil-3d", "autocad-2024"],
+  "version": "13.6.2123.0",
+  "install_location": "C:\\Program Files\\Autodesk\\AutoCAD 2024",
+  "verify": "powershell -NoProfile -Command \"$p='C:\\Program Files\\Autodesk\\AutoCAD 2024\\acad.exe'; if((Test-Path $p) -and ((Get-Item $p).VersionInfo.ProductVersion -eq 'R24.3.222.0.0')){$true}else{throw 'missing or wrong version'}\"",
+  "note": "Commercial licensed software. Registry version 13.6.2123.0 corresponds to Civil 3D 2024.4.6; acad.exe reports R24.3.222.0.0. No automated installer is provided."
+}

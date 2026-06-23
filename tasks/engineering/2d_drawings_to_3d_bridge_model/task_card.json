@@ -135,5 +135,8 @@
       },
       "rationale": "The task involves architectural design and modeling of a bridge within a site context."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "rhino-8"
+  ]
 }

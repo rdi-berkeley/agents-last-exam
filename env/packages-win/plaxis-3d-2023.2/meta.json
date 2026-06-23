@@ -1,0 +1,9 @@
+{
+  "description": "PLAXIS 3D 2023.2 Input, Output, and Output Viewer for Windows.",
+  "os": "windows",
+  "provides": ["plaxis-3d", "plaxis-3d-input", "plaxis-3d-output", "plaxis-3d-output-viewer"],
+  "version": "23.2.1.1079",
+  "install_location": "C:\\Program Files\\Seequent\\PLAXIS 3D 2023.2",
+  "verify": "powershell -NoProfile -Command \"$i='C:\\Program Files\\Seequent\\PLAXIS 3D 2023.2\\Plaxis3DInput.exe'; $o='C:\\Program Files\\Seequent\\PLAXIS 3D 2023.2\\Plaxis3DOutput.exe'; $v='C:\\Program Files\\Seequent\\PLAXIS 3D Output Viewer 2023.2\\Plaxis3DOutputViewer.exe'; if((Test-Path $i) -and (Test-Path $o) -and (Test-Path $v) -and ((Get-Item $i).VersionInfo.ProductVersion -eq '23.02.01.1079') -and ((Get-Item $o).VersionInfo.ProductVersion -eq '23.02.01.1079') -and ((Get-Item $v).VersionInfo.ProductVersion -eq '23.02.01.1079')){$true}else{throw 'missing or wrong version'}\"",
+  "note": "Commercial licensed software. No automated installer is provided; installation and activation require a vendor-provided installer and valid entitlement."
+}

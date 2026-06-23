@@ -105,5 +105,8 @@
       },
       "rationale": "The task involves geotechnical engineering and excavation analysis."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "plaxis-3d-2023.2"
+  ]
 }

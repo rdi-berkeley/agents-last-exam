@@ -77,5 +77,8 @@
       },
       "rationale": "The task involves audio project migration and VST plugin management, which fits within audio and music production."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "steinberg-cubase-15"
+  ]
 }

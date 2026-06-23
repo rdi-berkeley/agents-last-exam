@@ -147,5 +147,8 @@
       },
       "rationale": "The task involves creating a 3D architectural model, which fits within Civil, Architectural & Geospatial Engineering."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "rhino-8"
+  ]
 }

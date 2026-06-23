@@ -1,0 +1,9 @@
+{
+  "description": "Autodesk PowerMill Ultimate 2025 for Windows.",
+  "os": "windows",
+  "provides": ["powermill", "autodesk-powermill"],
+  "version": "25.0.0",
+  "install_location": "C:\\Program Files\\Autodesk\\PowerMill 2025",
+  "verify": "powershell -NoProfile -Command \"$p='C:\\Program Files\\Autodesk\\PowerMill 2025\\sys\\exec64\\pmill.exe'; if((Test-Path $p) -and ((Get-Item $p).VersionInfo.ProductVersion -eq '2025,0,0,0')){$true}else{throw 'missing or wrong version'}\"",
+  "note": "Commercial licensed software. The installed product inventory reports Autodesk PowerMill 2025 and Autodesk PowerMill Ultimate 2025 at version 25.0.0. No automated installer is provided."
+}
