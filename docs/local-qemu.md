@@ -14,18 +14,15 @@ normal cleanup.
 - `huggingface-hub` for `hf://` disks, installed with the project dependencies
 - `gcloud` or `gsutil` when `qemu.disk_source` is a `gs://` URI
 
-The currently published base image is:
+The published base images are:
 
-- `hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2.manifest.json`
+- `hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2`
+- `hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22.qcow2`
 
-The provider and runner also support Ubuntu guests, but the Ubuntu artifact is
-being revised and is intentionally not part of the default configuration yet.
-
-The manifest references 10 GB parts because Hugging Face's standard LFS path
-rejects files above 50 GB, while a single 177 GB Xet object produces an
-impractically large metadata synchronization request. The provider verifies
-each part, streams them into one local qcow2, verifies the final SHA-256, and
-removes the temporary parts. This packaging is invisible to the runner.
+These are logical disk paths. The provider automatically uses a multipart
+manifest when the dataset stores the disk as verified 10 GB parts, or downloads
+the qcow2 directly when it is stored as one object. This packaging is not part
+of the environment configuration.
 
 Use `configs/environments/qemu.yaml` as the starting configuration.
 
@@ -78,8 +75,14 @@ then creates a small qcow2 overlay under `~/.cache/ale/qemu/runtime/slots/`.
 The base image is mounted read-only into the QEMU container, so concurrent runs
 do not modify it or copy its full contents.
 
-For reproducible experiments, set `hf_revision` to the dataset commit SHA.
-Omitting it follows the dataset's `main` branch.
+HF sources follow the dataset's `main` branch by default. Advanced users can
+set `hf_revision` to a dataset commit SHA when an immutable artifact revision
+is required.
+
+For `gs://` sources, the provider records the object generation, size, ETag,
+and CRC32C in a sidecar next to the cached disk. It checks the remote generation
+before every run and downloads a generation-pinned object when the bucket path
+changes, so replacing an object at the same URI does not leave a stale cache.
 
 ## Lifecycle
 

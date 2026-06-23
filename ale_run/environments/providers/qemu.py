@@ -629,21 +629,100 @@ class QemuProvider(Provider):
             )
 
             def download() -> Path:
-                if destination.is_file() and destination.stat().st_size > 0:
-                    return destination
-
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 partial = destination.with_name(f"{destination.name}.partial")
+                sidecar = destination.with_name(f"{destination.name}.ale-source.json")
                 if shutil.which("gcloud"):
-                    command = ("gcloud", "storage", "cp", source, str(partial))
+                    describe_command = (
+                        "gcloud",
+                        "storage",
+                        "objects",
+                        "describe",
+                        source,
+                        "--format=json",
+                    )
+                    describe_result = subprocess.run(
+                        describe_command,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    if describe_result.returncode != 0:
+                        raise RuntimeError(
+                            f"QEMU disk metadata lookup failed "
+                            f"({describe_result.returncode}): "
+                            f"{' '.join(describe_command)}\n"
+                            f"stdout:\n{describe_result.stdout}\n"
+                            f"stderr:\n{describe_result.stderr}"
+                        )
+                    try:
+                        remote_raw = json.loads(describe_result.stdout)
+                        remote_size = int(remote_raw["size"])
+                        generation = str(remote_raw["generation"])
+                    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                        raise RuntimeError(f"invalid GCS metadata for QEMU disk {source}") from exc
+                    remote_metadata = {
+                        "source": source,
+                        "generation": generation,
+                        "etag": str(remote_raw.get("etag") or ""),
+                        "crc32c": str(remote_raw.get("crc32c_hash") or ""),
+                        "size": remote_size,
+                    }
+                    versioned_source = f"{source}#{generation}"
+                    command = ("gcloud", "storage", "cp", versioned_source, str(partial))
                 elif shutil.which("gsutil"):
-                    command = ("gsutil", "-m", "cp", source, str(partial))
+                    describe_command = ("gsutil", "stat", source)
+                    describe_result = subprocess.run(
+                        describe_command,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    if describe_result.returncode != 0:
+                        raise RuntimeError(
+                            f"QEMU disk metadata lookup failed "
+                            f"({describe_result.returncode}): "
+                            f"{' '.join(describe_command)}\n"
+                            f"stdout:\n{describe_result.stdout}\n"
+                            f"stderr:\n{describe_result.stderr}"
+                        )
+                    fields: dict[str, str] = {}
+                    for line in describe_result.stdout.splitlines():
+                        key, separator, value = line.strip().partition(":")
+                        if separator:
+                            fields[key] = value.strip()
+                    try:
+                        remote_size = int(fields["Content-Length"])
+                        generation = fields["Generation"]
+                    except (KeyError, ValueError) as exc:
+                        raise RuntimeError(f"invalid GCS metadata for QEMU disk {source}") from exc
+                    remote_metadata = {
+                        "source": source,
+                        "generation": generation,
+                        "etag": fields.get("ETag", ""),
+                        "crc32c": fields.get("Hash (crc32c)", ""),
+                        "size": remote_size,
+                    }
+                    versioned_source = f"{source}#{generation}"
+                    command = ("gsutil", "-m", "cp", versioned_source, str(partial))
                 else:
                     raise RuntimeError(
                         "downloading a gs:// QEMU disk requires `gcloud` or `gsutil`"
                     )
 
+                try:
+                    cached_metadata = json.loads(sidecar.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    cached_metadata = {}
+                if (
+                    destination.is_file()
+                    and destination.stat().st_size == remote_size
+                    and cached_metadata == remote_metadata
+                ):
+                    return destination
+
                 logger.info("Downloading QEMU base disk %s to %s", source, destination)
+                partial.unlink(missing_ok=True)
                 result = subprocess.run(
                     command,
                     text=True,
@@ -656,9 +735,19 @@ class QemuProvider(Provider):
                         f"{' '.join(command)}\nstdout:\n{result.stdout}\n"
                         f"stderr:\n{result.stderr}"
                     )
-                if not partial.is_file() or partial.stat().st_size == 0:
-                    raise RuntimeError(f"QEMU disk download produced no file: {partial}")
+                if not partial.is_file() or partial.stat().st_size != remote_size:
+                    actual_size = partial.stat().st_size if partial.is_file() else 0
+                    raise RuntimeError(
+                        f"QEMU disk download size mismatch for {source}: "
+                        f"expected {remote_size}, got {actual_size}"
+                    )
                 os.replace(partial, destination)
+                sidecar_tmp = sidecar.with_suffix(f"{sidecar.suffix}.tmp")
+                sidecar_tmp.write_text(
+                    json.dumps(remote_metadata, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                os.replace(sidecar_tmp, sidecar)
                 return destination
 
             return await asyncio.to_thread(_run_locked, lock_path, download)
@@ -682,6 +771,7 @@ class QemuProvider(Provider):
                         hf_hub_download,
                         hf_hub_url,
                     )
+                    from huggingface_hub.errors import EntryNotFoundError
                 except ImportError as exc:
                     raise RuntimeError(
                         "downloading an hf:// QEMU disk requires `huggingface-hub`; "
@@ -689,18 +779,40 @@ class QemuProvider(Provider):
                     ) from exc
 
                 snapshot.image_cache_dir.mkdir(parents=True, exist_ok=True)
-                url = hf_hub_url(
-                    repo_id=parsed.repo_id,
-                    filename=parsed.filename,
-                    repo_type="dataset",
-                    revision=snapshot.hf_revision,
-                )
-                metadata = get_hf_file_metadata(url)
-                if parsed.filename.endswith(_HF_DISK_MANIFEST_SUFFIX):
+                artifact_filename = parsed.filename
+                if not artifact_filename.endswith(_HF_DISK_MANIFEST_SUFFIX):
+                    manifest_filename = f"{artifact_filename}{_HF_DISK_MANIFEST_SUFFIX}"
+                    manifest_url = hf_hub_url(
+                        repo_id=parsed.repo_id,
+                        filename=manifest_filename,
+                        repo_type="dataset",
+                        revision=snapshot.hf_revision,
+                    )
+                    try:
+                        metadata = get_hf_file_metadata(manifest_url)
+                        artifact_filename = manifest_filename
+                    except EntryNotFoundError:
+                        artifact_url = hf_hub_url(
+                            repo_id=parsed.repo_id,
+                            filename=artifact_filename,
+                            repo_type="dataset",
+                            revision=snapshot.hf_revision,
+                        )
+                        metadata = get_hf_file_metadata(artifact_url)
+                else:
+                    artifact_url = hf_hub_url(
+                        repo_id=parsed.repo_id,
+                        filename=artifact_filename,
+                        repo_type="dataset",
+                        revision=snapshot.hf_revision,
+                    )
+                    metadata = get_hf_file_metadata(artifact_url)
+
+                if artifact_filename.endswith(_HF_DISK_MANIFEST_SUFFIX):
                     manifest_path = Path(
                         hf_hub_download(
                             repo_id=parsed.repo_id,
-                            filename=parsed.filename,
+                            filename=artifact_filename,
                             repo_type="dataset",
                             revision=snapshot.hf_revision,
                             local_dir=snapshot.image_cache_dir,
@@ -717,7 +829,7 @@ class QemuProvider(Provider):
                     expected_sha256 = manifest.sha256
                 else:
                     manifest = None
-                    destination = snapshot.image_cache_dir / parsed.filename
+                    destination = snapshot.image_cache_dir / artifact_filename
                     expected_size = metadata.size
                     expected_sha256 = None
 
@@ -731,6 +843,7 @@ class QemuProvider(Provider):
                             {
                                 "source": source,
                                 "revision": snapshot.hf_revision or "main",
+                                "artifact": artifact_filename,
                                 "commit_hash": metadata.commit_hash,
                                 "etag": metadata.etag,
                                 "size": expected_size,
@@ -758,10 +871,17 @@ class QemuProvider(Provider):
                     if (
                         source_metadata.get("source") == source
                         and source_metadata.get("revision") == (snapshot.hf_revision or "main")
+                        and source_metadata.get("artifact", artifact_filename) == artifact_filename
                         and source_metadata.get("commit_hash") == metadata.commit_hash
                         and source_metadata.get("etag") == metadata.etag
                         and source_metadata.get("sha256") == expected_sha256
                     ):
+                        return destination
+                    if (
+                        source_metadata.get("etag") == metadata.etag
+                        and source_metadata.get("sha256") == expected_sha256
+                    ):
+                        write_sidecar()
                         return destination
                     if expected_sha256 and _sha256_file(destination) == expected_sha256:
                         write_sidecar()
@@ -791,7 +911,7 @@ class QemuProvider(Provider):
                 result = Path(
                     hf_hub_download(
                         repo_id=parsed.repo_id,
-                        filename=parsed.filename,
+                        filename=artifact_filename,
                         repo_type="dataset",
                         revision=snapshot.hf_revision,
                         local_dir=snapshot.image_cache_dir,

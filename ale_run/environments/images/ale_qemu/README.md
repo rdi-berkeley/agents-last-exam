@@ -48,3 +48,31 @@ docker push agentslastexam/ale-qemu:latest
 The runner never downloads guest disks. Docker bind mounts are fixed when a
 container is created, so the host-side provider resolves and caches the qcow2,
 creates the per-run overlay, and only then invokes `docker run`.
+
+## Guest disk dataset
+
+The pre-baked guest disks are published in the Hugging Face dataset
+`agents-last-exam/ale-images-qcow2`.
+
+| File | Guest |
+|---|---|
+| `ale-win10.qcow2.manifest.json` | Windows 10 qcow2 manifest |
+| `ale-win10.qcow2.parts/*` | Verified 10 GB disk parts |
+| `ale-ubuntu22.qcow2.manifest.json` | Ubuntu 22.04 qcow2 manifest |
+| `ale-ubuntu22.qcow2.parts/*` | Verified 10 GB disk parts |
+
+Configure the provider with the logical qcow2 path:
+
+```yaml
+snapshots:
+  cpu-free:
+    qemu:
+      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2
+  cpu-free-ubuntu:
+    qemu:
+      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22.qcow2
+```
+
+The provider automatically discovers the multipart manifest, downloads and
+verifies each part, reconstructs the selected qcow2 in the host cache, verifies
+the complete disk SHA-256, and removes the temporary part files.

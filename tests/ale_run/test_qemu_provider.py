@@ -353,6 +353,81 @@ def test_parse_hf_disk_manifest_validates_total_size() -> None:
 
 
 @pytest.mark.asyncio
+async def test_resolve_gcs_disk_refreshes_changed_generation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = "gs://ale-data-public/images/ale-win10.qcow2"
+    provider = QemuProvider(
+        {
+            "snapshots": {
+                "cpu-free": {
+                    "image": "ale-win10",
+                    "disk_source": source,
+                    "root": str(tmp_path / "qemu"),
+                }
+            }
+        }
+    )
+    snapshot = provider.config.snapshots["cpu-free"]
+    generation = "100"
+    disk_data = b"first"
+    copy_sources: list[str] = []
+
+    def fake_run(command, *, text, capture_output, check):
+        _ = (text, capture_output, check)
+        if command[:4] == ("gcloud", "storage", "objects", "describe"):
+            return qemu_module.subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "size": len(disk_data),
+                        "generation": generation,
+                        "etag": f"etag-{generation}",
+                        "crc32c_hash": f"crc-{generation}",
+                    }
+                ),
+                stderr="",
+            )
+        if command[:3] == ("gcloud", "storage", "cp"):
+            copy_sources.append(command[3])
+            Path(command[4]).write_bytes(disk_data)
+            return qemu_module.subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(
+        qemu_module.shutil,
+        "which",
+        lambda command: "/usr/bin/gcloud" if command == "gcloud" else None,
+    )
+    monkeypatch.setattr(qemu_module.subprocess, "run", fake_run)
+
+    resolved = await provider._resolve_disk(snapshot)
+    assert resolved.read_bytes() == b"first"
+    assert copy_sources == [f"{source}#100"]
+
+    resolved = await provider._resolve_disk(snapshot)
+    assert resolved.read_bytes() == b"first"
+    assert copy_sources == [f"{source}#100"]
+
+    generation = "101"
+    disk_data = b"second"
+    resolved = await provider._resolve_disk(snapshot)
+
+    assert resolved.read_bytes() == b"second"
+    assert copy_sources == [f"{source}#100", f"{source}#101"]
+    sidecar = json.loads(resolved.with_name(f"{resolved.name}.ale-source.json").read_text())
+    assert sidecar == {
+        "crc32c": "crc-101",
+        "etag": "etag-101",
+        "generation": "101",
+        "size": 6,
+        "source": source,
+    }
+
+
+@pytest.mark.asyncio
 async def test_resolve_hf_disk_downloads(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -383,10 +458,14 @@ async def test_resolve_hf_disk_downloads(
             repo_type=repo_type,
             revision=revision,
         )
-        return "https://example.test/disk"
+        return f"https://example.test/{filename}"
 
     def fake_get_hf_file_metadata(url):
         captured.update(url=url)
+        if url.endswith(".manifest.json"):
+            from huggingface_hub.errors import EntryNotFoundError
+
+            raise EntryNotFoundError("no manifest")
         return Metadata()
 
     def fake_hf_hub_download(
@@ -396,7 +475,7 @@ async def test_resolve_hf_disk_downloads(
         repo_type,
         revision,
         local_dir,
-        force_download,
+        force_download=False,
     ):
         captured.update(
             repo_id=repo_id,
@@ -436,7 +515,7 @@ async def test_resolve_hf_manifest_assembles_and_verifies_disk(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source = "hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2.manifest.json"
+    source = "hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2"
     provider = QemuProvider(
         {
             "snapshots": {
@@ -493,7 +572,11 @@ async def test_resolve_hf_manifest_assembles_and_verifies_disk(
 
     import huggingface_hub
 
-    monkeypatch.setattr(huggingface_hub, "hf_hub_url", lambda **kwargs: "test-url")
+    monkeypatch.setattr(
+        huggingface_hub,
+        "hf_hub_url",
+        lambda **kwargs: f"test-url/{kwargs['filename']}",
+    )
     monkeypatch.setattr(
         huggingface_hub,
         "get_hf_file_metadata",
@@ -621,12 +704,20 @@ async def test_resolve_hf_disk_adopts_matching_existing_file(
 
     import huggingface_hub
 
-    monkeypatch.setattr(huggingface_hub, "hf_hub_url", lambda **kwargs: "test-url")
     monkeypatch.setattr(
         huggingface_hub,
-        "get_hf_file_metadata",
-        lambda url: Metadata(),
+        "hf_hub_url",
+        lambda **kwargs: f"test-url/{kwargs['filename']}",
     )
+
+    def fake_get_hf_file_metadata(url):
+        if url.endswith(".manifest.json"):
+            from huggingface_hub.errors import EntryNotFoundError
+
+            raise EntryNotFoundError("no manifest")
+        return Metadata()
+
+    monkeypatch.setattr(huggingface_hub, "get_hf_file_metadata", fake_get_hf_file_metadata)
 
     def fail_download(**kwargs):
         raise AssertionError("matching existing disk should not be downloaded")

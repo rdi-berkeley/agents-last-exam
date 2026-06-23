@@ -13,7 +13,7 @@ from huggingface_hub import HfApi
 
 
 DEFAULT_REPO_ID = "agents-last-exam/ale-images-qcow2"
-DEFAULT_FILENAMES = ("ale-win10.qcow2",)
+DEFAULT_FILENAMES = ("ale-win10.qcow2", "ale-ubuntu22.qcow2")
 DEFAULT_PART_SIZE_GB = 10
 MANIFEST_FORMAT = "ale-qemu-disk-parts-v1"
 STATE_FILENAME = ".ale-publish-state.json"
@@ -45,7 +45,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dataset-card",
         type=Path,
-        default=Path("ale_run/environments/images/ale_qemu/HF_DATASET_README.md"),
+        default=Path("ale_run/environments/images/ale_qemu/README.md"),
     )
     return parser.parse_args()
 
@@ -159,6 +159,36 @@ def _stage_disk(source: Path, staging_root: Path, part_size: int) -> Path:
     return staging_dir
 
 
+def _delete_stale_remote_parts(
+    *,
+    api: HfApi,
+    repo_id: str,
+    source: Path,
+    staging_dir: Path,
+) -> None:
+    manifest = _load_json(staging_dir / f"{source.name}.manifest.json")
+    expected_parts = {
+        str(part["filename"])
+        for part in manifest.get("parts", [])
+        if isinstance(part, dict) and part.get("filename")
+    }
+    parts_prefix = f"{source.name}.parts/"
+    stale_parts = sorted(
+        path
+        for path in api.list_repo_files(repo_id=repo_id, repo_type="dataset")
+        if path.startswith(parts_prefix) and path not in expected_parts
+    )
+    if not stale_parts:
+        return
+    api.delete_files(
+        repo_id=repo_id,
+        repo_type="dataset",
+        delete_patterns=stale_parts,
+        commit_message=f"remove stale {source.name} disk parts",
+    )
+    print(f"deleted {len(stale_parts)} stale remote parts for {source.name}")
+
+
 def main() -> None:
     args = _parse_args()
     if not 1 <= args.part_size_gb <= 20:
@@ -200,6 +230,12 @@ def main() -> None:
                 f"{source.name}.parts/*",
             ],
             num_workers=args.num_workers,
+        )
+        _delete_stale_remote_parts(
+            api=api,
+            repo_id=args.repo_id,
+            source=source,
+            staging_dir=staging_dir,
         )
 
 
