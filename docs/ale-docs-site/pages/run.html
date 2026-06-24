@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Run and collect results | ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Run and collect results</h1>
+    <p class="lede">
+      Validate the matrix before provisioning anything, launch the experiment,
+      resume interrupted sweeps, and choose how produced files leave the
+      sandbox.
+    </p>
+
+    <h2>Validate before launch</h2>
+    <pre><code>uv run python -m ale_run run my_experiment.yaml --dry-run</code></pre>
+    <p>
+      The dry run resolves the experiment, agent presets, environment routing,
+      and task list. It prints every agent × task × variant unit without creating
+      a sandbox.
+    </p>
+
+    <h2>Launch and filter</h2>
+    <pre><code>uv run python -m ale_run run my_experiment.yaml
+
+# Run only selected entries from the matrix:
+uv run python -m ale_run run my_experiment.yaml \
+  --agent claude_code \
+  --task demo/hello</code></pre>
+    <p>
+      <code>concurrency</code> limits units in flight. Each active unit owns one
+      sandbox while ALE provisions it, stages data, runs the agent, collects
+      artifacts, and evaluates the result. Provider quotas, host memory, disk
+      latency, and LLM rate limits can all become the practical bound.
+    </p>
+
+    <h2>Resume an interrupted sweep</h2>
+    <pre><code>uv run python -m ale_run run my_experiment.yaml --resume</code></pre>
+    <p>
+      Resume scans prior <code>run.json</code> files under the same experiment
+      name and output root. Units with status <code>completed</code> or
+      <code>timeout</code> are skipped. Failed, cancelled, malformed, and missing
+      units run again.
+    </p>
+
+    <h2 id="output-path">Choose where task output goes</h2>
+    <p>
+      <code>output.root</code> in the experiment controls the host directory for
+      run records. <code>output_path</code> in the environment controls what
+      happens to files produced inside the task's sandbox:
+    </p>
+    <table>
+      <thead><tr><th>Value</th><th>Behavior</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td><code>null</code></td><td>Do not copy the task output before cleanup.</td><td>Score-only runs where produced files are unnecessary.</td></tr>
+        <tr><td><code>local</code></td><td>Copy into the run's <code>output/</code> directory.</td><td>Local development and outputs you want beside the run record.</td></tr>
+        <tr><td><code>gs://&lt;bucket&gt;</code></td><td>Upload from the sandbox to <code>&lt;bucket&gt;/&lt;run_id&gt;/output/</code>.</td><td>Large batch artifacts and centralized storage.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Local collection uses the fastest available provider transport: Docker
+      uses <code>docker cp</code>, the QEMU provider uses a per-run guest share,
+      and other providers use the CUA file API. GCS output uses
+      sandbox-side <code>gsutil</code>. Managed providers use
+      <code>gcs_sa_key</code> to inject a service-account key; a static sandbox
+      must already have working Cloud Storage credentials.
+    </p>
+    <div class="note">
+      <div class="note-title">Output collection is best-effort</div>
+      An output transfer failure is recorded in <code>events.jsonl</code> but
+      does not prevent evaluation while the sandbox is still alive. Check
+      <code>output_gather_done</code> or <code>output_gather_failed</code> when
+      artifacts are required.
+    </div>
+
+    <h2>Choose cleanup behavior</h2>
+    <table>
+      <thead><tr><th>Mode</th><th>Managed providers</th></tr></thead>
+      <tbody>
+        <tr><td><code>delete</code></td><td>Remove the GCE VM, Docker container, or QEMU container and disposable overlay.</td></tr>
+        <tr><td><code>stop</code></td><td>Stop the sandbox but preserve its provider-managed state for inspection.</td></tr>
+        <tr><td><code>keep</code></td><td>Leave it running.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      The static provider never owns the attached machine. Its optional cleanup
+      script is the only release action it performs.
+    </p>
+
+    <h2>Read the result</h2>
+    <p>
+      Each unit writes a timestamped run directory containing
+      <code>events.jsonl</code>, <code>run.json</code>,
+      <code>eval_result.json</code>, the normalized trajectory, native agent
+      logs, screenshots, and any locally collected output. See
+      <a href="/pages/trajectories.html">Trajectories &amp; artifacts</a> for the
+      complete layout.
+    </p>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

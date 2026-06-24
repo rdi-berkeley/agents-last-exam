@@ -1,0 +1,88 @@
+# Local full-OS sandbox provider: one QEMU VM inside Docker per ALE run.
+#
+# Requirements:
+#   - Linux host with Docker and /dev/kvm
+#   - Enough disk for both cached base images (~349 GB logical)
+#
+# Each run creates a small qcow2 overlay; it does not copy the full base image.
+# The host provider downloads each configured base disk before starting Docker.
+#
+# Initial scope is CPU-only with task data already baked into the image.
+# GPU tasks and task_data_source: local:... fail explicitly.
+#
+# Field reference:
+#   snapshots.<tag>
+#     Logical snapshot requested by task_card.json. `gpu-free` is mapped here
+#     only for the CPU-safe tasks curated in selected_tasks/qemu_support.txt.
+#   provider
+#     Selects the local QEMU provider for this snapshot.
+#   image
+#     Selects ALE's guest OS definition and its baked path conventions.
+#   qemu.disk_source
+#     Base qcow2 source. Accepts a logical hf:// path, a gs:// object, or a
+#     local host path. HF multipart manifests are discovered automatically.
+#   qemu.root
+#     Host cache and runtime root. Base disks live under images/; disposable
+#     per-run overlays live under runtime/slots/.
+#   qemu.runner_image
+#     Docker Hub image containing QEMU, networking, noVNC, and supervision.
+#     It does not contain either guest disk.
+#   qemu.runner_pull_policy
+#     Docker pull policy. `missing` reuses a local runner image when available.
+#   qemu.shm_size
+#     /dev/shm allocation for the outer QEMU runner container.
+#   qemu.ready_timeout_s
+#     Maximum time to wait for the guest CUA server after starting the VM.
+#   task_data_source
+#     `baked_in_sandbox` means input, software, and references are in qcow2.
+#   gcs_sa_key
+#     Host path to the GCS service-account JSON key injected into each guest.
+#     Required when task data or output uses a gs:// path.
+#   output_path
+#     `local` copies the guest output directory through a per-run shared folder
+#     into the host run directory. A gs:// path uploads directly from the guest.
+#
+# VM CPU and memory normally come from task-card `machineType`, or explicit
+# `vcpus` / `memory_gb` fields. Per-snapshot qemu.vcpus and qemu.memory_gb can
+# be added here as provider-level overrides.
+snapshots:
+  cpu-free-ubuntu:
+    provider: qemu
+    image: ale-ubuntu22
+    qemu:
+      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22.qcow2
+      # GCS alternative: gs://ale-data-public/images/ale-ubuntu22.qcow2
+      root: ~/.cache/ale/qemu
+      runner_image: agentslastexam/ale-qemu:0.2.0
+      runner_pull_policy: missing
+      shm_size: 2g
+      ready_timeout_s: 900
+
+  cpu-free:
+    provider: qemu
+    image: ale-win10
+    qemu:
+      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2
+      # GCS alternative: gs://ale-data-public/images/ale-win10.qcow2
+      root: ~/.cache/ale/qemu
+      runner_image: agentslastexam/ale-qemu:0.2.0
+      runner_pull_policy: missing
+      shm_size: 2g
+      ready_timeout_s: 900
+
+  gpu-free:
+    provider: qemu
+    image: ale-win10
+    qemu:
+      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2
+      # GCS alternative: gs://ale-data-public/images/ale-win10.qcow2
+      root: ~/.cache/ale/qemu
+      runner_image: agentslastexam/ale-qemu:0.2.0
+      runner_pull_policy: missing
+      shm_size: 2g
+      ready_timeout_s: 900
+
+task_data_source: baked_in_sandbox
+# Uncomment when task_data_source or output_path uses gs://.
+# gcs_sa_key: secret/gcp_key.json
+output_path: local

@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
 import random
 import re
@@ -86,11 +85,11 @@ class DockerProviderConfig:
     gcs_sa_key: str = ""
     privileged: bool = False
     image_ref: str = ""
-    # Start the in-container nested dockerd (DinD) for tasks whose eval runs
-    # `docker run`. OFF by default: a fuse-overlayfs dockerd in every container is
-    # wasted overhead and, at concurrency, an I/O storm that starves cua startup.
-    # Only the ~4 nested-docker tasks need it (currently excluded — see the image
-    # README). When true the container gets ALE_ENABLE_DIND=1.
+    # Start the in-container nested dockerd (DinD) for custom development.
+    # The supported rootless-Docker profile excludes nested-runtime tasks and
+    # routes them to the QEMU/KVM Ubuntu guest instead. When true the container
+    # gets ALE_ENABLE_DIND=1; enabling it broadly can add substantial
+    # fuse-overlayfs I/O at high concurrency.
     enable_dind: bool = False
 
 
@@ -248,8 +247,16 @@ class DockerProvider(Provider):
         # derived value (a host-protection cap under single-host concurrency).
         from .gcloud import _parse_gce_machine_type, _DEFAULT_CPU_MACHINE
         shape = _parse_gce_machine_type(spec.machine_type or _DEFAULT_CPU_MACHINE)
-        cpus = self._cfg.cpus or (float(shape.vcpus) if shape else 0)
-        memory = self._cfg.memory or (f"{shape.memory_gb}g" if shape else "")
+        cpus = (
+            self._cfg.cpus
+            or (float(spec.vcpus) if spec.vcpus else 0)
+            or (float(shape.vcpus) if shape else 0)
+        )
+        memory = (
+            self._cfg.memory
+            or (f"{spec.memory_gb}g" if spec.memory_gb else "")
+            or (f"{shape.memory_gb}g" if shape else "")
+        )
         if cpus and cpus > 0:
             run_args.extend(["--cpus", str(cpus)])
         if memory:
@@ -303,6 +310,7 @@ class DockerProvider(Provider):
             os=image.os,
             **image.sandbox_paths(),
             metadata={
+                "provider": "docker",
                 "container_name": name,
                 "container_id": stdout[:12],
                 "cua_port": cua_port,

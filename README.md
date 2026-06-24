@@ -27,13 +27,14 @@ Led by **[UC Berkeley RDI](https://rdi.berkeley.edu/)** × **RDI Foundation**
 
 Agents' Last Exam aims to build the **broadest-coverage agent evaluation
 benchmark to date**, measuring performance on long-horizon, economically
-valuable tasks with verifiable outcomes. Co-led by Berkeley RDI and 300+
-industry experts, ALE covers non-physical industries defined with reference to
-O\*NET / SOC 2018 (the U.S. federal occupational taxonomy).
+valuable tasks with verifiable outcomes. Co-led by Berkeley RDI and built with
+hundreds of industry experts, ALE organizes real professional work into 55
+subdomains across 13 industry clusters, with reference to O\*NET / SOC 2018
+(the U.S. federal occupational taxonomy).
 
 <table align="center">
   <tr>
-    <td align="center" width="25%"><b>Broadest Coverage</b><br/><sub>55 industries<br/></sub></td>
+    <td align="center" width="25%"><b>Broadest Coverage</b><br/><sub>55 subdomains<br/>across 13 clusters</sub></td>
     <td align="center" width="25%"><b>Verifiable Outcomes</b><br/><sub>Hidden references<br/>+ deterministic graders</sub></td>
     <td align="center" width="25%"><b>Long-Horizon</b><br/><sub>Multi-step workflows<br/>on real OS sandboxes</sub></td>
     <td align="center" width="25%"><b>Economically Valuable</b><br/><sub>Sourced and validated<br/>by industry experts</sub></td>
@@ -41,20 +42,25 @@ O\*NET / SOC 2018 (the U.S. federal occupational taxonomy).
 </table>
 
 This repository is the **open evaluation framework**: the `ale_run` toolkit that
-provisions sandboxes, runs agents, and grades them, plus **150 reference tasks**
-across 55 industries (the current public subset of a 1,500+ task corpus) and two reference agent harnesses.
+provisions sandboxes, runs agents, and grades them, plus around **150 public
+tasks** across all 55 subdomains and reference integrations for several agent
+harnesses.
 
 ---
 
 ## Quick start
 
-One command boots a real cloud sandbox, runs an agent on a hello-world task, and
-grades the result — after a one-time Google Cloud setup (~10 min, covered by the
-$300 free trial).
+Choose where ALE should create or attach each task sandbox:
 
-→ **[docs/quickstart.md](docs/quickstart.md)** walks it end to end: create a
-project, copy the sandbox image, fill in two keys, and run your first task. You can 
-manually setup your account then hand the doc to your coding agents to finish the rest.
+| Provider | Best for | Guide |
+|---|---|---|
+| **Google Cloud VMs** | Elastic batch runs on published Ubuntu, Windows, and GPU images | [Cloud quick start](docs/quickstart.md) |
+| **QEMU/KVM VMs** | CPU-compatible Ubuntu and Windows tasks on a Linux host with KVM | [QEMU/KVM guide](https://agents-last-exam.org/docs?p=pages/local.html) |
+| **Local containers (Docker)** | The lighter supported Ubuntu subset | [Local container guide](https://agents-last-exam.org/docs?p=pages/local-docker.html) |
+| **Existing sandbox** | Debugging against a CUA-enabled machine you already operate | [Static provider guide](https://agents-last-exam.org/docs?p=pages/static.html) |
+
+Google Cloud is the recommended production path. The quick start covers the
+one-time project setup, image copy, credentials, demo run, and grading flow.
 
 ### Roadmap
 
@@ -62,15 +68,15 @@ Where the framework supports running sandboxes today, and what is coming next:
 
 | Platform / target | Status |
 |---|---|
-| **Google Cloud** | ✅ Done |
-| **Docker on ALE-CLI (linux-only subset)** ([guide](https://agents-last-exam.org/docs?p=pages/local-docker.html)) | ✅ Done |
-| **AWS** | 🚧 In progress (~50%) |
-| **Step-by-step env setup guide for Windows / Ubuntu** | 📋 Planned |
-| **Setup guide for licensed task** | 📋 Planned |
+| **Google Cloud VMs** | ✅ Supported |
+| **Existing CUA sandbox** | ✅ Supported |
+| **Local containers (Ubuntu subset)** ([guide](https://agents-last-exam.org/docs?p=pages/local-docker.html)) | ✅ Supported |
+| **QEMU/KVM VMs (CPU-only)** ([guide](https://agents-last-exam.org/docs?p=pages/local.html)) | ✅ Supported |
+| **AWS** | 🚧 In progress |
+| **Custom Windows / Ubuntu image build guide** | 📋 Planned |
+| **Setup guide for licensed tasks** | 📋 Planned |
 | **Alibaba Cloud (Ali-Yun)** | 📋 Planned |
 | **Local VMware** | 📋 Planned |
-
-We plan to finish the remaining items in the next 1–2 months.
 
 Have a question or run into an issue? [**Join our Discord**](https://discord.gg/jsG4Th3aVt) for direct questions.
 
@@ -94,10 +100,10 @@ Every run is built from three interchangeable pieces:
   one. Most harnesses are CLI-native, so ALE lifts any of them to that surface
   with a **unified, cross-OS CUA MCP bridge** — desktop actions (screenshot,
   click, type, scroll, …) exposed as ordinary tools in the agent's loop.
-- **Environment (sandbox)** — a virtual machine that **faithfully reproduces the
-  real production work context**: a full Windows or Linux OS with the actual
-  professional software installed and the task's real data on disk — not a
-  simplified or sanitized environment.
+- **Environment (sandbox)** — a machine-like Windows or Linux workspace that
+  **faithfully reproduces the real production context**, with the actual
+  professional software and task data. Most providers use full VMs; the local
+  container profile supports a smaller Ubuntu subset.
 - **Task** — a unit of real professional work, written as an executable
   `main.py`: an instruction, its input data, and a
   **hidden reference** that the grader `evaluate()` scores the output against,
@@ -136,8 +142,10 @@ and context management alongside. ALE-Claw is the reference:
 ## Running the benchmark
 
 Past the demo, ALE ships curated task lists across three difficulty tiers
-(near-term, full-spectrum, last-exam), plus an unlicensed track and a Linux-only slice. A full run is one experiment YAML wiring an agent matrix, an
-environment, and a task list, with outputs pushed to a GCS bucket.
+(near-term, full-spectrum, last-exam), plus provider-specific and unlicensed
+subsets. A full run is one experiment YAML wiring an agent matrix, an
+environment, and a task list. Outputs can be collected locally or uploaded
+directly to GCS.
 
 The step-by-step (provider setup, configuring an experiment, choosing task lists)
 is in the docs site under **[Run

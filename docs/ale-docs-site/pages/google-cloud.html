@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Set up Google Cloud | ALE Docs</title>
+  <title>Google Cloud VMs | ALE Docs</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -11,153 +11,165 @@
 </head>
 <body>
   <article class="article">
-    <h1>Set up Google Cloud</h1>
+    <h1>Google Cloud VMs</h1>
     <p class="lede">
-      One-time provisioning to run ALE on Google Cloud: a project, a service
-      account, the two sandbox images, networking, and a results bucket. About
-      10 minutes, mostly waiting on the image copies. Each step below explains
-      what it sets up and why. If you have done this before and just want the
-      commands, <code>docs/quickstart.md</code> in the repo is the condensed
-      version of this page.
+      Run every unit on a fresh Compute Engine VM. This is ALE's supported
+      production path for broad snapshot coverage and elastic batch
+      concurrency.
     </p>
 
-    <h2>Create a Google Cloud account and install the gcloud CLI</h2>
+    <h2>What the provider manages</h2>
     <p>
-      Skip the account step if you already have one. Open
-      <a href="https://cloud.google.com/free">cloud.google.com/free</a>, click
-      <em>Get started for free</em>, sign in with a Google account, pick your
-      country, accept the terms, and add a payment method.
+      The <code>gcloud</code> provider selects the image, machine type, GPU, and
+      candidate zones from the task snapshot and environment profile. It creates
+      a VM, waits for the in-guest CUA server, runs one unit, then deletes, stops,
+      or keeps the VM according to <code>cleanup_mode</code>.
     </p>
+    <ul>
+      <li>Ubuntu and Windows images are supported.</li>
+      <li>GPU snapshots use an L4 virtual workstation accelerator and retry across configured zones when capacity is unavailable.</li>
+      <li>CPU tasks use the task-card machine type, with a C-family to N2 fallback when applicable.</li>
+      <li>Windows snapshots apply the configured desktop resolution before the run starts.</li>
+    </ul>
+
+    <h2>Understand the two credentials</h2>
+    <table>
+      <thead><tr><th>Credential</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>gcloud auth login</code></td><td>The host creates, describes, stops, and deletes Compute Engine instances.</td></tr>
+        <tr><td><code>secret/gcp_key.json</code></td><td>A service-account key injected into each sandbox for task-data reads and optional output uploads through <code>gsutil</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Before you begin</h2>
+    <ul>
+      <li>A Google Cloud account and billing-enabled project.</li>
+      <li>The <a href="https://docs.cloud.google.com/sdk/docs/install-sdk">Google Cloud CLI</a> installed on the ALE host.</li>
+      <li>Compute Engine and Cloud Storage APIs enabled.</li>
+      <li>Sufficient CPU, GPU, and regional quota for your intended concurrency.</li>
+    </ul>
     <p>
-      A credit card is required, but only to confirm you are a real person.
-      <strong>On the free trial Google never charges it.</strong> You get $300 of
-      credit for 90 days; if you use it up (or the 90 days pass), your resources
-      simply stop. The card is billed only after you deliberately
-      <em>activate a full, paid billing account</em> and then spend beyond
-      whatever credit remains.
+      Google Cloud's Free Trial terms and available products can change. Review
+      the current
+      <a href="https://docs.cloud.google.com/free/docs/free-cloud-features">Free
+      Cloud features</a> before relying on credits. Google documents Windows
+      Server VMs as outside the Free Trial, so plan on a paid billing account for
+      Windows benchmark runs.
     </p>
 
-    <div class="note warn">
-      <div class="note-title">Free trial runs Linux only</div>
-      The trial can create <strong>Linux</strong> VMs but not
-      <strong>Windows</strong> ones. The demo (<code>demo/hello</code>) is Linux,
-      so it runs on the trial without ever touching your card. The full benchmark
-      is mostly Windows, so to run it you must activate a full billing account
-      (Console → Billing → <em>Activate full account</em>; your $300 credit still
-      applies, and only spend beyond it bills the card).
-    </div>
+    <h2>1. Authenticate and create a project</h2>
+    <pre><code>gcloud auth login
 
-    <p>
-      Then install the
-      <a href="https://docs.cloud.google.com/sdk/docs/install-sdk">gcloud CLI</a>
-      and sign in:
-    </p>
-    <pre><code>gcloud auth login</code></pre>
-
-    <h2>Provision the project</h2>
-
-    <h3>① Create a project and turn on billing</h3>
-    <p>
-      Everything in Google Cloud lives inside a <strong>project</strong>: one
-      billing and permissions boundary that holds your VMs, key, and storage.
-      ALE works entirely inside a single project you own. Billing has to be
-      linked even when you are spending free credit, otherwise the Compute and
-      Storage APIs stay switched off.
-    </p>
-    <p>
-      First set a few shell variables that the rest of the page reuses. Only
-      <code>GCP_PROJECT</code> is yours to choose: it must be unique across all
-      of Google Cloud, so change it if creation says the ID is taken. Leave the
-      rest as they are.
-    </p>
-    <pre><code>export GCP_PROJECT="ale-$(whoami)"          # must be globally unique
-export GCP_REGION="us-central1"             # default; fine to leave as is
+export GCP_PROJECT="ale-$(whoami)"          # must be globally unique
+export GCP_REGION="us-central1"
 export GCP_SA_NAME="ale-runner"
 export GCP_SA_EMAIL="${GCP_SA_NAME}@${GCP_PROJECT}.iam.gserviceaccount.com"
-export GCP_BUCKET="${GCP_PROJECT}-ale-results"</code></pre>
-    <p>Then create the project, link billing, and turn on the APIs:</p>
-    <pre><code>gcloud projects create "$GCP_PROJECT" --name="ALE"
+export GCP_BUCKET="${GCP_PROJECT}-ale-results"
+
+gcloud projects create "$GCP_PROJECT" --name="ALE"
 gcloud config set project "$GCP_PROJECT"
 
-gcloud billing accounts list                       # shows your billing-account IDs
-read -p "billing-account ID from the list above: " BILLING_ID
+gcloud billing accounts list
+read -p "Billing account ID: " BILLING_ID
 gcloud billing projects link "$GCP_PROJECT" --billing-account="$BILLING_ID"
 
 gcloud services enable compute.googleapis.com storage.googleapis.com</code></pre>
 
-    <h3>② Create a service account for Cloud Storage</h3>
-    <p>
-      The service account's JSON key is copied into every gcloud VM sandbox a
-      run creates, where the VM's <code>gsutil</code> uses it to
-      <strong>pull the current task's data</strong> from a GCS bucket and to
-      <strong>sync the agent's output artifacts</strong> back to your results
-      bucket (the recommended path, see
-      <a href="/pages/configure.html#output-path">output_path</a>). The two roles
-      cover exactly that: read objects, and bill requester-pays reads to your
-      project. The key is written to <code>secret/gcp_key.json</code>, which the
-      environment config points at on the next page.
-    </p>
-    <pre><code>gcloud iam service-accounts create "$GCP_SA_NAME" --display-name="ALE storage access"
+    <h2>2. Create the guest storage identity</h2>
+    <pre><code>gcloud iam service-accounts create "$GCP_SA_NAME" \
+  --display-name="ALE storage access"
 
-for role in storage.objectViewer \
-            serviceusage.serviceUsageConsumer ; do
+for role in storage.objectViewer serviceusage.serviceUsageConsumer; do
   gcloud projects add-iam-policy-binding "$GCP_PROJECT" \
-    --member="serviceAccount:$GCP_SA_EMAIL" --role="roles/$role" --condition=None
+    --member="serviceAccount:$GCP_SA_EMAIL" \
+    --role="roles/$role" \
+    --condition=None
 done
 
 mkdir -p secret
-gcloud iam service-accounts keys create secret/gcp_key.json --iam-account="$GCP_SA_EMAIL"</code></pre>
-
-    <h3 id="copy-images">③ Copy the sandbox images into your project</h3>
+gcloud iam service-accounts keys create secret/gcp_key.json \
+  --iam-account="$GCP_SA_EMAIL"</code></pre>
     <p>
-      A task boots from a <strong>prebaked disk image</strong>: an OS with the
-      professional software and ALE's in-VM tooling already installed. ALE
-      publishes two, <code>ale-ubuntu22</code> (Linux) and <code>ale-win10</code>
-      (Windows). Copy them once into your own project so VMs boot from your copy
-      and do not depend on ours at run time. Each copy takes a few minutes.
+      Keep this JSON file out of version control. ALE injects it only when an
+      environment config sets <code>gcs_sa_key</code>.
     </p>
-    <pre><code>for img in ale-ubuntu22 ale-win10 ; do
-  gcloud compute images create "$img" \
-    --source-image="$img" --source-image-project=agenthle-488519
+
+    <h2 id="copy-images">3. Copy the sandbox images</h2>
+    <p>
+      ALE publishes prebaked Ubuntu and Windows images. Copy them into your
+      project once so every run boots from an image you control:
+    </p>
+    <pre><code>for image in ale-ubuntu22 ale-win10; do
+  gcloud compute images create "$image" \
+    --source-image="$image" \
+    --source-image-project=agenthle-488519
 done</code></pre>
 
-    <h3>④ Open the network path to the sandbox</h3>
+    <h2>4. Create a restricted network rule</h2>
     <p>
-      Each VM comes up on a <strong>VPC network</strong> with its own IP. ALE
-      reaches the in-VM control server over <code>tcp:5000</code> to launch the
-      agent and pull artifacts, so the firewall has to allow that port. RDP
-      (<code>tcp:3389</code>) is optional, open it only if you want to watch a
-      Windows desktop live.
+      ALE connects directly to the CUA server on TCP port 5000. Restrict ingress
+      to the public CIDR of the machine running ALE. Do not expose the control
+      server to the entire internet.
     </p>
-    <pre><code>gcloud compute networks create ale-vpc --subnet-mode=auto
+    <pre><code>export ALE_CLIENT_CIDR="203.0.113.10/32"   # replace with the ALE host's public IP/CIDR
 
-gcloud compute firewall-rules create ale-allow-cua --network=ale-vpc \
-  --direction=INGRESS --allow=tcp:5000 --source-ranges=0.0.0.0/0
-gcloud compute firewall-rules create ale-allow-rdp --network=ale-vpc \
-  --direction=INGRESS --allow=tcp:3389 --source-ranges=0.0.0.0/0</code></pre>
-
-    <h3 id="results-bucket">⑤ Create a results bucket (recommended)</h3>
+gcloud compute networks create ale-vpc --subnet-mode=auto
+gcloud compute firewall-rules create ale-allow-cua \
+  --network=ale-vpc \
+  --direction=INGRESS \
+  --allow=tcp:5000 \
+  --source-ranges="$ALE_CLIENT_CIDR" \
+  --target-tags=ale-run</code></pre>
     <p>
-      The <strong>Cloud Storage bucket</strong> each VM syncs its output to.
-      Create it and grant the service account write access; you point
-      <a href="/pages/configure.html#output-path">output_path</a> at it on the next
-      page.
+      The provider tags every managed VM with <code>ale-run</code>. If the ALE
+      host's public IP changes, update the firewall rule before the next run.
+      See Google Cloud's
+      <a href="https://docs.cloud.google.com/firewall/docs/using-firewalls">VPC
+      firewall documentation</a> for alternative network designs.
+    </p>
+
+    <h2 id="results-bucket">5. Create a results bucket</h2>
+    <p>
+      This step is optional when <code>output_path: local</code>. It is
+      recommended for large batch artifacts:
     </p>
     <pre><code>gcloud storage buckets create "gs://$GCP_BUCKET" \
-  --project="$GCP_PROJECT" --location="$GCP_REGION" --uniform-bucket-level-access
-gcloud storage buckets add-iam-policy-binding "gs://$GCP_BUCKET" \
-  --member="serviceAccount:$GCP_SA_EMAIL" --role="roles/storage.objectAdmin"</code></pre>
+  --project="$GCP_PROJECT" \
+  --location="$GCP_REGION" \
+  --uniform-bucket-level-access
 
+gcloud storage buckets add-iam-policy-binding "gs://$GCP_BUCKET" \
+  --member="serviceAccount:$GCP_SA_EMAIL" \
+  --role="roles/storage.objectAdmin"</code></pre>
+
+    <h2>6. Configure ALE</h2>
+    <p>Add the project and key path to <code>secret/.env</code>:</p>
+    <pre><code>GCP_PROJECT=&lt;your-project-id&gt;
+GCP_SA_KEY=secret/gcp_key.json</code></pre>
     <p>
-      Every command is idempotent except <code>gcloud projects create</code>,
-      which errors if the project already exists. If a step fails, fix it and
-      re-run just that step.
+      The shipped <code>configs/environments/environment.yaml</code> maps all
+      five task snapshots to Google Cloud. Start with
+      <code>selected_tasks/helloworld.txt</code>, then use
+      <code>selected_tasks/unlicensed.txt</code> for the public unlicensed set.
+      Licensed tasks require separately activated software.
     </p>
 
+    <h2>Capacity and cleanup</h2>
+    <p>
+      GPU capacity is volatile, so the shipped profile lists several fallback
+      zones. Your project still needs quota in the selected regions. Set
+      <code>concurrency</code> below your CPU, GPU, external-IP, and LLM limits.
+    </p>
+    <p>
+      Use <code>cleanup_mode: delete</code> for batch runs. If the host process
+      is terminated before cleanup completes, inspect leftovers by tag:
+    </p>
+    <pre><code>gcloud compute instances list --filter="tags.items=ale-run"</code></pre>
+
     <div class="note">
-      <div class="note-title">Next</div>
-      Provisioning done. Wire an experiment: environment, agents, keys, and the
-      run command: <a href="/pages/configure.html">Configure &amp; run a benchmark →</a>
+      <div class="note-title">Condensed setup</div>
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/docs/quickstart.md"><code>docs/quickstart.md</code></a>
+      contains the same setup as a command-oriented checklist.
     </div>
   </article>
 

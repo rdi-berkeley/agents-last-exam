@@ -5,11 +5,12 @@
 # Per-task cpus/memory are derived from the task card's GCE machine type by the
 # provider (c4-standard-4 -> 4 CPU / 15g, etc.); `resolution` sets the Xvfb size.
 #
-# Nested Docker (DinD) is OFF here. Only ~4 tasks (openroad, k8s_migration, bpmn
-# x2) need a docker daemon inside the sandbox, and they are currently deferred /
-# excluded. The image still ships those nested images baked in; to re-enable the
-# tasks later, add `enable_dind: true` AND `privileged: true` below (see the
-# image README "Deferred: DinD tasks").
+# This profile intentionally stays a simple rootless-Docker path. Four tasks
+# require Docker inside the sandbox, and two more require Apptainer/Singularity;
+# use the QEMU/KVM provider for those tasks so the nested runtime executes inside
+# a complete Ubuntu guest. Opt-in DinD hooks remain available for custom
+# development setups through `enable_dind: true` + `privileged: true`, but they
+# are outside the supported `docker_support.txt` profile.
 snapshots:
   cpu-free-ubuntu:
     provider: docker

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Setup Environment Provider | ALE Docs</title>
+  <title>Run an experiment | ALE Docs</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -11,44 +11,117 @@
 </head>
 <body>
   <article class="article">
-    <h1>Setup Environment Provider</h1>
+    <h1>Run an experiment</h1>
     <p class="lede">
-      A provider boots the sandbox each task runs in. Set one up here, then
-      <a href="/pages/configure.html">configure a run</a>.
-    </p>
-    <p>
-      Standing up the environment that serves the sandbox is the heaviest,
-      most error-prone part of any agent benchmark, and ALE asks more of it
-      than most. Tasks ship real, large professional software and their input
-      data, and a single run can stretch for hours, so the platform also has to
-      scale out across many sandboxes at once. ALE intends to make the process as 
-      easy and straightforward as possible. Google Cloud is the supported
-      path today with 300 USD credit that's friendly enough to get you started; 
-      more cloud backends, plus a local path for debugging and
-      development on your own hardware, are on the roadmap.
+      Choose where task sandboxes run, connect an agent and task list, validate
+      the matrix, then launch. The provider determines operating-system support,
+      isolation, setup cost, and practical concurrency.
     </p>
 
-    <p>Whichever provider you pick, clone and install first:</p>
+    <h2>Install ALE</h2>
     <pre><code>git clone git@github.com:rdi-berkeley/agents-last-exam.git
 cd agents-last-exam
 uv sync --all-packages</code></pre>
 
-    <h2>Pick a provider</h2>
+    <h2>Choose a sandbox provider</h2>
+    <p>
+      ALE exposes four provider implementations. The names below describe the
+      sandbox the task receives. The code identifier used in environment YAML is
+      shown in parentheses.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Provider</th>
+          <th>Sandbox</th>
+          <th>Current coverage</th>
+          <th>Best use</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a href="/pages/google-cloud.html"><strong>Google Cloud VMs</strong></a><br><code>gcloud</code></td>
+          <td>A fresh GCE VM for every run unit</td>
+          <td>145 tasks in <code>unlicensed.txt</code>. The seven additional tasks in <code>full.txt</code> require your own licensed-software activation.</td>
+          <td>Production benchmark runs and elastic concurrency</td>
+        </tr>
+        <tr>
+          <td><a href="/pages/local-docker.html"><strong>Local containers</strong></a><br><code>docker</code></td>
+          <td>A fresh Linux container for every run unit</td>
+          <td>99 tasks in <code>docker_support.txt</code></td>
+          <td>The lightest local path for the supported Linux subset</td>
+        </tr>
+        <tr>
+          <td><a href="/pages/local.html"><strong>QEMU/KVM VMs</strong></a><br><code>qemu</code></td>
+          <td>A fresh QEMU/KVM guest VM for every run unit</td>
+          <td>140 CPU-compatible Ubuntu and Windows tasks in <code>qemu_support.txt</code></td>
+          <td>Full-OS local testing, including Windows, without cloud VMs</td>
+        </tr>
+        <tr>
+          <td><a href="/pages/static.html"><strong>Existing sandbox</strong></a><br><code>static</code></td>
+          <td>One CUA-enabled machine you start and manage</td>
+          <td>Whatever that machine's OS, software, and data support</td>
+          <td>Image development, debugging, and reproducing one task</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <div class="note-title">QEMU/KVM is one local-VM implementation</div>
+      Each task runs inside a complete QEMU/KVM guest. Docker packages and
+      supervises the VM runner, but it is not the task sandbox. The runner
+      inherits its QEMU, networking, and noVNC stack from
+      <a href="https://github.com/trycua/cua">CUA</a> and
+      <a href="https://github.com/dockur/windows">Dockur</a>. The provider-specific
+      name leaves room for future local VM backends, such as VMware, as sibling
+      providers. The stable ALE interface remains <code>provider: qemu</code>.
+    </div>
+
+    <h2>Match the task list to the provider</h2>
+    <p>
+      A task requests a logical snapshot such as <code>cpu-free-ubuntu</code>,
+      <code>cpu-free</code>, or <code>gpu-free</code>. The selected environment
+      must map every requested snapshot to a provider. Use the provider-specific
+      allowlists for local runs:
+    </p>
+    <table>
+      <thead><tr><th>Environment</th><th>Recommended task list</th></tr></thead>
+      <tbody>
+        <tr><td><code>configs/environments/environment.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code>, or <code>full.txt</code> after licensed software is activated</td></tr>
+        <tr><td><code>configs/environments/docker.yaml</code></td><td><code>selected_tasks/docker_support.txt</code></td></tr>
+        <tr><td><code>configs/environments/qemu.yaml</code></td><td><code>selected_tasks/qemu_support.txt</code></td></tr>
+        <tr><td>A static environment</td><td>A small list known to match the attached machine</td></tr>
+      </tbody>
+    </table>
+
+    <h2>The run workflow</h2>
+    <ol>
+      <li>Follow the provider guide and verify its prerequisites.</li>
+      <li><a href="/pages/configure.html">Configure an experiment</a> with one environment, one or more agents, and a compatible task list.</li>
+      <li>Run <code>--dry-run</code> to inspect the exact agent × task matrix.</li>
+      <li><a href="/pages/run.html">Launch, resume, and collect results</a>.</li>
+    </ol>
+
     <div class="card-grid">
       <a class="card" href="/pages/google-cloud.html">
         <div class="k">Supported</div>
-        <div class="t">Google Cloud</div>
-        <div class="d">Ephemeral GCE VMs: the production path for batch runs.</div>
+        <div class="t">Google Cloud VMs</div>
+        <div class="d">The broadest coverage and the production path for batch runs.</div>
       </a>
       <a class="card" href="/pages/local-docker.html">
-        <div class="k">Experimental</div>
-        <div class="t">Local Docker</div>
-        <div class="d">Run the Linux subset in a container on your own machine. Under validation.</div>
+        <div class="k">Supported</div>
+        <div class="t">Local containers</div>
+        <div class="d">A lighter local Linux sandbox with host-staged task data.</div>
       </a>
       <a class="card" href="/pages/local.html">
-        <div class="k">Planned</div>
-        <div class="t">VMware / QEMU</div>
-        <div class="d">Run tasks on your own hardware. Roadmap.</div>
+        <div class="k">Supported</div>
+        <div class="t">QEMU/KVM VMs</div>
+        <div class="d">CPU-only Ubuntu and Windows guests through QEMU/KVM.</div>
+      </a>
+      <a class="card" href="/pages/static.html">
+        <div class="k">Advanced</div>
+        <div class="t">Existing sandbox</div>
+        <div class="d">Attach ALE to a CUA endpoint you already operate.</div>
       </a>
     </div>
   </article>

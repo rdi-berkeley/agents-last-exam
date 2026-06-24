@@ -60,6 +60,12 @@ async def stage_input(
     sandbox: SandboxHandle, task_data: TaskDataSpec, *, source: str,
 ) -> dict[str, Any]:
     """Copy input/ (+ software/) from the host into the container; make output/."""
+    if sandbox.metadata.get("provider") != "docker":
+        raise NotImplementedError(
+            "task_data_source=local is currently supported only by the direct "
+            "Docker provider. QEMU guests need a host-to-container share plus "
+            "guest-side CIFS/Samba mounting, which is not implemented yet."
+        )
     host = _host_task_dir(source, task_data)
     if not os.path.isdir(os.path.join(host, "input")):
         raise RuntimeError(
@@ -96,6 +102,11 @@ async def stage_reference(
 ) -> dict[str, Any]:
     """Copy reference/ from the host into the container — AFTER the agent, just
     before evaluate, so the agent never sees the answers during its run."""
+    if sandbox.metadata.get("provider") != "docker":
+        raise NotImplementedError(
+            "task_data_source=local is currently supported only by the direct "
+            "Docker provider. QEMU guest staging is not implemented yet."
+        )
     host = _host_task_dir(source, task_data)
     ref = os.path.join(host, "reference")
     if not os.path.isdir(ref):

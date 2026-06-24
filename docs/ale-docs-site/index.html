@@ -16,7 +16,7 @@
       <h1>Measure agents on real work, in real sandboxes.</h1>
       <p class="lede">
         Agents' Last Exam runs AI agents on long-horizon, economically valuable
-        tasks inside full operating-system sandboxes, then grades what they
+        tasks inside reproducible desktop sandboxes, then grades what they
         produce against hidden references. This site explains how the
         <code>ale_run</code> framework works and how to run, configure, and
         extend it.
@@ -49,7 +49,7 @@
       too.
     </p>
     <div class="pillars">
-      <div class="pillar"><div class="t">Real environments</div><div class="d">Full Windows / Linux sandboxes with the actual professional software, driven through both terminal and GUI, not a simulation.</div></div>
+      <div class="pillar"><div class="t">Real environments</div><div class="d">Windows and Linux sandboxes with the actual professional software, driven through both terminal and GUI, not a simulation.</div></div>
       <div class="pillar"><div class="t">Curated real data</div><div class="d">Each task ships real input data and a hidden reference, collected and validated by domain experts.</div></div>
       <div class="pillar"><div class="t">Verifiable outcomes</div><div class="d">Deterministic and judge-based graders score the agent's output against that reference.</div></div>
       <div class="pillar"><div class="t">Broad coverage</div><div class="d">Around 150 public tasks across 55 subdomains, from a 1,000+ task corpus that keeps growing.</div></div>
@@ -63,7 +63,7 @@
     </p>
     <div class="slots">
       <div class="slot"><div class="sk">Agent</div><div class="st">What to test</div><div class="sd">Any harness (Claude Code, Codex, ALE-Claw, …), driven through one uniform interface.</div></div>
-      <div class="slot"><div class="sk">Environment</div><div class="st">Where it runs</div><div class="sd">A fresh OS sandbox with the real software and the task's data on disk.</div></div>
+      <div class="slot"><div class="sk">Environment</div><div class="st">Where it runs</div><div class="sd">A sandbox with the required OS surface, software, and task data.</div></div>
       <div class="slot"><div class="sk">Task</div><div class="st">What to do, how to grade</div><div class="sd">An instruction, its input data, and a hidden reference the grader scores against.</div></div>
     </div>
     <p>
@@ -74,7 +74,7 @@
     <ol class="lifecycle">
       <li>
         <div class="lt">1 · Provision the sandbox</div>
-        <div class="ld">A provider boots a fresh OS sandbox from a prebaked image and waits until the control server inside it answers.</div>
+        <div class="ld">A provider creates or attaches a sandbox and waits until its control server answers.</div>
         <div class="lp"><a href="/pages/sandbox.html">Sandbox &amp; provider &rarr;</a></div>
       </li>
       <li>
@@ -99,7 +99,7 @@
       </li>
       <li>
         <div class="lt">6 · Tear down</div>
-        <div class="ld">The sandbox is deleted (or kept, for debugging), so the next run always starts from a clean machine.</div>
+        <div class="ld">The provider deletes, stops, keeps, or detaches the sandbox according to the experiment's cleanup mode.</div>
         <div class="lp"><a href="/pages/sandbox.html">Sandbox &amp; provider &rarr;</a></div>
       </li>
     </ol>
@@ -113,7 +113,7 @@
       <a class="card" href="/pages/providers.html">
         <div class="k">Run experiments</div>
         <div class="t">Set up and run a benchmark</div>
-        <div class="d">Provision a cloud provider, configure an experiment, and launch.</div>
+        <div class="d">Choose a cloud or local provider, configure an experiment, and launch.</div>
       </a>
       <a class="card" href="/pages/add-agent.html">
         <div class="k">Build on ALE</div>
