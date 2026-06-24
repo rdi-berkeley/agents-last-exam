@@ -388,7 +388,7 @@ def _build_environment_from_path(
       fields are repeated per snapshot and reconciled). The loader reshapes this
       into one :class:`ProviderSpec` per provider kind plus a snapshot→kind
       routing table. ``gcs_sa_key`` (top level, alongside ``task_data_source``)
-      is injected into the docker provider when present.
+      is injected into providers that need in-sandbox GCS authentication.
     * **Single provider** (``provider:`` at top level, no ``snapshots:``) — the
       dev/``static`` shape: one provider serves every snapshot (it is a fixed
       attached box, so there is nothing to map).
@@ -445,8 +445,8 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
     config; the per-snapshot routing (image/zones/gpu) stays per snapshot.
     Docker carries only the image NAME + container sizing; the container ref,
     cua port and paths are read from the Image entry by the provider.
-    ``gcs_sa_key`` (top level, with ``task_data_source``) is injected into the
-    docker provider when set.
+    ``gcs_sa_key`` (top level, with ``task_data_source`` / ``output_path``) is
+    injected into providers that need in-sandbox GCS authentication.
     """
     snapshots = raw["snapshots"]
     if not isinstance(snapshots, dict) or not snapshots:
@@ -531,9 +531,12 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
             dk["gcs_sa_key"] = gcs_sa_key
         provider_specs["docker"] = ProviderSpec(kind="docker", config=dk)
     if qemu_snaps:
+        qemu_cfg: dict[str, Any] = {"snapshots": qemu_snaps}
+        if gcs_sa_key:
+            qemu_cfg["gcs_sa_key"] = str(Path(str(gcs_sa_key)).expanduser())
         provider_specs["qemu"] = ProviderSpec(
             kind="qemu",
-            config={"snapshots": qemu_snaps},
+            config=qemu_cfg,
         )
 
     return EnvironmentSpec(

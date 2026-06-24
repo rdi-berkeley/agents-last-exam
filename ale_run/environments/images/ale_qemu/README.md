@@ -41,6 +41,8 @@ docker push agentslastexam/ale-qemu:latest
 - The disk and every backing file must be readable when the container starts.
 - `/dev/kvm` must be passed through.
 - `NET_ADMIN` is required for the guest bridge and NAT rules.
+- `/shared` may be bind-mounted to expose a per-run host exchange directory
+  through Dockur's guest-only Samba share.
 - Container ports `5000` and `8006` expose CUA and noVNC.
 - `VM_NET_IP` defaults to `172.30.0.2`.
 - Docker health becomes healthy when the guest CUA `/status` endpoint responds.

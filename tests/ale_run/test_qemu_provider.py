@@ -3,15 +3,18 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from ale_run.base_interface import SandboxSpec
+from ale_run.base_interface import SandboxHandle, SandboxSpec, TaskDataSpec
+from ale_run.environments import output_pull
 from ale_run.environments.output_pull import _docker_container
 from ale_run.environments.providers import qemu as qemu_module
 from ale_run.environments.providers.qemu import QemuProvider
 from ale_run.orchestration.config_loader import load_experiment
-from ale_run.orchestration.lifecycle import _build_env_spec
+from ale_run.orchestration.experiment_spec import ArtifactsSpec
+from ale_run.orchestration.lifecycle import _build_env_spec, pull_agent_output
 from ale_run.tasks.loader import TaskLoader
 
 
@@ -43,6 +46,7 @@ snapshots:
       disk_source: gs://ale-data-public/images/ale-win10.qcow2
 task_data_source: baked_in_sandbox
 output_path: local
+gcs_sa_key: secret/gcp_key.json
 """,
         encoding="utf-8",
     )
@@ -66,6 +70,7 @@ tasks:
         "image": "ale-win10",
         "disk_source": "gs://ale-data-public/images/ale-win10.qcow2",
     }
+    assert provider.config["gcs_sa_key"] == "secret/gcp_key.json"
 
 
 def test_loader_rejects_qemu_without_disk_source(tmp_path: Path) -> None:
@@ -171,10 +176,13 @@ async def test_acquire_creates_overlay_and_returns_guest_handle(
 ) -> None:
     base_qcow2 = tmp_path / "ale-win10.qcow2"
     base_qcow2.write_bytes(b"qcow2")
-    provider = QemuProvider(_provider_config(tmp_path, base_qcow2))
+    config = _provider_config(tmp_path, base_qcow2)
+    config["gcs_sa_key"] = str(tmp_path / "gcp_key.json")
+    provider = QemuProvider(config)
     provider._preflight_done = True
 
     docker_calls: list[tuple[str, ...]] = []
+    credential_calls: list[tuple[str, str]] = []
 
     async def fake_run_docker(
         *args: str,
@@ -217,6 +225,15 @@ async def test_acquire_creates_overlay_and_returns_guest_handle(
         fake_wait_ready,
     )
 
+    async def fake_inject_credentials(
+        sandbox: SandboxHandle,
+        host_key_path: str,
+    ) -> tuple[str, str]:
+        credential_calls.append((sandbox.id, host_key_path))
+        return r"C:\agenthle\gcs-reader.json", "test-project"
+
+    monkeypatch.setattr(provider, "_inject_gcs_credentials", fake_inject_credentials)
+
     sandbox = await provider.acquire(
         SandboxSpec(snapshot="cpu-free", os="windows", task_id="demo/hello")
     )
@@ -227,6 +244,14 @@ async def test_acquire_creates_overlay_and_returns_guest_handle(
     assert sandbox.metadata["memory_gb"] == 8
     assert sandbox.metadata["novnc_url"] == "http://127.0.0.1:18000"
     assert sandbox.metadata["runner_image"] == "agentslastexam/ale-qemu:0.2.0"
+    assert sandbox.metadata["gcs_key_path"] == r"C:\agenthle\gcs-reader.json"
+    assert sandbox.metadata["gcs_user_project"] == "test-project"
+    assert credential_calls == [
+        (sandbox.id, str((tmp_path / "gcp_key.json").resolve())),
+    ]
+    exchange_dir = Path(sandbox.metadata["exchange_host_dir"])
+    assert exchange_dir.is_dir()
+    assert sandbox.metadata["exchange_guest_share"] == r"\\host.lan\Data"
     assert any(
         call[:5] == ("run", "--rm", "--pull=missing", "--entrypoint", "qemu-img")
         for call in docker_calls
@@ -235,6 +260,7 @@ async def test_acquire_creates_overlay_and_returns_guest_handle(
     assert "--pull=missing" in start_call
     assert "--device=/dev/kvm" in start_call
     assert f"type=bind,src={base_qcow2},dst=/images/base.qcow2,readonly" in start_call
+    assert f"type=bind,src={exchange_dir},dst=/shared" in start_call
     assert "RAM_SIZE=8G" in start_call
     assert "CPU_CORES=4" in start_call
     assert start_call[-1] == "agentslastexam/ale-qemu:0.2.0"
@@ -869,8 +895,6 @@ async def test_acquire_removes_container_when_network_setup_fails(
 
 
 def test_qemu_outer_container_is_not_guest_filesystem() -> None:
-    from ale_run.base_interface import SandboxHandle
-
     sandbox = SandboxHandle(
         id="ale-qemu-test",
         endpoint="http://127.0.0.1:15000",
@@ -884,3 +908,324 @@ def test_qemu_outer_container_is_not_guest_filesystem() -> None:
     )
 
     assert _docker_container(sandbox) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("os_type", "guest_share", "expected_command"),
+    [
+        ("windows", r"\\host.lan\Data", "robocopy"),
+        ("linux", "//172.30.0.1/Data", "mount -t cifs"),
+    ],
+)
+async def test_qemu_output_pull_uses_shared_exchange(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    os_type: str,
+    guest_share: str,
+    expected_command: str,
+) -> None:
+    exchange_dir = tmp_path / "exchange"
+    exchange_dir.mkdir()
+    sandbox = SandboxHandle(
+        id="ale-qemu-test",
+        endpoint="http://127.0.0.1:15000",
+        os=os_type,
+        work_dir_base="",
+        task_data_root="/task-data" if os_type == "linux" else r"E:\task-data",
+        node="",
+        python="",
+        mcp_server_dir="",
+        metadata={
+            "provider": "qemu",
+            "exchange_host_dir": str(exchange_dir),
+            "exchange_guest_share": guest_share,
+        },
+    )
+    commands: list[tuple[str, float]] = []
+
+    async def fake_run_command(command: str, *, timeout: float = 60):
+        commands.append((command, timeout))
+        staged_dir = exchange_dir / "output" / "nested"
+        staged_dir.mkdir(parents=True)
+        (staged_dir / "result.bin").write_bytes(b"result")
+        return qemu_module.subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(sandbox, "run_command", fake_run_command)
+
+    report = await output_pull.pull_to_host(
+        sandbox,
+        TaskDataSpec(
+            domain_name="demo",
+            task_name="hello",
+            variant_name="default",
+        ),
+        dest_dir=tmp_path / "run" / "output",
+    )
+
+    assert report == {
+        "transport": "qemu-share",
+        "vm_path": (
+            "/task-data/demo/hello/default/output"
+            if os_type == "linux"
+            else r"E:\task-data\demo\hello\default\output"
+        ),
+        "files": 1,
+        "bytes": 6,
+        "errors": [],
+    }
+    assert (tmp_path / "run" / "output" / "nested" / "result.bin").read_bytes() == b"result"
+    assert expected_command in commands[0][0]
+    if os_type == "linux":
+        assert 'sudo -n mkdir -p "$mount_dir/output"' in commands[0][0]
+        assert "sudo -n cp -rL" in commands[0][0]
+    assert commands[0][1] == output_pull._QEMU_SHARE_COPY_TIMEOUT_S
+
+
+@pytest.mark.asyncio
+async def test_qemu_output_pull_falls_back_to_cua(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exchange_dir = tmp_path / "exchange"
+    exchange_dir.mkdir()
+    sandbox = SandboxHandle(
+        id="ale-qemu-test",
+        endpoint="http://127.0.0.1:15000",
+        os="linux",
+        work_dir_base="",
+        task_data_root="/task-data",
+        node="",
+        python="",
+        mcp_server_dir="",
+        metadata={
+            "provider": "qemu",
+            "exchange_host_dir": str(exchange_dir),
+            "exchange_guest_share": "//172.30.0.1/Data",
+        },
+    )
+
+    async def fake_run_command(command: str, *, timeout: float = 60):
+        raise RuntimeError("shared copy unavailable")
+
+    async def fake_list_dir(path: str):
+        return [{"relpath": "result.txt", "is_dir": False}]
+
+    async def fake_download(remote_path: str, local_path: str, *, timeout: float = 120):
+        Path(local_path).write_text("result", encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(sandbox, "run_command", fake_run_command)
+    monkeypatch.setattr(sandbox, "list_dir", fake_list_dir)
+    monkeypatch.setattr(sandbox, "download_to_local", fake_download)
+
+    report = await output_pull.pull_to_host(
+        sandbox,
+        TaskDataSpec(
+            domain_name="demo",
+            task_name="hello",
+            variant_name="default",
+        ),
+        dest_dir=tmp_path / "run" / "output",
+    )
+
+    assert report["transport"] == "cua"
+    assert report["files"] == 1
+    assert (tmp_path / "run" / "output" / "result.txt").read_text() == "result"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("os_type", "expected_path", "expected_prepare", "expected_protect"),
+    [
+        (
+            "linux",
+            "/tmp/agenthle/gcs-reader.json",
+            "mkdir -p /tmp/agenthle",
+            "chmod 600 /tmp/agenthle/gcs-reader.json",
+        ),
+        (
+            "windows",
+            r"C:\agenthle\gcs-reader.json",
+            r"cmd /c if not exist C:\agenthle mkdir C:\agenthle",
+            None,
+        ),
+    ],
+)
+async def test_qemu_injects_gcs_credentials(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    os_type: str,
+    expected_path: str,
+    expected_prepare: str,
+    expected_protect: str | None,
+) -> None:
+    key_path = tmp_path / "gcp_key.json"
+    key_data = json.dumps({"project_id": "test-project"}).encode()
+    key_path.write_bytes(key_data)
+    sandbox = SandboxHandle(
+        id="ale-qemu-test",
+        endpoint="http://127.0.0.1:15000",
+        os=os_type,
+        work_dir_base="",
+        task_data_root="",
+        node="",
+        python="",
+        mcp_server_dir="",
+    )
+    commands: list[str] = []
+    writes: list[tuple[str, bytes]] = []
+
+    async def fake_run_command(command: str, *, timeout: float = 60):
+        commands.append(command)
+        return qemu_module.subprocess.CompletedProcess(command, 0, "", "")
+
+    async def fake_write_file(path: str, content: str | bytes):
+        assert isinstance(content, bytes)
+        writes.append((path, content))
+
+    monkeypatch.setattr(sandbox, "run_command", fake_run_command)
+    monkeypatch.setattr(sandbox, "write_file", fake_write_file)
+
+    guest_path, project_id = await QemuProvider._inject_gcs_credentials(
+        sandbox,
+        str(key_path),
+    )
+
+    assert guest_path == expected_path
+    assert project_id == "test-project"
+    assert writes == [(expected_path, key_data)]
+    assert commands[0] == expected_prepare
+    if expected_protect is None:
+        assert len(commands) == 1
+    else:
+        assert commands[1] == expected_protect
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("os_type", "task_data_root", "key_path"),
+    [
+        ("linux", "/task-data", "/tmp/agenthle/gcs-reader.json"),
+        ("windows", r"E:\task-data", r"C:\agenthle\gcs-reader.json"),
+    ],
+)
+async def test_qemu_output_push_uses_injected_gcs_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+    os_type: str,
+    task_data_root: str,
+    key_path: str,
+) -> None:
+    sandbox = SandboxHandle(
+        id="ale-qemu-test",
+        endpoint="http://127.0.0.1:15000",
+        os=os_type,
+        work_dir_base="",
+        task_data_root=task_data_root,
+        node="",
+        python="",
+        mcp_server_dir="",
+        metadata={
+            "provider": "qemu",
+            "gcs_key_path": key_path,
+            "gcs_user_project": "test-project",
+        },
+    )
+    commands: list[tuple[str, float]] = []
+
+    async def fake_run_command(command: str, *, timeout: float = 60):
+        commands.append((command, timeout))
+        return qemu_module.subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(sandbox, "run_command", fake_run_command)
+
+    report = await output_pull.push_to_gcs(
+        sandbox,
+        TaskDataSpec(
+            domain_name="demo",
+            task_name="hello",
+            variant_name="base",
+        ),
+        run_id="qemu-gcs-smoke",
+        bucket="gs://results-bucket/_probes",
+    )
+
+    assert report == {
+        "transport": "gcs",
+        "gcs_path": "gs://results-bucket/_probes/qemu-gcs-smoke/output/",
+    }
+    command, timeout = commands[0]
+    assert "gsutil -u test-project" in command
+    assert f"Credentials:gs_service_key_file={key_path}" in command
+    assert "gs://results-bucket/_probes/qemu-gcs-smoke/" in command
+    assert timeout == output_pull._GCS_PUSH_TIMEOUT_S
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_reports_qemu_gcs_output_transport(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sandbox = SandboxHandle(
+        id="ale-qemu-test",
+        endpoint="http://127.0.0.1:15000",
+        os="linux",
+        work_dir_base="",
+        task_data_root="/task-data",
+        node="",
+        python="",
+        mcp_server_dir="",
+        metadata={"provider": "qemu"},
+    )
+    events: list[tuple[str, dict]] = []
+    writer = SimpleNamespace(
+        emit_event=lambda event_type, **data: events.append((event_type, data))
+    )
+
+    async def fake_push_to_gcs(
+        sandbox_arg: SandboxHandle,
+        task_data: TaskDataSpec,
+        *,
+        run_id: str,
+        bucket: str,
+    ):
+        assert sandbox_arg is sandbox
+        assert task_data.task_name == "hello"
+        assert run_id == "qemu-gcs-smoke"
+        assert bucket == "gs://results-bucket/_probes"
+        return {
+            "transport": "gcs",
+            "gcs_path": "gs://results-bucket/_probes/qemu-gcs-smoke/output/",
+        }
+
+    monkeypatch.setattr(output_pull, "push_to_gcs", fake_push_to_gcs)
+
+    await pull_agent_output(
+        env=SimpleNamespace(sandbox=sandbox),
+        provider=None,
+        artifacts=ArtifactsSpec(
+            task_data_source="baked_in_sandbox",
+            output_path="gs://results-bucket/_probes",
+        ),
+        task_meta={
+            "task_data": TaskDataSpec(
+                domain_name="demo",
+                task_name="hello",
+                variant_name="base",
+            )
+        },
+        run_id="qemu-gcs-smoke",
+        task_id="demo/hello",
+        writer=writer,
+        run_dir=tmp_path,
+    )
+
+    assert events == [
+        (
+            "output_gather_done",
+            {
+                "transport": "gcs",
+                "gcs_path": "gs://results-bucket/_probes/qemu-gcs-smoke/output/",
+            },
+        )
+    ]

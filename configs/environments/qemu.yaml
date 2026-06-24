@@ -35,9 +35,12 @@
 #     Maximum time to wait for the guest CUA server after starting the VM.
 #   task_data_source
 #     `baked_in_sandbox` means input, software, and references are in qcow2.
+#   gcs_sa_key
+#     Host path to the GCS service-account JSON key injected into each guest.
+#     Required when task data or output uses a gs:// path.
 #   output_path
-#     `local` pulls the guest output directory into the host run directory via
-#     CUA before the VM and its disposable overlay are deleted.
+#     `local` copies the guest output directory through a per-run shared folder
+#     into the host run directory. A gs:// path uploads directly from the guest.
 #
 # VM CPU and memory normally come from task-card `machineType`, or explicit
 # `vcpus` / `memory_gb` fields. Per-snapshot qemu.vcpus and qemu.memory_gb can
@@ -80,4 +83,6 @@ snapshots:
       ready_timeout_s: 900
 
 task_data_source: baked_in_sandbox
+# Uncomment when task_data_source or output_path uses gs://.
+# gcs_sa_key: secret/gcp_key.json
 output_path: local

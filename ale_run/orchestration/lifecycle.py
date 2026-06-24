@@ -402,7 +402,7 @@ async def run_one_unit(
             # ============================================================
             # 3a. OUTPUT HANDLING — dispatch on artifacts_path.output_path:
             #     null       → skip (output stays on VM, lost on teardown)
-            #     "local"    → cua-direct pull → <run_dir>/output/
+            #     "local"    → provider-local pull → <run_dir>/output/
             #     "gs://..." → vm-side gsutil push → user bucket
             #     Best-effort: failure logs + emits event but doesn't abort.
             await pull_agent_output(
@@ -796,7 +796,7 @@ async def pull_agent_output(
     dir to one of three destinations:
 
       None         → emit ``output_gather_skipped`` reason=unconfigured
-      ``"local"``  → pull via cua HTTP → ``<run_dir>/output/``
+      ``"local"``  → provider-local pull → ``<run_dir>/output/``
       ``"gs://X"`` → push from VM to ``X/<run_id>/output/`` via gsutil
 
     Best-effort throughout: any failure emits an event + logs a warning
@@ -834,7 +834,7 @@ async def pull_agent_output(
             else:
                 writer.emit_event(
                     "output_gather_done",
-                    transport="cua",
+                    transport=report.get("transport", "cua"),
                     vm_path=report.get("vm_path"),
                     files=report.get("files"),
                     bytes=report.get("bytes"),
@@ -842,7 +842,7 @@ async def pull_agent_output(
                 )
         except Exception as e:
             logger.warning("pull_to_host failed (best-effort): %s", e)
-            writer.emit_event("output_gather_failed", transport="cua", error=str(e))
+            writer.emit_event("output_gather_failed", transport="local", error=str(e))
         return
 
     # gs:// case

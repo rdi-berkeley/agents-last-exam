@@ -67,6 +67,8 @@ class QemuProviderConfig:
     """Provider configuration keyed by task-card snapshot tag."""
 
     snapshots: dict[str, QemuSnapshotConfig]
+    gcs_sa_key: str = ""
+    """Optional host path to a GCS service-account key injected into each guest."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,7 +274,13 @@ def _build_provider_config(raw: dict[str, Any]) -> QemuProviderConfig:
                 f"qemu disk identities {previous!r} and {owner!r} "
                 f"would share cache path {destination}"
             )
-    return QemuProviderConfig(snapshots=snapshots)
+    gcs_sa_key = str(raw.get("gcs_sa_key") or "").strip()
+    if gcs_sa_key:
+        gcs_sa_key = str(Path(gcs_sa_key).expanduser().resolve())
+    return QemuProviderConfig(
+        snapshots=snapshots,
+        gcs_sa_key=gcs_sa_key,
+    )
 
 
 def _generate_container_name(spec: SandboxSpec) -> str:
@@ -493,7 +501,9 @@ class QemuProvider(Provider):
         name = _generate_container_name(spec)
         slot_root = snapshot.runtime_root / "slots" / name
         storage_dir = slot_root / "storage"
+        exchange_dir = slot_root / "exchange"
         storage_dir.mkdir(parents=True, exist_ok=False)
+        exchange_dir.mkdir()
         container_started = False
 
         try:
@@ -509,6 +519,7 @@ class QemuProvider(Provider):
                 task_id=spec.task_id,
                 base_qcow2=base_qcow2,
                 storage_dir=storage_dir,
+                exchange_dir=exchange_dir,
                 cua_port=cua_internal_port,
                 vcpus=vcpus,
                 memory_gb=memory_gb,
@@ -544,6 +555,41 @@ class QemuProvider(Provider):
                     f"container logs:\n{detail[-4000:]}"
                 )
 
+            metadata = {
+                "provider": "qemu",
+                "container_name": name,
+                "slot_root": str(slot_root),
+                "base_qcow2": str(base_qcow2),
+                "overlay_qcow2": str(storage_dir / "data.qcow2"),
+                "exchange_host_dir": str(exchange_dir),
+                "exchange_guest_share": (
+                    "//172.30.0.1/Data" if image.os == "linux" else r"\\host.lan\Data"
+                ),
+                "cua_port": cua_port,
+                "novnc_port": novnc_port,
+                "novnc_url": f"http://{client_host}:{novnc_port}",
+                "image": image.name,
+                "snapshot": spec.snapshot,
+                "machine_type": spec.machine_type,
+                "vcpus": vcpus,
+                "memory_gb": memory_gb,
+                "runner_image": snapshot.runner_image,
+            }
+            sandbox = SandboxHandle(
+                id=name,
+                endpoint=cua_url,
+                os=image.os,
+                **image.sandbox_paths(),
+                metadata=metadata,
+            )
+            if self._cfg.gcs_sa_key:
+                gcs_key_path, gcs_user_project = await self._inject_gcs_credentials(
+                    sandbox,
+                    self._cfg.gcs_sa_key,
+                )
+                metadata["gcs_key_path"] = gcs_key_path
+                metadata["gcs_user_project"] = gcs_user_project
+
             logger.info(
                 "QEMU sandbox %s ready: image=%s vcpus=%d memory=%dG cua=%s",
                 name,
@@ -552,28 +598,7 @@ class QemuProvider(Provider):
                 memory_gb,
                 cua_url,
             )
-            return SandboxHandle(
-                id=name,
-                endpoint=cua_url,
-                os=image.os,
-                **image.sandbox_paths(),
-                metadata={
-                    "provider": "qemu",
-                    "container_name": name,
-                    "slot_root": str(slot_root),
-                    "base_qcow2": str(base_qcow2),
-                    "overlay_qcow2": str(storage_dir / "data.qcow2"),
-                    "cua_port": cua_port,
-                    "novnc_port": novnc_port,
-                    "novnc_url": f"http://{client_host}:{novnc_port}",
-                    "image": image.name,
-                    "snapshot": spec.snapshot,
-                    "machine_type": spec.machine_type,
-                    "vcpus": vcpus,
-                    "memory_gb": memory_gb,
-                    "runner_image": snapshot.runner_image,
-                },
-            )
+            return sandbox
         except BaseException:
             try:
                 if container_started:
@@ -587,6 +612,52 @@ class QemuProvider(Provider):
                     slot_root,
                 )
             raise
+
+    @staticmethod
+    async def _inject_gcs_credentials(
+        sandbox: SandboxHandle,
+        host_key_path: str,
+    ) -> tuple[str, str]:
+        """Copy a GCS service-account key into the guest."""
+        key = Path(host_key_path)
+        if not key.is_file():
+            raise FileNotFoundError(f"gcs_sa_key not found: {host_key_path}")
+        data = await asyncio.to_thread(key.read_bytes)
+        try:
+            parsed = json.loads(data)
+            project_id = parsed.get("project_id", "") if isinstance(parsed, dict) else ""
+        except json.JSONDecodeError:
+            project_id = ""
+
+        if sandbox.is_linux:
+            destination = "/tmp/agenthle/gcs-reader.json"
+            prepare = "mkdir -p /tmp/agenthle"
+            protect = f"chmod 600 {destination}"
+        else:
+            destination = r"C:\agenthle\gcs-reader.json"
+            prepare = r"cmd /c if not exist C:\agenthle mkdir C:\agenthle"
+            protect = ""
+
+        result = await sandbox.run_command(prepare)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"failed to prepare QEMU GCS credential directory: "
+                f"{(result.stderr or result.stdout or '')[:300]}"
+            )
+        await sandbox.write_file(destination, data)
+        if protect:
+            result = await sandbox.run_command(protect)
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"failed to protect QEMU GCS credential: "
+                    f"{(result.stderr or result.stdout or '')[:300]}"
+                )
+        logger.info(
+            "QEMU: injected GCS SA key -> %s (project=%s)",
+            destination,
+            project_id,
+        )
+        return destination, str(project_id or "")
 
     async def release(
         self,
@@ -1144,6 +1215,7 @@ class QemuProvider(Provider):
         task_id: str,
         base_qcow2: Path,
         storage_dir: Path,
+        exchange_dir: Path,
         cua_port: int,
         vcpus: int,
         memory_gb: int,
@@ -1166,6 +1238,8 @@ class QemuProvider(Provider):
             f"type=bind,src={base_qcow2},dst=/images/base.qcow2,readonly",
             "--mount",
             f"type=bind,src={storage_dir},dst=/storage",
+            "--mount",
+            f"type=bind,src={exchange_dir},dst=/shared",
             "--publish",
             f"{snapshot.bind_address}:0:{cua_port}",
             "--publish",
