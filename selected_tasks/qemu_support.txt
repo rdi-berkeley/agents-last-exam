@@ -7,7 +7,7 @@
 # end-to-end CPU evaluation.
 # GPU-required exclusions: humanoid_velocity_tracking_policy,
 # compress_3dgs_scene_ply, and chroma_key_from_reference.
-# Total: 148 tasks.
+# Total: 140 tasks.
 
 agriculture_env/crop_rotation_d02
 agriculture_env/ndvi_zonal_statistics_d02
@@ -55,14 +55,6 @@ computing_math/ranking_node_feature_parity_recovery_instance_1
 computing_math/recsys_cold_start_instance_1
 computing_math/synthetic_causal_structure_inference
 computing_math/tris_crackme
-demo/apply_patch_win
-demo/hello
-demo/hello_win
-demo/readfile_secret
-demo/seecheck
-demo/seecheck_win
-demo/tool_smoke
-demo/tool_smoke_win
 education_info/homework_grading_numerical_pdes_instance_02
 education_info/marc_remediation_folio_overlay
 education_info/moodle_gradebook_closeout_reconciliation

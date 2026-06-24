@@ -351,6 +351,62 @@ async def test_release_removes_container_and_slot(
     assert not slot_root.exists()
 
 
+@pytest.mark.asyncio
+async def test_release_reports_slot_cleanup_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base_qcow2 = tmp_path / "ale-win10.qcow2"
+    base_qcow2.write_bytes(b"qcow2")
+    provider = QemuProvider(_provider_config(tmp_path, base_qcow2))
+    slot_root = tmp_path / "qemu" / "runtime" / "slots" / "ale-qemu-test"
+    slot_root.mkdir(parents=True)
+
+    async def fake_run_docker(
+        *args: str,
+        check: bool = True,
+    ) -> tuple[int, str, str]:
+        _ = (args, check)
+        return (0, "", "")
+
+    monkeypatch.setattr(qemu_module, "_run_docker", fake_run_docker)
+    monkeypatch.setattr(qemu_module, "_SLOT_CLEANUP_RETRY_S", 0)
+    monkeypatch.setattr(qemu_module.shutil, "rmtree", lambda *args, **kwargs: None)
+
+    from ale_run.base_interface import SandboxHandle
+
+    sandbox = SandboxHandle(
+        id="ale-qemu-test",
+        endpoint="http://127.0.0.1:15000",
+        os="windows",
+        work_dir_base=r"C:\Users\User\.ale",
+        task_data_root=r"E:\agenthle",
+        node=r"C:\node.exe",
+        python=r"C:\python.exe",
+        mcp_server_dir=r"C:\cua_mcp_server",
+        metadata={"provider": "qemu", "slot_root": str(slot_root)},
+    )
+
+    with pytest.raises(RuntimeError, match="failed to remove QEMU runtime slot"):
+        await provider.release(sandbox)
+
+
+def test_remove_slot_root_recovers_read_only_directory(tmp_path: Path) -> None:
+    slot_root = tmp_path / "slot"
+    storage_dir = slot_root / "storage"
+    storage_dir.mkdir(parents=True)
+    (storage_dir / "data.qcow2").write_bytes(b"overlay")
+    storage_dir.chmod(0o500)
+
+    try:
+        qemu_module._remove_slot_root(slot_root)
+    finally:
+        if storage_dir.exists():
+            storage_dir.chmod(0o700)
+
+    assert not slot_root.exists()
+
+
 def test_parse_hf_source_splits_repo_and_path() -> None:
     parsed = qemu_module._parse_hf_source(
         "hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22.qcow2"

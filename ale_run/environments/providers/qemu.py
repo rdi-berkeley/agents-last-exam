@@ -16,7 +16,9 @@ import logging
 import os
 import re
 import shutil
+import stat
 import subprocess
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -37,6 +39,8 @@ _REMOTE_SOURCE_RE = re.compile(r"^[a-z][a-z0-9+.-]*://", re.IGNORECASE)
 _HF_DISK_MANIFEST_FORMAT = "ale-qemu-disk-parts-v1"
 _HF_DISK_MANIFEST_SUFFIX = ".manifest.json"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_SLOT_CLEANUP_ATTEMPTS = 3
+_SLOT_CLEANUP_RETRY_S = 0.25
 
 
 @dataclass(frozen=True, slots=True)
@@ -407,6 +411,41 @@ async def _remove_container(container_name: str) -> None:
     )
 
 
+def _remove_slot_root(slot_root: Path) -> None:
+    def make_writable_and_retry(
+        operation: Callable[[str], object],
+        path: str,
+        error: BaseException,
+    ) -> None:
+        try:
+            failed_path = Path(path)
+            os.chmod(failed_path, failed_path.stat().st_mode | stat.S_IRWXU)
+            parent = failed_path.parent
+            os.chmod(parent, parent.stat().st_mode | stat.S_IRWXU)
+            operation(path)
+        except OSError:
+            raise error
+
+    last_error: OSError | None = None
+    for attempt in range(1, _SLOT_CLEANUP_ATTEMPTS + 1):
+        try:
+            shutil.rmtree(slot_root, onexc=make_writable_and_retry)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            last_error = exc
+        if not slot_root.exists():
+            return
+        if attempt < _SLOT_CLEANUP_ATTEMPTS:
+            time.sleep(_SLOT_CLEANUP_RETRY_S)
+
+    detail = f": {last_error}" if last_error else ""
+    raise RuntimeError(
+        f"failed to remove QEMU runtime slot after {_SLOT_CLEANUP_ATTEMPTS} attempts: "
+        f"{slot_root}{detail}"
+    )
+
+
 class QemuProvider(Provider):
     """One ephemeral Docker-packaged QEMU VM per ALE run."""
 
@@ -539,7 +578,7 @@ class QemuProvider(Provider):
             try:
                 if container_started:
                     await _remove_container(name)
-                await asyncio.to_thread(shutil.rmtree, slot_root, True)
+                await asyncio.to_thread(_remove_slot_root, slot_root)
             except Exception:
                 logger.exception(
                     "failed to clean up QEMU sandbox %s after acquire failure; "
@@ -569,7 +608,7 @@ class QemuProvider(Provider):
         await _remove_container(sandbox.id)
         slot_root = sandbox.metadata.get("slot_root")
         if slot_root:
-            await asyncio.to_thread(shutil.rmtree, slot_root, True)
+            await asyncio.to_thread(_remove_slot_root, Path(slot_root))
 
     def open_session(self, sandbox: SandboxHandle) -> Any:
         from cua_bench.computers.remote import RemoteDesktopSession
