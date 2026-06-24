@@ -1,4 +1,8 @@
-# Local QEMU provider
+# Local QEMU/KVM provider
+
+For installation and run instructions, see the
+[QEMU/KVM VMs website guide](https://agents-last-exam.org/docs?p=pages/local.html).
+This document records implementation details for maintainers.
 
 The `qemu` provider runs a complete Ubuntu or Windows guest with QEMU inside a
 Docker container. It provisions one VM for each ALE run and deletes it during
@@ -91,7 +95,20 @@ changes, so replacing an object at the same URI does not leave a stale cache.
 3. Run `qemu-img` from the runner image to create a per-run backing overlay.
 4. Start the runner with KVM, `NET_ADMIN`, dynamic loopback ports, and task shape.
 5. Wait for CUA readiness while also monitoring early container exit.
-6. Remove the container and overlay directory on normal delete cleanup.
+6. Copy local outputs through the VM's per-run Samba share.
+7. Remove the container, overlay, and exchange directory on delete cleanup.
+
+For `output_path: local`, the provider bind-mounts an empty per-run exchange
+directory into the runner. Dockur exposes that directory to Windows as
+`\\host.lan\Data` and to Ubuntu through a temporary CIFS mount. The guest copies
+the complete output tree into the share, after which the host moves it into the
+run directory. CUA remains a fallback, but does not carry file contents during
+the normal local QEMU path.
+
+For `output_path: gs://...`, set `gcs_sa_key` to a host-side service-account
+JSON key. The provider injects the key into the guest after CUA becomes ready,
+and the guest uploads its output directory directly with `gsutil`. Output bytes
+do not pass through CUA or the local exchange directory.
 
 ## Initial limitations
 

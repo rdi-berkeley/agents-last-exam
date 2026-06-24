@@ -85,11 +85,11 @@ class DockerProviderConfig:
     gcs_sa_key: str = ""
     privileged: bool = False
     image_ref: str = ""
-    # Start the in-container nested dockerd (DinD) for tasks whose eval runs
-    # `docker run`. OFF by default: a fuse-overlayfs dockerd in every container is
-    # wasted overhead and, at concurrency, an I/O storm that starves cua startup.
-    # Only the ~4 nested-docker tasks need it (currently excluded — see the image
-    # README). When true the container gets ALE_ENABLE_DIND=1.
+    # Start the in-container nested dockerd (DinD) for custom development.
+    # The supported rootless-Docker profile excludes nested-runtime tasks and
+    # routes them to the QEMU/KVM Ubuntu guest instead. When true the container
+    # gets ALE_ENABLE_DIND=1; enabling it broadly can add substantial
+    # fuse-overlayfs I/O at high concurrency.
     enable_dind: bool = False
 
 

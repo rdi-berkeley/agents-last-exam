@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Local Docker | ALE Docs</title>
+  <title>Local containers | ALE Docs</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -11,81 +11,103 @@
 </head>
 <body>
   <article class="article">
-    <h1>Local Docker</h1>
+    <h1>Local containers</h1>
     <p class="lede">
-      Run the Linux subset in a container on your own machine — no GCP, no VM.
+      Run the supported Ubuntu subset as one fresh Docker container per run
+      unit. This is the lightest local provider, but it is not a full virtual
+      machine and does not support Windows tasks.
     </p>
 
-    <h2>How it works</h2>
+    <div class="note">
+      <div class="note-title">Supported Linux subset</div>
+      Use <code>configs/environments/docker.yaml</code> with
+      <code>selected_tasks/docker_support.txt</code>. The list currently
+      contains 99 tasks.
+    </div>
+
+    <h2>What runs where</h2>
     <p>
-      The <code>docker</code> provider boots
-      <code>agentslastexam/ale-ubuntu22-docker</code> (pulled from Docker Hub on
-      first use), a container whose userspace is an export of the
-      <code>ale-ubuntu22</code> GCE VM's root filesystem — the same node, Python
-      venv, cua-server and pre-installed task software, at the same paths. Per run
-      unit it starts one container, brings up <code>cua-server</code> on port 5000
-      behind a virtual X display (<code>Xvfb&nbsp;:0</code>), and drives it over
-      the same cua HTTP API as a cloud VM.
+      The <code>docker</code> provider starts
+      <code>agentslastexam/ale-ubuntu22-docker</code>. The image is an export of
+      the <code>ale-ubuntu22</code> VM userspace, including its applications,
+      Python environment, Node runtime, CUA server, and filesystem paths.
+      A virtual X display provides the desktop surface.
     </p>
     <p>
-      The published image is <strong>data-less</strong>: it ships no task data and
-      no answers. The data is supplied from your host by the
-      <code>local:&lt;dir&gt;</code> source — fetched once from Hugging Face,
-      then <code>docker&nbsp;cp</code>'d into each container (input before the
-      agent, reference only at grading; see
-      <a href="/pages/tasks.html#staging">Task spec &amp; data staging</a>).
+      The task runs directly in the container and shares the host kernel. Use
+      the <a href="/pages/local.html">QEMU/KVM VM provider</a> when a complete
+      guest operating system or Windows is required.
     </p>
 
-    <h2>Run it</h2>
-    <p>Two things to fetch, both one-time; then run as usual.</p>
-    <ol>
-      <li><strong>Image</strong> — nothing to do: the provider
-      <code>docker pull</code>s it on first use (~105&nbsp;GB, ~42&nbsp;GB
-      compressed).</li>
-      <li><strong>Task data</strong> — request access to the
-      <a href="https://huggingface.co/datasets/agents-last-exam/agents-last-exam-data-archive">gated
-      Hugging Face dataset</a>, <code>huggingface-cli login</code>, then:
-      <pre><code>scripts/fetch_task_data.sh        # -&gt; ./task-data</code></pre></li>
-    </ol>
-    <p>
-      The shipped <code>configs/environments/docker.yaml</code> already points at
-      that directory, so you only <a href="/pages/configure.html">configure a
-      run</a> against it:
-    </p>
-    <pre><code>snapshots:
-  cpu-free-ubuntu:
-    provider: docker
-    image: ale-ubuntu22-docker     # Hub ref + cua port come from the Image entry
-    docker:
-      shm_size: 2g
-      resolution: [1024, 768]
-task_data_source: local:task-data
-output_path: local</code></pre>
-    <p>
-      Per-task CPU/memory are derived from the task card's GCE machine type;
-      override with <code>cpus</code>/<code>memory</code> under <code>docker:</code>
-      as a host cap.
-    </p>
-    <p>
-      Point the run's task list at <code>selected_tasks/docker_support.txt</code> —
-      the 99 Linux tasks this image currently supports. Unsupported tasks are
-      excluded (see below).
-    </p>
-
-    <h2 id="unsupported">Unsupported tasks</h2>
-    <p>
-      These tasks are not in <code>selected_tasks/docker_support.txt</code> because
-      they require nested container/runtime behavior that is not supported by the
-      current local Docker provider.
-    </p>
+    <h2>Host requirements</h2>
     <ul>
-      <li><code>business_finance/bpmn_category_governance_restructuring_l3</code></li>
-      <li><code>business_finance/bpmn_supply_disruption_l3</code></li>
-      <li><code>computing_math/k8s_migration_1</code></li>
-      <li><code>engineering/openroad_sky130_ibex_pnr_signoff</code></li>
-      <li><code>health_medicine/scene3_skullstrip_qc</code></li>
-      <li><code>psychology_neuro/scene2_resample</code></li>
+      <li>Docker capable of running Linux amd64 containers. The supported profile targets rootless Docker on a Linux host.</li>
+      <li>Enough disk for the published image, about 105 GB uncompressed and 42 GB compressed.</li>
+      <li>Enough CPU and memory for each concurrent task container.</li>
+      <li>Approved access to the gated task-data dataset on Hugging Face.</li>
     </ul>
+    <pre><code>docker info
+df -h .
+uv sync --all-packages</code></pre>
+
+    <h2>Fetch task data once</h2>
+    <p>
+      The container image intentionally ships without task inputs or references.
+      Request access to the
+      <a href="https://huggingface.co/datasets/agents-last-exam/agents-last-exam-data-archive">ALE
+      task-data archive</a>, authenticate with Hugging Face, then run:
+    </p>
+    <pre><code>huggingface-cli login
+scripts/fetch_task_data.sh</code></pre>
+    <p>
+      The script extracts the canonical data tree into <code>./task-data</code>.
+      Before the agent runs, ALE copies <code>input/</code> and
+      <code>software/</code> into the container. It copies
+      <code>reference/</code> only after the agent finishes.
+    </p>
+
+    <h2>Use the shipped environment</h2>
+    <pre><code>environment: configs/environments/docker.yaml
+tasks: selected_tasks/docker_support.txt</code></pre>
+    <p>
+      The environment uses <code>task_data_source: local:task-data</code> and
+      <code>output_path: local</code>. Local task data and output both use
+      host-side <code>docker cp</code>, avoiding per-file transfer through the
+      CUA API.
+    </p>
+
+    <h2>Resource sizing</h2>
+    <p>
+      By default the provider translates each task card's GCE
+      <code>machineType</code> into Docker CPU and memory limits. The schema
+      also accepts explicit <code>vm.vcpus</code> and
+      <code>vm.memory_gb</code> values. Set
+      <code>docker.cpus</code> or <code>docker.memory</code> in a copied
+      environment profile to impose a provider-level cap.
+    </p>
+
+    <h2>Output options</h2>
+    <p>
+      The default local path copies produced files into the run directory. GCS
+      output is also supported when <code>gcs_sa_key</code> and a
+      <code>gs://</code> output path are configured. See
+      <a href="/pages/run.html#output-path">Choose where task output goes</a>.
+    </p>
+
+    <h2>Current limits</h2>
+    <ul>
+      <li>Linux tasks only. Windows and GPU snapshots are not mapped.</li>
+      <li>The sandbox shares the host kernel and is not VM-isolated.</li>
+      <li>Six Linux tasks are excluded because they require another container runtime inside the sandbox: four use Docker, and two use Apptainer or Singularity GUI bundles.</li>
+      <li>The shipped profile intentionally remains a simple rootless-Docker path. Use the <a href="/pages/local.html">QEMU/KVM VM provider</a> for those nested-runtime tasks so Docker, Apptainer, or Singularity runs inside a complete Ubuntu guest.</li>
+      <li>Opt-in privileged DinD hooks remain available for custom development setups, but they are not part of the supported default task list and can add substantial I/O at high concurrency.</li>
+    </ul>
+
+    <div class="note">
+      <div class="note-title">Next</div>
+      Follow <a href="/pages/configure.html">Configure an experiment</a>, then
+      validate the matrix with <code>--dry-run</code>.
+    </div>
   </article>
 
   <script src="/assets/nav.js"></script>

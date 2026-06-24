@@ -13,95 +13,97 @@
   <article class="article">
     <h1>Sandbox &amp; provider</h1>
     <p class="lede">
-      Every task runs on a real machine of its own. This page is what that
-      machine is, how a provider brings a fresh one up and tears it down each run,
-      and how the framework reaches inside to do its work.
+      A sandbox is the machine-like environment an agent controls. A provider
+      creates or attaches that sandbox, exposes one uniform control endpoint,
+      and releases it after the run.
     </p>
 
-    <h2>A sandbox is a whole computer</h2>
+    <h2>What a sandbox provides</h2>
     <p>
-      ALE's unit of environment is a <strong>sandbox</strong>: a complete Windows
-      or Linux operating system, with the real applications installed and the
-      task's files on disk. We give an agent full control of the machine: not only
-      its shell and filesystem, but its <strong>graphical desktop</strong> too.
-      That GUI access is essential, because many real-world tasks live in
-      professional applications that cannot be driven by code and the command line
-      alone.
+      Every sandbox exposes the operating-system paths, applications, shell,
+      filesystem, and graphical desktop expected by the task. Most ALE runs use
+      a complete Ubuntu or Windows virtual machine. The local-container profile
+      reproduces the supported Ubuntu userspace inside Docker and shares the host
+      kernel.
+    </p>
+    <p>
+      This distinction affects isolation and task compatibility, but not the
+      agent interface. Agents receive the same CLI and GUI tools across
+      providers.
     </p>
 
-    <h2>Providers boot the sandbox</h2>
+    <h2>What a provider owns</h2>
     <p>
-      Each run gets a <strong>brand-new sandbox</strong>, created just for it and
-      deleted when it ends, so no task ever inherits another's leftovers. A
-      <a href="https://github.com/rdi-berkeley/agents-last-exam/tree/main/ale_run/environments/providers"><code>Provider</code></a> owns that lifecycle. <code>acquire()</code> boots a
-      machine from a published image and waits until it answers, then returns a
-      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/ale_run/base_interface/sandbox.py"><code>SandboxHandle</code></a>: the thin async surface the whole framework uses
-      to act on the sandbox (run a command, read or write a file, upload and
-      download). <code>release()</code> deletes it when the run ends, pass or fail.
-      (A task gets its own session through <code>open_session()</code>, covered
-      under <a href="/pages/tasks.html">Task spec</a>.)
+      The framework calls <code>acquire()</code> with the task's snapshot and
+      resource shape. The provider returns a <code>SandboxHandle</code> with a
+      live CUA endpoint and image path conventions. After evaluation,
+      <code>release()</code> applies the requested cleanup mode.
     </p>
     <div class="flow">
-      <div class="phase"><div class="pk">acquire()</div><div class="pd">Boot a fresh VM from the image, wait until its server answers.</div></div>
+      <div class="phase"><div class="pk">acquire()</div><div class="pd">Create or attach the sandbox.</div></div>
       <div class="arrow">&rarr;</div>
-      <div class="phase"><div class="pk">SandboxHandle</div><div class="pd">A live target the framework acts through.</div></div>
+      <div class="phase"><div class="pk">SandboxHandle</div><div class="pd">Uniform OS, path, and CUA surface.</div></div>
       <div class="arrow">&rarr;</div>
-      <div class="phase"><div class="pk">The run</div><div class="pd">Stage data, install the agent, run it, grade.</div></div>
+      <div class="phase"><div class="pk">Run unit</div><div class="pd">Stage, execute, collect, and grade.</div></div>
       <div class="arrow">&rarr;</div>
-      <div class="phase"><div class="pk">release()</div><div class="pd">Delete the VM, pass or fail.</div></div>
+      <div class="phase"><div class="pk">release()</div><div class="pd">Delete, stop, keep, or detach.</div></div>
     </div>
-    <p>Two providers back the sandbox today:</p>
+
+    <h2>Provider implementations</h2>
     <table>
-      <thead><tr><th>Provider</th><th>Backs the sandbox with</th><th>Use</th></tr></thead>
+      <thead><tr><th>Code identifier</th><th>Sandbox realization</th><th>Lifecycle</th></tr></thead>
       <tbody>
-        <tr><td><code>gcloud</code></td><td>A fresh GCE VM, one per run, from a published image</td><td>The production path, many sandboxes in parallel for leaderboard runs.</td></tr>
-        <tr><td><code>static</code></td><td>A sandbox you already have, at a fixed address</td><td>Debugging, or wrapping a VMware / local VM you brought up by hand.</td></tr>
+        <tr><td><code>gcloud</code></td><td>A complete GCE VM</td><td>Creates a fresh VM per unit and manages it through the Google Cloud CLI.</td></tr>
+        <tr><td><code>docker</code></td><td>A Linux container with a virtual desktop</td><td>Creates a fresh container per unit and exposes the CUA port through Docker.</td></tr>
+        <tr><td><code>qemu</code></td><td>A complete QEMU/KVM guest inside a Docker-packaged runner</td><td>Caches a base qcow2, creates a disposable overlay, and starts one guest per unit.</td></tr>
+        <tr><td><code>static</code></td><td>An existing CUA-enabled machine</td><td>Attaches to a fixed endpoint. It does not provision or destroy the machine.</td></tr>
       </tbody>
     </table>
+
+    <h2>Snapshot routing</h2>
     <p>
-      Virtual machines are heavy to provision, so ALE leans on
-      <strong>Google Cloud</strong> as its main provider: a stable,
-      well-supported platform that can bring up many sandboxes in parallel. Other
-      clouds (AWS, Azure, …) and a local VMware / QEMU provider for debugging are
-      on the roadmap, though running locally demands much more of your own machine
-      and is hard to scale to hundreds of parallel tasks.
+      Tasks request logical snapshots such as <code>cpu-free-ubuntu</code> or
+      <code>gpu-free</code>. An environment profile maps each snapshot to a
+      provider and image. Routing is per snapshot, so one environment can mix
+      provider kinds, although the shipped profiles use one primary provider
+      family each.
+    </p>
+    <p>
+      Resource hints come from the task card. Google Cloud uses its machine type
+      directly, Docker translates it into container limits, and QEMU translates
+      it into guest vCPU and memory values.
     </p>
 
-    <h2>How the framework reaches in</h2>
+    <h2>How ALE reaches the sandbox</h2>
     <p>
-      The framework never touches the VM directly. Each image runs the open-source
+      Each managed image runs the open-source
       <a href="https://github.com/trycua/cua">Cua</a>
-      <strong>computer-server</strong>, which exposes the sandbox's shell,
-      filesystem, and GUI over a single HTTP API that is identical on Windows and
-      Linux. The <code>SandboxHandle</code> is simply a client of that server, so
-      every layer above it stays the same whatever OS a task needs. (Tasks reach
-      the same server through cua-bench's
-      <a href="https://github.com/trycua/cua/blob/2925b491c20595ae850e3e4a05d6fea188e8f40a/libs/cua-bench/cua_bench/computers/remote.py#L60-L84"><code>RemoteDesktopSession</code></a>.)
-      Credit to <a href="https://github.com/trycua/cua">Cua</a> for the package.
+      <strong>computer-server</strong>. It exposes shell, filesystem, and GUI
+      operations over the same HTTP API on Windows and Linux.
+      <code>SandboxHandle</code> and cua-bench's remote desktop session are
+      clients of that endpoint.
+    </p>
+    <p>
+      Providers can use optimized host-side transports for bulk artifacts.
+      Docker uses <code>docker cp</code>; the QEMU provider uses a guest share.
+      These transports do not change the agent's control surface.
     </p>
 
-    <h2>Prebuilt images</h2>
+    <h2>Published sandbox assets</h2>
     <p>
-      A provider boots from an <strong>image</strong>, a disk snapshot that
-      decides what is already on the machine. To speed experiments up and make ALE
-      easy for the community to run, we maintain two prebuilt images on Google
-      Cloud: <code>ale-ubuntu22</code> (Linux) and <code>ale-win10</code>
-      (Windows). Each is ready to boot, carrying the OS and its professional
-      software, the Cua computer-server, the in-sandbox agent CLIs, the Node and
-      Python runtimes, the <a href="/pages/agents.html">GUI MCP
-      bridge</a>, and, for many tasks, the task data itself. You copy them into
-      your own project once, as part of
-      <a href="/pages/google-cloud.html#copy-images">setting up Google Cloud</a>. A
-      small
-      <a href="https://github.com/rdi-berkeley/agents-last-exam/tree/main/ale_run/environments/images">image registry</a>
-      records each image's paths and server port, so nothing else in the framework
-      hard-codes them.
+      ALE maintains the <code>ale-ubuntu22</code> and <code>ale-win10</code>
+      environments with professional applications, CUA tooling, agent runtimes,
+      and task data. Google Cloud publishes machine images, while the local VM
+      provider uses qcow2 disks from
+      <a href="https://huggingface.co/datasets/agents-last-exam/ale-images-qcow2">Hugging
+      Face</a>. The local-container provider uses a separate data-less Docker
+      export of the Ubuntu userspace.
     </p>
+
     <div class="note">
-      <div class="note-title">Next</div>
-      Now we have a sandbox. Where does the agent run, and how does ALE host the
-      many different frontier agents from the community under one uniform
-      interface? <a href="/pages/agents.html">Agents &amp; executor &rarr;</a>
+      <div class="note-title">Choose a provider</div>
+      Compare coverage and requirements under
+      <a href="/pages/providers.html">Run an experiment</a>.
     </div>
   </article>
 

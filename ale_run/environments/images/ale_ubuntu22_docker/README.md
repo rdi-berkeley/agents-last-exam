@@ -37,7 +37,7 @@ scratch, ~100 GB free), `ALE_FORCE_EXPORT=1`, `ALE_KEEP_VM=1`.
 | `entrypoint.sh` | container, at runtime | `Xvfb :0` + cua-server on `:5000` (+ optional DinD) |
 | `bake_nested_images.sh` | container, at build (optional) | pre-populates `/var/lib/dind` with the DinD task images |
 
-## DinD (deferred)
+## Optional DinD hooks
 
 A few task evals run `docker` **inside** the sandbox (openroad, k8s_migration,
 bpmn ×2). In a container that's Docker-in-Docker: the nested daemon needs
@@ -45,8 +45,13 @@ bpmn ×2). In a container that's Docker-in-Docker: the nested daemon needs
 `fuse-overlayfs` at `/var/lib/dind`, with its images baked in
 (`bake_nested_images.sh`) so a pulled image needs no per-start load.
 
-It is **off by default** (`ALE_ENABLE_DIND=1`, set per task): running a
-fuse-overlayfs dockerd in every container is an I/O storm that starves cua-server
-startup at concurrency, and those 4 tasks are currently excluded. To re-enable,
-set `enable_dind: true` + `privileged: true` in `docker.yaml` and add the tasks
-back.
+The supported local-container profile intentionally remains a simple rootless
+Docker path, so tasks that require Docker, Apptainer, or Singularity inside the
+sandbox are excluded from `docker_support.txt`. Run those tasks with the
+QEMU/KVM provider, where the nested runtime operates inside a complete Ubuntu
+guest.
+
+The DinD path remains available for custom development through
+`ALE_ENABLE_DIND=1`, `enable_dind: true`, and `privileged: true`. It is not part
+of the supported default task list. At high concurrency, its fuse-overlayfs
+daemon can also add significant I/O and delay cua-server readiness.

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>VMware / QEMU | ALE Docs</title>
+  <title>QEMU/KVM VMs | ALE Docs</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -11,18 +11,166 @@
 </head>
 <body>
   <article class="article">
-    <h1>VMware / QEMU</h1>
+    <h1>QEMU/KVM VMs</h1>
     <p class="lede">
-      Run tasks on your own hardware instead of the cloud. Planned, not yet
-      shipped.
+      Run CPU-compatible Ubuntu and Windows tasks as complete QEMU/KVM guest
+      machines on a local Linux host. ALE creates one disposable VM per run
+      unit.
     </p>
-    <div class="note todo">
-      <div class="note-title">Roadmap</div>
-      Local <strong>VMware</strong> and <strong>QEMU</strong> providers are
-      planned: boot the same sandbox images on your own machine to run and debug
-      tasks without GCP. Until they land, Google Cloud is the supported provider.
-      As an interim, the <code>static</code> provider can wrap a VM you bring up by
-      hand, with output pulled back over <code>local</code>.
+
+    <div class="note">
+      <div class="note-title">Supported, CPU-only</div>
+      Use <code>configs/environments/qemu.yaml</code> with
+      <code>selected_tasks/qemu_support.txt</code>. GPU passthrough and licensed
+      tasks are outside the current provider scope.
+    </div>
+
+    <h2>Architecture and naming</h2>
+    <div class="diagram">ALE host process
+└── provider: qemu
+    └── Docker container: agentslastexam/ale-qemu
+        └── QEMU/KVM guest: Ubuntu or Windows
+            └── task, applications, agent, and CUA server</div>
+    <p>
+      The task sandbox is the guest VM, not the outer Docker container. Docker
+      packages the ALE QEMU runner and supervises its networking, noVNC, and
+      process lifecycle. The runner is derived from the
+      <a href="https://github.com/trycua/cua">CUA</a> and
+      <a href="https://github.com/dockur/windows">Dockur</a> QEMU stack. The
+      user-facing name is therefore <strong>QEMU/KVM VMs</strong>, while the
+      stable configuration identifier is <code>provider: qemu</code>. A future
+      VMware implementation would be documented as a separate sibling provider.
+    </p>
+
+    <h2>Host requirements</h2>
+    <ul>
+      <li>A Linux host.</li>
+      <li>Docker available to the current user.</li>
+      <li>Hardware or nested virtualization exposed as readable and writable <code>/dev/kvm</code>.</li>
+      <li>Enough memory for every concurrently active guest.</li>
+      <li>Enough disk for the cached base images and growing per-run overlays. Plan for about 350 GB when caching both published disks.</li>
+    </ul>
+    <pre><code>docker info
+test -r /dev/kvm &amp;&amp; test -w /dev/kvm
+df -h ~/.cache</code></pre>
+    <p>
+      If ALE itself runs inside a cloud VM, that host must expose nested
+      virtualization. The provider fails before provisioning when Docker or
+      <code>/dev/kvm</code> is unavailable.
+    </p>
+
+    <h2>Understand the two downloads</h2>
+    <ol>
+      <li>
+        <strong>Runner image.</strong> Docker pulls
+        <code>agentslastexam/ale-qemu:0.2.0</code> from Docker Hub when it is
+        missing. It contains QEMU and runner infrastructure, not a guest OS.
+      </li>
+      <li>
+        <strong>Guest disk.</strong> The host provider downloads the selected
+        Ubuntu or Windows qcow2 from the
+        <a href="https://huggingface.co/datasets/agents-last-exam/ale-images-qcow2">ALE
+        qcow2 dataset</a> and reconstructs multipart disks when necessary.
+      </li>
+    </ol>
+    <p>
+      Base disks are cached under <code>~/.cache/ale/qemu/images</code>. Each
+      run creates a small qcow2 overlay under
+      <code>~/.cache/ale/qemu/runtime/slots</code>. The overlay grows only as the
+      guest writes changed blocks and is removed with <code>cleanup_mode:
+      delete</code>.
+    </p>
+
+    <h2>Disk sources</h2>
+    <p>
+      The shipped profile uses logical Hugging Face paths. A snapshot can
+      instead use a GCS object or an existing host file:
+    </p>
+    <pre><code>qemu:
+  disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2
+  # or: gs://ale-data-public/images/ale-win10.qcow2
+  # or: /absolute/path/to/ale-win10.qcow2
+  root: ~/.cache/ale/qemu
+  runner_image: agentslastexam/ale-qemu:0.2.0
+  runner_pull_policy: missing</code></pre>
+    <p>
+      GCS disk downloads require <code>gcloud</code> or <code>gsutil</code> on
+      the host. The provider records source metadata and refreshes a cached disk
+      when the remote object generation changes.
+    </p>
+
+    <h2>Run the demo tasks</h2>
+    <p>Create an experiment in the repository root:</p>
+    <pre><code>name: local_vm_demo
+secret_file: secret/.env
+agents:
+  - configs/agents/claude_code.yaml
+environment: configs/environments/qemu.yaml
+tasks: selected_tasks/hello_both.txt
+output:
+  root: .logs/ale
+concurrency: 1
+wall_time_s: 1800
+cleanup_mode: delete</code></pre>
+    <pre><code>uv run python -m ale_run run local_vm_demo.yaml --dry-run
+uv run python -m ale_run run local_vm_demo.yaml</code></pre>
+    <p>
+      <code>demo/hello</code> boots Ubuntu and <code>demo/hello_win</code> boots
+      Windows. Both produce and grade an output file, exercising provisioning,
+      agent execution, output collection, evaluation, and cleanup.
+    </p>
+
+    <h2>Task coverage</h2>
+    <p>
+      <code>qemu_support.txt</code> currently contains 140 unlicensed tasks:
+      all 105 <code>cpu-free-ubuntu</code> tasks, all 30
+      <code>cpu-free</code> tasks, and five tasks labeled
+      <code>gpu-free</code> whose actual workflows were selected as
+      CPU-compatible. Tasks that require GPU execution, licensed software, or a
+      missing application are excluded.
+    </p>
+
+    <h2>Resource sizing and concurrency</h2>
+    <p>
+      Each guest normally derives its vCPU and memory shape from the task card's
+      GCE <code>machineType</code>. The schema also accepts explicit
+      <code>vm.vcpus</code> and <code>vm.memory_gb</code> values.
+      Per-snapshot <code>qemu.vcpus</code> and <code>qemu.memory_gb</code> can
+      override either source.
+    </p>
+    <p>
+      ALE does not reserve host resources globally. Start with low concurrency,
+      then monitor available memory, disk latency, and overlay growth. A vCPU
+      allocation is a guest limit, not guaranteed constant utilization, but
+      guest memory allocations still determine the host's worst-case pressure.
+    </p>
+
+    <h2>Output options</h2>
+    <p>
+      With <code>output_path: local</code>, each guest copies its output through
+      a per-run Samba share into the host run directory. CUA remains a fallback,
+      not the normal bulk-transfer path.
+    </p>
+    <p>
+      With a <code>gs://</code> output path, configure
+      <code>gcs_sa_key</code>. ALE injects the key into the guest and the guest
+      uploads directly with <code>gsutil</code>. See
+      <a href="/pages/run.html#output-path">Choose where task output goes</a>.
+    </p>
+
+    <h2>Current limits</h2>
+    <ul>
+      <li>GPU passthrough is not implemented.</li>
+      <li><code>task_data_source: local:...</code> is not implemented for QEMU guests. Published task data must be baked into the qcow2, or staged through another supported guest-side source.</li>
+      <li>macOS and Windows hosts are not supported.</li>
+      <li>There is no host-wide CPU, memory, or disk admission controller.</li>
+    </ul>
+
+    <div class="note">
+      <div class="note-title">Maintainer reference</div>
+      Runner construction, cache validation, multipart disk assembly, overlay
+      lifecycle, and cleanup internals are documented in
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/docs/local-qemu.md"><code>docs/local-qemu.md</code></a>.
     </div>
   </article>
 

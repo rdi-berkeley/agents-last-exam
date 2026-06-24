@@ -42,13 +42,11 @@ export CUA_TELEMETRY_DISABLED=1
 # docker provider's 120s ready timeout. Entirely best-effort: without
 # --privileged the daemon won't start and non-docker tasks are unaffected.
 #
-# GATED OFF BY DEFAULT (ALE_ENABLE_DIND != 1). Only the ~4 tasks whose eval runs
-# nested docker (openroad, k8s_migration, bpmn ×2) need it, and starting a
-# fuse-overlayfs dockerd in EVERY container is pure overhead — at concurrency it
-# is an I/O/FUSE storm that starves cua-server startup past the 120s ready
-# timeout and fails acquires. The provider sets ALE_ENABLE_DIND=1 only for tasks
-# that need it (config knob `enable_dind`). Those 4 tasks are currently excluded
-# from the Docker provider — see README "Deferred: DinD tasks".
+# GATED OFF BY DEFAULT (ALE_ENABLE_DIND != 1). The supported Docker profile is a
+# simple rootless-container path; tasks that require a nested runtime should use
+# the QEMU/KVM Ubuntu guest instead. This hook remains for custom development
+# through `enable_dind`, and enabling it for every container can also create
+# significant fuse-overlayfs I/O at high concurrency.
 if [ "${ALE_ENABLE_DIND:-0}" = "1" ] && command -v dockerd >/dev/null; then
   sudo mkdir -p /run /var/lib/dind 2>/dev/null || true
   sudo dockerd --data-root=/var/lib/dind --storage-driver=fuse-overlayfs \

@@ -9,37 +9,39 @@ window.ALE_NAV = [
   {
     label: "Introduction",
     items: [
-      { href: "/index.html",                       title: "Overview" },
-      { href: "/pages/tasks.html",         title: "Task spec & data staging" },
-      { href: "/pages/sandbox.html",      title: "Sandbox & provider" },
-      { href: "/pages/agents.html",title: "Agents & executor" },
-      { href: "/pages/trajectories.html",        title: "Trajectories & artifacts" },
+      { href: "/index.html",                    title: "Overview" },
+      { href: "/pages/tasks.html",              title: "Task spec & data staging" },
+      { href: "/pages/sandbox.html",            title: "Sandbox & provider" },
+      { href: "/pages/agents.html",             title: "Agents & executor" },
+      { href: "/pages/trajectories.html",       title: "Trajectories & artifacts" },
     ],
   },
   {
     label: "Run experiments",
     items: [
-      { href: "/pages/providers.html",       title: "Setup Environment Provider", children: [
-        { href: "/pages/google-cloud.html",           title: "Google Cloud" },
-        { href: "/pages/local-docker.html",  title: "Local Docker" },
-        { href: "/pages/local.html",         title: "VMware / QEMU" },
+      { href: "/pages/providers.html", title: "Run an experiment", children: [
+        { href: "/pages/google-cloud.html",  title: "Google Cloud VMs" },
+        { href: "/pages/local-docker.html",  title: "Local containers" },
+        { href: "/pages/local.html",         title: "QEMU/KVM VMs" },
+        { href: "/pages/static.html",        title: "Existing sandbox" },
       ]},
-      { href: "/pages/configure.html",               title: "Configure & run a benchmark" },
+      { href: "/pages/configure.html", title: "Configure an experiment" },
+      { href: "/pages/run.html",       title: "Run and collect results" },
     ],
   },
   {
     label: "Build on ALE",
     items: [
-      { href: "/pages/add-agent.html",         title: "Add an agent" },
-      { href: "/pages/add-environment.html",           title: "Add an environment" },
-      { href: "/pages/add-task.html",          title: "Add a task" },
+      { href: "/pages/add-agent.html",          title: "Add an agent" },
+      { href: "/pages/add-environment.html",    title: "Add an environment" },
+      { href: "/pages/add-task.html",           title: "Add a task" },
     ],
   },
   {
     label: "Reference",
     items: [
-      { href: "/pages/trajectory-schema.html",     title: "Trajectory schema" },
-      { href: "/pages/mcp-tools.html",             title: "MCP tools" },
+      { href: "/pages/trajectory-schema.html",  title: "Trajectory schema" },
+      { href: "/pages/mcp-tools.html",          title: "MCP tools" },
     ],
   },
 ];

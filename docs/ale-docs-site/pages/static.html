@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Existing sandbox | ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Existing sandbox</h1>
+    <p class="lede">
+      Attach ALE to one already-running CUA-enabled machine. The
+      <code>static</code> provider does not create, stop, reset, or delete the
+      machine.
+    </p>
+
+    <div class="note warn">
+      <div class="note-title">Debugging provider, not an isolated benchmark backend</div>
+      Reusing one machine means state can carry between runs. Keep
+      <code>concurrency: 1</code>, use a narrow task list, and reset the machine
+      yourself when reproducibility matters.
+    </div>
+
+    <h2>When to use it</h2>
+    <ul>
+      <li>Iterating on a sandbox image without waiting for a fresh VM boot.</li>
+      <li>Reproducing one failed task against a machine you can inspect live.</li>
+      <li>Connecting ALE to a VMware, cloud, or local VM managed outside ALE.</li>
+    </ul>
+    <p>
+      For benchmark sweeps, use a managed provider that creates a fresh sandbox
+      per run unit.
+    </p>
+
+    <h2>Requirements</h2>
+    <ul>
+      <li>A reachable CUA computer-server endpoint.</li>
+      <li>An OS and software stack that match the selected tasks.</li>
+      <li>Filesystem paths compatible with one registered ALE image family.</li>
+      <li>Task data already present in the sandbox, unless you configured another supported staging path yourself.</li>
+    </ul>
+
+    <h2>Configure the endpoint</h2>
+    <p>Create a local environment file without committing machine addresses:</p>
+    <pre><code>provider: static
+endpoint: http://127.0.0.1:5000
+image: ale-win10
+vm_id: local-debug
+
+task_data_source: baked_in_sandbox
+output_path: local</code></pre>
+    <p>
+      <code>image</code> selects ALE's path conventions. It does not inspect or
+      replace the machine image. Use <code>ale-ubuntu22</code> for a compatible
+      Linux sandbox or <code>ale-win10</code> for a compatible Windows sandbox.
+    </p>
+
+    <h2>Optional cleanup script</h2>
+    <p>
+      The provider can run a command when a unit releases the sandbox, but it
+      still does not restore a clean disk snapshot:
+    </p>
+    <pre><code>cleanup_on_release: true
+cleanup_script: |
+  powershell -NoProfile -Command "Remove-Item -Recurse -Force C:\Users\User\.ale\*"</code></pre>
+
+    <div class="note">
+      <div class="note-title">Next</div>
+      Point an experiment at this environment file and follow
+      <a href="/pages/configure.html">Configure an experiment</a>.
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

@@ -75,26 +75,32 @@
     </div>
     <p>
       Where those files come from is set by the environment's
-      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/51d094e7b3cbe7b7f2f7e615708876e42ad8813e/configs/environments/environment.yaml#L116-L117"><code>task_data_source</code></a>,
-      which has three modes:
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/configs/environments/environment.yaml"><code>task_data_source</code></a>,
+      which has three implemented modes:
     </p>
     <ul>
       <li><strong>Runtime pull</strong> (<code>gs://ale-data-public</code>) — the
       general case: each task's data is fetched onto the sandbox when its slot
       runs. A sandbox you build yourself uses this, and from a Google Cloud VM
       the pull is fast.</li>
-      <li><strong>Baked</strong> — ALE's published
-      <a href="/pages/google-cloud.html#copy-images">Google Cloud images</a> arrive
-      with every task's data already on the disk, so a run starts with nothing to
+      <li><strong>Baked</strong> — ALE's published Google Cloud images and
+      <a href="/pages/local.html">QEMU/KVM qcow2 disks</a> arrive with every task's data
+      already on the disk, so a run starts with nothing to
       fetch. The reference then sits on the machine all run, so it is baked as an
       encrypted archive (<code>reference.7z</code>) unpacked only at grading.</li>
       <li><strong>Local mount</strong> (<code>local:&lt;dir&gt;</code>) — for the
-      <a href="/pages/local-docker.html">local Docker</a> provider. The host holds
+      <a href="/pages/local-docker.html">local-container</a> provider. The host holds
       the data (fetched once from Hugging Face); the framework <code>docker&nbsp;cp</code>s
       each task's input into the container before the agent and the reference in
       after. No encryption is needed: the reference is simply never inside the
       container while the agent runs — the same timing that hides it above.</li>
     </ul>
+    <p>
+      The configuration schema also reserves <code>hf://...</code> for direct
+      Hugging Face staging, but that task-data backend is not implemented yet.
+      The local-container fetch script downloads from Hugging Face on the host,
+      then uses the implemented <code>local:</code> path.
+    </p>
 
     <h2>Grading</h2>
     <p>

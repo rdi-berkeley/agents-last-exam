@@ -82,22 +82,19 @@
     <p>
       Whether <code>output/</code> is collected, and how, is set by the
       environment's <code>output_path</code> (see
-      <a href="/pages/configure.html#output-path">Configure &amp; run a benchmark</a>).
-      Set it to <code>local</code> and ALE pulls the agent's output folder back to
-      this run directory over the sandbox's control server. Point it at a
-      <code>gs://</code> bucket and the sandbox itself (the Google Cloud VM)
-      uploads that folder straight to Cloud Storage, which is much faster and more
-      reliable when the outputs are large.
+      <a href="/pages/run.html#output-path">Run and collect results</a>).
+      Set it to <code>local</code> and ALE copies the output into this run
+      directory using the provider's local transport. Point it at a
+      <code>gs://</code> bucket and a credentialed sandbox uploads the folder
+      directly to Cloud Storage, which is preferable for large batch artifacts.
     </p>
 
     <div class="note">
       <div class="note-title">Next</div>
-      That is the architecture end to end. To run it, follow the
-      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/docs/quickstart.md">quickstart</a>
-      for a first demo task, or head to
-      <a href="/pages/providers.html">Run experiments</a> to set up Google
-      Cloud for high-concurrency benchmark runs and configure your own agents,
-      environments, and experiments.
+      That is the architecture end to end. To launch a benchmark, start with
+      <a href="/pages/providers.html">Run an experiment</a>. For a command-first
+      Google Cloud setup, use the
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/docs/quickstart.md">quickstart</a>.
     </div>
   </article>
 
