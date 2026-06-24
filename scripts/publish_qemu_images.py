@@ -95,7 +95,15 @@ def _stage_disk(source: Path, staging_root: Path, part_size: int) -> Path:
         print(f"reusing staged parts for {source.name}")
         return staging_dir
 
-    shutil.rmtree(staging_dir, ignore_errors=True)
+    if staging_dir.is_symlink():
+        raise RuntimeError(f"refusing to remove symlinked staging directory: {staging_dir}")
+    if staging_dir.exists():
+        try:
+            shutil.rmtree(staging_dir)
+        except OSError as exc:
+            raise RuntimeError(f"cannot remove stale staging directory: {staging_dir}") from exc
+    if staging_dir.exists():
+        raise RuntimeError(f"stale staging directory still exists: {staging_dir}")
     parts_dir = staging_dir / f"{source.name}.parts"
     parts_dir.mkdir(parents=True)
     full_digest = hashlib.sha256()

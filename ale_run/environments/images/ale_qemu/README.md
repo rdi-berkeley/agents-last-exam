@@ -78,3 +78,79 @@ snapshots:
 The provider automatically discovers the multipart manifest, downloads and
 verifies each part, reconstructs the selected qcow2 in the host cache, verifies
 the complete disk SHA-256, and removes the temporary part files.
+
+## Ubuntu disk maintenance
+
+The Ubuntu qcow2 is derived from the GCE image, but its QEMU source image is a
+separate artifact. Before creating that source image, mount the guest root
+filesystem offline. Generate the validation manifests from the current task
+allowlist and canonical GCS inventory:
+
+```bash
+gcloud storage ls \
+  --recursive \
+  --billing-project PROJECT \
+  gs://ale-data-public \
+  > /tmp/ale-data-public-list.txt
+
+python scripts/prepare_qemu_ubuntu22_image.py manifests \
+  --task-list selected_tasks/qemu_support.txt \
+  --gcs-listing /tmp/ale-data-public-list.txt \
+  --extra-variant demo/hello/base \
+  --extra-variant demo/seecheck/base \
+  --extra-variant demo/tool_smoke/base \
+  --output-dir /tmp/ale-ubuntu22-manifests
+```
+
+Then clean and validate the offline filesystem:
+
+```bash
+python scripts/prepare_qemu_ubuntu22_image.py clean \
+  --root /mnt/ale-ubuntu22 \
+  --expected-variants /tmp/ale-ubuntu22-manifests/expected-ubuntu-all-variants.txt \
+  --hg002-reference /tmp/hg002-reference \
+  --disable-gce-services
+
+python scripts/prepare_qemu_ubuntu22_image.py validate \
+  --root /mnt/ale-ubuntu22 \
+  --expected-variants /tmp/ale-ubuntu22-manifests/expected-ubuntu-all-variants.txt \
+  --expected-visible-files /tmp/ale-ubuntu22-manifests/expected-ubuntu-visible-files.txt \
+  --expected-reference-variants /tmp/ale-ubuntu22-manifests/expected-reference-variants.txt \
+  --expected-reference-files /tmp/ale-ubuntu22-manifests/expected-ubuntu-reference-files.txt \
+  --verify-reference-archives \
+  --expect-gce-services-disabled
+```
+
+Run the cleanup without `--disable-gce-services` on the canonical GCE source
+disk. Clone that cleaned disk for QEMU export, then run the commands above on
+the clone. Never mask the GCE services in the canonical GCE image.
+
+The cleanup removes task outputs, plaintext top-level references, stale agent
+state, credentials, histories, system logs, GCE runtime state, and old machine
+identity. It restores the HG002 input reference directory from the canonical
+task-data source, regenerates SSH host keys, and masks GCE-only services in the
+QEMU derivative.
+
+After offline validation and a successful boot test, label the versioned GCE
+image:
+
+```bash
+gcloud compute images add-labels IMAGE \
+  --project PROJECT \
+  --labels=ale-image-role=qemu-guest,ale-validation=passed
+```
+
+Export only to a versioned object. The export script verifies the labels and
+refuses to overwrite either an existing object or the canonical path:
+
+```bash
+scripts/export_qemu_gce_image.sh \
+  IMAGE \
+  gs://BUCKET/images/ale-ubuntu22-YYYYMMDD.qcow2 \
+  PROJECT \
+  gs://NON_REQUESTER_PAYS_STAGING_BUCKET
+```
+
+Run `qemu-img check` and a local QEMU cold-boot task against the downloaded
+versioned object before copying it to the canonical GCS path or publishing it
+to Hugging Face.
