@@ -258,27 +258,60 @@ def _strip_bom(raw: bytes) -> bytes:
     return raw[3:] if raw.startswith(b"\xef\xbb\xbf") else raw
 
 
+# SSE body read chunk. Large on purpose: ``requests.iter_lines`` defaults to a
+# 512-byte chunk and rebuilds a growing ``pending`` buffer on every chunk, which
+# is O(n^2) on the single multi-MB ``data:`` line cua-server returns for
+# read_bytes / download_range (a 5.6 MB reply measured ~19s via iter_lines vs
+# ~1s reading the body in MB chunks). We read big chunks into a bytearray
+# (amortized O(1) append) and scan for the first complete line ourselves.
+_SSE_READ_CHUNK = 1 << 20  # 1 MiB
+
+
 def _read_first_sse_event(
     resp: requests.Response, read_timeout: float = 30,
 ) -> dict[str, Any] | None:
-    """Stream until the first ``data:`` line, parse + return JSON.
+    """Read until the first SSE ``data:`` line, parse + return its JSON.
 
-    cua-server replies as SSE — first data event is the result; any
-    later events are progress/keepalives we don't consume here."""
-    # NOTE: requests doesn't support asyncio time loops — this function is
-    # meant to be called from inside a worker thread where the host's
-    # blocking read is fine. Inline timeout is enforced via the original
-    # requests.post(stream=True, timeout=...).
-    for line in resp.iter_lines(decode_unicode=False):
-        if not line:
+    cua-server replies as SSE — the first data event is the result; any later
+    events are progress/keepalives we don't consume here, so we stop and return
+    as soon as the first ``data:`` line is complete.
+
+    Reads via :meth:`requests.Response.iter_content` with a large chunk into a
+    ``bytearray`` (O(n)) rather than :meth:`iter_lines` (512-byte default chunk
+    → O(n^2) on a multi-MB single line; see ``_SSE_READ_CHUNK``). The socket
+    read timeout is enforced by the originating ``requests.post(timeout=...)``;
+    ``read_timeout`` is accepted for call-site symmetry."""
+    buf = bytearray()
+    line_start = 0   # index of the current (in-progress) line's first byte
+    scan_pos = 0     # index to resume the newline search from
+    for chunk in resp.iter_content(chunk_size=_SSE_READ_CHUNK):
+        if not chunk:
             continue
-        if line.startswith(b"data:"):
-            payload = _strip_bom(line[len(b"data:"):].strip())
-            try:
-                return json.loads(payload)
-            except json.JSONDecodeError as e:
-                logger.debug("SSE parse failed: %s -- raw=%s", e, payload[:200])
-                return None
+        buf.extend(chunk)
+        while True:
+            nl = buf.find(b"\n", scan_pos)
+            if nl == -1:
+                scan_pos = len(buf)
+                break
+            line = bytes(buf[line_start:nl]).rstrip(b"\r")
+            line_start = scan_pos = nl + 1
+            if line.startswith(b"data:"):
+                payload = _strip_bom(line[len(b"data:"):].strip())
+                try:
+                    return json.loads(payload)
+                except json.JSONDecodeError as e:
+                    logger.debug("SSE parse failed: %s -- raw=%s", e, payload[:200])
+                    return None
+    # Stream ended without a newline-terminated data line — accept a trailing
+    # unterminated ``data:`` line if present (server closed right after it).
+    tail = bytes(buf[line_start:]).rstrip(b"\r\n")
+    if tail.startswith(b"data:"):
+        payload = _strip_bom(tail[len(b"data:"):].strip())
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError as e:
+            logger.debug("SSE parse failed (trailing): %s -- raw=%s", e, payload[:200])
+            return None
     return None
 
 
@@ -495,7 +528,13 @@ def _upload_local_file_sync(sandbox: SandboxHandle, local_path: str, remote_path
     _write_binary_sync(sandbox, remote_path, content)
 
 
-_DOWNLOAD_CHUNK_BYTES = 4 * 1024 * 1024
+# Per-RPC read_bytes chunk for whole-file downloads. Larger is faster here: with
+# the O(n) SSE reader (see _read_first_sse_event) throughput RISES with chunk
+# size (measured on a GCE win10 VM: 4MiB≈4.3, 8MiB≈6.9, 16MiB≈12 MB/s) because
+# the per-RPC overhead is amortized. 8 MiB halves the round-trips vs 4 MiB and
+# gives headroom for very large transcripts under the gather deadline, while
+# keeping the in-flight base64 payload (~11 MiB) modest.
+_DOWNLOAD_CHUNK_BYTES = 8 * 1024 * 1024
 
 
 def _download_to_local_sync(
@@ -588,7 +627,15 @@ def _build_range_cmd_windows(remote_path: str, start: int, max_chunk_bytes: int)
         "\"SIZE=$len\";\"B64=$b64\""
         "}catch{\"SIZE=-2\";\"B64=\";\"ERR=$($_.Exception.Message)\"}"
     )
-    return f'powershell -NoProfile -Command "{ps}"'
+    # Pass via -EncodedCommand (base64 of UTF-16LE) rather than -Command "<ps>":
+    # the cua-server runs commands through cmd.exe, which mangles this script's
+    # many nested double-quotes — the quotes broke, PowerShell then tried to
+    # execute the bare "SIZE=-2" output token ("not recognized as a cmdlet"),
+    # so download_range ALWAYS failed on Windows (the incremental tail was dead;
+    # transcripts only ever arrived via the slower post-run gather). base64 is
+    # cmd-safe (only [A-Za-z0-9+/=]), so the script reaches PowerShell intact.
+    encoded = base64.b64encode(ps.encode("utf-16-le")).decode("ascii")
+    return f"powershell -NoProfile -EncodedCommand {encoded}"
 
 
 def _parse_range_stdout(stdout: str, *, expected_start: int) -> RangeResult:
@@ -609,6 +656,13 @@ def _parse_range_stdout(stdout: str, *, expected_start: int) -> RangeResult:
             err_text = line[4:].strip()
     if size is None:
         return RangeResult(success=False, error="missing SIZE line")
+    if size == -1:
+        # Remote file does not exist (yet). This is a valid, non-error outcome:
+        # the tail's _tick_one keys off ``new_size == -1`` to reset its offset
+        # and await creation. Collapsing it into success=False would make the
+        # reconcile (post-fix) report a spurious failure for a never-written
+        # transcript. Only the -2 (exception) sentinel is a real error.
+        return RangeResult(success=True, new_size=-1)
     if size < 0:
         return RangeResult(
             success=False, new_size=0,
