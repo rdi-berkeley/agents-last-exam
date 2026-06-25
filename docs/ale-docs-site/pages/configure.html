@@ -132,12 +132,23 @@ config:
       referenced as <code>${env:NAME}</code> by the selected environment:
     </p>
     <pre><code>OPENROUTER_API_KEY=...
+ALE_REFERENCE_ARCHIVE_PASSWORD=rdi-ucberkeley-Gov8EV7wGHYAc7XQBzhd
 GCP_PROJECT=...
 GCP_SA_KEY=secret/gcp_key.json</code></pre>
     <p>
-      GCP variables are required only by the Google Cloud profile. Local
-      profiles still need whichever API key their agent preset uses. Judge-based
-      tasks can also require evaluator keys under
+      <code>ALE_REFERENCE_ARCHIVE_PASSWORD</code> is required when the selected
+      environment uses <code>task_data_source: baked_in_sandbox</code>. It is a
+      public benchmark-wide archive key, not a private credential. ALE reads it
+      on the host after agent execution and intentionally does not forward it
+      into the agent sandbox environment or embed it in runtime source copied
+      there.
+    </p>
+    <p>
+      Start by copying <code>secret/.env.example</code> to
+      <code>secret/.env</code>, then fill in the API and provider credentials
+      needed by your run. GCP variables are required only by the Google Cloud
+      profile. Local profiles still need whichever API key their agent preset
+      uses. Judge-based tasks can also require evaluator keys under
       <code>secret/eval_time/</code>.
     </p>
 
