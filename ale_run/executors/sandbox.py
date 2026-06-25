@@ -101,6 +101,11 @@ _TAIL_RECONCILE_RETRIES = 3
 _TAIL_RECONCILE_DELAY_S = 1.0
 _TAIL_CHUNK_BYTES = 16 * 1024 * 1024
 
+# _tick_one return sentinels (negative = not a real remote byte size).
+_TICK_FAILED = -2    # download_range failed (transport / remote command error)
+_TICK_NO_FILE = -1   # remote file does not exist (yet)
+_TAIL_LIVE_FAIL_WARN = 3  # consecutive live-tick failures before a WARNING log
+
 
 @dataclass
 class SandboxExecutor(BaseExecutor):
@@ -600,6 +605,7 @@ async def tail_hot_artifacts(
     next tick once the writer flushes a newline.
     """
     offsets: dict[str, int] = {src: _local_offset(dst) for src, dst in targets}
+    fails: dict[str, int] = {src: 0 for src, _ in targets}
     while not stop_event.is_set():
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=interval_s)
@@ -608,29 +614,55 @@ async def tail_hot_artifacts(
             pass
         for src, dst in targets:
             try:
-                await _tick_one(executor, src, dst, offsets)
+                rc = await _tick_one(executor, src, dst, offsets)
             except Exception as e:                                  # noqa: BLE001
-                logger.debug("tail tick failed for %s: %s", src, e)
+                rc = _TICK_FAILED
+                logger.debug("tail tick raised for %s: %s", src, e)
+            # Don't fail silently: a persistently failing pull means the host
+            # mirror is stalling (e.g. download_range broken / VM unreachable).
+            if rc == _TICK_FAILED:
+                fails[src] += 1
+                if fails[src] == _TAIL_LIVE_FAIL_WARN:
+                    logger.warning(
+                        "tail: %d consecutive failed pulls of %s — host mirror "
+                        "stalling (retrying; final reconcile will report)",
+                        fails[src], src,
+                    )
+            else:
+                fails[src] = 0
 
-    # Final reconcile
+    # Final reconcile: keep pulling each file until its size stops growing, so
+    # the host mirror is complete. A failed pull (_TICK_FAILED) must NOT be
+    # mistaken for "stable" — doing so silently dropped large transcripts
+    # (the failure sentinel repeated → looked like an unchanging size → break).
     deadline = time.monotonic() + _TAIL_RECONCILE_TIMEOUT_S
     last_err: str | None = None
     for src, dst in targets:
-        prev_size = -1
+        prev_size: int | None = None
+        target_err: str | None = None
         for _ in range(_TAIL_RECONCILE_RETRIES + 1):
             if time.monotonic() > deadline:
-                last_err = f"reconcile timeout after {_TAIL_RECONCILE_TIMEOUT_S}s"
+                target_err = (
+                    f"reconcile timeout after {_TAIL_RECONCILE_TIMEOUT_S}s for {src}"
+                )
                 break
             try:
                 size = await _tick_one(executor, src, dst, offsets)
             except Exception as e:                                  # noqa: BLE001
-                last_err = str(e)
+                target_err = f"tick raised for {src}: {e}"
                 await asyncio.sleep(_TAIL_RECONCILE_DELAY_S)
                 continue
+            if size == _TICK_FAILED:
+                target_err = f"download_range failed for {src}"
+                await asyncio.sleep(_TAIL_RECONCILE_DELAY_S)
+                continue
+            target_err = None  # a successful pull clears a prior transient error
             if size == prev_size:
-                break
+                break          # size stabilized → host mirror is complete
             prev_size = size
             await asyncio.sleep(_TAIL_RECONCILE_DELAY_S)
+        if target_err and last_err is None:
+            last_err = target_err
     return last_err
 
 
@@ -647,16 +679,16 @@ async def _tick_one(
         src=src, start=start, max_bytes=_TAIL_CHUNK_BYTES,
     )
     if not rr.success:
-        return -2
+        return _TICK_FAILED
     size = rr.new_size
-    if size == -1:
+    if size == _TICK_NO_FILE:
         offsets[src] = 0
         if dst.exists():
             try:
                 dst.unlink()
             except OSError:
                 pass
-        return -1
+        return _TICK_NO_FILE
     if size < start:
         # rotation/truncation
         offsets[src] = 0
