@@ -17,15 +17,16 @@ into ``<base>/reference/``. A legacy layout that wraps everything in a
 single top-level ``reference/`` dir is also tolerated — stage_reference
 detects and flattens it, so graders always find ``<base>/reference/<file>``.
 
-The password is a project-wide constant (this is throwaway benchmark
-infrastructure — the encryption stops the agent from reading the
-answer, not external attackers). Both linux and windows images have
-``7z`` 26.01 on PATH (installer adds it to system PATH).
+The project-wide password is read from the host environment only when
+evaluation begins. It is intentionally not embedded in the source tree
+that the executor ships into the sandbox. Both linux and windows images
+have ``7z`` 26.01 on PATH (installer adds it to system PATH).
 """
 from __future__ import annotations
 
 import base64
 import logging
+import os
 from typing import Any
 
 from ...base_interface import SandboxHandle, TaskDataSpec
@@ -34,10 +35,7 @@ from . import join, shell_q, task_subdir
 logger = logging.getLogger(__name__)
 
 
-# Project-wide reference-archive password. Plain string — not a secret
-# in the security sense (anyone with image access could read it anyway),
-# but stops the agent from passively reading the answer.
-_REFERENCE_PASSWORD = "rdi-ucberkeley-Gov8EV7wGHYAc7XQBzhd"
+REFERENCE_ARCHIVE_PASSWORD_ENV = "ALE_REFERENCE_ARCHIVE_PASSWORD"
 
 
 async def _repoint_evaluator_venv_home(
@@ -157,18 +155,25 @@ async def stage_reference(
     if not await sandbox.exists(archive):
         return {"skipped": True, "reason": "no_reference_7z"}
 
+    password = os.environ.get(REFERENCE_ARCHIVE_PASSWORD_ENV)
+    if not password:
+        raise ValueError(
+            f"{REFERENCE_ARCHIVE_PASSWORD_ENV} is required to decrypt "
+            "baked task reference data. Copy secret/.env.example to "
+            "secret/.env before running the experiment."
+        )
+
     await sandbox.rm([target, tmp])
     await sandbox.mkdir(tmp)
 
-    pwd = _REFERENCE_PASSWORD
     a, t = shell_q(sandbox, archive), shell_q(sandbox, tmp)
     if sandbox.is_linux:
-        cmd = f"7z x -p{shell_q(sandbox, pwd)} {a} -o{t} -y"
+        cmd = f"7z x -p{shell_q(sandbox, password)} {a} -o{t} -y"
     else:
         # PowerShell with single-quoted strings (no interpolation).
         cmd = (
             'powershell -NoProfile -Command "'
-            f"7z x -p'{pwd}' {a} -o{t} -y"
+            f"7z x -p'{password}' {a} -o{t} -y"
             '"'
         )
     r = await sandbox.run_command(cmd, timeout=300)

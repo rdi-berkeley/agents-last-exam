@@ -727,7 +727,9 @@ def _build_executor(
 def _collect_env_passthrough() -> dict[str, str]:
     """Env vars to propagate into the substrate so deployers see API keys.
 
-    Keep this list small — only well-known LLM keys we know deployers need.
+    Keep this list small — only well-known agent credentials deployers need.
+    Host-only orchestration values such as ``ALE_REFERENCE_ARCHIVE_PASSWORD``
+    must not be added here because this mapping is sent into the sandbox.
 
     Special handling for ``CURSOR_AUTH_JSON_PATH``: if it points to an
     existing file on the host, the file's content is also passed as
