@@ -116,6 +116,22 @@ class ClaudeCodeConfig:
     (Merely unsetting MAX_THINKING_TOKENS is NOT enough — the CLI still
     sends adaptive. Verified by request capture + e2e tool flow.)"""
 
+    effort_level: str | None = None
+    """Reasoning-effort level for adaptive-thinking models (Claude Opus 4.7/4.8,
+    Fable 5, ...), passed to the CLI as ``--effort <level>``. This is the
+    Anthropic-native control that maps to the API's ``output_config.effort`` —
+    DISTINCT from ``max_thinking_tokens``/``budget_tokens`` (the legacy extended-
+    thinking budget, which is removed → 400 on Opus 4.7/4.8). Accepted values:
+    ``low | medium | high | xhigh | max`` (verified against the pinned CLI's
+    ``--effort <level>`` option). Claude Code only applies effort to supported
+    Claude models; it's a no-op on non-Claude endpoints.
+
+    ``None`` ⇒ don't pass ``--effort`` (let the CLI use its default). When SET,
+    the deployer ALSO skips ``MAX_THINKING_TOKENS``/``CLAUDE_CODE_DISABLE_THINKING``
+    entirely: effort is the reasoning control for these models, and pairing it
+    with the legacy budget env is wrong (budget_tokens 400s on 4.7/4.8). Thinking
+    is left to the model's adaptive default."""
+
     # ---- documentation ----
     cli_version: str = "@anthropic-ai/claude-code@2.1.170"
     """Full npm spec of the pinned CLI. The deployer probes the installed

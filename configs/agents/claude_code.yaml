@@ -37,8 +37,23 @@ config:
   # Bypass all tool-permission prompts (required for headless runs).
   dangerously_skip_permissions: true
 
-  # Extended-thinking token budget (MAX_THINKING_TOKENS env). 31999 = the
-  # default-high "ultrathink" cap; lower (e.g. 8000) to cut cost, 0 to disable.
+  # ── Reasoning depth: TWO knobs, which one is live depends on the model ──
+  # (verified by capturing the CLI's actual request body, 2.1.170)
+
+  # effort_level — the CURRENT reasoning control for adaptive-thinking models
+  # (Opus 4.6 / 4.7 / 4.8, Fable 5). Passed as `--effort <level>` →
+  # API `output_config.effort`. Values: low | medium | high | xhigh | max.
+  # null = don't pass --effort, use the CLI default (for opus-4-8 that is `high`).
+  # When set, the deployer skips max_thinking_tokens entirely (see below).
+  effort_level: null
+
+  # max_thinking_tokens — LEGACY extended-thinking budget (MAX_THINKING_TOKENS env
+  # → thinking.budget_tokens). Only effective on OLDER models (Sonnet 4.5 and
+  # earlier). On adaptive models (Opus 4.6 / 4.7 / 4.8, Fable 5) the CLI IGNORES
+  # it and always sends thinking:{type:"adaptive"} — 31999 / 8000 / unset all
+  # produce an identical request; use effort_level to control depth there.
+  # 31999 = the old "ultrathink" cap; null ⇒ CLAUDE_CODE_DISABLE_THINKING=1
+  # (omit the thinking param; required for adaptive models over OpenRouter).
   max_thinking_tokens: 31999
 
   # Built-in CC tools that deadlock or corrupt state headless — passed as

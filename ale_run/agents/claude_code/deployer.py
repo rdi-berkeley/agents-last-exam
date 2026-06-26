@@ -357,6 +357,10 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
             "--mcp-config", mcp_config,
             "--model", cfg.model,
         ]
+        if cfg.effort_level:
+            # Reasoning-effort for adaptive-thinking Claude models (→ API
+            # output_config.effort). A CLI flag like --model, not an env var.
+            argv += ["--effort", cfg.effort_level]
         if cfg.max_turns is not None and cfg.max_turns >= 0:
             argv += ["--max-turns", str(cfg.max_turns)]
         if cfg.max_budget_usd is not None:
@@ -393,7 +397,15 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
         # is not supported"). With the param absent the provider applies the
         # model's native adaptive thinking (the model still thinks).
         # Verified via request capture + e2e tool flow on 2.1.170.
-        if cfg.max_thinking_tokens is not None:
+        #
+        # When effort_level is set, --effort is the reasoning control: skip the
+        # legacy MAX_THINKING_TOKENS/budget path entirely (budget_tokens is
+        # removed → 400 on Opus 4.7/4.8) and leave thinking to the model's
+        # adaptive default — don't disable it.
+        if cfg.effort_level:
+            env.pop("MAX_THINKING_TOKENS", None)
+            env.pop("CLAUDE_CODE_DISABLE_THINKING", None)
+        elif cfg.max_thinking_tokens is not None:
             env["MAX_THINKING_TOKENS"] = str(cfg.max_thinking_tokens)
             env.pop("CLAUDE_CODE_DISABLE_THINKING", None)
         else:
