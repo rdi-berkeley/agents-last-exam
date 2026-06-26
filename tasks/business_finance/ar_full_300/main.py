@@ -91,6 +91,7 @@ Data Rules:
   - Use `股票简称` for the company part (do NOT use `证券代码`).
   - Example: if company is `华兴源创` and person is `曹振宇`, then `识别码` is `华兴源创曹振宇`.
   - Example: if company is `天准科技` and person is `徐一华`, then `识别码` is `天准科技徐一华`.
+- `年龄` means the person's age in 2024.
 - Try to fill each required field from evidence as completely as possible.
 - Use NaN only when the value cannot be reliably found.
 - For numeric output values, keep at least 3 decimal places (0.001 precision) when applicable.
