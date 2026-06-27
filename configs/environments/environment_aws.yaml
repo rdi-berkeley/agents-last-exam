@@ -50,28 +50,27 @@ snapshots:
       tenancy: dedicated
       zones: [us-east-1a, us-east-1b, us-east-1c]
 
-  gpu-free:                   # Windows + GPU (same family; GPU is the instance type)
+  gpu-free:                   # GPU Windows = the license-included Server image (L4 driver baked in)
     provider: aws
-    image: ale-win10
+    image: ale-win-server
     resolution: [1920, 1080]
     aws:
       region: us-east-1
       security_group: ale-sandbox
       instance_prefix: ale
       gpu: nvidia-l4          # truthy → g6 (NVIDIA L4)
-      tenancy: dedicated
+      # license-included → shared tenancy (no BYOL/dedicated, unlike win10)
       zones: [us-east-1a, us-east-1b, us-east-1c]
 
-  gpu-license:                # Windows + GPU, licensed
+  gpu-license:                # GPU Windows, licensed-image tasks (same Server image)
     provider: aws
-    image: ale-win10
+    image: ale-win-server
     resolution: [1920, 1080]
     aws:
       region: us-east-1
       security_group: ale-sandbox
       instance_prefix: ale
       gpu: nvidia-l4
-      tenancy: dedicated
       zones: [us-east-1a, us-east-1b, us-east-1c]
 
 # ---------------------------------------------------------------------------

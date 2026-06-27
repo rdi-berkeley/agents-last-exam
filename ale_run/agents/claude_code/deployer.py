@@ -133,10 +133,13 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
         # "@anthropic-ai/claude-code@2.1.170". --force so a same-version
         # residue under the prefix is overwritten cleanly.
         pkg = cfg.cli_version or "@anthropic-ai/claude-code"
+        # 300s is too short for a COLD npm install on Windows (no pre-baked CLI,
+        # empty cache) — e.g. the ale-win-server image, which (unlike ale-win10)
+        # doesn't bake the claude CLI, needs ~5-10 min. Allow 15 min.
         proc = await asyncio.to_thread(
             subprocess.run,
             [npm, "install", "-g", "--force", "--prefix", prefix, pkg],
-            capture_output=True, text=True, timeout=300, env=env,
+            capture_output=True, text=True, timeout=900, env=env,
         )
         if proc.returncode != 0:
             raise RuntimeError(
