@@ -33,8 +33,8 @@ window.ALE_NAV = [
     label: "Build on ALE",
     items: [
       { href: "/pages/add-agent.html",          title: "Add an agent" },
-      { href: "/pages/add-environment.html",    title: "Add an environment" },
       { href: "/pages/add-task.html",           title: "Add a task" },
+      { href: "/pages/build-image.html",        title: "Build a custom image" },
     ],
   },
   {

@@ -108,6 +108,7 @@
 
   // ---- assemble ----
   document.addEventListener("DOMContentLoaded", function () {
+   try {
     var article = document.querySelector(".article");
     var articleHTML = article ? article.outerHTML : '<div class="article"><p>Empty page.</p></div>';
 
@@ -147,6 +148,11 @@
     setThemeIcon();
     addCopyButtons();
     initScrollSpy();
+   } finally {
+    // Reveal only after the shell is built, so the pre-shell reflow is never
+    // visible. Inline style overrides the CSS FOUC guard immediately.
+    document.body.style.visibility = "visible";
+   }
   });
 
   // ---- copy buttons on code blocks ----

@@ -85,6 +85,16 @@
 /* ---- Reset / base ----------------------------------------------------- */
 *, *::before, *::after { box-sizing: border-box; }
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
+/* FOUC guard. Each page ships with only a bare <article> in the body; app.js
+   rebuilds the body into the sidebar+layout shell on DOMContentLoaded. Without
+   this, the browser paints the bare article first and then jumps it into the
+   layout — a one-frame reflow on every navigation. Hide until app.js reveals
+   (it sets body visibility after assembling the shell). The animation is a
+   failsafe: content reveals after 1.2s even if JS never runs. */
+body { visibility: hidden; animation: ale-reveal 0s linear 1.2s forwards; }
+@keyframes ale-reveal { to { visibility: visible; } }
+
 body {
   margin: 0;
   background: var(--bg);

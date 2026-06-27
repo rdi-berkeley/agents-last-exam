@@ -73,9 +73,8 @@ Where the framework supports running sandboxes today, and what is coming next:
 | **Local containers (Ubuntu subset)** ([guide](https://agents-last-exam.org/docs?p=pages/local-docker.html)) | ✅ Supported |
 | **QEMU/KVM VMs (CPU-only)** ([guide](https://agents-last-exam.org/docs?p=pages/local.html)) | ✅ Supported |
 | **AWS** | 🚧 In progress |
-| **Custom Windows / Ubuntu image build guide** | 📋 Planned |
-| **Setup guide for licensed tasks** | 📋 Planned |
-| **Alibaba Cloud (Ali-Yun)** | 📋 Planned |
+| **Custom image build & licensed tasks** ([guide](https://agents-last-exam.org/docs?p=pages/build-image.html)) | ✅ Supported |
+| **Alibaba Cloud (Ali-Yun)** | 🚧 In progress |
 | **Local VMware** | 📋 Planned |
 
 Have a question or run into an issue? [**Join our Discord**](https://discord.gg/jsG4Th3aVt) for direct questions.

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Build a custom image | ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Build a custom image</h1>
+    <p class="lede">
+      ALE boots each sandbox from a named image. The published
+      <code>ale-ubuntu22</code> and <code>ale-win10</code> images already carry
+      the software the public task set needs. Build your own when you add a task
+      that wants software not yet baked in, or when you provision licensed
+      Windows applications that the public images omit. The steps below use the
+      Google Cloud provider throughout; other providers follow the same
+      build-then-snapshot shape.
+    </p>
+
+    <div class="note">
+      <div class="note-title">When you do not need this</div>
+      The published images cover every task in
+      <code>selected_tasks/unlicensed.txt</code>. Copy them as-is from the
+      <a href="/pages/google-cloud.html#copy-images">Google Cloud quick start</a>
+      and skip this page unless you are adding software or enabling licensed
+      tasks.
+    </div>
+
+    <h2>The image model</h2>
+    <p>
+      An ALE image is a boot disk with three things baked in: the
+      <strong>CUA server</strong> and its runtime (node, a framework Python), the
+      <strong>system software</strong> tasks call out to, and — under
+      <code>task_data_source: baked_in_sandbox</code> — the
+      <strong>task data</strong> itself. Each image is described to the framework
+      by one small module under
+      <code>ale_run/environments/images/</code> that records the VM-side paths the
+      deployer relies on without discovery, and is referenced from an environment
+      config by its registry <code>name</code>.
+    </p>
+    <pre><code># ale_run/environments/images/ale_ubuntu22.py
+IMAGE = Image(
+    name="ale-ubuntu22",                 # the name an environment config selects
+    os="linux",
+    work_dir_base="/home/user/.ale",     # per-run scratch
+    task_data_root="/media/user/data/agenthle",
+    node="/usr/local/bin/node",
+    python="/opt/ale-run/.venv/bin/python",
+    mcp_server_dir="/home/user/cua_mcp_server",
+    default_machine_type="e2-standard-4",
+    cua_server_port=5000,
+)</code></pre>
+    <p>
+      These fields are read dynamically wherever the framework needs them —
+      nothing is hard-coded, so a custom image sets its own port and paths. The
+      only constraint is that each value is real: the image must actually run the
+      CUA server on the declared port, and the paths must exist and be writable.
+      Building an image is therefore two things: install the software and data,
+      and declare where they live in the module.
+    </p>
+    <div class="diagram">published base image  (ale-ubuntu22 / ale-win10)
+   └── boot a builder VM
+        └── install system packages   (env/install_task_deps.sh)
+             └── verify                (env/verify_task_env.sh)
+                  └── bake task data   (optional: input/ + reference.7z)
+                       └── snapshot disk → new named GCE image
+                            └── register the family + point an environment at it</div>
+
+    <h2 id="packages">The per-task package system</h2>
+    <p>
+      Every task declares the system software it needs in its
+      <code>task_card.json</code>:
+    </p>
+    <pre><code>"requiredSystemPackages": ["energyplus-22.1.0", "docker-ce"]</code></pre>
+    <p>
+      Each id maps to one idempotent installer in the package library under
+      <code>env/</code> — there are no per-task build scripts:
+    </p>
+    <ul>
+      <li><code>env/packages-linux/&lt;id&gt;/</code> — <code>install.sh</code> + <code>meta.json</code> (Linux).</li>
+      <li><code>env/packages-win/&lt;id&gt;/</code> — <code>install.ps1</code> + <code>meta.json</code> (Windows Server&nbsp;2022).</li>
+    </ul>
+    <p>
+      Installers provide <strong>only system software and libraries</strong> —
+      apt packages, version-pinned <code>/opt</code> (Linux) or
+      <code>C:\Softwares</code> (Windows) binaries, docker images. They do
+      <strong>not</strong> install task Python packages (see
+      <a href="#python">the Pythons</a> below). Version-pinned tools install to a
+      versioned path so multiple versions coexist, and a task's
+      <code>software/</code> wrappers exec those exact paths.
+    </p>
+    <p>Two entry points drive the library from a task card:</p>
+    <pre><code># install every requiredSystemPackages id, in order
+env/install_task_deps.sh path/to/task_card.json
+
+# run each package's meta.json "verify" command, and — if a task base dir is
+# given — build its input/runtime_env with uv to prove the pinned Python
+# runtime resolves against the freshly installed system libraries
+env/verify_task_env.sh path/to/task_card.json path/to/task_base_dir</code></pre>
+    <p>
+      Run <code>install_task_deps.sh</code> for each task card you want the image
+      to cover; installers are idempotent, so the image converges to a superset.
+      Full policy:
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/env/README.md"><code>env/README.md</code></a>.
+    </p>
+
+    <h2 id="python">The Pythons (what the image owns, what it doesn't)</h2>
+    <p>
+      Python in ALE spans three interpreters with three owners. The image bakes
+      only one of them.
+    </p>
+    <table>
+      <thead><tr><th>Interpreter</th><th>Where it runs</th><th>Responsible for</th><th>In the image?</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Host framework venv</strong></td>
+          <td>The ALE host, outside any sandbox.</td>
+          <td>The orchestrator, and loading each task module to read its config and hold its <code>evaluate()</code> function. A grader's <em>import-time</em> dependencies must resolve here.</td>
+          <td>No — host setup, never baked.</td>
+        </tr>
+        <tr>
+          <td><strong>Image <code>python</code></strong></td>
+          <td>Inside the sandbox (Linux <code>/opt/ale-run/.venv</code>, Windows system Python).</td>
+          <td>The in-sandbox framework entry point and agent hosting. <code>install_agent_deps()</code> pip-installs each agent's declared packages into <em>this</em> interpreter at launch.</td>
+          <td>Yes — this is the <code>python</code> field your module declares.</td>
+        </tr>
+        <tr>
+          <td><strong>Per-task runtime</strong></td>
+          <td>Inside the sandbox, per task.</td>
+          <td>Running the scoring scripts that <code>evaluate()</code> dispatches onto the VM with <code>session.run_command</code>. Today the tasks that isolate their own runtime ship a baked <code>reference/evaluator_env/.venv</code> (inside <code>reference.7z</code>) that their <code>main.py</code> names explicitly; an <code>input/runtime_env/</code> (<code>uv --frozen</code>) is also supported but not yet used by any shipped task. Tasks with neither fall back to the image's Python.</td>
+          <td>Baked into the task <em>data</em>, not the OS image's <code>python</code>.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      The one you bake is the image <code>python</code>: keep it user-writable and
+      minimal — <code>pydantic</code>, <code>pip</code>, and what
+      <code>install_agent_deps()</code> adds — not a home for task libraries.
+    </p>
+    <div class="note">
+      <div class="note-title">Recommended split when you build your own</div>
+      Keep the image <code>python</code> minimal; pin every task's score-time deps
+      in its own baked <code>input/runtime_env/</code> (<code>uv --frozen</code>,
+      which <code>verify_task_env.sh</code> builds); keep the host venv complete
+      for graders. Today this is uneven — a few tasks isolate their runtime in an
+      <code>evaluator_env</code> venv, most lean on the image Python.
+    </div>
+
+    <h2>1. Boot a builder VM</h2>
+    <p>
+      Start from the matching published base so the CUA server, node, Python, and
+      path conventions are already in place. Create a VM from the base image and
+      keep it running while you install software:
+    </p>
+    <pre><code>gcloud compute instances create ale-builder \
+  --image=ale-ubuntu22 --image-project="$GCP_PROJECT" \
+  --machine-type=e2-standard-4 \
+  --zone="$GCP_REGION-a" \
+  --tags=ale-run</code></pre>
+    <p>
+      For a Windows image, build from <code>ale-win10</code> (or
+      <code>ale-win-server</code> for the GPU family) over RDP.
+    </p>
+
+    <h2>2. Install and verify the software</h2>
+    <p>
+      Copy the <code>env/</code> tree to the builder and run the installers for
+      each task card you want the image to cover. On Linux:
+    </p>
+    <pre><code># on the builder VM, repo root
+for t in $(grep -v '^#' selected_tasks/linux_only.txt); do
+  sudo env/install_task_deps.sh "tasks/$t/task_card.json"
+done
+
+# verify each package self-checks and the task runtimes resolve
+env/verify_task_env.sh tasks/&lt;domain&gt;/&lt;task&gt;/task_card.json \
+                       tasks/&lt;domain&gt;/&lt;task&gt;</code></pre>
+    <p>
+      On Windows, run the per-package <code>install.ps1</code> from an elevated
+      PowerShell, then confirm each <code>meta.json</code> <code>verify</code>
+      command returns true. Installers pin exact versions on purpose: some graders
+      reject the wrong build (for example the Blender task accepts 5.0.x and
+      rejects 4.5.x), so do not float versions.
+    </p>
+
+    <h2 id="bake-data">3. Bake task data (optional)</h2>
+    <p>
+      With <code>task_data_source: baked_in_sandbox</code> the task data lives on
+      the image rather than being staged at run time. The convention under the
+      image's <code>task_data_root</code> is:
+    </p>
+    <pre><code>&lt;task_data_root&gt;/&lt;domain&gt;/&lt;task&gt;/&lt;variant&gt;/
+├── input/            ← visible to the agent from stage_inputs onward
+└── reference.7z      ← password-encrypted; decrypted to reference/ at grading</code></pre>
+    <p>
+      The reference archive stays encrypted during the run and is decrypted only
+      at grading. Both images carry <code>7z</code> on PATH. To skip baking, point
+      the environment at a <code>gs://</code> source instead — see
+      <a href="/pages/run.html">Run and collect results</a>.
+    </p>
+
+    <h2 id="snapshot">4. Snapshot the disk into a named image</h2>
+    <p>
+      Stop the builder, then create a GCE image from its boot disk. Deleting the
+      instance with <code>--keep-disks=boot</code> leaves the disk in place to
+      image from:
+    </p>
+    <pre><code>gcloud compute instances stop ale-builder --zone="$GCP_REGION-a"
+gcloud compute instances delete ale-builder --zone="$GCP_REGION-a" \
+  --keep-disks=boot
+
+gcloud compute images create ale-ubuntu22-custom \
+  --source-disk=ale-builder --source-disk-zone="$GCP_REGION-a"</code></pre>
+    <p>
+      To share the image with other projects, copy it the same way the quick
+      start copies the published images:
+    </p>
+    <pre><code>gcloud compute images create ale-ubuntu22-custom \
+  --source-image=ale-ubuntu22-custom \
+  --source-image-project="$GCP_PROJECT"</code></pre>
+
+    <h2 id="register">5. Register and select the image</h2>
+    <p>
+      If you reused the base image's name, you are done — environments already
+      point at it. To ship a <strong>new</strong> family, add a module under
+      <code>ale_run/environments/images/</code> declaring its
+      <code>IMAGE = Image(...)</code> (copy the closest existing module and adjust
+      <code>name</code> and any paths), register it in the package
+      <code>_REGISTRY</code>, then select it from an environment config by name:
+    </p>
+    <pre><code>snapshots:
+  cpu-free-ubuntu:
+    provider: gcloud
+    image: ale-ubuntu22-custom    # ← your registered image name
+    gcloud:
+      project: ${env:GCP_PROJECT}
+      service_account_key: ${env:GCP_SA_KEY}
+      instance_prefix: ale
+      network: ale-vpc
+      subnet: ale-vpc
+      zones: [us-central1-a, us-east1-b, us-west1-a]</code></pre>
+    <p>Validate with a one-task dry run, then a real run:</p>
+    <pre><code>uv run python -m ale_run run my_experiment.yaml --dry-run
+uv run python -m ale_run run my_experiment.yaml</code></pre>
+    <p>
+      If you changed <code>cua_server_port</code>, open that port in the firewall
+      before running — ALE reaches the CUA server over TCP on it, and the
+      <a href="/pages/google-cloud.html">Google Cloud setup</a> only opens
+      <code>tcp:5000</code> (rule <code>ale-allow-cua</code>). A custom port needs
+      its own ingress rule or the run is blocked:
+    </p>
+    <pre><code>gcloud compute firewall-rules create ale-allow-cua-8000 \
+  --network=ale-vpc --direction=INGRESS --allow=tcp:8000 \
+  --source-ranges="$ALE_CLIENT_CIDR" --target-tags=ale-run</code></pre>
+
+    <h2 id="licensed">Licensed tasks</h2>
+    <p>
+      The public task set splits into an <strong>unlicensed</strong> subset that
+      the published images run as-is, and a small <strong>licensed</strong> subset
+      whose software cannot be redistributed. Of the 152 tasks in
+      <code>selected_tasks/full.txt</code>, 145 are in
+      <code>unlicensed.txt</code>; the remaining 7 are listed in
+      <code>selected_tasks/licensed.txt</code>. Every licensed task today is a
+      Windows task — there are no licensed Linux packages.
+    </p>
+    <table>
+      <thead><tr><th>Task</th><th>Licensed software</th></tr></thead>
+      <tbody>
+        <tr><td>engineering/2d_drawings_to_3d_building_model</td><td>Autodesk Civil 3D 2024</td></tr>
+        <tr><td>engineering/cailian_road_highway_alignment_2</td><td>Autodesk Civil 3D 2024</td></tr>
+        <tr><td>engineering/gcode</td><td>Autodesk PowerMill 2025</td></tr>
+        <tr><td>engineering/inner_support_elevation_optimization</td><td>PLAXIS 3D 2023.2</td></tr>
+        <tr><td>engineering/mold-flow</td><td>Moldex3D 2025</td></tr>
+        <tr><td>visual_media/music_transcription</td><td>Steinberg Dorico 6 / Cubase 15</td></tr>
+        <tr><td>visual_media/project_migration</td><td>Rhino 8</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Their installers and credentials are <strong>not</strong> committed to the
+      repository; keep them outside it. Each licensed package carries a
+      <code>meta.json</code> (pinned version + <code>verify</code> command) and a
+      <code>README.md</code> with one reproducible provisioning sequence (for
+      example <code>env/packages-win/rhino-8/</code>):
+    </p>
+    <ol>
+      <li>Purchase the product entitlement from the vendor.</li>
+      <li>Assign the entitlement to the account used for installation.</li>
+      <li>Sign in to the vendor account and download the pinned installer.</li>
+      <li>Install and activate on the builder Windows VM, and disable automatic updates to preserve the pinned build.</li>
+      <li>Run the package's <code>meta.json</code> <code>verify</code> command.</li>
+    </ol>
+    <p>
+      Provision the licensed software into your Windows builder alongside the
+      unlicensed software — one image carries both — then snapshot and register it
+      like any other custom image (steps 4–5). Point your Windows snapshot at that
+      image and run <code>selected_tasks/licensed.txt</code>.
+    </p>
+
+    <h2>Checklist</h2>
+    <ul>
+      <li>Booted a builder from the matching published base image.</li>
+      <li>Ran <code>install_task_deps.sh</code> for every target task card and confirmed <code>verify_task_env.sh</code> passes.</li>
+      <li>Baked task data (or chose a <code>gs://</code> source).</li>
+      <li>Stopped the builder, kept its boot disk, and created the named image.</li>
+      <li>Registered the family (only for a new name) and pointed an environment at it.</li>
+      <li>Validated with a one-task dry run, then a real run.</li>
+    </ul>
+
+    <div class="note">
+      <div class="note-title">Related</div>
+      <a href="/pages/google-cloud.html">Google Cloud VMs</a> covers copying the
+      published images, project setup, and the environment config the image plugs
+      into.
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
