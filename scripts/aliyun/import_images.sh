@@ -49,10 +49,18 @@ ensure_bucket() {                    # OSS import bucket exists (region-local)
 ensure_raw() {                       # $1 family → ensure oss://$BUCKET/images/$1.raw
   local key="images/$1.raw"
   if ossutil stat "oss://$BUCKET/$key" >/dev/null 2>&1; then echo "raw present: $1"; return; fi
-  say "stream $GCS/$1.tar.gz -> oss://$BUCKET/$key"
-  # gsutil can't write oss://, but ossutil reads stdin via `cp - oss://...`, so
-  # pipe GCS → tar → ossutil; the full raw never lands on local disk.
-  gsutil -u "$BILLING" cat "$GCS/$1.tar.gz" | tar -xzO | ossutil cp - "oss://$BUCKET/$key"
+  # ossutil (unlike `aws s3 cp -`) cannot read stdin — it stat()s the source —
+  # so we can't pipe GCS→tar→OSS directly. Stage the decompressed raw to a local
+  # scratch dir (needs ~170 GiB free), upload, then delete. ALE_IMG_SCRATCH
+  # overrides the scratch location (default /var/tmp/aliimg).
+  local scratch="${ALE_IMG_SCRATCH:-/var/tmp/aliimg}" raw
+  mkdir -p "$scratch"; raw="$scratch/$1.raw"
+  say "stage $GCS/$1.tar.gz -> $raw (decompress)"
+  gsutil -u "$BILLING" cat "$GCS/$1.tar.gz" | tar -xzO > "$raw"
+  [ -s "$raw" ] || { echo "staging produced an empty raw for $1" >&2; return 1; }
+  say "upload $raw -> oss://$BUCKET/$key ($(stat -c %s "$raw") bytes)"
+  ossutil cp -f "$raw" "oss://$BUCKET/$key"
+  rm -f "$raw"
 }
 
 vsw_in_sg_vpc() {                    # echo a vSwitch id in the SG's VPC
