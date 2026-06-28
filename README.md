@@ -55,6 +55,7 @@ Choose where ALE should create or attach each task sandbox:
 | Provider | Best for | Guide |
 |---|---|---|
 | **Google Cloud VMs** | Elastic batch runs on published Ubuntu, Windows, and GPU images | [Cloud quick start](docs/quickstart.md) |
+| **AWS (EC2 + S3)** | Elastic batch runs on the published Ubuntu and Windows images | [AWS setup guide](https://agents-last-exam.org/docs?p=pages/aws.html) |
 | **QEMU/KVM VMs** | CPU-compatible Ubuntu and Windows tasks on a Linux host with KVM | [QEMU/KVM guide](https://agents-last-exam.org/docs?p=pages/local.html) |
 | **Local containers (Docker)** | The lighter supported Ubuntu subset | [Local container guide](https://agents-last-exam.org/docs?p=pages/local-docker.html) |
 | **Existing sandbox** | Debugging against a CUA-enabled machine you already operate | [Static provider guide](https://agents-last-exam.org/docs?p=pages/static.html) |
@@ -72,7 +73,7 @@ Where the framework supports running sandboxes today, and what is coming next:
 | **Existing CUA sandbox** | ✅ Supported |
 | **Local containers (Ubuntu subset)** ([guide](https://agents-last-exam.org/docs?p=pages/local-docker.html)) | ✅ Supported |
 | **QEMU/KVM VMs (CPU-only)** ([guide](https://agents-last-exam.org/docs?p=pages/local.html)) | ✅ Supported |
-| **AWS** | 🚧 In progress |
+| **AWS (EC2 + S3)** ([guide](https://agents-last-exam.org/docs?p=pages/aws.html)) | ✅ Supported |
 | **Custom image build & licensed tasks** ([guide](https://agents-last-exam.org/docs?p=pages/build-image.html)) | ✅ Supported |
 | **Alibaba Cloud (Ali-Yun)** | 🚧 In progress |
 | **Local VMware** | 📋 Planned |

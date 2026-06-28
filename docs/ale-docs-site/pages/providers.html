@@ -46,6 +46,12 @@ uv sync --all-packages</code></pre>
           <td>Production benchmark runs and elastic concurrency</td>
         </tr>
         <tr>
+          <td><a href="/pages/aws.html"><strong>AWS EC2</strong></a><br><code>aws</code></td>
+          <td>A fresh EC2 instance for every run unit</td>
+          <td>Linux + Windows from public AMIs. GPU is wired but untested.</td>
+          <td>Production runs on AWS instead of/alongside GCP</td>
+        </tr>
+        <tr>
           <td><a href="/pages/local-docker.html"><strong>Local containers</strong></a><br><code>docker</code></td>
           <td>A fresh Linux container for every run unit</td>
           <td>99 tasks in <code>docker_support.txt</code></td>
@@ -112,6 +118,11 @@ uv sync --all-packages</code></pre>
         <div class="k">Supported</div>
         <div class="t">Local containers</div>
         <div class="d">A lighter local Linux sandbox with host-staged task data.</div>
+      </a>
+      <a class="card" href="/pages/aws.html">
+        <div class="k">Supported</div>
+        <div class="t">AWS</div>
+        <div class="d">Ephemeral EC2 instances + S3. Linux ready; Windows is BYOL + dedicated.</div>
       </a>
       <a class="card" href="/pages/local.html">
         <div class="k">Supported</div>
