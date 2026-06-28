@@ -75,20 +75,28 @@ _ALIYUN_MAX_RETRIES_TRANSIENT = 3
 _ALIYUN_TRANSIENT_BASE_DELAY = 15          # seconds, exponential backoff
 
 # error-code/message substring → error class. transient = retry same zone;
-# zone = move to next zone (capacity); anything else = fail fast. Matched
-# case-insensitively against the aliyun CLI's stderr (which carries the API
-# ``Code`` and ``Message``).
-_ALIYUN_RETRYABLE_TRANSIENT = [
-    "throttling", "requestlimitexceeded", "rate exceeded",
-    "internalerror", "internal error", "servererror",
-    "serviceunavailable", "service unavailable", "unavailable",
-    "connection reset", "connection refused", "timed out", "timeout",
-    "could not connect", "connection aborted", "i/o timeout",
+# zone = move to next zone (capacity); anything else = fail fast.
+#
+# IMPORTANT: classify on the API **ErrorCode** (extracted by _error_code), NOT
+# the raw stderr. The aliyun CLI wraps every API failure as
+# ``ERROR: SDK.ServerError`` regardless of the underlying code, so matching the
+# wrapper string (e.g. a naive "servererror" substring) would mark EVERY error —
+# even a hard ``InvalidAccountStatus.NotEnoughBalance`` or ``InvalidImageId`` —
+# transient and burn the full retry budget on it. These patterns are matched
+# against the real ``ErrorCode:`` value; genuine transport errors (which carry no
+# ErrorCode line) are caught by _TRANSIENT_TRANSPORT against the full stderr.
+_ALIYUN_RETRYABLE_TRANSIENT = [          # matched against ErrorCode
+    "throttling", "requestlimitexceeded", "requestthrottled", "rate exceeded",
+    "internalerror", "serviceunavailable", "servicetimeout",
 ]
-_ALIYUN_RETRYABLE_ZONE = [
+_TRANSIENT_TRANSPORT = [                  # matched against full stderr (no ErrorCode)
+    "connection reset", "connection refused", "timed out", "timeout",
+    "could not connect", "connection aborted", "i/o timeout", "no such host",
+]
+_ALIYUN_RETRYABLE_ZONE = [               # matched against ErrorCode + message
     "operationdenied.nostock", "nostock", "out of stock",
-    "resource.notenough", "resourcenotavailable",
-    "zonenotsupported", "zone_not_sufficient",
+    "resource.notenough", "resourcenotavailable", "operationdenied.noschedule",
+    "zonenotsupported", "zone_not_sufficient", "zonenotsupportedforspotinstance",
     "no capacity", "not have capacity", "instancediskcategorylimitexceeded",
 ]
 
@@ -315,14 +323,30 @@ async def _run_aliyun(product: str, action: str, *args: str) -> tuple[int, str, 
     )
 
 
+def _error_code(stderr: str) -> str:
+    """Extract the API ``ErrorCode`` from the aliyun CLI's error block.
+
+    The CLI prints e.g. ``ERROR: SDK.ServerError\\nErrorCode: <code>\\n...``; we
+    classify on ``<code>`` so the generic ``SDK.ServerError`` wrapper never
+    drives retry decisions. Returns "" when no ErrorCode line is present (a pure
+    transport error)."""
+    m = re.search(r"ErrorCode:\s*([A-Za-z0-9_.\-]+)", stderr)
+    return m.group(1).lower() if m else ""
+
+
 def _is_transient_error(stderr: str) -> bool:
+    code = _error_code(stderr)
+    if code:
+        return any(pat in code for pat in _ALIYUN_RETRYABLE_TRANSIENT)
+    # No ErrorCode line → a transport/network failure; scan the raw stderr.
     lower = stderr.lower()
-    return any(pat in lower for pat in _ALIYUN_RETRYABLE_TRANSIENT)
+    return any(pat in lower for pat in _TRANSIENT_TRANSPORT)
 
 
 def _is_zone_capacity_error(stderr: str) -> bool:
-    lower = stderr.lower()
-    return any(pat in lower for pat in _ALIYUN_RETRYABLE_ZONE)
+    code = _error_code(stderr)
+    haystack = code if code else stderr.lower()
+    return any(pat in haystack for pat in _ALIYUN_RETRYABLE_ZONE)
 
 
 # ============================================================================
