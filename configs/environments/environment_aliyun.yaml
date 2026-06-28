@@ -31,7 +31,7 @@ snapshots:
       region: cn-hangzhou
       security_group: ale-sandbox
       instance_prefix: ale
-      zones: [cn-hangzhou-i, cn-hangzhou-j, cn-hangzhou-k]
+      zones: [cn-hangzhou-j, cn-hangzhou-k]
 
   cpu-free:                   # Windows, no GPU
     provider: aliyun
@@ -41,7 +41,7 @@ snapshots:
       region: cn-hangzhou
       security_group: ale-sandbox
       instance_prefix: ale
-      zones: [cn-hangzhou-i, cn-hangzhou-j, cn-hangzhou-k]
+      zones: [cn-hangzhou-j, cn-hangzhou-k]
 
   cpu-license:                # Windows requiring a licensed image (same family)
     provider: aliyun
@@ -51,7 +51,7 @@ snapshots:
       region: cn-hangzhou
       security_group: ale-sandbox
       instance_prefix: ale
-      zones: [cn-hangzhou-i, cn-hangzhou-j, cn-hangzhou-k]
+      zones: [cn-hangzhou-j, cn-hangzhou-k]
 
   gpu-free:                   # GPU Windows = the Server image (A10 driver baked in)
     provider: aliyun
@@ -62,7 +62,7 @@ snapshots:
       security_group: ale-sandbox
       instance_prefix: ale
       gpu: nvidia-a10         # truthy → gn7i (NVIDIA A10)
-      zones: [cn-hangzhou-i, cn-hangzhou-j, cn-hangzhou-k]
+      zones: [cn-hangzhou-j, cn-hangzhou-k]
 
   gpu-license:                # GPU Windows, licensed-image tasks (same Server image)
     provider: aliyun
@@ -73,7 +73,7 @@ snapshots:
       security_group: ale-sandbox
       instance_prefix: ale
       gpu: nvidia-a10
-      zones: [cn-hangzhou-i, cn-hangzhou-j, cn-hangzhou-k]
+      zones: [cn-hangzhou-j, cn-hangzhou-k]
 
 # ---------------------------------------------------------------------------
 # Task data + output (substrate-coupled; mirrors environment.yaml).
