@@ -73,6 +73,10 @@ _DEFAULT_GPU_INSTANCE = "ecs.gn7i-c8g1.2xlarge"   # 8 vCPU / 30 GiB / 1x A10
 # Launch retry tuning.
 _ALIYUN_MAX_RETRIES_TRANSIENT = 3
 _ALIYUN_TRANSIENT_BASE_DELAY = 15          # seconds, exponential backoff
+# Delete retry tuning — a just-created box rejects DeleteInstance while
+# ``Initializing``; retry through that window so we never leak a billable box.
+_DELETE_MAX_RETRIES = 6
+_DELETE_RETRY_DELAY = 12                   # seconds
 
 # error-code/message substring → error class. transient = retry same zone;
 # zone = move to next zone (capacity); anything else = fail fast.
@@ -481,6 +485,7 @@ async def _wait_running_with_ip(
     ``VpcAttributes.PrivateIpAddress.IpAddress``."""
     deadline = time.monotonic() + timeout
     last_state = "?"
+    nudged = False        # whether we've issued a one-shot StartInstance
     while time.monotonic() < deadline:
         rc, stdout, stderr = await _run_aliyun(
             "ecs", "DescribeInstances",
@@ -500,9 +505,21 @@ async def _wait_running_with_ip(
                         )
                     if ip:
                         return ip
-                if last_state in ("Deleted", "Stopped"):
+                # ``Deleted`` is the only terminal failure. A freshly-created ECS
+                # instance briefly reports ``Stopped`` right after RunInstances
+                # before its auto-start transitions it Starting→Running, so we do
+                # NOT treat Stopped as terminal (doing so killed healthy boots).
+                # If it lingers Stopped, nudge it once with StartInstance in case
+                # auto-start didn't fire, then keep polling until Running/timeout.
+                elif last_state == "Deleted":
                     raise RuntimeError(
-                        f"instance {instance_id} entered {last_state} before becoming reachable"
+                        f"instance {instance_id} entered Deleted before becoming reachable"
+                    )
+                elif last_state == "Stopped" and not nudged:
+                    nudged = True
+                    await _run_aliyun(
+                        "ecs", "StartInstance",
+                        "--RegionId", cfg.region, "--InstanceId", instance_id,
                     )
             except (KeyError, IndexError, json.JSONDecodeError):
                 pass
@@ -515,18 +532,30 @@ async def _wait_running_with_ip(
 
 async def _delete(instance_id: str, cfg: AliyunProviderConfig) -> bool:
     """Force-delete the instance (``--Force true`` releases a Running box without
-    a separate stop)."""
+    a separate stop).
+
+    A box still in its post-RunInstances ``Initializing`` window rejects
+    DeleteInstance with ``IncorrectInstanceStatus.Initializing``; since a failed
+    delete leaks a billable instance, retry a few times through that window
+    before giving up."""
     logger.info("Deleting instance %s", instance_id)
-    rc, _, stderr = await _run_aliyun(
-        "ecs", "DeleteInstance",
-        "--RegionId", cfg.region,
-        "--InstanceId", instance_id,
-        "--Force", "true",
-    )
-    if rc != 0:
-        logger.error("Failed to delete %s: %s", instance_id, stderr)
-        return False
-    return True
+    last_stderr = ""
+    for attempt in range(_DELETE_MAX_RETRIES):
+        rc, _, stderr = await _run_aliyun(
+            "ecs", "DeleteInstance",
+            "--RegionId", cfg.region,
+            "--InstanceId", instance_id,
+            "--Force", "true",
+        )
+        if rc == 0:
+            return True
+        last_stderr = stderr
+        code = _error_code(stderr)
+        if "incorrectinstancestatus" not in code:
+            break
+        await asyncio.sleep(_DELETE_RETRY_DELAY)
+    logger.error("Failed to delete %s: %s", instance_id, last_stderr)
+    return False
 
 
 async def _stop(instance_id: str, cfg: AliyunProviderConfig) -> bool:
