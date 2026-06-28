@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alibaba Cloud ECS | ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Alibaba Cloud ECS</h1>
+    <p class="lede">
+      Run every unit on a fresh ECS instance. The <code>aliyun</code> provider is
+      the Alibaba Cloud counterpart of the Google Cloud and AWS paths — same
+      per-snapshot model, same image-family names.
+    </p>
+
+    <h2>What the provider manages</h2>
+    <p>
+      The <code>aliyun</code> provider selects the image, instance type, GPU, and
+      candidate zones from the task snapshot and environment profile. It runs an
+      instance, waits for the in-guest CUA server, runs one unit, then deletes,
+      stops, or keeps the instance according to <code>cleanup_mode</code>.
+    </p>
+    <ul>
+      <li>Ubuntu and Windows custom images are supported.</li>
+      <li>GPU snapshots use a <code>gn7i</code> (NVIDIA A10) instance and retry across configured zones when capacity is unavailable.</li>
+      <li>CPU tasks use the task-card instance type, with a C-family to G-family (<code>ecs.c*</code> → <code>ecs.g*</code>) fallback when applicable.</li>
+      <li>Windows snapshots apply the configured desktop resolution before the run starts.</li>
+    </ul>
+
+    <h2>Understand the credential model</h2>
+    <table>
+      <thead><tr><th>Credential</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>aliyun configure</code> (RAM-user AccessKey)</td><td>The host creates, describes, stops, and deletes ECS instances.</td></tr>
+        <tr><td>Instance RAM role (<code>ram_role_name</code>)</td><td>Attached at launch; the in-box <code>ossutil</code> uses it for task-data reads and optional output uploads — no key is injected into the sandbox (the Alibaba analogue of AWS's IAM instance profile).</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Unlike Google Cloud, there is no service-account key file to push into the
+      sandbox: OSS access is granted by the instance RAM role, so the yaml never
+      names a secret.
+    </p>
+
+    <h2>Before you begin</h2>
+    <ul>
+      <li>An Alibaba Cloud account, and a RAM user with an AccessKey pair (do not use the root account key).</li>
+      <li>The <a href="https://www.alibabacloud.com/help/en/cli/">Alibaba Cloud CLI</a> (<code>aliyun</code>) installed on the ALE host, plus <code>ossutil</code> for OSS transfers.</li>
+      <li>ECS and OSS activated in your target region.</li>
+      <li>Sufficient vCPU and GPU quota for your intended concurrency.</li>
+    </ul>
+
+    <h2>1. Authenticate</h2>
+    <p>
+      Create an AccessKey pair for a RAM user in the console
+      (<em>RAM &rarr; Users &rarr; <code>&lt;user&gt;</code> &rarr; Create AccessKey</em>),
+      then configure the CLI:
+    </p>
+    <pre><code>export ALE_ALIYUN_REGION="cn-hangzhou"
+
+aliyun configure set \
+  --profile ale \
+  --mode AK \
+  --region "$ALE_ALIYUN_REGION" \
+  --access-key-id  &lt;AccessKeyId&gt; \
+  --access-key-secret &lt;AccessKeySecret&gt;</code></pre>
+    <p>
+      The provider uses the ambient credential chain, so you can equivalently
+      export <code>ALIBABA_CLOUD_ACCESS_KEY_ID</code> /
+      <code>ALIBABA_CLOUD_ACCESS_KEY_SECRET</code>.
+    </p>
+
+    <h2 id="copy-images">2. Import the sandbox images</h2>
+    <p>
+      ALE publishes prebaked Ubuntu and Windows raw images on GCS. Import them
+      into your account once as ECS custom images, tagged
+      <code>ale:image-family=&lt;name&gt;</code> (the tag the provider resolves):
+    </p>
+    <pre><code>./scripts/aliyun/import_images.sh all   # ale-ubuntu22, ale-win10, ale-win-server</code></pre>
+    <p>
+      The script streams each image from GCS through an OSS import bucket, calls
+      <code>aliyun ecs ImportImage</code>, and bakes the <code>aliyun</code> CLI +
+      <code>ossutil</code> into the Linux image (needed for <code>oss://</code>
+      task data / output).
+    </p>
+
+    <h2>3. Create the instance RAM role (for oss:// data/output)</h2>
+    <p>
+      Only needed when <code>task_data_source</code> or <code>output_path</code>
+      points at <code>oss://</code>. Create a RAM role the ECS service can assume,
+      grant it OSS access, and name it in each snapshot's <code>ram_role_name</code>:
+    </p>
+    <pre><code>aliyun ram CreateRole --RoleName ale-sandbox \
+  --AssumeRolePolicyDocument '{"Statement":[{"Action":"sts:AssumeRole","Effect":"Allow","Principal":{"Service":["ecs.aliyuncs.com"]}}],"Version":"1"}'
+aliyun ram AttachPolicyToRole --PolicyType System \
+  --PolicyName AliyunOSSReadOnlyAccess --RoleName ale-sandbox</code></pre>
+
+    <h2>4. Create a restricted security group</h2>
+    <p>
+      ALE connects directly to the CUA server on TCP port 5000. Restrict ingress
+      to the public CIDR of the machine running ALE. Do not expose the control
+      server to the entire internet.
+    </p>
+    <pre><code>export ALE_CLIENT_CIDR="203.0.113.10/32"   # the ALE host's public IP/CIDR
+
+VPC=$(aliyun ecs DescribeVpcs --RegionId "$ALE_ALIYUN_REGION" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["Vpcs"]["Vpc"][0]["VpcId"])')
+SG=$(aliyun ecs CreateSecurityGroup --RegionId "$ALE_ALIYUN_REGION" \
+  --SecurityGroupName ale-sandbox --VpcId "$VPC" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["SecurityGroupId"])')
+aliyun ecs AuthorizeSecurityGroup --RegionId "$ALE_ALIYUN_REGION" \
+  --SecurityGroupId "$SG" --IpProtocol tcp --PortRange 5000/5000 \
+  --SourceCidrIp "$ALE_CLIENT_CIDR"</code></pre>
+    <p>
+      The provider resolves the security group by name to its id and VPC, then
+      picks a vSwitch in each candidate zone within that VPC. Tag a vSwitch with
+      <code>project=ale</code> to pin which one the provider prefers.
+    </p>
+
+    <h2 id="results-bucket">5. Create a results bucket</h2>
+    <p>
+      Optional when <code>output_path: local</code>; recommended for large batch
+      artifacts. Create an OSS bucket and grant the instance RAM role write
+      access, then set <code>output_path: oss://&lt;bucket&gt;</code>.
+    </p>
+    <pre><code>ossutil mb "oss://ale-results-$(whoami)" --region "$ALE_ALIYUN_REGION"</code></pre>
+
+    <h2>6. Configure ALE</h2>
+    <p>
+      The shipped <code>configs/environments/environment_aliyun.yaml</code> maps
+      all five task snapshots to Alibaba Cloud. Set the region and zones to match
+      your account, start with <code>selected_tasks/helloworld.txt</code>, then
+      use <code>selected_tasks/unlicensed.txt</code> for the public unlicensed
+      set.
+    </p>
+
+    <h2>Capacity and cleanup</h2>
+    <p>
+      GPU capacity is volatile, so the shipped profile lists several fallback
+      zones. Your account still needs quota in the selected region. Set
+      <code>concurrency</code> below your vCPU, GPU, public-IP, and LLM limits.
+    </p>
+    <p>
+      Use <code>cleanup_mode: delete</code> for batch runs. If the host process
+      is terminated before cleanup completes, inspect leftovers by tag:
+    </p>
+    <pre><code>aliyun ecs DescribeInstances --RegionId "$ALE_ALIYUN_REGION" \
+  --Tag.1.Key purpose --Tag.1.Value ale-run</code></pre>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

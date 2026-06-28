@@ -1,0 +1,87 @@
+# ============================================================================
+# environment_aliyun.yaml — run ALE on Alibaba Cloud (ECS + OSS). Aliyun
+# counterpart of environment.yaml / environment_aws.yaml; same per-snapshot
+# model and the SAME image-family names.
+# ============================================================================
+# Like the gcloud/aws envs, everything here is a hardcoded convention. There are
+# NO ${env:...} references: Alibaba credentials come from the ambient chain
+# (`aliyun configure` profile / ALIBABA_CLOUD_ACCESS_KEY_ID +
+# ALIBABA_CLOUD_ACCESS_KEY_SECRET env), and the VPC, vSwitches and images are
+# resolved at run time by name/tag (set up once per the Alibaba setup docs):
+#   • image            image-FAMILY name (registry key under
+#                      ale_run/environments/images/) → resolved to the newest
+#                      self-owned image tagged `ale:image-family=<name>`. Pin one
+#                      with `image_id:`.
+#   • security_group   the firewall by NAME (gcloud analogue: `network`). The
+#                      provider resolves it to its id + the VPC it lives in; that
+#                      VPC scopes the zone→vSwitch lookup.
+#   • zones            Alibaba zone ids, tried in order on capacity errors.
+#   • gpu              truthy → a GPU instance type (gn7i / NVIDIA A10).
+#   • ram_role_name    instance RAM role for in-box OSS access (only needed for
+#                      oss:// task data / output) — Alibaba analogue of AWS's
+#                      IAM instance profile.
+# ----------------------------------------------------------------------------
+
+snapshots:
+
+  cpu-free-ubuntu:            # Linux, no GPU — the bulk of tasks
+    provider: aliyun
+    image: ale-ubuntu22
+    aliyun:
+      region: cn-hangzhou
+      security_group: ale-sandbox
+      instance_prefix: ale
+      zones: [cn-hangzhou-i, cn-hangzhou-j, cn-hangzhou-k]
+
+  cpu-free:                   # Windows, no GPU
+    provider: aliyun
+    image: ale-win10
+    resolution: [1024, 768]
+    aliyun:
+      region: cn-hangzhou
+      security_group: ale-sandbox
+      instance_prefix: ale
+      zones: [cn-hangzhou-i, cn-hangzhou-j, cn-hangzhou-k]
+
+  cpu-license:                # Windows requiring a licensed image (same family)
+    provider: aliyun
+    image: ale-win10
+    resolution: [1024, 768]
+    aliyun:
+      region: cn-hangzhou
+      security_group: ale-sandbox
+      instance_prefix: ale
+      zones: [cn-hangzhou-i, cn-hangzhou-j, cn-hangzhou-k]
+
+  gpu-free:                   # GPU Windows = the Server image (A10 driver baked in)
+    provider: aliyun
+    image: ale-win-server
+    resolution: [1920, 1080]
+    aliyun:
+      region: cn-hangzhou
+      security_group: ale-sandbox
+      instance_prefix: ale
+      gpu: nvidia-a10         # truthy → gn7i (NVIDIA A10)
+      zones: [cn-hangzhou-i, cn-hangzhou-j, cn-hangzhou-k]
+
+  gpu-license:                # GPU Windows, licensed-image tasks (same Server image)
+    provider: aliyun
+    image: ale-win-server
+    resolution: [1920, 1080]
+    aliyun:
+      region: cn-hangzhou
+      security_group: ale-sandbox
+      instance_prefix: ale
+      gpu: nvidia-a10
+      zones: [cn-hangzhou-i, cn-hangzhou-j, cn-hangzhou-k]
+
+# ---------------------------------------------------------------------------
+# Task data + output (substrate-coupled; mirrors environment.yaml).
+# ---------------------------------------------------------------------------
+# "baked_in_sandbox" (data baked into the image) | "oss://<bucket>".
+task_data_source: baked_in_sandbox
+
+# Output after the run: null | "local" | "oss://<bucket>". For full benchmark
+# runs set this to your results bucket and add `ram_role_name: ale-sandbox` to
+# each snapshot's aliyun: block (the in-box ossutil writes via the instance role).
+output_path: local
