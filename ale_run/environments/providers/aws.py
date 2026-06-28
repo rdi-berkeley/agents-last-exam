@@ -528,8 +528,10 @@ class AwsProvider(Provider):
             "--query", "reverse(sort_by(Images,&CreationDate))[0].ImageId",
             region=self._cfg.region,
         )
+        # --output json (forced by _run_aws) serialises a no-match --query as the
+        # literal `null` → "null" after strip; treat it as empty.
         ami = (out or "").strip().strip('"')
-        if rc != 0 or not ami or ami == "None":
+        if rc != 0 or not ami or ami in ("None", "null"):
             raise RuntimeError(
                 f"no AMI tagged ale:image-family={family!r} in {self._cfg.region} "
                 f"(register one, tag it, or set an explicit `ami:` on the snapshot). "
@@ -579,14 +581,16 @@ class AwsProvider(Provider):
             "| [0]",
             region=self._cfg.region,
         )
+        # "null" = no project=ale subnet in this AZ → fall through to any subnet
+        # (--output json serialises an empty --query as the literal `null`).
         subnet = (out or "").strip().strip('"')
-        if not subnet or subnet == "None":
+        if not subnet or subnet in ("None", "null"):
             rc, out, err = await _run_aws(
                 "ec2", "describe-subnets", "--filters", *filters,
                 "--query", "Subnets[0].SubnetId", region=self._cfg.region,
             )
             subnet = (out or "").strip().strip('"')
-        if rc != 0 or not subnet or subnet == "None":
+        if rc != 0 or not subnet or subnet in ("None", "null"):
             raise RuntimeError(
                 f"no subnet in AZ {az} (vpc={vpc_id}): {(err or '').strip()[:200]}"
             )

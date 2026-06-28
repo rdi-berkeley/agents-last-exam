@@ -113,7 +113,10 @@ import_linux() {                     # $1 family (ale-ubuntu22)
     --query 'Reservations[0].Instances[0].PublicIpAddress' --output text 2>/dev/null); [ -n "$ip" ] && [ "$ip" != None ] && break; sleep 10; done
   wait_cua "$ip" || { aws ec2 terminate-instances --region $R --instance-ids "$iid" >/dev/null; return 1; }
   local inst='curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/a.zip && cd /tmp && unzip -q -o a.zip && sudo ./aws/install --update && rm -rf /tmp/aws /tmp/a.zip && /usr/local/bin/aws --version'
-  curl -s --max-time 180 -X POST "http://$ip:5000/cmd" -H 'Content-Type: application/json' \
+  # 900s: the aws CLI install (~100MB download + unzip + sudo install) can take
+  # several minutes on a cold instance; too short and curl drops before the
+  # single SSE `data:` reply, aborting the script (set -o pipefail) + leaking the builder.
+  curl -s --max-time 900 -X POST "http://$ip:5000/cmd" -H 'Content-Type: application/json' \
     -d "$(python3 -c 'import json,sys;print(json.dumps({"command":"run_command","params":{"command":sys.argv[1]}}))' "$inst")" \
     | tr '\r' '\n' | grep '^data:' | head -1 | sed 's/^data: //' | J "['stdout'][-60:]"
   ami1=$(aws ec2 create-image --region $R --instance-id "$iid" --name "$fam-$(date +%s)" \

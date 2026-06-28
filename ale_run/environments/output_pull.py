@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 _PULL_CONCURRENCY = 8
 _QEMU_SHARE_COPY_TIMEOUT_S = 3600
 _GCS_PUSH_TIMEOUT_S = 3600
+_S3_PUSH_TIMEOUT_S = 3600
 
 
 def _output_dir(sandbox: SandboxHandle, task_data: TaskDataSpec) -> str:
@@ -367,7 +368,7 @@ async def push_to_s3(
             '"'
         )
     logger.info("push_to_s3: %s → %s", src, s3_dst)
-    r = await sandbox.run_command(cmd, timeout=600)
+    r = await sandbox.run_command(cmd, timeout=_S3_PUSH_TIMEOUT_S)
     if r.returncode != 0:
         raise RuntimeError(
             f"aws s3 cp failed (rc={r.returncode}): {(r.stderr or '')[:300]}"
