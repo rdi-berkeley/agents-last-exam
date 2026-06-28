@@ -33,14 +33,13 @@ export ACCOUNT=$(aws sts get-caller-identity --query Account --output text)</cod
 
     <h2>① Create the network</h2>
     <p>
-      One VPC named by its security group <code>ale-sandbox</code>, with a public
-      subnet in three Availability Zones (tried in order if one is short on
-      capacity) and the port ALE needs open (<code>5000</code>; <code>3389</code>
-      for viewing a Windows desktop). The gcloud counterpart is the
-      <code>ale-vpc</code> network.
+      An <code>ale-vpc</code> network with a public subnet in three Availability
+      Zones (tried in order if one is short on capacity), and a security group
+      <code>ale-sandbox</code> opening the port ALE needs (<code>5000</code>;
+      <code>3389</code> to view a Windows desktop).
     </p>
     <pre><code>VPC=$(aws ec2 create-vpc --cidr-block 10.0.0.0/16 \
-  --tag-specifications 'ResourceType=vpc,Tags=[{Key=project,Value=ale}]' \
+  --tag-specifications 'ResourceType=vpc,Tags=[{Key=project,Value=ale},{Key=Name,Value=ale-vpc}]' \
   --query Vpc.VpcId --output text)
 aws ec2 modify-vpc-attribute --vpc-id $VPC --enable-dns-hostnames
 
@@ -72,7 +71,7 @@ aws ec2 authorize-security-group-ingress --group-id $SG --protocol tcp --port 33
     <ul>
       <li><code>ale-ubuntu22</code> — Linux (the bulk of tasks)</li>
       <li><code>ale-win10</code> or <code>ale-win-server</code> — Windows; either
-        works, choose whichever your tasks need</li>
+        one works, pick one</li>
     </ul>
     <pre><code># copy an image into your account (repeat per image you need)
 fam=ale-ubuntu22                       # or ale-win10 / ale-win-server
@@ -87,10 +86,15 @@ aws ec2 create-tags --resources $new --tags Key=ale:image-family,Value=$fam</cod
       while — it's a large disk.)
     </p>
 
-    <h2>③ Keep run output in S3 <span style="font-weight:400">(optional)</span></h2>
+    <h2>③ Keep run output in S3 <span style="font-weight:400">(recommended for real runs)</span></h2>
     <p>
-      By default each run's output is pulled back to your machine. To collect it
-      in S3 instead, create a bucket and a role that lets the sandbox upload to it:
+      With <code>output_path: local</code> each run's output is fetched back to
+      your machine over the sandbox's control port — fine for a quick demo, but
+      for large outputs at scale that's slow and flaky and drags down overall
+      throughput. So, exactly as on Google Cloud (where output goes to a GCS
+      bucket), the recommended path is to have the sandbox upload straight to S3.
+      Output is organized by run id, so you can find each run's files afterward.
+      Create the bucket and a role that lets the sandbox upload to it:
     </p>
     <pre><code>aws s3api create-bucket --bucket ale-run-results-$ACCOUNT --region us-east-1
 
