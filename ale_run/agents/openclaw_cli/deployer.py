@@ -16,7 +16,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 import shutil
 import subprocess
 import time
@@ -717,14 +716,32 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         pid_file.write_text(str(proc.pid), encoding="ascii")
         logger.info("openclaw_cli: spawned pid=%s", proc.pid)
 
-        # The episode wall budget is orchestration-owned: the executor wraps
-        # launch() in asyncio.wait_for(timeout=timeout_s) (derived from the
-        # task), so we just wait for the child here. (OpenClaw also enforces
-        # its own internal --timeout=agent_timeout_s.) If the orchestration
-        # budget fires we are cancelled mid-await; reap the child before
-        # propagating so it cannot outlive the run.
+        result_envelope: dict | None = None
+        last_stderr_size = -1
         try:
             while proc.poll() is None:
+                try:
+                    stderr_size = stderr_log.stat().st_size
+                except OSError:
+                    stderr_size = -1
+                if stderr_size > 0 and stderr_size != last_stderr_size:
+                    last_stderr_size = stderr_size
+                    candidate = _parse_stderr_json(_read_text_tolerant(stderr_log))
+                    if (
+                        isinstance(candidate, dict)
+                        and isinstance(candidate.get("payloads"), list)
+                        and isinstance(candidate.get("meta"), dict)
+                        and isinstance(
+                            candidate["meta"].get("durationMs"),
+                            (int, float),
+                        )
+                    ):
+                        result_envelope = candidate
+                        logger.info(
+                            "openclaw_cli: result envelope complete while pid=%s remains alive",
+                            proc.pid,
+                        )
+                        break
                 await asyncio.sleep(_POLL_INTERVAL_S)
         except asyncio.CancelledError:
             try:
@@ -744,13 +761,16 @@ class OpenClawCliDeployer(BaseAgentDeployer):
 
         duration_s = time.monotonic() - t0
         exit_code = proc.returncode
-        status = "completed" if exit_code == 0 else "failed"
+        status = "completed" if result_envelope is not None or exit_code == 0 else "failed"
         error: str | None = None
         if status == "failed":
             error = _diagnose_failure(stderr_log, exit_code)
 
         # Copy session trajectory to work_dir for gathering
-        session_id = self._extract_session_id(stderr_log)
+        if result_envelope is not None:
+            session_id = result_envelope.get("meta", {}).get("agentMeta", {}).get("sessionId")
+        else:
+            session_id = self._extract_session_id(stderr_log)
         if session_id:
             src = Path(home) / ".openclaw" / "agents" / _AGENT_ID / "sessions" / f"{session_id}.jsonl"
             dst = wd / "transcript.jsonl"
@@ -1072,7 +1092,8 @@ def _parse_stderr_json(stderr: str) -> dict | None:
         if line.strip() == "{":
             payload = "\n".join(lines[i:])
             try:
-                return json.loads(payload)
+                value, _ = json.JSONDecoder().raw_decode(payload.lstrip())
+                return value if isinstance(value, dict) else None
             except json.JSONDecodeError:
                 break
 
