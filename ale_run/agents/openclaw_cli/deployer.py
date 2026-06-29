@@ -903,6 +903,9 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                 usage = agent_meta.get("usage", {})
                 if usage:
                     builder.trajectory.extra["openclaw_cli"]["usage"] = usage
+                    final_metrics = _usage_final_metrics(usage)
+                    if final_metrics:
+                        builder.override_final_metrics(**final_metrics)
 
         if not transcript_file.exists():
             builder.add_step(
@@ -1122,6 +1125,26 @@ def _parse_stderr_json(stderr: str) -> dict | None:
                     except json.JSONDecodeError:
                         return None
     return None
+
+
+def _usage_final_metrics(usage: object) -> dict[str, int]:
+    """Map an authoritative OpenClaw aggregate usage object to ALE totals."""
+    if not isinstance(usage, dict):
+        return {}
+    field_map = {
+        "input": "total_input_tokens",
+        "output": "total_output_tokens",
+        "cacheRead": "total_cache_read_tokens",
+        "cacheWrite": "total_cache_creation_tokens",
+    }
+    totals = {
+        target: int(value)
+        for source, target in field_map.items()
+        if isinstance((value := usage.get(source)), (int, float))
+        and not isinstance(value, bool)
+        and value >= 0
+    }
+    return totals if any(totals.values()) else {}
 
 
 _DIAG_SIGNAL_PATTERNS = (
