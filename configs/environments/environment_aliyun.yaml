@@ -16,10 +16,32 @@
 #                      provider resolves it to its id + the VPC it lives in; that
 #                      VPC scopes the zone→vSwitch lookup.
 #   • zones            Alibaba zone ids, tried in order on capacity errors.
+#   • resolution       [w, h] forced Windows desktop framebuffer (sibling of
+#                      `image:`). WINDOWS-ONLY by design — Linux/X picks its own
+#                      size and ignores it, so the Ubuntu snapshot sets none.
+#                      Same rule as gcloud/aws (see environment.yaml's note).
 #   • gpu              truthy → a GPU instance type (gn7i / NVIDIA A10).
 #   • ram_role_name    instance RAM role for in-box OSS access (only needed for
 #                      oss:// task data / output) — Alibaba analogue of AWS's
 #                      IAM instance profile.
+#
+# VALIDATION STATUS (be honest — these differ by what was actually run):
+#   • cpu-free-ubuntu (Linux)  — ✅ validated end-to-end on cn-hangzhou (acquire
+#                                → cua → agent → eval → delete).
+#   • cpu-free / cpu-license (ale-win10, Windows) — ⚠️ WIRED, NOT YET TESTED on
+#                                Alibaba. No Windows image has been imported here
+#                                yet; the win10 boot + cua-on-Windows path is
+#                                unverified on ECS.
+#   • gpu-free / gpu-license (GPU) — ⚠️ WIRED, NOT YET TESTED, and likely needs
+#                                driver work: the published images bake the
+#                                **gcloud/AWS L4** GPU driver, but Alibaba's GPU
+#                                family here is **gn7i = NVIDIA A10** (a DIFFERENT
+#                                GPU). The baked L4 driver is NOT expected to bind
+#                                to A10 without a re-baked A10 driver. Treat GPU
+#                                as experimental until a gn7i box is launched and
+#                                `nvidia-smi` / the GPU app stack is verified
+#                                in-guest. (AWS likewise ships GPU "wired but
+#                                untested".)
 # ----------------------------------------------------------------------------
 
 snapshots:
@@ -53,26 +75,26 @@ snapshots:
       instance_prefix: ale
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
-  gpu-free:                   # GPU Windows = the Server image (A10 driver baked in)
+  gpu-free:                   # GPU Windows — ⚠️ untested on Alibaba (see header)
     provider: aliyun
-    image: ale-win-server
+    image: ale-win-server     # mirrors AWS; gcloud uses ale-win10. UNVERIFIED here.
     resolution: [1920, 1080]
     aliyun:
       region: cn-hangzhou
       security_group: ale-sandbox
       instance_prefix: ale
-      gpu: nvidia-a10         # truthy → gn7i (NVIDIA A10)
+      gpu: nvidia-a10         # truthy → gn7i (A10). NOTE: baked driver is L4, not A10.
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
-  gpu-license:                # GPU Windows, licensed-image tasks (same Server image)
+  gpu-license:                # GPU Windows, licensed tasks — ⚠️ untested (see header)
     provider: aliyun
-    image: ale-win-server
+    image: ale-win-server     # mirrors AWS; gcloud uses ale-win10. UNVERIFIED here.
     resolution: [1920, 1080]
     aliyun:
       region: cn-hangzhou
       security_group: ale-sandbox
       instance_prefix: ale
-      gpu: nvidia-a10
+      gpu: nvidia-a10         # baked driver is L4, not A10 — likely needs re-bake
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
 # ---------------------------------------------------------------------------
