@@ -172,3 +172,72 @@ def test_write_config_supports_custom_primary_and_direct_openai_vision(
             "key": "openai-test-key",
         },
     }
+
+
+def test_write_config_routes_direct_openai_vision_through_usage_proxy(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cfg = OpenClawCliConfig(
+        model="glm-5.2",
+        provider="zai",
+        base_url="https://open.bigmodel.cn/api/paas/v4",
+        vision_model="openai/gpt-5.4",
+        vision_provider="direct",
+    )
+    executor = SimpleNamespace(
+        config=cfg,
+        env={
+            "GLM_API_KEY": "zai-test-key",
+            "OPENAI_API_KEY": "openai-test-key",
+        },
+        cua_bridge_url=lambda: "http://127.0.0.1:5000",
+    )
+    deployer = OpenClawCliDeployer(executor)
+    deployer._vision_usage_proxy_provider = "openai"
+    deployer._vision_usage_proxy_url = "http://127.0.0.1:43210/v1"
+
+    deployer._write_config(cfg)
+
+    openclaw_config = json.loads(
+        (tmp_path / ".openclaw" / "openclaw.json").read_text()
+    )
+    assert openclaw_config["models"]["providers"]["openai"] == {
+        "baseUrl": "http://127.0.0.1:43210/v1",
+        "models": [
+            {
+                "id": "gpt-5.4",
+                "name": "openai/gpt-5.4",
+                "input": ["text", "image"],
+            }
+        ],
+        "request": {"allowPrivateNetwork": True},
+    }
+
+
+def test_direct_openai_primary_does_not_start_image_usage_proxy(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    cfg = OpenClawCliConfig(
+        model="openai/gpt-5.4",
+        provider="direct",
+        vision_model="openai/gpt-5.4",
+        vision_provider="direct",
+    )
+    executor = SimpleNamespace(config=cfg)
+    deployer = OpenClawCliDeployer(executor)
+
+    class UnexpectedProxy:
+        def __init__(self, **kwargs) -> None:
+            raise AssertionError(f"proxy should not start: {kwargs}")
+
+    monkeypatch.setattr(
+        "ale_run.agents.openclaw_cli.deployer.VisionUsageProxy",
+        UnexpectedProxy,
+    )
+
+    deployer._start_vision_usage_proxy(cfg, tmp_path)
+
+    assert not hasattr(deployer, "_vision_usage_proxy")

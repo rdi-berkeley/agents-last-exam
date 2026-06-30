@@ -37,6 +37,13 @@ from ale_run.base_interface import (
 )
 
 from .config import CUA_TOOL_NAMES, OpenClawCliConfig
+from .vision import (
+    VisionUsageProxy,
+    persist_transcript_images,
+    read_image_model_usage,
+    run_dir_for_artifacts,
+    stage_transcript_file_images,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +52,6 @@ _TERM_GRACE_S = 2.0
 _AGENT_ID = "main"
 _PLUGIN_PROVIDER_IDS = frozenset({"anthropic", "openai", "openrouter", "zai"})
 _ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
 _STDERR_PREAMBLE_PREFIXES = (
     "[agent/embedded] session file repaired",
     "[agent/embedded] embedded run agent end",
@@ -342,6 +348,65 @@ class OpenClawCliDeployer(BaseAgentDeployer):
             "(expected 'openrouter', 'direct', 'zai', or 'custom')"
         )
 
+    def _start_vision_usage_proxy(
+        self,
+        cfg: OpenClawCliConfig,
+        work_dir: Path,
+    ) -> None:
+        if not cfg.vision_model:
+            return
+        routing_provider = cfg.vision_provider or cfg.provider
+        try:
+            resolved_provider = self._direct_provider_for_model(cfg.vision_model)
+        except RuntimeError:
+            return
+        if routing_provider != "direct" or resolved_provider != "openai":
+            return
+        primary_route_model = cfg.model_id or cfg.model
+        if (
+            cfg.provider == "direct"
+            and self._direct_provider_for_model(primary_route_model) == "openai"
+        ) or (
+            cfg.provider == "custom"
+            and cfg.provider_id == "openai"
+        ):
+            logger.info(
+                "openclaw_cli: image usage capture skipped because the primary "
+                "and vision routes share the OpenAI provider"
+            )
+            return
+
+        upstream_url = cfg.vision_base_url or "https://api.openai.com/v1"
+        try:
+            proxy = VisionUsageProxy(
+                upstream_url=upstream_url,
+                usage_log=work_dir / "vision-usage.jsonl",
+                provider="openai",
+                model=cfg.vision_model.split("/", 1)[-1],
+            )
+        except ValueError:
+            logger.warning(
+                "openclaw_cli: vision usage proxy skipped for unsupported "
+                "upstream URL %s",
+                upstream_url,
+            )
+            return
+        proxy.start()
+        self._vision_usage_proxy = proxy
+        self._vision_usage_proxy_provider = "openai"
+        self._vision_usage_proxy_url = proxy.base_url
+        logger.info(
+            "openclaw_cli: vision usage proxy listening at %s",
+            self._vision_usage_proxy_url,
+        )
+
+    def _stop_vision_usage_proxy(self) -> None:
+        proxy = getattr(self, "_vision_usage_proxy", None)
+        if proxy is None:
+            return
+        proxy.stop()
+        self._vision_usage_proxy = None
+
     def _write_config(self, cfg: OpenClawCliConfig) -> None:
         """Write openclaw.json, auth-profiles.json, exec-approvals, workspace-state."""
         home = os.path.expanduser("~")
@@ -383,6 +448,9 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                 api_key_env=cfg.api_key_env,
                 purpose="vision",
             )
+            proxy_url = getattr(self, "_vision_usage_proxy_url", None)
+            if proxy_url:
+                vision_base_url = proxy_url
 
         # --- openclaw.json ---
         primary_model = self._route_model(primary_route_model, provider)
@@ -518,11 +586,22 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                 if catalog_provider == "zai" or catalog_api:
                     existing["api"] = catalog_api or "openai-completions"
                 provider_catalogs[catalog_provider] = existing
+            if (
+                catalog_provider
+                == getattr(self, "_vision_usage_proxy_provider", None)
+            ):
+                existing["request"] = {"allowPrivateNetwork": True}
             if not any(model["id"] == catalog_id for model in existing["models"]):
                 model_entry = {
                     "id": catalog_id,
                     "name": catalog_name or catalog_id,
                 }
+                if (
+                    catalog_provider
+                    == getattr(self, "_vision_usage_proxy_provider", None)
+                    and catalog_model == cfg.vision_model
+                ):
+                    model_entry["input"] = ["text", "image"]
                 if cfg.provider == "custom" and catalog_provider == provider:
                     model_entry["compat"] = {
                         "maxTokensField": "max_completion_tokens",
@@ -742,11 +821,19 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         else:
             logger.info("openclaw_cli: CUA plugin already installed")
 
-        # 3. Write config files
-        self._write_config(cfg)
+        # 3. Route the direct OpenAI vision model through an ALE-owned
+        # loopback proxy that records response usage only.
+        self._start_vision_usage_proxy(cfg, wd)
 
-        # 4. Pre-warm the bundled-plugin runtime-deps mirror.
-        await self._prewarm_plugin_runtime_mirror(cfg)
+        try:
+            # 4. Write config files
+            self._write_config(cfg)
+
+            # 5. Pre-warm the bundled-plugin runtime-deps mirror.
+            await self._prewarm_plugin_runtime_mirror(cfg)
+        except BaseException:
+            self._stop_vision_usage_proxy()
+            raise
 
     async def _prewarm_plugin_runtime_mirror(self, cfg: OpenClawCliConfig) -> None:
         """Force OpenClaw to build its bundled-plugin runtime-deps mirror now,
@@ -893,8 +980,10 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                     proc.kill()
                 except ProcessLookupError:
                     pass
+            self._stop_vision_usage_proxy()
             raise
 
+        self._stop_vision_usage_proxy()
         duration_s = time.monotonic() - t0
         exit_code = proc.returncode
         status = "completed" if result_envelope is not None or exit_code == 0 else "failed"
@@ -912,6 +1001,7 @@ class OpenClawCliDeployer(BaseAgentDeployer):
             dst = wd / "transcript.jsonl"
             if src.exists():
                 shutil.copy2(str(src), str(dst))
+                stage_transcript_file_images(dst, wd)
                 logger.info("openclaw_cli: copied session trajectory to %s", dst)
 
         return AgentRunResult(
@@ -1020,6 +1110,10 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         # 1. Parse session trajectory JSONL (if available)
         transcript_file = work_dir / "transcript.jsonl"
         if transcript_file.exists():
+            persist_transcript_images(
+                transcript_file,
+                run_dir_for_artifacts(work_dir),
+            )
             raw = transcript_file.read_text(encoding="utf-8", errors="replace")
             for line in raw.splitlines():
                 line = line.strip()
@@ -1046,6 +1140,12 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                     final_metrics = _usage_final_metrics(usage)
                     if final_metrics:
                         builder.override_final_metrics(**final_metrics)
+
+        image_usage = read_image_model_usage(work_dir / "vision-usage.jsonl")
+        if image_usage:
+            builder.trajectory.extra.setdefault("openclaw_cli", {})[
+                "image_model_usage"
+            ] = image_usage
 
         if not transcript_file.exists():
             builder.add_step(
@@ -1149,6 +1249,18 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                                         data=c.get("data"),
                                     ),
                                 ))
+                            elif c.get("type") == "image" and c.get("path"):
+                                parts.append(ContentPart(
+                                    type="image",
+                                    image=ImageSource(
+                                        type="path",
+                                        media_type=c.get(
+                                            "mimeType",
+                                            "image/png",
+                                        ),
+                                        path=c.get("path"),
+                                    ),
+                                ))
                     results.append(ToolResult(
                         tool_call_id=block.get("tool_use_id") or block.get("call_id", ""),
                         content=parts,
@@ -1186,6 +1298,15 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                             type="base64",
                             media_type=block.get("mimeType", "image/png"),
                             data=block.get("data"),
+                        ),
+                    ))
+                elif btype == "image" and block.get("path"):
+                    parts.append(ContentPart(
+                        type="image",
+                        image=ImageSource(
+                            type="path",
+                            media_type=block.get("mimeType", "image/png"),
+                            path=block.get("path"),
                         ),
                     ))
             if not parts:
