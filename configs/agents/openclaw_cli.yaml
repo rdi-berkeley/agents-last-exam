@@ -17,7 +17,8 @@ model: openai/gpt-5.4
 
 config:
   # Routing: "openrouter" (default), "direct" (provider picked by model vendor),
-  # or "zai".
+  # "zai" (validated with GLM-5.2), or "custom" (validated with an Azure
+  # OpenAI-compatible endpoint).
   provider: openrouter
 
   # Custom OpenAI-compatible base URL → written to openclaw.json
