@@ -50,8 +50,18 @@
 #                                even launch here yet. Even once it does, the baked
 #                                GPU driver is the gcloud/AWS L4 driver, so binding
 #                                to an A10/T4 is a further unknown (likely a re-bake).
-#                                Override `vm.machineType` to a UEFI GPU type your
-#                                region actually sells, or rebuild the image for BIOS.
+#                                TRIED (2026-07-01) + FAILED: re-importing the raw
+#                                with --BootMode BIOS DOES let it launch on the
+#                                in-stock BIOS A10 (gn7i-c8g1), but Windows then
+#                                never boots (cua times out at 1200s) — the GCE
+#                                image is UEFI/GPT and carries no MBR boot code, so
+#                                a BootMode-only flip is not bootable. Real GPU
+#                                support needs a genuinely BIOS-bootable rebuild of
+#                                the image (hybrid MBR/GPT) OR a region/zone that
+#                                actually sells a UEFI GPU type (gn7i-xr / gn6t) —
+#                                plus, likely, an A10/T4 driver re-bake. Not a
+#                                config fix. Override `vm.machineType` per-env if
+#                                your region sells a UEFI GPU type.
 # ----------------------------------------------------------------------------
 
 snapshots:
