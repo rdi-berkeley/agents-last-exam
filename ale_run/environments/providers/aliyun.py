@@ -65,10 +65,19 @@ logger = logging.getLogger(__name__)
 
 # Default instance when a task_card declares no ``vm.machineType``. CPU falls
 # back C→G (see _instance_chain); GPU has no instance fallback.
-_DEFAULT_CPU_INSTANCE = "ecs.g7.2xlarge"          # 8 vCPU / 32 GiB, general
-# gn7i = NVIDIA A10 — the closest Alibaba family to the GCE image's L4, so the
-# baked driver has the best chance of binding.
-_DEFAULT_GPU_INSTANCE = "ecs.gn7i-c8g1.2xlarge"   # 8 vCPU / 30 GiB / 1x A10
+_DEFAULT_CPU_INSTANCE = "ecs.g7.2xlarge"          # 8 vCPU / 32 GiB, general (UEFI ✓)
+# GPU default MUST be a UEFI-boot-capable type: the published ALE images are
+# UEFI (built on GCE), and RunInstances hard-rejects a UEFI image on a BIOS-only
+# instance type with ``InvalidParameter.NotMatch: Image bootMode UEFI does not
+# match instanceType bootMode``. The common A10 type ``ecs.gn7i-c8g1.2xlarge`` is
+# BIOS-only, so it does NOT work here (verified live). The A10 type that DOES
+# accept UEFI is ``ecs.gn7i-xr.4xlarge``; the T4 ``ecs.gn6t.*`` family is also
+# UEFI-capable. ⚠️ Availability is region/zone-specific and volatile — as of this
+# writing gn7i-xr is not offered in cn-hangzhou and gn6t is offered but often
+# out of stock, so GPU snapshots may need a per-env ``vm.machineType`` override
+# to whatever UEFI GPU type your region actually sells. GPU is NOT yet validated
+# end-to-end on Alibaba (blocked on UEFI-GPU stock; see environment_aliyun.yaml).
+_DEFAULT_GPU_INSTANCE = "ecs.gn7i-xr.4xlarge"      # NVIDIA A10, UEFI-capable
 
 # Launch retry tuning.
 _ALIYUN_MAX_RETRIES_TRANSIENT = 3

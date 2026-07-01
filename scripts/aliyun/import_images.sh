@@ -106,6 +106,12 @@ import_base() {                      # $1 family, $2 OSType, $3 Platform → ech
   local fam=$1 ostype=$2 platform=$3
   ensure_bucket; ensure_raw "$fam" >&2
   say "$fam: ImportImage (OSType=$ostype Platform=$platform)" >&2
+  # --Platform is a CLOSED enum. The bare value "Windows" is rejected
+  # (InvalidPlatform.Malformed), and OMITTING it makes ImportImage auto-detect a
+  # Windows disk as OSType=linux (Platform "Others Linux") — which then skips
+  # Alibaba's Windows virtio driver injection, so the booted guest has no NIC and
+  # cua is unreachable. So Windows MUST pass an explicit Server platform (e.g.
+  # "Windows Server 2022"); that yields OSType=windows + proper driver injection.
   local img
   img=$(aliyun ecs ImportImage --RegionId "$R" \
     --ImageName "$fam-base-$(date +%s)" --OSType "$ostype" --Platform "$platform" \
@@ -147,8 +153,10 @@ import_linux() {                     # $1 family — import, bake aliyun CLI + o
 }
 
 import_windows() {                   # $1 family — import + tag (no bake needed)
+  # Explicit Server platform → OSType=windows + virtio driver injection (a bare
+  # or omitted Platform mis-detects as Linux and the guest boots with no NIC).
   local fam=$1 img
-  img=$(import_base "$fam" windows Windows); [ "$img" = FAILED ] && return 1
+  img=$(import_base "$fam" windows "Windows Server 2022"); [ "$img" = FAILED ] && return 1
   tag_image "$img" "$fam"
   echo "WINDOWS_DONE $fam -> $img"
 }

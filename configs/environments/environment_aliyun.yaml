@@ -28,20 +28,30 @@
 # VALIDATION STATUS (be honest — these differ by what was actually run):
 #   • cpu-free-ubuntu (Linux)  — ✅ validated end-to-end on cn-hangzhou (acquire
 #                                → cua → agent → eval → delete).
-#   • cpu-free / cpu-license (ale-win10, Windows) — ⚠️ WIRED, NOT YET TESTED on
-#                                Alibaba. No Windows image has been imported here
-#                                yet; the win10 boot + cua-on-Windows path is
-#                                unverified on ECS.
-#   • gpu-free / gpu-license (GPU) — ⚠️ WIRED, NOT YET TESTED, and likely needs
-#                                driver work: the published images bake the
-#                                **gcloud/AWS L4** GPU driver, but Alibaba's GPU
-#                                family here is **gn7i = NVIDIA A10** (a DIFFERENT
-#                                GPU). The baked L4 driver is NOT expected to bind
-#                                to A10 without a re-baked A10 driver. Treat GPU
-#                                as experimental until a gn7i box is launched and
-#                                `nvidia-smi` / the GPU app stack is verified
-#                                in-guest. (AWS likewise ships GPU "wired but
-#                                untested".)
+#   • cpu-free / cpu-license (Windows, ale-win10) — ✅ boot + cua VALIDATED on
+#                                cn-hangzhou (win10 → "Windows 10 Pro", cua ready
+#                                ~144 s on ecs.g7). ale-win-server likewise (→
+#                                "Windows Server 2022"). NOTE on IMPORT: a Windows
+#                                image MUST be imported with an explicit
+#                                `--Platform "Windows Server 2022"` (OSType=windows)
+#                                so Alibaba injects the virtio NIC driver; omitting
+#                                Platform auto-detects it as Linux → the guest boots
+#                                with no NIC and cua never connects. On a non-GPU box
+#                                the Windows display adapter only offers 800x600, so
+#                                `resolution:` best-fits down (logged, not fatal).
+#   • gpu-free / gpu-license (GPU) — ⚠️ WIRED, NOT yet runnable on cn-hangzhou.
+#                                BLOCKER is boot-mode + stock, BEFORE the driver
+#                                question: the ALE images are UEFI, but the GPU
+#                                types with stock here (ecs.gn7i-c8g1 A10, gn6i T4,
+#                                gn6v V100) are BIOS-only and reject a UEFI image at
+#                                launch. UEFI-capable GPU types — ecs.gn7i-xr (A10),
+#                                ecs.gn6t (T4) — are either not sold in cn-hangzhou
+#                                (gn7i-xr) or out of stock (gn6t). So a GPU box can't
+#                                even launch here yet. Even once it does, the baked
+#                                GPU driver is the gcloud/AWS L4 driver, so binding
+#                                to an A10/T4 is a further unknown (likely a re-bake).
+#                                Override `vm.machineType` to a UEFI GPU type your
+#                                region actually sells, or rebuild the image for BIOS.
 # ----------------------------------------------------------------------------
 
 snapshots:
