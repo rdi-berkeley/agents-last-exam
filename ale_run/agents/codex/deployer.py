@@ -43,6 +43,7 @@ from ale_run.base_interface import (
 )
 
 from .config import CodexConfig
+from .telemetry import CodexOtelCollector, recover_telemetry_artifacts
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,11 @@ class CodexDeployer(BaseAgentDeployer):
 
     default_executor: ClassVar[str] = "sandbox"
     supported_executors: ClassVar[frozenset[str]] = frozenset({"sandbox"})
-    hot_artifacts: ClassVar[tuple[str, ...]] = ("transcript.jsonl", "stderr.log")
+    hot_artifacts: ClassVar[tuple[str, ...]] = (
+        "transcript.jsonl",
+        "stderr.log",
+        "otel_requests.jsonl",
+    )
 
     # NPM stock fallback version (only relevant when nothing is on PATH and the
     # fork overlay is then applied on top). Last-resort value for ``version``.
@@ -333,7 +338,12 @@ class CodexDeployer(BaseAgentDeployer):
             except OSError:
                 pass
 
-    async def _write_codex_config(self, cfg: CodexConfig) -> None:
+    async def _write_codex_config(
+        self,
+        cfg: CodexConfig,
+        *,
+        otel_endpoint: str | None = None,
+    ) -> None:
         """Write ~/.codex/config.toml with MCP server + provider config."""
         sandbox = self.executor.sandbox
 
@@ -431,6 +441,18 @@ class CodexDeployer(BaseAgentDeployer):
                           for k, v in cfg.feature_overrides.items()),
             )
 
+        if otel_endpoint is not None:
+            config_toml += (
+                "\n[otel]\n"
+                'environment = "ale"\n'
+                "log_user_prompt = true\n"
+                'trace_exporter = "none"\n'
+                'metrics_exporter = "none"\n'
+                "exporter = { otlp-http = { "
+                f'endpoint = "{otel_endpoint}", protocol = "json"'
+                " } }\n"
+            )
+
         # Write config file (codex_config_dir created above).
         config_path = os.path.join(codex_config_dir, "config.toml")
         Path(config_path).write_text(config_toml, encoding="utf-8")
@@ -449,6 +471,7 @@ class CodexDeployer(BaseAgentDeployer):
         transcript_file = wd / "transcript.jsonl"
         stderr_log = wd / "stderr.log"
         pid_file = wd / "codex.pid"
+        collector = CodexOtelCollector(wd) if cfg.otel_enabled else None
 
         for f in (transcript_file, stderr_log, pid_file):
             if f.exists():
@@ -471,42 +494,44 @@ class CodexDeployer(BaseAgentDeployer):
         argv = self._build_argv(cfg)
         env = self._build_env(cfg)
 
-        t0 = time.monotonic()
-        with open(prompt_file, "rb") as pin, \
-             open(transcript_file, "wb") as tout, \
-             open(stderr_log, "wb") as terr:
-            proc = await asyncio.to_thread(
-                subprocess.Popen,
-                argv,
-                stdin=pin,
-                stdout=tout,
-                stderr=terr,
-                env=env,
-                cwd=str(wd),
-                start_new_session=True if hasattr(os, "setsid") else False,
-            )
-        pid_file.write_text(str(proc.pid), encoding="ascii")
-        logger.info("codex: spawned pid=%s", proc.pid)
-
-        # The episode wall budget is orchestration-owned: the executor
-        # wraps launch() in asyncio.wait_for(timeout=timeout_s) (derived
-        # from the task), so we just wait for the child here. If that
-        # budget fires we are cancelled mid-await; reap the child before
-        # propagating so it cannot outlive the run.
         try:
-            while proc.poll() is None:
-                await asyncio.sleep(_POLL_INTERVAL_S)
-        except asyncio.CancelledError:
-            # Reap codex *and its children* — multi-agent sub-processes and
-            # stdio MCP servers — so the wall-budget cancel can't leave orphans.
-            self._terminate_proc_group(proc, force=False)
-            try:
-                await asyncio.wait_for(
-                    asyncio.to_thread(proc.wait), timeout=_TERM_GRACE_S,
+            if collector is not None:
+                collector.start()
+                await self._write_codex_config(cfg, otel_endpoint=collector.endpoint)
+                logger.info("codex: OTel collector listening at %s", collector.endpoint)
+
+            t0 = time.monotonic()
+            with open(prompt_file, "rb") as pin, \
+                 open(transcript_file, "wb") as tout, \
+                 open(stderr_log, "wb") as terr:
+                proc = await asyncio.to_thread(
+                    subprocess.Popen,
+                    argv,
+                    stdin=pin,
+                    stdout=tout,
+                    stderr=terr,
+                    env=env,
+                    cwd=str(wd),
+                    start_new_session=True if hasattr(os, "setsid") else False,
                 )
-            except (asyncio.TimeoutError, asyncio.CancelledError):
-                self._terminate_proc_group(proc, force=True)
-            raise
+            pid_file.write_text(str(proc.pid), encoding="ascii")
+            logger.info("codex: spawned pid=%s", proc.pid)
+
+            try:
+                while proc.poll() is None:
+                    await asyncio.sleep(_POLL_INTERVAL_S)
+            except asyncio.CancelledError:
+                self._terminate_proc_group(proc, force=False)
+                try:
+                    await asyncio.wait_for(
+                        asyncio.to_thread(proc.wait), timeout=_TERM_GRACE_S,
+                    )
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    self._terminate_proc_group(proc, force=True)
+                raise
+        finally:
+            if collector is not None:
+                collector.stop()
 
         duration_s = time.monotonic() - t0
         exit_code = proc.returncode
@@ -636,6 +661,11 @@ class CodexDeployer(BaseAgentDeployer):
         - ``turn.completed``: usage stats
         - ``thread.started``, ``error``, etc.
         """
+        try:
+            recover_telemetry_artifacts(work_dir)
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning("codex: could not recover telemetry artifacts: %s", exc)
+
         transcript_file = work_dir / "transcript.jsonl"
         if not transcript_file.exists():
             builder.add_step(
@@ -707,6 +737,8 @@ class CodexDeployer(BaseAgentDeployer):
         builder.trajectory.extra.setdefault("codex", {}).update({
             "exit_code": run_result.exit_code,
             "transcript_path": str(transcript_file),
+            "telemetry_path": str(work_dir / "telemetry.jsonl"),
+            "telemetry_summary_path": str(work_dir / "telemetry_summary.json"),
         })
 
     @classmethod

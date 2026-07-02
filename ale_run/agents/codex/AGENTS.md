@@ -197,6 +197,7 @@ Notes:
 | `model_catalog_path` | str | `""` | Host path to a Codex model-catalog JSON (for models not in codex's bundled catalog); read + sanitised host-side, shipped into the sandbox |
 | `model_catalog_content` | str | `""` | Auto-populated from `model_catalog_path` (do not set by hand) — carries the catalog text to the in-sandbox deployer |
 | `feature_overrides` | dict | `{}` | `{feature_key: bool}` written to config.toml `[features]`; force-enable/disable codex features (== tool surface). Empty = codex defaults |
+| `otel_enabled` | bool | `true` | Start a run-local OTLP/HTTP receiver and persist complete Codex telemetry, API timing, prompts, and tool results. Raw requests use a bounded-record WAL that is incrementally mirrored from sandbox VMs; event and summary files are rebuilt from it during finalization |
 
 > `timeout_s` is **not** an agent knob — the episode wall budget is
 > orchestration-owned (the executor wraps `launch()` in `wait_for`).

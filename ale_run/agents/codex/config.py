@@ -156,6 +156,11 @@ class CodexConfig:
     # ``{"multi_agent_v2": True, "multi_agent": False}``.
     feature_overrides: dict[str, bool] = field(default_factory=dict)
 
+    # Capture complete Codex OpenTelemetry logs for every run. The deployer
+    # starts a run-local OTLP/HTTP receiver and stores raw requests, flattened
+    # events, API-call timings, prompts, and tool arguments/results in work_dir.
+    otel_enabled: bool = True
+
     def __post_init__(self) -> None:
         # Load the catalog host-side (build_config) and embed its content so it
         # reaches the in-sandbox deployer. On the in-sandbox reconstruction the
