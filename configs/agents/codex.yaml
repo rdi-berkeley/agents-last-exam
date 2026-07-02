@@ -38,6 +38,10 @@ config:
   # Bypass all interactive approval prompts (headless exec).
   yolo: true
 
+  # Capture complete Codex OpenTelemetry logs, including prompts, API timing,
+  # tool arguments, tool output, and per-tool duration.
+  otel_enabled: true
+
   # model_reasoning_effort → Responses-API reasoning.effort. off|low|medium|high.
   reasoning_effort: high
 

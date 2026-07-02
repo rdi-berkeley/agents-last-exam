@@ -3,6 +3,7 @@
 # Auth: API keys via auth-profiles.json.
 #   provider=openrouter → OPENROUTER_API_KEY (model prefixed openrouter/<model>);
 #   provider=direct → OPENAI_API_KEY (gpt-*) or ANTHROPIC_API_KEY (claude-*).
+#   provider=zai → ZAI_API_KEY / Z_AI_API_KEY (model prefixed zai/<model>).
 #
 # Consolidated preset; `model:` is an example, every `config:` key is the
 # dataclass default (ale_run/agents/openclaw_cli/config.py).
@@ -15,7 +16,9 @@ harness: openclaw_cli
 model: openai/gpt-5.4
 
 config:
-  # Routing: "openrouter" (default) or "direct" (provider picked by model vendor).
+  # Routing: "openrouter" (default), "direct" (provider picked by model vendor),
+  # "zai" (validated with GLM-5.2), or "custom" (validated with an Azure
+  # OpenAI-compatible endpoint).
   provider: openrouter
 
   # Custom OpenAI-compatible base URL → written to openclaw.json
@@ -32,15 +35,29 @@ config:
   # provider's env var. When set, used directly in auth-profiles.json.
   api_key: null
 
+  # Provider-specific primary-model parameters. `extra_body` is merged into
+  # the OpenAI-compatible request body.
+  model_params: null
+
+  # Request token usage in streamed responses. Disable only for an endpoint
+  # that rejects stream_options.include_usage.
+  supports_usage_in_streaming: true
+
   # OpenClaw's OWN internal run budget (openclaw.json timeoutSeconds +
   # `agent --local --timeout <s>`). Distinct from the orchestration episode budget.
   agent_timeout_s: 600
 
-  # Thinking level: off | low | medium | high.
+  # Thinking level. Common values: off | on | minimal | low | medium | high |
+  # xhigh | max. OpenClaw validates provider-specific support at launch.
   thinking: high
 
   # Vision/screenshot model. null = none; default pins it to the same id as model.
   vision_model: openai/gpt-5.4
+
+  # Separate vision routing. null inherits the primary route.
+  vision_provider: null
+  vision_base_url: null
+  vision_api_key: null
 
   # Heartbeat cadence. "never" = no heartbeat messages.
   heartbeat_every: never

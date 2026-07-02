@@ -3,7 +3,7 @@
 OpenClaw is installed from a fork tarball (not public npm).
 CUA bridge is the native OpenClaw plugin (not MCP).
 
-Auth: API keys set via auth-profiles.json (OpenRouter or direct).
+Auth: API keys set via auth-profiles.json.
 """
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ class OpenClawCliConfig:
     # agenthle openclaw_cli_openrouter_gpt-5_4.yaml: openai/gpt-5.4.
     model: str = "openai/gpt-5.4"
 
-    # ---- routing (no secrets — API keys come from shell env) ----
+    # ---- primary-model routing ----
     provider: str = "openrouter"
     """Routing provider, drives auth-profile + model-prefix setup
     explicitly (not a key-presence heuristic):
@@ -78,7 +78,19 @@ class OpenClawCliConfig:
         (``claude-*`` / ``anthropic/...``) uses the ``anthropic`` provider
         + ANTHROPIC_API_KEY. OPENROUTER_API_KEY is dropped from the launch
         env so it cannot override the chosen direct provider.
+      - ``"zai"`` → Z.AI's native provider via ZAI_API_KEY,
+        Z_AI_API_KEY, or GLM_API_KEY; a custom CN/global endpoint can be
+        set with ``base_url``.
+      - ``"custom"`` → a named OpenAI-compatible provider declared through
+        ``provider_id``, ``model_id``, ``base_url``, and ``api_key_env``.
     Missing the required key for the chosen provider is a hard error."""
+
+    provider_id: str | None = None
+    """OpenClaw provider id used when ``provider: custom``."""
+
+    model_id: str | None = None
+    """Provider-facing model/deployment id. The top-level ``model`` remains
+    the human-facing model name recorded in experiment logs."""
 
     base_url: str | None = None
     """Custom OpenAI-compatible base URL for the resolved provider, written
@@ -97,6 +109,23 @@ class OpenClawCliConfig:
     serialized config, needs no env-passthrough whitelist change, and does not
     collide with a real OPENROUTER_API_KEY in the shell env."""
 
+    api_key_env: str | None = None
+    """Environment variable containing the key for ``provider: custom``."""
+
+    provider_api: str = "openai-completions"
+    """OpenClaw transport used by a custom provider."""
+
+    supports_usage_in_streaming: bool = True
+    """Request usage metadata in streamed responses. OpenAI-compatible
+    endpoints normally support this via ``stream_options.include_usage``;
+    disable only for an endpoint that rejects that request field."""
+
+    model_params: dict[str, object] | None = None
+    """Provider-specific parameters written to the primary model's
+    ``agents.defaults.models.<provider/model>.params`` entry. Use
+    ``extra_body`` for request-body fields that the OpenClaw transport does
+    not natively expose."""
+
     # OpenClaw's OWN internal run budget, written into openclaw.json
     # (``timeoutSeconds``) and passed as ``agent --local --timeout <s>``.
     # This is an agent-consumed knob (the CLI enforces it itself), distinct
@@ -104,12 +133,27 @@ class OpenClawCliConfig:
     # openclaw_cli_openrouter_gpt-5_4.yaml: timeout_seconds: 600.
     agent_timeout_s: int = 600
 
-    # agenthle openclaw_cli deployer default (_thinking_level): "high".
+    # Provider-specific accepted values are validated by OpenClaw.
     thinking: str = "high"
     # agenthle openclaw_cli_openrouter_gpt-5_4.yaml sets vision_model to the
     # same id as model; the dataclass default was None but every operational
     # openclaw_cli yaml pins it, so default to the gpt-5.4 operational value.
     vision_model: str | None = "openai/gpt-5.4"
+    """Image model used by both the explicit ``image`` tool and automatic
+    media understanding."""
+
+    vision_provider: str | None = None
+    """Routing mode for ``vision_model``. ``None`` inherits ``provider``.
+    Set ``"direct"`` to route a vision model through its native provider
+    while the primary model uses a gateway or Z.AI endpoint."""
+
+    vision_base_url: str | None = None
+    """Optional endpoint override for the vision route. When
+    ``vision_provider`` is unset, ``None`` inherits ``base_url``."""
+
+    vision_api_key: str | None = None
+    """Optional API key for the vision route. Native-provider environment
+    variables are used when omitted."""
     tools_deny: tuple[str, ...] = _TOOLS_DENY
     # Matches the agenthle openclaw_*_openrouter*.yaml plugins.allow: the
     # `memory-core` plugin provides the harmless `memory_get` file reader

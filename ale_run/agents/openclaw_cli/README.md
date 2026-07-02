@@ -32,7 +32,7 @@ install time via `npm install` + esbuild (`npm run build`).
 | Auth profiles | `~/.openclaw/agents/main/agent/auth-profiles.json` |
 | Sessions | `~/.openclaw/agents/main/sessions/<sid>.jsonl` |
 
-## Provider — OpenRouter or Direct
+## Provider Routing
 
 Auth is configured via `auth-profiles.json`. Routing is **explicit**, set
 by the `provider` config field (not inferred from which keys are in the
@@ -46,6 +46,16 @@ env):
   `anthropic/...`) uses the `anthropic` provider + `ANTHROPIC_API_KEY`.
   `OPENROUTER_API_KEY` is dropped from the launch env so it can't override
   the chosen direct provider.
+- `provider: zai` — the native Z.AI provider uses `ZAI_API_KEY` or
+  `Z_AI_API_KEY`. Set `base_url` to select the global, CN, or coding endpoint.
+- `provider: custom` — registers an OpenAI-compatible endpoint under
+  `provider_id`. `model_id` is the provider-facing deployment name, while the
+  top-level `model` remains the human-facing experiment label. The key is read
+  from `api_key_env`.
+
+`vision_provider` can route screenshot analysis independently from the
+primary model. For example, a text-only Z.AI model can use
+`vision_provider: direct` with `vision_model: openai/gpt-5.4`.
 
 Missing the required key for the chosen provider is a hard error.
 
@@ -78,8 +88,8 @@ agent:
   harness: openclaw_cli
   model: openai/gpt-5.4
   config:
-    provider: openrouter   # or "direct" (native openai/anthropic)
-    timeout_s: 1800
+    provider: openrouter   # or "direct" / "zai" / "custom"
+    agent_timeout_s: 1800
     thinking: high
     tarball_path: /opt/ale/openclaw-fork.tgz
     tarball_url: https://github.com/cua-verse/openclaw/releases/download/v0.1.0/openclaw-fork.tgz
@@ -90,10 +100,20 @@ agent:
 
 | Field | Meaning |
 |---|---|
-| `provider` | Routing: `openrouter` (default) or `direct` (native openai/anthropic) |
+| `provider` | Primary routing: `openrouter` (default), `direct`, `zai`, or `custom` |
+| `provider_id` | OpenClaw provider id for a custom route |
+| `model_id` | Provider-facing model or deployment id for a custom route |
+| `base_url` | Optional OpenAI-compatible endpoint override |
+| `api_key_env` | Environment variable containing a custom provider key |
+| `provider_api` | OpenClaw transport for a custom provider; defaults to `openai-completions` |
+| `supports_usage_in_streaming` | Request streamed token usage metadata; defaults to `true` |
 | `model` | Model slug. OpenRouter: `openai/gpt-5.4`, `anthropic/claude-sonnet-4-6`. Direct: `gpt-5.4` or `claude-sonnet-4-6` |
-| `thinking` | Reasoning depth: `off\|low\|medium\|high` |
+| `model_params` | Provider-specific model parameters; use `extra_body` for raw request fields |
+| `thinking` | Provider-specific reasoning depth; common values are `off`, `on`, `low`, `medium`, `high`, and `max` |
 | `vision_model` | Per-tool model override for image analysis |
+| `vision_provider` | Optional independent route for `vision_model`; `null` inherits `provider` |
+| `vision_base_url` | Optional endpoint override for the vision route |
+| `vision_api_key` | Optional key override for the vision route |
 | `tools_deny` | Tools removed from the schema |
 | `plugins_allow` | Which plugins load at startup |
 | `heartbeat_every` | `"never"` skips background loop |

@@ -37,13 +37,21 @@ from ale_run.base_interface import (
 )
 
 from .config import CUA_TOOL_NAMES, OpenClawCliConfig
+from .vision import (
+    VisionUsageProxy,
+    persist_transcript_images,
+    read_image_model_usage,
+    run_dir_for_artifacts,
+    stage_transcript_file_images,
+)
 
 logger = logging.getLogger(__name__)
 
 _POLL_INTERVAL_S = 2.0
 _TERM_GRACE_S = 2.0
 _AGENT_ID = "main"
-
+_PLUGIN_PROVIDER_IDS = frozenset({"anthropic", "openai", "openrouter", "zai"})
+_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _STDERR_PREAMBLE_PREFIXES = (
     "[agent/embedded] session file repaired",
     "[agent/embedded] embedded run agent end",
@@ -250,13 +258,24 @@ class OpenClawCliDeployer(BaseAgentDeployer):
             f"(claude-*) model, or prefix it with 'openai/' or 'anthropic/'."
         )
 
-    def _resolve_routing(self, cfg: OpenClawCliConfig) -> tuple[str, str]:
-        """Return ``(provider, api_key)`` for the configured routing.
+    def _resolve_route(
+        self,
+        *,
+        model: str,
+        routing_provider: str,
+        api_key_override: str | None,
+        provider_id: str | None = None,
+        api_key_env: str | None = None,
+        purpose: str,
+    ) -> tuple[str, str]:
+        """Return ``(provider, api_key)`` for one configured model route.
 
         Explicit, provider-driven (not key-presence inference):
           - ``openrouter`` → OPENROUTER_API_KEY.
           - ``direct`` → openai/anthropic native provider chosen by the
             model's vendor, keyed by OPENAI_API_KEY / ANTHROPIC_API_KEY.
+          - ``zai`` → ZAI_API_KEY, Z_AI_API_KEY, or GLM_API_KEY.
+          - ``custom`` → caller-supplied provider id and key env var.
         Missing the required key for the chosen provider is a hard error.
         """
         env = self.executor.env or {}
@@ -264,38 +283,129 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         def _key(name: str) -> str:
             return env.get(name) or os.environ.get(name, "")
 
-        if cfg.provider == "openrouter":
-            # A literal cfg.api_key (e.g. api_key: ${env:ARK_API_KEY}) travels
+        if routing_provider == "openrouter":
+            # A literal override (e.g. api_key: ${env:ARK_API_KEY}) travels
             # with the serialized config and takes precedence, so it does not
             # require — or collide with — a real OPENROUTER_API_KEY env var.
-            api_key = cfg.api_key or _key("OPENROUTER_API_KEY")
+            api_key = api_key_override or _key("OPENROUTER_API_KEY")
             if not api_key:
                 raise RuntimeError(
-                    "openclaw_cli: provider=openrouter but neither config "
-                    "api_key nor OPENROUTER_API_KEY is set. Set one before "
-                    "launch()."
+                    f"openclaw_cli: {purpose} provider=openrouter but neither "
+                    "its config api_key nor OPENROUTER_API_KEY is set."
                 )
             return "openrouter", api_key
 
-        if cfg.provider == "direct":
-            provider = self._direct_provider_for_model(cfg.model)
+        if routing_provider == "direct":
+            provider = self._direct_provider_for_model(model)
             key_var = "OPENAI_API_KEY" if provider == "openai" else "ANTHROPIC_API_KEY"
-            # A literal cfg.api_key (e.g. api_key: ${env:ARK_API_KEY}) takes
+            # A literal override (e.g. api_key: ${env:ARK_API_KEY}) takes
             # precedence — lets an OpenAI-compatible gateway (model prefixed
             # ``openai/...`` + base_url) authenticate without the native env var.
-            api_key = cfg.api_key or _key(key_var)
+            api_key = api_key_override or _key(key_var)
             if not api_key:
                 raise RuntimeError(
-                    f"openclaw_cli: provider=direct resolved to {provider!r} "
-                    f"for model {cfg.model!r} but neither config api_key nor "
-                    f"{key_var} is set. Set one before launch()."
+                    f"openclaw_cli: {purpose} provider=direct resolved to "
+                    f"{provider!r} for model {model!r} but neither its config "
+                    f"api_key nor {key_var} is set."
                 )
             return provider, api_key
 
+        if routing_provider == "zai":
+            api_key = (
+                api_key_override
+                or _key("ZAI_API_KEY")
+                or _key("Z_AI_API_KEY")
+                or _key("GLM_API_KEY")
+            )
+            if not api_key:
+                raise RuntimeError(
+                    f"openclaw_cli: {purpose} provider=zai but neither its "
+                    "config api_key, ZAI_API_KEY, Z_AI_API_KEY, nor "
+                    "GLM_API_KEY is set."
+                )
+            return "zai", api_key
+
+        if routing_provider == "custom":
+            if not provider_id:
+                raise RuntimeError(
+                    f"openclaw_cli: {purpose} provider=custom requires provider_id."
+                )
+            if not api_key_env or not _ENV_NAME_RE.fullmatch(api_key_env):
+                raise RuntimeError(
+                    f"openclaw_cli: {purpose} provider=custom requires a valid "
+                    "api_key_env environment variable name."
+                )
+            api_key = api_key_override or _key(api_key_env)
+            if not api_key:
+                raise RuntimeError(
+                    f"openclaw_cli: {purpose} provider=custom but neither its "
+                    f"config api_key nor {api_key_env} is set."
+                )
+            return provider_id, api_key
+
         raise RuntimeError(
-            f"openclaw_cli: unknown provider {cfg.provider!r} "
-            "(expected 'openrouter' or 'direct')"
+            f"openclaw_cli: unknown {purpose} provider {routing_provider!r} "
+            "(expected 'openrouter', 'direct', 'zai', or 'custom')"
         )
+
+    def _start_vision_usage_proxy(
+        self,
+        cfg: OpenClawCliConfig,
+        work_dir: Path,
+    ) -> None:
+        if not cfg.vision_model:
+            return
+        routing_provider = cfg.vision_provider or cfg.provider
+        try:
+            resolved_provider = self._direct_provider_for_model(cfg.vision_model)
+        except RuntimeError:
+            return
+        if routing_provider != "direct" or resolved_provider != "openai":
+            return
+        primary_route_model = cfg.model_id or cfg.model
+        if (
+            cfg.provider == "direct"
+            and self._direct_provider_for_model(primary_route_model) == "openai"
+        ) or (
+            cfg.provider == "custom"
+            and cfg.provider_id == "openai"
+        ):
+            logger.info(
+                "openclaw_cli: image usage capture skipped because the primary "
+                "and vision routes share the OpenAI provider"
+            )
+            return
+
+        upstream_url = cfg.vision_base_url or "https://api.openai.com/v1"
+        try:
+            proxy = VisionUsageProxy(
+                upstream_url=upstream_url,
+                usage_log=work_dir / "vision-usage.jsonl",
+                provider="openai",
+                model=cfg.vision_model.split("/", 1)[-1],
+            )
+        except ValueError:
+            logger.warning(
+                "openclaw_cli: vision usage proxy skipped for unsupported "
+                "upstream URL %s",
+                upstream_url,
+            )
+            return
+        proxy.start()
+        self._vision_usage_proxy = proxy
+        self._vision_usage_proxy_provider = "openai"
+        self._vision_usage_proxy_url = proxy.base_url
+        logger.info(
+            "openclaw_cli: vision usage proxy listening at %s",
+            self._vision_usage_proxy_url,
+        )
+
+    def _stop_vision_usage_proxy(self) -> None:
+        proxy = getattr(self, "_vision_usage_proxy", None)
+        if proxy is None:
+            return
+        proxy.stop()
+        self._vision_usage_proxy = None
 
     def _write_config(self, cfg: OpenClawCliConfig) -> None:
         """Write openclaw.json, auth-profiles.json, exec-approvals, workspace-state."""
@@ -308,20 +418,62 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         # routes the request through it: "openrouter/<model>" for the
         # OpenRouter gateway, or the native "openai/..." / "anthropic/..."
         # provider for a direct run.
-        provider, api_key = self._resolve_routing(cfg)
+        primary_route_model = cfg.model_id or cfg.model
+        provider, api_key = self._resolve_route(
+            model=primary_route_model,
+            routing_provider=cfg.provider,
+            api_key_override=cfg.api_key,
+            provider_id=cfg.provider_id,
+            api_key_env=cfg.api_key_env,
+            purpose="primary",
+        )
+        vision_provider: str | None = None
+        vision_api_key: str | None = None
+        vision_base_url: str | None = None
+        if cfg.vision_model:
+            vision_routing_provider = cfg.vision_provider or cfg.provider
+            vision_base_url = (
+                cfg.vision_base_url
+                if cfg.vision_provider is not None
+                else cfg.vision_base_url or cfg.base_url
+            )
+            vision_key_override = cfg.vision_api_key
+            if cfg.vision_provider is None and vision_key_override is None:
+                vision_key_override = cfg.api_key
+            vision_provider, vision_api_key = self._resolve_route(
+                model=cfg.vision_model,
+                routing_provider=vision_routing_provider,
+                api_key_override=vision_key_override,
+                provider_id=cfg.provider_id,
+                api_key_env=cfg.api_key_env,
+                purpose="vision",
+            )
+            proxy_url = getattr(self, "_vision_usage_proxy_url", None)
+            if proxy_url:
+                vision_base_url = proxy_url
 
         # --- openclaw.json ---
-        primary_model = self._route_model(cfg.model, provider)
+        primary_model = self._route_model(primary_route_model, provider)
         # The resolved provider's plugin must be enabled for its auth
         # profile to load (e.g. "anthropic" is not in the default allow set).
         plugins_allow = list(cfg.plugins_allow)
-        if provider not in plugins_allow:
-            plugins_allow.append(provider)
+        for required_provider in (provider, vision_provider):
+            if (
+                required_provider in _PLUGIN_PROVIDER_IDS
+                and required_provider not in plugins_allow
+            ):
+                plugins_allow.append(required_provider)
         tools_also_allow = list(CUA_TOOL_NAMES)
         agent_defaults: dict = {
             "model": {"primary": primary_model},
             "timeoutSeconds": int(cfg.agent_timeout_s),
-            "models": {primary_model: {}},
+            "models": {
+                primary_model: (
+                    {"params": cfg.model_params}
+                    if cfg.model_params is not None
+                    else {}
+                ),
+            },
         }
         # Only add heartbeat config when a valid duration is specified;
         # "never" is not a valid duration string for the openclaw CLI
@@ -366,20 +518,22 @@ class OpenClawCliDeployer(BaseAgentDeployer):
             },
         }
         if cfg.vision_model:
+            vision_model = self._route_model(cfg.vision_model, vision_provider)
+            agent_defaults["imageModel"] = {"primary": vision_model}
+            agent_defaults["models"].setdefault(vision_model, {})
             # openclaw schema (v2026.4.26): tools.media.image.models is an
             # ARRAY of {provider, model} entries (ordered preference list),
-            # not a map. For openrouter routing the model id stays vendor-
-            # prefixed ("openai/gpt-5.4"); for direct routing we split the
-            # vendor head off and route through it.
+            # not a map. OpenRouter keeps vendor-prefixed model ids while
+            # native providers receive their bare model id.
             vm = cfg.vision_model
-            if provider == "openrouter":
+            if vision_provider == "openrouter":
                 vision_entry = {"provider": "openrouter", "model": vm}
             else:
                 head, _, tail = vm.partition("/")
-                if tail:
-                    vision_entry = {"provider": head, "model": tail}
-                else:
-                    vision_entry = {"provider": provider, "model": vm}
+                vision_entry = {
+                    "provider": vision_provider,
+                    "model": tail if tail and head == vision_provider else vm,
+                }
             oc_config["tools"]["media"] = {
                 "image": {"models": [vision_entry]},
             }
@@ -390,23 +544,72 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         # also requires a non-empty ``models`` array declaring each usable model
         # id (bare, no provider prefix); openclaw surfaces them as
         # ``<provider>/<id>``. We register the primary (and vision) model ids.
-        if cfg.base_url:
-            def _bare(m: str) -> str:
-                head, sep, tail = m.partition("/")
-                return tail if sep and head == provider else m
-            catalog_ids: list[str] = [_bare(cfg.model)]
-            if cfg.vision_model:
-                vid = _bare(cfg.vision_model)
-                if vid not in catalog_ids:
-                    catalog_ids.append(vid)
-            oc_config["models"] = {
-                "providers": {
-                    provider: {
-                        "baseUrl": cfg.base_url,
-                        "models": [{"id": mid, "name": mid} for mid in catalog_ids],
-                    },
-                },
-            }
+        provider_catalogs: dict[str, dict] = {}
+        route_catalog_specs = [
+            (
+                provider,
+                cfg.base_url,
+                primary_route_model,
+                cfg.model,
+                cfg.provider_api if cfg.provider == "custom" else None,
+            ),
+            (
+                vision_provider,
+                vision_base_url,
+                cfg.vision_model,
+                cfg.vision_model,
+                None,
+            ),
+        ]
+        for (
+            catalog_provider,
+            catalog_base_url,
+            catalog_model,
+            catalog_name,
+            catalog_api,
+        ) in route_catalog_specs:
+            if not catalog_provider or not catalog_base_url or not catalog_model:
+                continue
+            head, sep, tail = catalog_model.partition("/")
+            catalog_id = tail if sep and head == catalog_provider else catalog_model
+            existing = provider_catalogs.get(catalog_provider)
+            if existing and existing["baseUrl"] != catalog_base_url:
+                raise RuntimeError(
+                    "openclaw_cli: primary and vision routes resolve to provider "
+                    f"{catalog_provider!r} with different base URLs"
+                )
+            if existing is None:
+                existing = {
+                    "baseUrl": catalog_base_url,
+                    "models": [],
+                }
+                if catalog_provider == "zai" or catalog_api:
+                    existing["api"] = catalog_api or "openai-completions"
+                provider_catalogs[catalog_provider] = existing
+            if (
+                catalog_provider
+                == getattr(self, "_vision_usage_proxy_provider", None)
+            ):
+                existing["request"] = {"allowPrivateNetwork": True}
+            if not any(model["id"] == catalog_id for model in existing["models"]):
+                model_entry = {
+                    "id": catalog_id,
+                    "name": catalog_name or catalog_id,
+                }
+                if (
+                    catalog_provider
+                    == getattr(self, "_vision_usage_proxy_provider", None)
+                    and catalog_model == cfg.vision_model
+                ):
+                    model_entry["input"] = ["text", "image"]
+                if cfg.provider == "custom" and catalog_provider == provider:
+                    model_entry["compat"] = {
+                        "maxTokensField": "max_completion_tokens",
+                        "supportsUsageInStreaming": cfg.supports_usage_in_streaming,
+                    }
+                existing["models"].append(model_entry)
+        if provider_catalogs:
+            oc_config["models"] = {"providers": provider_catalogs}
         (oc_home / "openclaw.json").write_text(
             json.dumps(oc_config, indent=2), encoding="utf-8",
         )
@@ -430,16 +633,27 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         agent_dir = oc_home / "agents" / _AGENT_ID / "agent"
         agent_dir.mkdir(parents=True, exist_ok=True)
 
+        auth_keys = {provider: api_key}
+        if vision_provider and vision_api_key:
+            existing_key = auth_keys.get(vision_provider)
+            if existing_key is not None and existing_key != vision_api_key:
+                raise RuntimeError(
+                    "openclaw_cli: primary and vision routes resolve to provider "
+                    f"{vision_provider!r} with different API keys"
+                )
+            auth_keys[vision_provider] = vision_api_key
         auth = {
             "profiles": {
-                f"{provider}:default": {
-                    "provider": provider,
+                f"{auth_provider}:default": {
+                    "provider": auth_provider,
                     "type": "api_key",
-                    "key": api_key,
-                },
+                    "key": auth_key,
+                }
+                for auth_provider, auth_key in auth_keys.items()
             },
             "lastGood": {
-                provider: f"{provider}:default",
+                auth_provider: f"{auth_provider}:default"
+                for auth_provider in auth_keys
             },
         }
         (agent_dir / "auth-profiles.json").write_text(
@@ -607,11 +821,19 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         else:
             logger.info("openclaw_cli: CUA plugin already installed")
 
-        # 3. Write config files
-        self._write_config(cfg)
+        # 3. Route the direct OpenAI vision model through an ALE-owned
+        # loopback proxy that records response usage only.
+        self._start_vision_usage_proxy(cfg, wd)
 
-        # 4. Pre-warm the bundled-plugin runtime-deps mirror.
-        await self._prewarm_plugin_runtime_mirror(cfg)
+        try:
+            # 4. Write config files
+            self._write_config(cfg)
+
+            # 5. Pre-warm the bundled-plugin runtime-deps mirror.
+            await self._prewarm_plugin_runtime_mirror(cfg)
+        except BaseException:
+            self._stop_vision_usage_proxy()
+            raise
 
     async def _prewarm_plugin_runtime_mirror(self, cfg: OpenClawCliConfig) -> None:
         """Force OpenClaw to build its bundled-plugin runtime-deps mirror now,
@@ -717,14 +939,32 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         pid_file.write_text(str(proc.pid), encoding="ascii")
         logger.info("openclaw_cli: spawned pid=%s", proc.pid)
 
-        # The episode wall budget is orchestration-owned: the executor wraps
-        # launch() in asyncio.wait_for(timeout=timeout_s) (derived from the
-        # task), so we just wait for the child here. (OpenClaw also enforces
-        # its own internal --timeout=agent_timeout_s.) If the orchestration
-        # budget fires we are cancelled mid-await; reap the child before
-        # propagating so it cannot outlive the run.
+        result_envelope: dict | None = None
+        last_stderr_size = -1
         try:
             while proc.poll() is None:
+                try:
+                    stderr_size = stderr_log.stat().st_size
+                except OSError:
+                    stderr_size = -1
+                if stderr_size > 0 and stderr_size != last_stderr_size:
+                    last_stderr_size = stderr_size
+                    candidate = _parse_stderr_json(_read_text_tolerant(stderr_log))
+                    if (
+                        isinstance(candidate, dict)
+                        and isinstance(candidate.get("payloads"), list)
+                        and isinstance(candidate.get("meta"), dict)
+                        and isinstance(
+                            candidate["meta"].get("durationMs"),
+                            (int, float),
+                        )
+                    ):
+                        result_envelope = candidate
+                        logger.info(
+                            "openclaw_cli: result envelope complete while pid=%s remains alive",
+                            proc.pid,
+                        )
+                        break
                 await asyncio.sleep(_POLL_INTERVAL_S)
         except asyncio.CancelledError:
             try:
@@ -740,22 +980,28 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                     proc.kill()
                 except ProcessLookupError:
                     pass
+            self._stop_vision_usage_proxy()
             raise
 
+        self._stop_vision_usage_proxy()
         duration_s = time.monotonic() - t0
         exit_code = proc.returncode
-        status = "completed" if exit_code == 0 else "failed"
+        status = "completed" if result_envelope is not None or exit_code == 0 else "failed"
         error: str | None = None
         if status == "failed":
             error = _diagnose_failure(stderr_log, exit_code)
 
         # Copy session trajectory to work_dir for gathering
-        session_id = self._extract_session_id(stderr_log)
+        if result_envelope is not None:
+            session_id = result_envelope.get("meta", {}).get("agentMeta", {}).get("sessionId")
+        else:
+            session_id = self._extract_session_id(stderr_log)
         if session_id:
             src = Path(home) / ".openclaw" / "agents" / _AGENT_ID / "sessions" / f"{session_id}.jsonl"
             dst = wd / "transcript.jsonl"
             if src.exists():
                 shutil.copy2(str(src), str(dst))
+                stage_transcript_file_images(dst, wd)
                 logger.info("openclaw_cli: copied session trajectory to %s", dst)
 
         return AgentRunResult(
@@ -820,7 +1066,11 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         # For a direct run, drop the OpenRouter key so its presence (always
         # exported by the secrets sidecar) cannot make openclaw fall back to
         # the openrouter provider behind the explicitly-chosen direct one.
-        if cfg.provider == "direct":
+        uses_openrouter = cfg.provider == "openrouter" or (
+            cfg.vision_model is not None
+            and (cfg.vision_provider or cfg.provider) == "openrouter"
+        )
+        if not uses_openrouter:
             env.pop("OPENROUTER_API_KEY", None)
         # Source .env file values
         if env_file.exists():
@@ -860,6 +1110,10 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         # 1. Parse session trajectory JSONL (if available)
         transcript_file = work_dir / "transcript.jsonl"
         if transcript_file.exists():
+            persist_transcript_images(
+                transcript_file,
+                run_dir_for_artifacts(work_dir),
+            )
             raw = transcript_file.read_text(encoding="utf-8", errors="replace")
             for line in raw.splitlines():
                 line = line.strip()
@@ -883,6 +1137,15 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                 usage = agent_meta.get("usage", {})
                 if usage:
                     builder.trajectory.extra["openclaw_cli"]["usage"] = usage
+                    final_metrics = _usage_final_metrics(usage)
+                    if final_metrics:
+                        builder.override_final_metrics(**final_metrics)
+
+        image_usage = read_image_model_usage(work_dir / "vision-usage.jsonl")
+        if image_usage:
+            builder.trajectory.extra.setdefault("openclaw_cli", {})[
+                "image_model_usage"
+            ] = image_usage
 
         if not transcript_file.exists():
             builder.add_step(
@@ -986,6 +1249,18 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                                         data=c.get("data"),
                                     ),
                                 ))
+                            elif c.get("type") == "image" and c.get("path"):
+                                parts.append(ContentPart(
+                                    type="image",
+                                    image=ImageSource(
+                                        type="path",
+                                        media_type=c.get(
+                                            "mimeType",
+                                            "image/png",
+                                        ),
+                                        path=c.get("path"),
+                                    ),
+                                ))
                     results.append(ToolResult(
                         tool_call_id=block.get("tool_use_id") or block.get("call_id", ""),
                         content=parts,
@@ -1023,6 +1298,15 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                             type="base64",
                             media_type=block.get("mimeType", "image/png"),
                             data=block.get("data"),
+                        ),
+                    ))
+                elif btype == "image" and block.get("path"):
+                    parts.append(ContentPart(
+                        type="image",
+                        image=ImageSource(
+                            type="path",
+                            media_type=block.get("mimeType", "image/png"),
+                            path=block.get("path"),
                         ),
                     ))
             if not parts:
@@ -1072,7 +1356,8 @@ def _parse_stderr_json(stderr: str) -> dict | None:
         if line.strip() == "{":
             payload = "\n".join(lines[i:])
             try:
-                return json.loads(payload)
+                value, _ = json.JSONDecoder().raw_decode(payload.lstrip())
+                return value if isinstance(value, dict) else None
             except json.JSONDecodeError:
                 break
 
@@ -1101,6 +1386,26 @@ def _parse_stderr_json(stderr: str) -> dict | None:
                     except json.JSONDecodeError:
                         return None
     return None
+
+
+def _usage_final_metrics(usage: object) -> dict[str, int]:
+    """Map an authoritative OpenClaw aggregate usage object to ALE totals."""
+    if not isinstance(usage, dict):
+        return {}
+    field_map = {
+        "input": "total_input_tokens",
+        "output": "total_output_tokens",
+        "cacheRead": "total_cache_read_tokens",
+        "cacheWrite": "total_cache_creation_tokens",
+    }
+    totals = {
+        target: int(value)
+        for source, target in field_map.items()
+        if isinstance((value := usage.get(source)), (int, float))
+        and not isinstance(value, bool)
+        and value >= 0
+    }
+    return totals if any(totals.values()) else {}
 
 
 _DIAG_SIGNAL_PATTERNS = (
