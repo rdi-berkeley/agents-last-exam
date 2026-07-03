@@ -65,7 +65,7 @@ You may also use Python, shell utilities, and editors available on the VM.
 - Run QE SCF and NSCF/bands calculations, then `pw2bgw`, BerkeleyGW `epsilon`, `sigma`, and `inteqp`.
 - Use approximately `5x5x5` wavefunction k-point sampling, a `10 Ry` dielectric cutoff, and about `39` GW summation bands.
 - Set `OMP_NUM_THREADS=1` and use no more than four MPI ranks, for example `mpirun -np 4`.
-- Scientific sanity targets: DFT indirect gap near `0.6 eV`, GW indirect gap near `1.1 eV`, VBM at Gamma, and CBM near X along Gamma-X.
+- Report the converged DFT and GW indirect gaps, identify the VBM and CBM locations, and demonstrate the quasiparticle gap opening.
 
 ## What You Must Do
 1. Create the missing Quantum ESPRESSO and BerkeleyGW input decks from scratch.
