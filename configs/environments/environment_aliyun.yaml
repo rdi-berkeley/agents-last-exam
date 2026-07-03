@@ -39,29 +39,31 @@
 #                                with no NIC and cua never connects. On a non-GPU box
 #                                the Windows display adapter only offers 800x600, so
 #                                `resolution:` best-fits down (logged, not fatal).
-#   • gpu-free / gpu-license (GPU) — ⚠️ WIRED, NOT yet runnable on cn-hangzhou.
-#                                BLOCKER is boot-mode + stock, BEFORE the driver
-#                                question: the ALE images are UEFI, but the GPU
-#                                types with stock here (ecs.gn7i-c8g1 A10, gn6i T4,
-#                                gn6v V100) are BIOS-only and reject a UEFI image at
-#                                launch. UEFI-capable GPU types — ecs.gn7i-xr (A10),
-#                                ecs.gn6t (T4) — are either not sold in cn-hangzhou
-#                                (gn7i-xr) or out of stock (gn6t). So a GPU box can't
-#                                even launch here yet. Even once it does, the baked
-#                                GPU driver is the gcloud/AWS L4 driver, so binding
-#                                to an A10/T4 is a further unknown (likely a re-bake).
-#                                TRIED (2026-07-01) + FAILED: re-importing the raw
-#                                with --BootMode BIOS DOES let it launch on the
-#                                in-stock BIOS A10 (gn7i-c8g1), but Windows then
-#                                never boots (cua times out at 1200s) — the GCE
-#                                image is UEFI/GPT and carries no MBR boot code, so
-#                                a BootMode-only flip is not bootable. Real GPU
-#                                support needs a genuinely BIOS-bootable rebuild of
-#                                the image (hybrid MBR/GPT) OR a region/zone that
-#                                actually sells a UEFI GPU type (gn7i-xr / gn6t) —
-#                                plus, likely, an A10/T4 driver re-bake. Not a
-#                                config fix. Override `vm.machineType` per-env if
-#                                your region sells a UEFI GPU type.
+#   • gpu-free / gpu-license (GPU) — ⚠️ launches + boots, but the GPU DRIVER is
+#                                not functional (this is now a driver gap, NOT an
+#                                infra gap). Full 2026-07-02 live finding:
+#                                  – The default GPU type is the vGPU vWS family
+#                                    ecs.vgn7i-vws-* (fractional A10, UEFI-capable,
+#                                    in stock in cn-hangzhou + most regions). Do
+#                                    NOT use passthrough ecs.gn7i-c8g1 (BIOS-only →
+#                                    rejects the UEFI image) or ecs.gn7i-xr (UEFI
+#                                    but not sold in most regions).
+#                                  – VERIFIED: a vgn7i-vws-m4 box launches the UEFI
+#                                    ale-win-server image, Windows Server 2022 boots,
+#                                    cua ready ~127 s. ✅ infra path works.
+#                                  – BUT `nvidia-smi` fails: "couldn't communicate
+#                                    with the NVIDIA driver". The GCE-baked
+#                                    nvidia-l4-vws driver does not bind to Alibaba's
+#                                    A10 vGPU, and the display stays at 800x600 (no
+#                                    GPU display driver). ❌ GPU compute is unusable
+#                                    until Alibaba's own A10 GRID/vGPU driver is
+#                                    installed/baked into the image (an image-build
+#                                    step, not a config change).
+#                                  – Also tried + rejected: --BootMode BIOS re-import
+#                                    to use in-stock BIOS A10 (gn7i-c8g1) — launches
+#                                    but Windows never boots (UEFI/GPT image has no
+#                                    MBR boot code; a BootMode metadata flip is not
+#                                    bootable).
 # ----------------------------------------------------------------------------
 
 snapshots:
