@@ -105,7 +105,7 @@ What you need to do:
 2. Download the clinical data and STAR-count expression data for the LUAD cohort.
 3. Extract KRAS (`ENSG00000133703`) expression using the `tpm_unstranded` metric (not raw counts).
 4. When a patient has multiple primary-tumor samples, keep only the one whose sample submitter_id is lexicographically smallest.
-5. Merge expression with survival and clinical covariates, and stratify patients into high/low KRAS groups using the cohort median.
+5. Merge expression with survival and clinical covariates, and stratify patients into high/low KRAS groups using the cohort median; values greater than or equal to the median are high.
 6. Fit a Kaplan-Meier analysis, a log-rank test, and a Cox proportional hazards model with KRAS group, age, and stage grouping.
 7. Save every required output under `{self.remote_output_dir}`.
 
@@ -143,7 +143,9 @@ Do not ask for confirmation. Execute directly.
         return metadata
 
 
-config = TaskConfig(DOMAIN_NAME=DOMAIN_NAME, TASK_NAME=TASK_NAME, VARIANT_NAME=VARIANT_NAME)
+config = TaskConfig(
+    DOMAIN_NAME=DOMAIN_NAME, TASK_NAME=TASK_NAME, VARIANT_NAME=VARIANT_NAME
+)
 
 
 @cb.tasks_config(split="train")
@@ -152,7 +154,10 @@ def load():
         cb.Task(
             description=config.task_description,
             metadata=config.to_metadata(),
-            computer={"provider": "computer", "setup_config": {"os_type": config.OS_TYPE}},
+            computer={
+                "provider": "computer",
+                "setup_config": {"os_type": config.OS_TYPE},
+            },
         )
     ]
 
@@ -162,11 +167,15 @@ async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
 
 
-async def _read_required_output_files(session: cb.DesktopSession, output_files: dict[str, str]):
+async def _read_required_output_files(
+    session: cb.DesktopSession, output_files: dict[str, str]
+):
     payloads: dict[str, bytes] = {}
     missing: list[str] = []
     for name, path in output_files.items():
-        if not (await session.file_exists(path) or await session.directory_exists(path)):
+        if not (
+            await session.file_exists(path) or await session.directory_exists(path)
+        ):
             missing.append(name)
             continue
         payloads[name] = await session.read_bytes(path)
@@ -178,13 +187,34 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     outputs, missing = await _read_required_output_files(session, meta["output_files"])
     if missing:
-        logger.info("Missing output files: %s", missing)
+        logger.info(
+            "Evaluation report: %s",
+            json.dumps(
+                {
+                    "evaluator_version": "2.0.0",
+                    "score": 0.0,
+                    "passed": False,
+                    "hard_failure": True,
+                    "reasons": [f"missing required files: {missing}"],
+                },
+                sort_keys=True,
+            ),
+        )
         return [0.0]
 
-    for ref_key in ("reference_cohort_file", "reference_cox_file", "evaluation_contract_file"):
+    for ref_key in (
+        "reference_cohort_file",
+        "reference_cox_file",
+        "evaluation_contract_file",
+    ):
         ref_path = meta[ref_key]
-        if not (await session.file_exists(ref_path) or await session.directory_exists(ref_path)):
-            raise RuntimeError(f"evaluator-controlled reference missing: {ref_key}={ref_path}")
+        if not (
+            await session.file_exists(ref_path)
+            or await session.directory_exists(ref_path)
+        ):
+            raise RuntimeError(
+                f"evaluator-controlled reference missing: {ref_key}={ref_path}"
+            )
 
     reference_cohort = await session.read_bytes(meta["reference_cohort_file"])
     reference_cox = await session.read_bytes(meta["reference_cox_file"])

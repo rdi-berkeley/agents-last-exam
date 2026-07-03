@@ -11,12 +11,13 @@
     "ggplot2",
     "jsonlite"
   ],
-  "taskPrompt": "You are a bioinformatics analyst performing a TCGA-LUAD KRAS survival analysis on Linux.\n\nTask directory:\n- `base`\n\nVisible files and directories:\n- Task specification: `base/input/task_spec.json`\n- Detailed instructions: `base/input/task_description.txt`\n- Output contract: `base/input/output_requirements.txt`\n- Runtime notes: `base/input/runtime_notes.txt`\n- Software notes: `base/software/README.txt`\n\nWhat you need to do:\n1. Use public TCGA-LUAD data from the GDC Data Portal.\n2. Download the clinical data and STAR-count expression data for the LUAD cohort.\n3. Extract KRAS (`ENSG00000133703`) expression, merge it with survival and clinical covariates, and stratify patients into high/low KRAS groups using the cohort median.\n4. Fit a Kaplan-Meier analysis, a log-rank test, and a Cox proportional hazards model with KRAS group, age, and stage grouping.\n5. Save every required output under `base/output`.\n\nRequired output files:\n- `cohort.csv`\n- `km_plot.png`\n- `cox_results.json`\n- `analysis.R`\n\nDo not modify staged inputs or evaluator-only directories.\nDo not ask for confirmation. Execute directly.\n",
+  "taskPrompt": "You are a bioinformatics analyst performing a TCGA-LUAD KRAS survival analysis on Linux.\n\nTask directory:\n- `base`\n\nVisible files and directories:\n- Task specification: `base/input/task_spec.json`\n- Detailed instructions: `base/input/task_description.txt`\n- Output contract: `base/input/output_requirements.txt`\n- Runtime notes: `base/input/runtime_notes.txt`\n- Software notes: `base/software/README.txt`\n\nWhat you need to do:\n1. Use public TCGA-LUAD data from the GDC Data Portal.\n2. Download the clinical data and STAR-count expression data for the LUAD cohort.\n3. Extract KRAS (`ENSG00000133703`) using `tpm_unstranded`.\n4. For multiple primary-tumor samples per patient, use the lexicographically smallest 15-character sample submitter ID.\n5. Merge expression with survival and clinical covariates, then assign values greater than or equal to the cohort median to the KRAS-high group.\n6. Fit Kaplan-Meier, log-rank, and Cox proportional-hazards analyses with KRAS group, age, and stage grouping.\n7. Save every required output under `base/output`.\n\nRequired output files:\n- `cohort.csv`\n- `km_plot.png`\n- `cox_results.json`\n- `analysis.R`\n\nDo not modify staged inputs or evaluator-only directories.\nDo not ask for confirmation. Execute directly.\n",
   "agentMustDo": [
     "Read the staged task specification and output contract.",
     "Download public TCGA-LUAD clinical and STAR-count expression data from GDC.",
-    "Extract KRAS expression and merge it with survival and clinical covariates.",
-    "Stratify patients into high and low KRAS groups using the cohort median.",
+    "Extract KRAS expression from `tpm_unstranded` and merge it with survival and clinical covariates.",
+    "Use the lexicographically smallest primary-tumor sample submitter ID per patient.",
+    "Stratify patients using the cohort median, assigning ties to the high group.",
     "Fit Kaplan-Meier, log-rank, and Cox proportional hazards analyses.",
     "Write `cohort.csv`, `km_plot.png`, `cox_results.json`, and `analysis.R` under `output/`."
   ],
@@ -78,7 +79,7 @@
       "description": "R script that performs the end-to-end public-data survival analysis."
     }
   ],
-  "evaluation": "Binary pass/fail. The evaluator requires all four output files, validates PNG signature and minimum byte size, checks that `analysis.R` contains the required workflow markers, validates the cohort schema and patient set, compares hidden-reference sample/file/stage fields, and compares key cohort, log-rank, and Cox-model values with the hidden reference contract. A complete valid run scores `1.0`; missing, malformed, or inconsistent outputs score `0.0`.",
+  "evaluation": "Weighted evaluation: 20% artifact/schema integrity, 25% soft cohort/reference alignment, 25% derivation correctness, 20% survival-statistics consistency recomputed from the submitted cohort, and 10% R-script/KM-plot reproducibility. Mutable GDC patient and file differences receive proportional credit rather than an automatic zero. Missing or unparseable artifacts, duplicate patients, fewer than 400 rows, invalid required values, invalid PNGs, or prohibited reference access are hard failures. The pass threshold is 0.85 with additional critical-quality gates.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",
