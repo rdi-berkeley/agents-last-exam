@@ -38,7 +38,7 @@
       "description": "Includes bandstructure.dat, eqp.dat, eqp_q.dat, absorption_eh.dat, absorption_noeh.dat, eigenvalues.dat, eigenvalues_noeh.dat, bandstructure_inteqp.png, absorption.png"
     }
   ],
-  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- `output/` is missing\n- any required filename is missing from `output/`\n- any required text output is unparsable or empty\n\n**Scoring method:**\n- Required file set: `absorption.png`, `absorption_eh.dat`, `absorption_noeh.dat`, `bandstructure.dat`, `bandstructure_inteqp.png`, `eigenvalues.dat`, `eigenvalues_noeh.dat`, `eqp.dat`, `eqp_q.dat`.\n- Numeric scoring is based on `absorption_eh.dat`, `absorption_noeh.dat`, `bandstructure.dat`, `eigenvalues.dat`, `eigenvalues_noeh.dat`, `eqp.dat`, and `eqp_q.dat`. Parse whitespace-delimited numeric tables, require the same row count and column count as the matching hidden reference, and require every numeric value to match within `rtol=1e-4` and `atol=5e-3`.\n- Plot outputs (`absorption.png`, `bandstructure_inteqp.png`) are required for task completeness and must exist with the exact expected filename and a non-zero file size.\n- Final score is binary: `1.0` only if every required file passes its check after the hard-gate conditions; otherwise `0.0`.\n- Scientific sanity targets for manual review: Silicon GW-BSE absorption should retain the silicon gap targets and show a prominent electron-hole peak near `3.4 eV` in `absorption_eh.dat`.\n\n- **Where does the main scoring logic run?** local Python evaluation\n- **If any scoring step runs on the VM, why is that exception necessary?** none planned\n\n**What does a PERFECT output look like?**\nEvery required output file is present in the correct location and matches the hidden reference for this task. Perfect score = `1.0`.\n\n**What does a WRONG/empty output look like?**\nMissing files, empty placeholder outputs, or obviously wrong numeric curves should drive the score toward `0.0`.",
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- `output/` is missing\n- any required filename is missing from `output/`\n- any required text output is unparsable or empty\n- either required plot is empty or is not a PNG\n\n**Scoring method:**\n- Keep the existing nine-file output contract.\n- Extract the DFT/GW gaps and band-edge topology, the first optically bright excitation, the principal absorption features, and the electron-hole-induced spectral change.\n- Compare spectra after interpolation to a common energy grid and normalization; row counts, energy grids, absolute intensity scale, and individual floating-point values do not need to match the reference.\n- Score the physical observables and normalized spectral shape continuously against hidden acceptable ranges.\n- Final score is continuous from `0.0` to `1.0`; `0.70` is the pass threshold after hard gates.\n\n- **Where does the main scoring logic run?** local Python evaluation\n- **If any scoring step runs on the VM, why is that exception necessary?** none planned\n\n**What does a PERFECT output look like?**\nEvery required output is present and the extracted electronic and optical observables are physically consistent.\n\n**What does a WRONG/empty output look like?**\nMissing files, empty placeholders, unparsable tables, invalid plots, or physically inconsistent bands and spectra score `0.0`.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",
@@ -66,9 +66,5 @@
       },
       "rationale": "The task involves computational materials science focusing on the absorption spectrum of silicon."
     }
-  },
-  "requiredSystemPackages": [
-    "micromamba",
-    "qe-bgw-6.7.0-4.0"
-  ]
+  }
 }

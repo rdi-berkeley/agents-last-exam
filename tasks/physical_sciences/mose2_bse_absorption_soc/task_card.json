@@ -44,7 +44,7 @@
       "description": "Includes absorption_eh.dat, MoSe2_bands.dat.gnu, MoSe2_bands.png, exciton_absorption_spectra_avg.png"
     }
   ],
-  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- `output/` is missing\n- any required filename is missing from `output/`\n- any required text output is unparsable or empty\n\n**Scoring method:**\n- Required file set: `absorption_eh.dat`, `MoSe2_bands.dat.gnu`, `MoSe2_bands.png`, `exciton_absorption_spectra_avg.png`.\n- Numeric scoring is based on `absorption_eh.dat` and `MoSe2_bands.dat.gnu` only. Parse whitespace-delimited numeric tables, require the same row count and column count as the matching hidden reference, and require every numeric value to match within `rtol=1e-4` and `atol=5e-3`.\n- Plot outputs (`MoSe2_bands.png`, `exciton_absorption_spectra_avg.png`) are required for task completeness and must exist with the exact expected filename and a non-zero file size.\n- Final score is binary: `1.0` only if every required file passes its check after the hard-gate conditions; otherwise `0.0`.\n- Scientific sanity targets for manual review: MoSe2 should show a direct K-point gap near `1.33 eV` in the mean-field band structure and a sharp excitonic absorption peak near `1.61 eV` when electron-hole interaction is included.\n\n- **Where does the main scoring logic run?** local Python evaluation\n- **If any scoring step runs on the VM, why is that exception necessary?** none planned\n\n**What does a PERFECT output look like?**\nEvery required output file is present in the correct location and matches the hidden reference for this task. Perfect score = `1.0`.\n\n**What does a WRONG/empty output look like?**\nMissing files, empty placeholder outputs, or obviously wrong numeric curves should drive the score toward `0.0`.",
+  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- `output/` is missing\n- any required filename is missing from `output/`\n- any required text output is unparsable or empty\n- either required plot is empty or is not a PNG\n\n**Scoring method:**\n- Keep the existing four-file output contract.\n- Extract the direct band gap, coincidence of the band edges, spin-orbit splittings, the first two prominent excitonic features, and their separation.\n- Compare the absorption spectrum to the hidden reference only after interpolation to a common energy grid and normalization; row counts, sampling grids, absolute intensity scale, and individual floating-point values do not need to match.\n- Score the physical observables and normalized spectral shape continuously against hidden acceptable ranges.\n- Final score is continuous from `0.0` to `1.0`; `0.70` is the pass threshold after hard gates.\n\n- **Where does the main scoring logic run?** local Python evaluation\n- **If any scoring step runs on the VM, why is that exception necessary?** none planned\n\n**What does a PERFECT output look like?**\nEvery required output is present and the extracted SOC band and excitonic observables are physically consistent.\n\n**What does a WRONG/empty output look like?**\nMissing files, empty placeholders, unparsable tables, invalid plots, or physically inconsistent bands and spectra score `0.0`.",
   "vm": {
     "machineType": "c4-standard-16",
     "snapshot": "cpu-free-ubuntu",
@@ -72,9 +72,5 @@
       },
       "rationale": "The task involves computational materials science focusing on optical response in materials."
     }
-  },
-  "requiredSystemPackages": [
-    "micromamba",
-    "qe-bgw-6.7.0-4.0"
-  ]
+  }
 }
