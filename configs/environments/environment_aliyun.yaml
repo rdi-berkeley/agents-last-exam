@@ -52,13 +52,26 @@
 #                                    ale-win-server image, Windows Server 2022 boots,
 #                                    cua ready ~127 s. ✅ infra path works.
 #                                  – BUT `nvidia-smi` fails: "couldn't communicate
-#                                    with the NVIDIA driver". The GCE-baked
-#                                    nvidia-l4-vws driver does not bind to Alibaba's
-#                                    A10 vGPU, and the display stays at 800x600 (no
-#                                    GPU display driver). ❌ GPU compute is unusable
-#                                    until Alibaba's own A10 GRID/vGPU driver is
-#                                    installed/baked into the image (an image-build
-#                                    step, not a config change).
+#                                    with the NVIDIA driver". Root cause (probed via
+#                                    Cloud Assistant): the vGPU shows up as
+#                                    "NVIDIA A10-8Q" but its driver service is
+#                                    DISABLED (CM_PROB_DISABLED_SERVICE), and a
+#                                    PHANTOM "NVIDIA L4" device lingers — the GCE
+#                                    image ships the L4 vWS driver (582.16), which is
+#                                    both the wrong GPU and a newer version than the
+#                                    Alibaba vGPU host expects (A10 wants GRID 475.14).
+#                                    Alibaba's auto-installer (Cloud Assistant
+#                                    grid_driver_install — the agent IS present on the
+#                                    imported image) uninstalls 582.16 but then FAILS
+#                                    to install 475.14 ("install failed, reboot and
+#                                    retry", empty output) — the leftover L4 driver +
+#                                    disabled-service state on this GCE-derived image
+#                                    breaks the clean install (native Alibaba images
+#                                    don't hit this). ❌ GPU compute unusable until a
+#                                    CLEAN bake of Alibaba's GRID 475.14 (purge the
+#                                    GCE L4 driver/phantom devices first, or build the
+#                                    Windows image from an Alibaba-native base). A
+#                                    scoped image-build task, NOT a config change.
 #                                  – Also tried + rejected: --BootMode BIOS re-import
 #                                    to use in-stock BIOS A10 (gn7i-c8g1) — launches
 #                                    but Windows never boots (UEFI/GPT image has no
