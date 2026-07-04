@@ -144,7 +144,9 @@ import_linux() {                     # $1 family — import, bake aliyun CLI + o
     | tr '\r' '\n' | grep '^data:' | head -1 | sed 's/^data: //' | J "['stdout'][-60:]" || true
   final=$(aliyun ecs CreateImage --RegionId "$R" --InstanceId "$iid" \
     --ImageName "$fam-$(date +%s)" --Description "$fam + aliyun CLI + ossutil" | J "['ImageId']")
-  poll_image "$final"
+  # Under `set -e`, a poll_image failure here would exit before the cleanup
+  # below — leaking the (billable) builder instance. Delete it on failure.
+  poll_image "$final" || { aliyun ecs DeleteInstance --RegionId "$R" --InstanceId "$iid" --Force true >/dev/null 2>&1 || true; return 1; }
   tag_image "$final" "$fam"
   # retire base image + builder
   aliyun ecs DeleteImage --RegionId "$R" --ImageId "$base" 2>/dev/null || true

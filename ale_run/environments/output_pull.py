@@ -387,7 +387,11 @@ async def push_to_oss(
     there is no key to inject — mirror of :func:`push_to_gcs` /
     :func:`push_to_s3` but credential-free.
     """
-    src = _output_dir(sandbox, task_data)
+    # Trailing slash on the source is required: `ossutil cp -r <dir> <dst>/`
+    # (no slash) copies the directory ITSELF under dst, landing files at
+    # ``<dst>/output/output/...``; ``<dir>/`` copies its CONTENTS to ``<dst>/``.
+    # (Same rule ossbucket._sync_cmd applies.)
+    src = _output_dir(sandbox, task_data).rstrip("/") + "/"
     oss_dst = f"{bucket.rstrip('/')}/{run_id}/output/"
 
     if sandbox.is_linux:

@@ -540,8 +540,9 @@ async def _delete(instance_id: str, cfg: AliyunProviderConfig) -> bool:
 
     A box still in its post-RunInstances ``Initializing`` window rejects
     DeleteInstance with ``IncorrectInstanceStatus.Initializing``; since a failed
-    delete leaks a billable instance, retry a few times through that window
-    before giving up."""
+    delete leaks a billable instance, retry through that window. Delete is the
+    last safety net against billing leaks, so we also retry throttle/transport
+    (transient) errors — only a genuine hard error (bad id, auth) breaks early."""
     logger.info("Deleting instance %s", instance_id)
     last_stderr = ""
     for attempt in range(_DELETE_MAX_RETRIES):
@@ -555,7 +556,9 @@ async def _delete(instance_id: str, cfg: AliyunProviderConfig) -> bool:
             return True
         last_stderr = stderr
         code = _error_code(stderr)
-        if "incorrectinstancestatus" not in code:
+        # retry the Initializing window + any transient (throttle/transport) error;
+        # bail only on a hard error we can't recover from.
+        if "incorrectinstancestatus" not in code and not _is_transient_error(stderr):
             break
         await asyncio.sleep(_DELETE_RETRY_DELAY)
     logger.error("Failed to delete %s: %s", instance_id, last_stderr)
