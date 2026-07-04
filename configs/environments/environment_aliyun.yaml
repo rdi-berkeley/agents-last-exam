@@ -72,6 +72,20 @@
 #                                    GCE L4 driver/phantom devices first, or build the
 #                                    Windows image from an Alibaba-native base). A
 #                                    scoped image-build task, NOT a config change.
+#                                    Exhaustively confirmed unfixable IN-PLACE
+#                                    (2026-07-04): FOUR install routes — Cloud
+#                                    Assistant grid_driver_install, reboot+retry,
+#                                    the bundled grid_intaller.exe run directly, and
+#                                    with the display-capturing software stopped —
+#                                    ALL fail identically & instantly at
+#                                    "InstallGpuDriver output: []". The A10-8Q stays
+#                                    CM_PROB_DISABLED_SERVICE. The installer is an
+#                                    opaque Alibaba binary that bails on the imported
+#                                    image; the 475.14 package isn't separately
+#                                    obtainable (NVIDIA vGPU needs the licensing
+#                                    portal). So GPU truly needs an Alibaba-native
+#                                    Windows image base — out of scope for a config /
+#                                    driver-install fix on the GCE-derived image.
 #                                  – Also tried + rejected: --BootMode BIOS re-import
 #                                    to use in-stock BIOS A10 (gn7i-c8g1) — launches
 #                                    but Windows never boots (UEFI/GPT image has no
