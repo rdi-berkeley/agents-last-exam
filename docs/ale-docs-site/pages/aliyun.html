@@ -93,10 +93,13 @@ aliyun ram CreateRole --RoleName ale-sandbox --AssumeRolePolicyDocument \
 aliyun ram AttachPolicyToRole --PolicyType System \
   --PolicyName AliyunOSSFullAccess --RoleName ale-sandbox</code></pre>
     <p>
-      Then in <code>configs/environments/environment_aliyun.yaml</code> set
-      <code>output_path: oss://ale-run-results-&lt;account&gt;</code> and add
-      <code>ram_role_name: ale-sandbox</code> under each snapshot's
-      <code>aliyun:</code> block.
+      The commands above only <em>create</em> the bucket and the role. To
+      <em>use</em> them, edit <code>configs/environments/environment_aliyun.yaml</code>
+      by hand: set <code>output_path: oss://ale-run-results-&lt;account&gt;</code>,
+      and add a <code>ram_role_name: ale-sandbox</code> line under each snapshot's
+      <code>aliyun:</code> block so the sandbox is launched with that role
+      attached (that's what lets its in-box <code>ossutil</code> write to the
+      bucket).
     </p>
 
     <h2>④ Run</h2>
