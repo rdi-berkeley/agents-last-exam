@@ -800,6 +800,7 @@ async def pull_agent_output(
       None         → emit ``output_gather_skipped`` reason=unconfigured
       ``"local"``  → provider-local pull → ``<run_dir>/output/``
       ``"gs://X"`` → push from VM to ``X/<run_id>/output/`` via gsutil
+      ``"oss://X"`` → push from VM to ``X/<run_id>/output/`` via ossutil
 
     Best-effort throughout: any failure emits an event + logs a warning
     but never aborts the run (eval still runs on the live env regardless).
@@ -861,6 +862,22 @@ async def pull_agent_output(
         except Exception as e:
             logger.warning("push_to_s3 failed (best-effort): %s", e)
             writer.emit_event("output_gather_failed", transport="s3", error=str(e))
+        return
+
+    # oss:// case
+    if output_path.startswith("oss://"):
+        try:
+            report = await output_pull.push_to_oss(
+                env.sandbox, task_data, run_id=run_id, bucket=output_path,
+            )
+            writer.emit_event(
+                "output_gather_done",
+                transport="oss",
+                oss_path=report.get("oss_path"),
+            )
+        except Exception as e:
+            logger.warning("push_to_oss failed (best-effort): %s", e)
+            writer.emit_event("output_gather_failed", transport="oss", error=str(e))
         return
 
     # gs:// case
@@ -938,6 +955,7 @@ async def _stage_task_data(
     Dispatches on ``artifacts_path.task_data_source``:
       ``"baked_in_sandbox"``  — image already has data; sanity-check only
       ``"gs://..."``          — gsutil rsync from a GCS bucket
+      ``"oss://..."``         — ossutil sync from an Alibaba Cloud OSS bucket
       ``"hf://..."``          — HuggingFace (stub)
 
     Returns silently when the task declares no data-staging requirements.
@@ -958,8 +976,9 @@ async def _stage_task_data(
 def _task_data_source(artifacts: ArtifactsSpec | None) -> str:
     """Where to source task data from (yaml ``artifacts_path.task_data_source``).
 
-    One of ``"baked_in_sandbox"`` / ``"gs://<bucket>"`` / ``"hf://<dataset>"``.
-    Defaults to the dataclass default when no ArtifactsSpec was built.
+    One of ``"baked_in_sandbox"`` / ``"gs://<bucket>"`` / ``"oss://<bucket>"`` /
+    ``"hf://<dataset>"``. Defaults to the dataclass default when no
+    ArtifactsSpec was built.
     """
     if artifacts is None:
         return ArtifactsSpec().task_data_source

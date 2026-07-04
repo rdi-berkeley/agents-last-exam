@@ -52,6 +52,12 @@ uv sync --all-packages</code></pre>
           <td>Production runs on AWS instead of/alongside GCP</td>
         </tr>
         <tr>
+          <td><a href="/pages/aliyun.html"><strong>Alibaba Cloud ECS</strong></a><br><code>aliyun</code></td>
+          <td>A fresh ECS instance for every run unit</td>
+          <td>Linux + Windows from the same image families. GPU tasks not supported.</td>
+          <td>Production runs on Alibaba Cloud instead of/alongside GCP</td>
+        </tr>
+        <tr>
           <td><a href="/pages/local-docker.html"><strong>Local containers</strong></a><br><code>docker</code></td>
           <td>A fresh Linux container for every run unit</td>
           <td>99 tasks in <code>docker_support.txt</code></td>
@@ -93,7 +99,9 @@ uv sync --all-packages</code></pre>
     <table>
       <thead><tr><th>Environment</th><th>Recommended task list</th></tr></thead>
       <tbody>
-        <tr><td><code>configs/environments/environment.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code>, or <code>full.txt</code> after licensed software is activated</td></tr>
+        <tr><td><code>configs/environments/environment_gcloud.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code>, or <code>full.txt</code> after licensed software is activated</td></tr>
+        <tr><td><code>configs/environments/environment_aws.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code> (same image families on AWS EC2)</td></tr>
+        <tr><td><code>configs/environments/environment_aliyun.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code> (same image families on Alibaba Cloud ECS)</td></tr>
         <tr><td><code>configs/environments/docker.yaml</code></td><td><code>selected_tasks/docker_support.txt</code></td></tr>
         <tr><td><code>configs/environments/qemu.yaml</code></td><td><code>selected_tasks/qemu_support.txt</code></td></tr>
         <tr><td>A static environment</td><td>A small list known to match the attached machine</td></tr>
@@ -113,6 +121,11 @@ uv sync --all-packages</code></pre>
         <div class="k">Supported</div>
         <div class="t">Google Cloud VMs</div>
         <div class="d">The broadest coverage and the production path for batch runs.</div>
+      </a>
+      <a class="card" href="/pages/aliyun.html">
+        <div class="k">Supported</div>
+        <div class="t">Alibaba Cloud</div>
+        <div class="d">Ephemeral ECS instances + OSS. Linux + Windows; GPU tasks not supported.</div>
       </a>
       <a class="card" href="/pages/local-docker.html">
         <div class="k">Supported</div>

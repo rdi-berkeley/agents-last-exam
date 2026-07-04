@@ -6,6 +6,7 @@ Three sources today, dispatched on yaml ``artifacts_path.task_data_source``:
   ``"baked_in_sandbox"``     image already has input/ + reference.7z baked in
   ``"gs://<bucket>"``        rsync from a GCS bucket
   ``"s3://<bucket>"``        sync from an S3 bucket
+  ``"oss://<bucket>"``       sync from an Alibaba Cloud OSS bucket
   ``"hf://<dataset>"``       HuggingFace Hub (STUB)
   ``"local:<host_dir>"``     docker cp from a HOST dir — for a data-less Docker
                              image: input before the agent, reference before eval
@@ -47,6 +48,9 @@ def select(task_data_source: str):
     if task_data_source.startswith("s3://"):
         from . import s3bucket
         return s3bucket
+    if task_data_source.startswith("oss://"):
+        from . import ossbucket
+        return ossbucket
     if task_data_source.startswith("hf://"):
         from . import huggingface
         return huggingface
@@ -55,7 +59,8 @@ def select(task_data_source: str):
         return local_host
     raise ValueError(
         f"unknown task_data_source {task_data_source!r}: expected "
-        f"'baked_in_sandbox', 'gs://<bucket>', 's3://<bucket>', 'hf://<dataset>', "
+        f"'baked_in_sandbox', 'gs://<bucket>', 's3://<bucket>', 'oss://<bucket>', "
+        f"'hf://<dataset>', "
         f"or 'local:<dir>'"
     )
 

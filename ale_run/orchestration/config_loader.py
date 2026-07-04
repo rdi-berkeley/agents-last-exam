@@ -282,10 +282,11 @@ def _build_artifacts(raw: dict[str, Any]) -> ArtifactsSpec:
     if output_path is not None:
         op = str(output_path).strip()
         if (op and op not in _VALID_OUTPUT_PATH_LITERALS
-                and not op.startswith("gs://") and not op.startswith("s3://")):
+                and not op.startswith("gs://") and not op.startswith("s3://")
+                and not op.startswith("oss://")):
             raise ValueError(
                 f"artifacts_path.output_path must be null, 'local', or a "
-                f"'gs://...'/'s3://...' bucket path; got {output_path!r}"
+                f"'gs://...'/'s3://...'/'oss://...' bucket path; got {output_path!r}"
             )
         output_path = op or None
 
@@ -294,11 +295,13 @@ def _build_artifacts(raw: dict[str, Any]) -> ArtifactsSpec:
     if (tdp not in _VALID_TASK_DATA_LITERALS
             and not tdp.startswith("gs://")
             and not tdp.startswith("s3://")
+            and not tdp.startswith("oss://")
             and not tdp.startswith("hf://")
             and not tdp.startswith("local:")):
         raise ValueError(
             f"artifacts_path.task_data_source must be 'baked_in_sandbox', "
-            f"'gs://<bucket>', 's3://<bucket>', 'hf://<dataset>', or 'local:<dir>'; "
+            f"'gs://<bucket>', 's3://<bucket>', 'oss://<bucket>', 'hf://<dataset>', "
+            f"or 'local:<dir>'; "
             f"got {task_data_source!r}"
         )
 
@@ -382,6 +385,15 @@ _AWS_CRED_KEYS = (
 # `tenancy` and `ami` are intentionally NOT cred keys: they are per-snapshot
 # routing (tenancy: Linux default vs Windows-client dedicated; ami: optional
 # explicit AMI override) so one env can mix both.
+# aliyun connection fields that belong to the provider as a whole (vs the
+# per-snapshot routing fields image/zones/gpu). Repeated on each aliyun
+# snapshot's block and reconciled here into one provider config. `image_id` is
+# intentionally NOT a cred key: it is a per-snapshot explicit-image override, so
+# one env can pin different images per snapshot.
+_ALIYUN_CRED_KEYS = (
+    "region", "security_group", "instance_prefix", "key_name", "ram_role_name",
+    "internet_max_bandwidth_out", "system_disk_category", "instance_charge_type",
+)
 
 
 def _build_environment_from_path(
@@ -427,6 +439,16 @@ def _build_environment_from_path(
             f"environment config {path!r} must declare either `snapshots:` "
             f"(per-snapshot provider mapping) or `provider:` (single provider)"
         )
+
+    # aws/aliyun attach an instance role for bucket output; tell the provider
+    # whether output actually targets its bucket, so a missing role becomes a
+    # hard error (bucket output can't work without it) rather than a tolerated
+    # skip (see AliyunProvider._effective_ram_role / the aws counterpart).
+    out = artifacts.output_path or ""
+    if out.startswith("s3://") and "aws" in env.provider_specs:
+        env.provider_specs["aws"].config["output_to_bucket"] = True
+    if out.startswith("oss://") and "aliyun" in env.provider_specs:
+        env.provider_specs["aliyun"].config["output_to_bucket"] = True
     return env, artifacts
 
 
@@ -466,6 +488,8 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
     gcloud_creds: dict[str, Any] = {}   # project/sa/network/... (reconciled, last wins)
     aws_snaps: dict[str, Any] = {}      # tag -> {image(AMI), gpu, zones(subnets)}
     aws_creds: dict[str, Any] = {}      # region/sg/profile/... (reconciled, last wins)
+    aliyun_snaps: dict[str, Any] = {}   # tag -> {image, gpu, zones(zone ids)}
+    aliyun_creds: dict[str, Any] = {}   # region/sg/ram_role/... (reconciled, last wins)
     docker_cfg: dict[str, Any] | None = None
     qemu_snaps: dict[str, Any] = {}
 
@@ -500,6 +524,14 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
             if entry.get("resolution") is not None:
                 snap_entry["resolution"] = entry["resolution"]
             aws_snaps[str(tag)] = snap_entry
+        elif kind == "aliyun":
+            # same split as gcloud: provider-wide creds vs per-snapshot routing.
+            aliyun_creds.update({k: knobs[k] for k in _ALIYUN_CRED_KEYS if k in knobs})
+            routing = {k: v for k, v in knobs.items() if k not in _ALIYUN_CRED_KEYS}
+            snap_entry = {"image": str(image), **routing}
+            if entry.get("resolution") is not None:
+                snap_entry["resolution"] = entry["resolution"]
+            aliyun_snaps[str(tag)] = snap_entry
         elif kind == "docker":
             # docker carries just the image NAME + sizing knobs; the provider
             # resolves the container ref + port from the Image entry. Multiple
@@ -551,6 +583,13 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
         # instance profile, so nothing is injected for s3:// staging/output.
         _validate_provider_required("aws", aw, path)
         provider_specs["aws"] = ProviderSpec(kind="aws", config=aw)
+    if aliyun_snaps:
+        al = dict(aliyun_creds)
+        al["snapshots"] = aliyun_snaps
+        # No gcs_sa_key counterpart: ECS boxes authenticate to OSS via their
+        # instance RAM role, so nothing is injected for oss:// staging/output.
+        _validate_provider_required("aliyun", al, path)
+        provider_specs["aliyun"] = ProviderSpec(kind="aliyun", config=al)
     if docker_cfg is not None:
         dk = dict(docker_cfg)
         if gcs_sa_key:
@@ -588,6 +627,12 @@ def _validate_provider_required(provider: str, cfg: dict[str, Any], path: str = 
             raise KeyError(
                 f"environment provider=aws missing required field `region`{where} "
                 f"(set it on each aws snapshot's `aws:` block)"
+            )
+    elif provider == "aliyun":
+        if not cfg.get("region"):
+            raise KeyError(
+                f"environment provider=aliyun missing required field `region`{where} "
+                f"(set it on each aliyun snapshot's `aliyun:` block)"
             )
     elif provider == "static":
         if not cfg.get("endpoint"):

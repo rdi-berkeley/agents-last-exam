@@ -173,6 +173,9 @@ def build_provider(spec: "ProviderSpec") -> "Provider":
     if kind == "aws":
         from ..environments.providers.aws import AwsProvider
         return AwsProvider(spec.config)
+    if kind == "aliyun":
+        from ..environments.providers.aliyun import AliyunProvider
+        return AliyunProvider(spec.config)
     if kind == "static":
         from ..environments.providers.static import StaticProvider
         return StaticProvider(spec.config)

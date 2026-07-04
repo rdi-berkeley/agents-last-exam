@@ -75,7 +75,7 @@ Where the framework supports running sandboxes today, and what is coming next:
 | **QEMU/KVM VMs (CPU-only)** ([guide](https://agents-last-exam.org/docs?p=pages/local.html)) | ✅ Supported |
 | **AWS (EC2 + S3)** ([guide](https://agents-last-exam.org/docs?p=pages/aws.html)) | ✅ Supported |
 | **Custom image build & licensed tasks** ([guide](https://agents-last-exam.org/docs?p=pages/build-image.html)) | ✅ Supported |
-| **Alibaba Cloud (Ali-Yun)** | 🚧 In progress |
+| **Alibaba Cloud (Ali-Yun)** ([guide](https://agents-last-exam.org/docs?p=pages/aliyun.html)) | ✅ Supported |
 | **Local VMware** | 📋 Planned |
 
 Have a question or run into an issue? [**Join our Discord**](https://discord.gg/jsG4Th3aVt) for direct questions.

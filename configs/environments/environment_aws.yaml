@@ -25,6 +25,7 @@ snapshots:
       region: us-east-1
       security_group: ale-sandbox
       instance_prefix: ale
+      iam_instance_profile: ale-sandbox
       zones: [us-east-1a, us-east-1b, us-east-1c]
 
   cpu-free:                   # Windows
@@ -35,6 +36,7 @@ snapshots:
       region: us-east-1
       security_group: ale-sandbox
       instance_prefix: ale
+      iam_instance_profile: ale-sandbox
       zones: [us-east-1a, us-east-1b, us-east-1c]
 
   cpu-license:                # Windows (licensed-software tasks)
@@ -45,6 +47,7 @@ snapshots:
       region: us-east-1
       security_group: ale-sandbox
       instance_prefix: ale
+      iam_instance_profile: ale-sandbox
       zones: [us-east-1a, us-east-1b, us-east-1c]
 
   gpu-free:                   # Windows + GPU
@@ -55,6 +58,7 @@ snapshots:
       region: us-east-1
       security_group: ale-sandbox
       instance_prefix: ale
+      iam_instance_profile: ale-sandbox
       gpu: nvidia-l4
       zones: [us-east-1a, us-east-1b, us-east-1c]
 
@@ -66,6 +70,7 @@ snapshots:
       region: us-east-1
       security_group: ale-sandbox
       instance_prefix: ale
+      iam_instance_profile: ale-sandbox
       gpu: nvidia-l4
       zones: [us-east-1a, us-east-1b, us-east-1c]
 
@@ -75,7 +80,9 @@ snapshots:
 # Where task data comes from: "baked_in_sandbox" (baked into the AMI) | "s3://<bucket>".
 task_data_source: baked_in_sandbox
 
-# What to do with each run's output: null | "local" | "s3://<bucket>". To keep
-# output in S3, set the bucket here and add `iam_instance_profile: ale-sandbox`
-# to each snapshot's aws: block.
-output_path: local
+# What to do with each run's output: null | "local" | "s3://<bucket>". The
+# snapshots already reference the `ale-sandbox` instance profile; to keep output
+# in S3, create that role/profile (see the setup docs) and set the bucket here.
+# (If it doesn't exist it's skipped for non-bucket output, so local runs need nothing.)
+output_path: null
+# output_path: local          # uncomment to fetch each run's output back to the host

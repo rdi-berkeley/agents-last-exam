@@ -25,7 +25,7 @@ secret_file: secret/.env
 
 agents:
   - configs/agents/claude_code.yaml
-environment: configs/environments/environment.yaml
+environment: configs/environments/environment_gcloud.yaml
 tasks: selected_tasks/helloworld.txt
 
 output:
@@ -59,7 +59,9 @@ cleanup_mode: delete</code></pre>
     <table>
       <thead><tr><th>Profile</th><th>Provider routing</th><th>Compatible list</th></tr></thead>
       <tbody>
-        <tr><td><code>configs/environments/environment.yaml</code></td><td><a href="/pages/google-cloud.html">Google Cloud VMs</a> for all published snapshots</td><td><code>unlicensed.txt</code>, or <code>full.txt</code> with licensed software activated</td></tr>
+        <tr><td><code>configs/environments/environment_gcloud.yaml</code></td><td><a href="/pages/google-cloud.html">Google Cloud VMs</a> for all published snapshots</td><td><code>unlicensed.txt</code>, or <code>full.txt</code> with licensed software activated</td></tr>
+        <tr><td><code>configs/environments/environment_aws.yaml</code></td><td><a href="/pages/aws.html">AWS EC2</a> for all published snapshots</td><td><code>unlicensed.txt</code> (same image families)</td></tr>
+        <tr><td><code>configs/environments/environment_aliyun.yaml</code></td><td><a href="/pages/aliyun.html">Alibaba Cloud ECS</a> for all published snapshots</td><td><code>unlicensed.txt</code> (same image families)</td></tr>
         <tr><td><code>configs/environments/docker.yaml</code></td><td><a href="/pages/local-docker.html">Local containers</a> for <code>cpu-free-ubuntu</code></td><td><code>docker_support.txt</code></td></tr>
         <tr><td><code>configs/environments/qemu.yaml</code></td><td><a href="/pages/local.html">QEMU/KVM VMs</a> for CPU-compatible Ubuntu and Windows snapshots</td><td><code>qemu_support.txt</code></td></tr>
         <tr><td>Your own static profile</td><td><a href="/pages/static.html">Existing sandbox</a> for every selected task</td><td>A narrow list matching that machine</td></tr>

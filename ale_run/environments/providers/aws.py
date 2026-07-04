@@ -158,6 +158,11 @@ class AwsProviderConfig:
     key_name: str = ""
     iam_instance_profile: str = ""
     associate_public_ip: bool = True
+    output_to_bucket: bool = False
+    """Set by the config loader when ``output_path`` is an ``s3://`` bucket. It
+    turns a missing ``iam_instance_profile`` from a tolerated skip into a hard
+    error — without the profile the in-box aws CLI can't upload, so a bucket
+    output would silently lose every run's files."""
     snapshots: dict[str, SnapshotConfig] = dataclass_field(default_factory=dict)
 
 
@@ -212,6 +217,7 @@ def _build_provider_config(raw: dict[str, Any]) -> AwsProviderConfig:
         key_name=str(raw.get("key_name") or ""),
         iam_instance_profile=str(raw.get("iam_instance_profile") or ""),
         associate_public_ip=bool(raw.get("associate_public_ip", True)),
+        output_to_bucket=bool(raw.get("output_to_bucket", False)),
         snapshots=snapshots,
     )
 
@@ -358,9 +364,12 @@ async def _try_run_in_subnet(
     cfg: AwsProviderConfig,
     tenancy: str,
     snapshot_tag: str,
+    iam_instance_profile: str,
 ) -> tuple[bool, str, str]:
     """Returns (ok, stdout, stderr). On capacity error returns ok=False without
-    retrying (caller moves to the next subnet); transient errors retry here."""
+    retrying (caller moves to the next subnet); transient errors retry here.
+    ``iam_instance_profile`` is the *effective* profile (existence-checked by the
+    caller), not ``cfg.iam_instance_profile`` — empty means attach none."""
     args = _build_run_args(
         name=name,
         image=image,
@@ -368,7 +377,7 @@ async def _try_run_in_subnet(
         subnet=subnet,
         security_group_id=security_group_id,
         key_name=cfg.key_name,
-        iam_instance_profile=cfg.iam_instance_profile,
+        iam_instance_profile=iam_instance_profile,
         associate_public_ip=cfg.associate_public_ip,
         tenancy=tenancy,
         snapshot_tag=snapshot_tag,
@@ -503,12 +512,49 @@ class AwsProvider(Provider):
         self._ami_cache: dict[str, str] = {}     # family name → ami id
         self._subnet_cache: dict[str, str] = {}  # az name → subnet id
         self._sg: tuple[str, str] | None = None  # (sg_id, vpc_id), resolved once
+        self._iam_profile: str | None = None     # effective profile, resolved once
 
     @property
     def config(self) -> AwsProviderConfig:
         return self._cfg
 
     # ----------------------------------------------------------- resolution
+
+    async def _effective_iam_profile(self) -> str:
+        """The instance profile to actually attach — resolved + existence-checked
+        once. Lets the config ship a default ``iam_instance_profile`` (e.g.
+        ``ale-sandbox``) that a user who only runs with ``output_path: null``/
+        ``local`` never has to create: if the profile doesn't exist we don't
+        attach it (``--iam-instance-profile Name=<missing>`` fails the launch).
+        BUT if ``output_path`` is an ``s3://`` bucket the profile is mandatory
+        (the in-box aws CLI needs it to upload), so a missing profile is a
+        fail-fast error instead of a silent skip."""
+        if self._iam_profile is not None:
+            return self._iam_profile
+        name = self._cfg.iam_instance_profile
+        if not name:
+            self._iam_profile = ""
+            return ""
+        rc, _, _ = await _run_aws(
+            "iam", "get-instance-profile", "--instance-profile-name", name,
+            region=self._cfg.region,
+        )
+        if rc == 0:
+            self._iam_profile = name
+        elif self._cfg.output_to_bucket:
+            raise RuntimeError(
+                f"output_path is an s3:// bucket but IAM instance profile {name!r} "
+                f"does not exist — create it (see the AWS setup docs) so the "
+                f"sandbox can upload output, or unset output_path"
+            )
+        else:
+            logger.warning(
+                "IAM instance profile %r not found — launching without it "
+                "(output_path isn't a bucket, so no in-box S3 access is needed)",
+                name,
+            )
+            self._iam_profile = ""
+        return self._iam_profile
 
     async def _resolve_ami(self, snap: SnapshotConfig) -> str:
         """Resolve a snapshot's image to a concrete AMI id.
@@ -624,6 +670,9 @@ class AwsProvider(Provider):
         # and the security-group name to its id + the VPC that scopes subnets.
         ami_id = await self._resolve_ami(snap)
         sg_id, vpc_id = await self._resolve_security_group()
+        # instance profile to attach: the configured name if it exists, else ""
+        # (skip) — unless output_path is a bucket, in which case a miss raises.
+        iam_profile = await self._effective_iam_profile()
 
         name = generate_instance_name(
             self._cfg.instance_prefix,
@@ -663,6 +712,7 @@ class AwsProvider(Provider):
                     cfg=self._cfg,
                     tenancy=snap.tenancy,
                     snapshot_tag=spec.snapshot,
+                    iam_instance_profile=iam_profile,
                 )
                 if ok:
                     stdout = out

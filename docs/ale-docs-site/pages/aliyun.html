@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Set up Alibaba Cloud | ALE Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <article class="article">
+    <h1>Set up Alibaba Cloud</h1>
+    <p class="lede">
+      One-time setup to run ALE on Alibaba Cloud: sign in, create a network, and
+      import the sandbox images into your account. Then point an experiment at the
+      Alibaba environment and run. Credentials live in your Alibaba CLI profile;
+      everything else is created once below.
+    </p>
+
+    <h2>Sign in</h2>
+    <p>
+      Create an <a href="https://www.alibabacloud.com/">Alibaba Cloud account</a>
+      if you don't have one and activate <strong>ECS</strong> and
+      <strong>OSS</strong> (Object Storage Service) in the console. Install the
+      <a href="https://www.alibabacloud.com/help/en/cli/">Alibaba Cloud CLI</a>
+      (<code>aliyun</code>) plus <a href="https://www.alibabacloud.com/help/en/oss/developer-reference/ossutil/"><code>ossutil</code></a>,
+      create a RAM user with ECS + OSS access and an AccessKey pair for it, then:
+    </p>
+    <pre><code>aliyun configure           # paste the AccessKey id/secret, region cn-hangzhou
+export ALE_ALIYUN_REGION=cn-hangzhou</code></pre>
+
+    <h2>① Create the network</h2>
+    <p>
+      A VPC with a vSwitch in two zones (tried in order if one is short on
+      capacity), and a security group <code>ale-sandbox</code> opening the port
+      ALE needs (<code>5000</code>; <code>3389</code> to view a Windows desktop).
+    </p>
+    <pre><code>R=cn-hangzhou
+J(){ python3 -c "import sys,json;print(json.load(sys.stdin)$1)"; }
+
+VPC=$(aliyun vpc CreateVpc --RegionId $R --VpcName ale-vpc --CidrBlock 192.168.0.0/16 | J "['VpcId']")
+
+i=10; for z in cn-hangzhou-j cn-hangzhou-k; do
+  VSW=$(aliyun vpc CreateVSwitch --RegionId $R --VpcId $VPC --ZoneId $z \
+    --CidrBlock 192.168.$i.0/24 --VSwitchName ale-vsw-$z | J "['VSwitchId']")
+  aliyun vpc TagResources --RegionId $R --ResourceType VSWITCH --ResourceId.1 $VSW \
+    --Tag.1.Key project --Tag.1.Value ale; i=$((i+10))
+done
+
+SG=$(aliyun ecs CreateSecurityGroup --RegionId $R --VpcId $VPC \
+  --SecurityGroupName ale-sandbox --Description "ALE sandbox ingress" | J "['SecurityGroupId']")
+for p in 5000 3389; do
+  aliyun ecs AuthorizeSecurityGroup --RegionId $R --SecurityGroupId $SG \
+    --IpProtocol tcp --PortRange $p/$p --SourceCidrIp 0.0.0.0/0
+done</code></pre>
+
+    <h2>② Import the sandbox images</h2>
+    <p>
+      A task boots from a prebaked image (the OS, the professional software, and
+      the task data, ready to go). ALE publishes them as raw disks; the script
+      imports the one(s) you need into your account. Pick by what your tasks run
+      on:
+    </p>
+    <ul>
+      <li><code>ale-ubuntu22</code> — Linux (the bulk of tasks)</li>
+      <li><code>ale-win10</code> or <code>ale-win-server</code> — Windows; either
+        one works, pick one</li>
+    </ul>
+    <pre><code># imports from the published source into your OSS + registers an ECS image,
+# tagged ale:image-family=&lt;name&gt; (repeat per image you need)
+./scripts/aliyun/import_images.sh ale-ubuntu22      # or ale-win10 / ale-win-server</code></pre>
+    <p>
+      The environment config refers to images by these family names, so once
+      imported they're picked up automatically. (A Windows image is a large disk;
+      the import takes a while.)
+    </p>
+
+    <h2>③ Keep run output in OSS <span style="font-weight:400">(recommended for real runs)</span></h2>
+    <p>
+      With <code>output_path: local</code> each run's output is fetched back to
+      your machine over the sandbox's control port — fine for a quick demo, but
+      slow and flaky for large outputs at scale. So, exactly as on Google Cloud
+      (where output goes to a GCS bucket), the recommended path is to have the
+      sandbox upload straight to OSS. Create the bucket and a RAM role that lets
+      the sandbox upload to it:
+    </p>
+    <pre><code>ossutil mb oss://ale-run-results-$(aliyun sts GetCallerIdentity | J "['AccountId']")
+
+aliyun ram CreateRole --RoleName ale-sandbox --AssumeRolePolicyDocument \
+  '{"Statement":[{"Action":"sts:AssumeRole","Effect":"Allow","Principal":{"Service":["ecs.aliyuncs.com"]}}],"Version":"1"}'
+aliyun ram AttachPolicyToRole --PolicyType System \
+  --PolicyName AliyunOSSFullAccess --RoleName ale-sandbox</code></pre>
+    <p>
+      The snapshots already reference the <code>ale-sandbox</code> role, so once
+      it exists the sandbox is launched with it attached (that's what lets the
+      in-box <code>ossutil</code> write to the bucket). All you do to switch on
+      OSS output is set <code>output_path: oss://ale-run-results-&lt;account&gt;</code>
+      in <code>configs/environments/environment_aliyun.yaml</code>. (If the role
+      doesn't exist it's skipped for local runs, so you only need it for OSS
+      output — and if <code>output_path</code> is a bucket but the role is
+      missing, the run fails fast with a clear message.)
+    </p>
+
+    <h2>④ Run</h2>
+    <p>
+      Point your experiment at the Alibaba environment
+      (<code>environment: configs/environments/environment_aliyun.yaml</code>) and run:
+    </p>
+    <pre><code>uv run python -m ale_run run my_experiment.yaml</code></pre>
+
+    <div class="note">
+      <div class="note-title">GPU tasks: not supported</div>
+      GPU tasks are not supported on Alibaba Cloud. Use the CPU snapshots.
+    </div>
+
+    <div class="note">
+      <div class="note-title">Next</div>
+      Provisioning done. Wire an experiment — agents, keys, and the run command:
+      <a href="/pages/configure.html">Configure &amp; run a benchmark →</a>
+    </div>
+  </article>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

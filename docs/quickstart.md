@@ -123,7 +123,7 @@ gcloud storage buckets add-iam-policy-binding "gs://$GCP_BUCKET" \
 ```
 
 To upload task output directly from each sandbox, set this in a copy of
-`configs/environments/environment.yaml`:
+`configs/environments/environment_gcloud.yaml`:
 
 ```yaml
 output_path: gs://<your-results-bucket>

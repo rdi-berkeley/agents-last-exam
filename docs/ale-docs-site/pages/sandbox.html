@@ -54,6 +54,8 @@
       <thead><tr><th>Code identifier</th><th>Sandbox realization</th><th>Lifecycle</th></tr></thead>
       <tbody>
         <tr><td><code>gcloud</code></td><td>A complete GCE VM</td><td>Creates a fresh VM per unit and manages it through the Google Cloud CLI.</td></tr>
+        <tr><td><code>aws</code></td><td>A complete EC2 instance</td><td>Creates a fresh instance per unit and manages it through the AWS CLI.</td></tr>
+        <tr><td><code>aliyun</code></td><td>A complete Alibaba Cloud ECS instance</td><td>Creates a fresh instance per unit and manages it through the Alibaba Cloud CLI.</td></tr>
         <tr><td><code>docker</code></td><td>A Linux container with a virtual desktop</td><td>Creates a fresh container per unit and exposes the CUA port through Docker.</td></tr>
         <tr><td><code>qemu</code></td><td>A complete QEMU/KVM guest inside a Docker-packaged runner</td><td>Caches a base qcow2, creates a disposable overlay, and starts one guest per unit.</td></tr>
         <tr><td><code>static</code></td><td>An existing CUA-enabled machine</td><td>Attaches to a fixed endpoint. It does not provision or destroy the machine.</td></tr>
