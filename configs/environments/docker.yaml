@@ -19,5 +19,6 @@ snapshots:
       shm_size: 2g
       resolution: [1024, 768]
 task_data_source: local:task-data
-output_path: local
+output_path: null
+# output_path: local          # uncomment to fetch each run's output back to the host
 gcs_sa_key: secret/gcp_key.json

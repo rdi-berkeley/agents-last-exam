@@ -28,6 +28,7 @@ snapshots:
       region: cn-hangzhou
       security_group: ale-sandbox
       instance_prefix: ale
+      ram_role_name: ale-sandbox
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
   cpu-free:                   # Windows
@@ -38,6 +39,7 @@ snapshots:
       region: cn-hangzhou
       security_group: ale-sandbox
       instance_prefix: ale
+      ram_role_name: ale-sandbox
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
   cpu-license:                # Windows (licensed-software tasks)
@@ -48,6 +50,7 @@ snapshots:
       region: cn-hangzhou
       security_group: ale-sandbox
       instance_prefix: ale
+      ram_role_name: ale-sandbox
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
   gpu-free:                   # Windows + GPU — NOT SUPPORTED on Alibaba
@@ -58,6 +61,7 @@ snapshots:
       region: cn-hangzhou
       security_group: ale-sandbox
       instance_prefix: ale
+      ram_role_name: ale-sandbox
       gpu: nvidia-a10
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
@@ -69,6 +73,7 @@ snapshots:
       region: cn-hangzhou
       security_group: ale-sandbox
       instance_prefix: ale
+      ram_role_name: ale-sandbox
       gpu: nvidia-a10
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
@@ -78,7 +83,9 @@ snapshots:
 # Where task data comes from: "baked_in_sandbox" (baked into the image) | "oss://<bucket>".
 task_data_source: baked_in_sandbox
 
-# What to do with each run's output: null | "local" | "oss://<bucket>". To keep
-# output in OSS, set the bucket here and add `ram_role_name: ale-sandbox` to each
-# snapshot's aliyun: block.
-output_path: local
+# What to do with each run's output: null | "local" | "oss://<bucket>". The
+# snapshots already reference the `ale-sandbox` RAM role; to keep output in OSS,
+# create that role (see the setup docs) and set the bucket here. (If the role
+# doesn't exist it's skipped for non-bucket output, so local runs need nothing.)
+output_path: null
+# output_path: local          # uncomment to fetch each run's output back to the host

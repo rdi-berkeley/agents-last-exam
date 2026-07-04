@@ -186,6 +186,11 @@ class AliyunProviderConfig:
     internet_max_bandwidth_out: int = 100
     system_disk_category: str = "cloud_essd"
     instance_charge_type: str = "PostPaid"
+    output_to_bucket: bool = False
+    """Set by the config loader when ``output_path`` is an ``oss://`` bucket. It
+    turns a missing ``ram_role_name`` from a tolerated skip into a hard error —
+    without the role the in-box ossutil can't upload, so a bucket output would
+    silently lose every run's files."""
     snapshots: dict[str, SnapshotConfig] = dataclass_field(default_factory=dict)
 
     @property
@@ -245,6 +250,7 @@ def _build_provider_config(raw: dict[str, Any]) -> AliyunProviderConfig:
         internet_max_bandwidth_out=int(raw.get("internet_max_bandwidth_out", 100)),
         system_disk_category=str(raw.get("system_disk_category") or "cloud_essd"),
         instance_charge_type=str(raw.get("instance_charge_type") or "PostPaid"),
+        output_to_bucket=bool(raw.get("output_to_bucket", False)),
         snapshots=snapshots,
     )
 
@@ -372,12 +378,15 @@ def _build_run_args(
     security_group_id: str,
     cfg: AliyunProviderConfig,
     snapshot_tag: str,
+    ram_role_name: str,
 ) -> list[str]:
     """``aliyun ecs RunInstances`` argv.
 
     System-disk size is NOT passed — we use the image's baked system-disk
     snapshot size. ``InternetMaxBandwidthOut > 0`` makes ECS auto-assign a
     public IP; tags mark the box for fleet cleanup (mirror of aws's tags).
+    ``ram_role_name`` is the *effective* role (resolved + existence-checked by
+    the caller), not ``cfg.ram_role_name`` — empty means attach none.
     """
     args = [
         "--RegionId", cfg.region,
@@ -398,8 +407,8 @@ def _build_run_args(
     ]
     if cfg.key_name:
         args += ["--KeyPairName", cfg.key_name]
-    if cfg.ram_role_name:
-        args += ["--RamRoleName", cfg.ram_role_name]
+    if ram_role_name:
+        args += ["--RamRoleName", ram_role_name]
     return args
 
 
@@ -413,6 +422,7 @@ async def _try_run_in_zone(
     security_group_id: str,
     cfg: AliyunProviderConfig,
     snapshot_tag: str,
+    ram_role_name: str,
 ) -> tuple[bool, str, str]:
     """Returns (ok, stdout, stderr). On capacity error returns ok=False without
     retrying (caller moves to the next zone); transient errors retry here."""
@@ -425,6 +435,7 @@ async def _try_run_in_zone(
         security_group_id=security_group_id,
         cfg=cfg,
         snapshot_tag=snapshot_tag,
+        ram_role_name=ram_role_name,
     )
     last_stderr = ""
     for attempt in range(1, _ALIYUN_MAX_RETRIES_TRANSIENT + 1):
@@ -608,12 +619,46 @@ class AliyunProvider(Provider):
         self._image_cache: dict[str, str] = {}    # family name → image id
         self._vswitch_cache: dict[str, str] = {}  # zone id → vswitch id
         self._sg: tuple[str, str] | None = None   # (sg_id, vpc_id), resolved once
+        self._ram_role: str | None = None         # effective role name, resolved once
 
     @property
     def config(self) -> AliyunProviderConfig:
         return self._cfg
 
     # ----------------------------------------------------------- resolution
+
+    async def _effective_ram_role(self) -> str:
+        """The RAM role to actually attach — resolved + existence-checked once.
+
+        Lets the config ship a default ``ram_role_name`` (e.g. ``ale-sandbox``)
+        that a user who only runs with ``output_path: null``/``local`` never has
+        to create: if the role doesn't exist we simply don't attach it (a bare
+        ``--RamRoleName`` for a missing role is a hard ``InvalidRamRole.NotFound``
+        at RunInstances). BUT if ``output_path`` is an ``oss://`` bucket the role
+        is mandatory (the in-box ossutil needs it to upload), so a missing role
+        is a fail-fast error instead of a silent skip."""
+        if self._ram_role is not None:
+            return self._ram_role
+        name = self._cfg.ram_role_name
+        if not name:
+            self._ram_role = ""
+            return ""
+        rc, _, _ = await _run_aliyun("ram", "GetRole", "--RoleName", name)
+        if rc == 0:
+            self._ram_role = name
+        elif self._cfg.output_to_bucket:
+            raise RuntimeError(
+                f"output_path is an oss:// bucket but RAM role {name!r} does not "
+                f"exist — create it (see the Alibaba setup docs) so the sandbox "
+                f"can upload output, or unset output_path"
+            )
+        else:
+            logger.warning(
+                "RAM role %r not found — launching without it (output_path isn't "
+                "a bucket, so no in-box OSS access is needed)", name,
+            )
+            self._ram_role = ""
+        return self._ram_role
 
     async def _resolve_image(self, snap: SnapshotConfig) -> str:
         """Resolve a snapshot's image to a concrete custom-image id.
@@ -746,6 +791,9 @@ class AliyunProvider(Provider):
         # and the security-group name to its id + the VPC that scopes vSwitches.
         image_id = await self._resolve_image(snap)
         sg_id, vpc_id = await self._resolve_security_group()
+        # RAM role to attach: the configured name if it exists, else "" (skip) —
+        # unless output_path is a bucket, in which case a missing role raises.
+        ram_role = await self._effective_ram_role()
 
         name = generate_instance_name(
             self._cfg.instance_prefix,
@@ -785,6 +833,7 @@ class AliyunProvider(Provider):
                     security_group_id=sg_id,
                     cfg=self._cfg,
                     snapshot_tag=spec.snapshot,
+                    ram_role_name=ram_role,
                 )
                 if ok:
                     stdout = out

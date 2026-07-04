@@ -439,6 +439,16 @@ def _build_environment_from_path(
             f"environment config {path!r} must declare either `snapshots:` "
             f"(per-snapshot provider mapping) or `provider:` (single provider)"
         )
+
+    # aws/aliyun attach an instance role for bucket output; tell the provider
+    # whether output actually targets its bucket, so a missing role becomes a
+    # hard error (bucket output can't work without it) rather than a tolerated
+    # skip (see AliyunProvider._effective_ram_role / the aws counterpart).
+    out = artifacts.output_path or ""
+    if out.startswith("s3://") and "aws" in env.provider_specs:
+        env.provider_specs["aws"].config["output_to_bucket"] = True
+    if out.startswith("oss://") and "aliyun" in env.provider_specs:
+        env.provider_specs["aliyun"].config["output_to_bucket"] = True
     return env, artifacts
 
 

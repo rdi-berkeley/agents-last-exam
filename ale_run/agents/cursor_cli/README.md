@@ -36,7 +36,7 @@ enabled alongside the CUA MCP tools.
    ```yaml
    # my_exp.yaml
    agents: [configs/agents/cc_composer25_cursor.yaml]
-   environment: configs/environments/environment.yaml
+   environment: configs/environments/environment_gcloud.yaml
    tasks: selected_tasks/my_list.txt
    wall_time_s: 18000         # per-task wall-clock — set HERE, not in the agent
    ```
