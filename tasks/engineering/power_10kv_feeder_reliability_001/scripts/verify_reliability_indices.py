@@ -4,8 +4,10 @@
 Scoring: leaf-level partial credit.  Every leaf comparison (scalar field or
 cell inside a table row) counts equally.  score = correct / total.
 
-Table rows are matched order-insensitively using natural key fields so that
-a correct answer in a different sort order is not penalised.
+Table rows are matched order-insensitively by their contents.  The literal
+value of the agent's ``section`` identifier is ignored, but the field must be
+present.  A one-to-one maximum-weight assignment prevents one row from being
+reused to satisfy multiple reference rows.
 """
 
 from __future__ import annotations
@@ -29,11 +31,7 @@ EXPECTED_INPUT_MD5S = {
     "input/uv.lock": "fabc12e00ffe5c2f2dc9dc7a120b34cd",
 }
 
-TABLE_KEYS: dict[str, list[str]] = {
-    "fault_rows": ["section"],
-    "device_fault_rows": ["section", "type"],
-    "scheduled_rows": ["section"],
-}
+TABLE_NAMES = frozenset({"fault_rows", "device_fault_rows", "scheduled_rows"})
 
 
 def _load_json(path: str) -> Any:
@@ -76,14 +74,95 @@ def _check_leaf(agent_value: Any, ref_value: Any, field: str) -> bool:
     return _same_text(agent_value, ref_value)
 
 
-def _row_key(row: dict, key_fields: list[str]) -> tuple:
-    return tuple(str(row.get(k, "")).strip() for k in key_fields)
+def _section_is_present(row: dict) -> bool:
+    return "section" in row and bool(str(row["section"]).strip())
+
+
+def _row_match_score(agent_row: Any, ref_row: dict) -> int:
+    """Count correct leaves for one possible agent/reference row pairing."""
+    if not isinstance(agent_row, dict):
+        return 0
+
+    correct = 0
+    for field, ref_val in ref_row.items():
+        if field == "section":
+            correct += int(_section_is_present(agent_row))
+        elif field in agent_row and _check_leaf(agent_row[field], ref_val, field):
+            correct += 1
+    return correct
+
+
+def _max_weight_assignment(weights: list[list[int]]) -> list[tuple[int, int]]:
+    """Return maximum-weight one-to-one (row, column) pairs.
+
+    This is the rectangular Hungarian algorithm.  It assigns every element
+    on the smaller side and leaves surplus rows on the larger side unmatched.
+    """
+    if not weights or not weights[0]:
+        return []
+
+    original_rows = len(weights)
+    original_cols = len(weights[0])
+    transposed = original_rows > original_cols
+    matrix = [list(row) for row in weights]
+    if transposed:
+        matrix = [list(row) for row in zip(*matrix)]
+
+    row_count = len(matrix)
+    col_count = len(matrix[0])
+    max_weight = max(max(row) for row in matrix)
+    costs = [[max_weight - value for value in row] for row in matrix]
+
+    u = [0] * (row_count + 1)
+    v = [0] * (col_count + 1)
+    p = [0] * (col_count + 1)
+    way = [0] * (col_count + 1)
+
+    for i in range(1, row_count + 1):
+        p[0] = i
+        j0 = 0
+        minv = [float("inf")] * (col_count + 1)
+        used = [False] * (col_count + 1)
+        while True:
+            used[j0] = True
+            i0 = p[j0]
+            delta = float("inf")
+            j1 = 0
+            for j in range(1, col_count + 1):
+                if used[j]:
+                    continue
+                cur = costs[i0 - 1][j - 1] - u[i0] - v[j]
+                if cur < minv[j]:
+                    minv[j] = cur
+                    way[j] = j0
+                if minv[j] < delta:
+                    delta = minv[j]
+                    j1 = j
+            for j in range(col_count + 1):
+                if used[j]:
+                    u[p[j]] += delta
+                    v[j] -= delta
+                else:
+                    minv[j] -= delta
+            j0 = j1
+            if p[j0] == 0:
+                break
+        while True:
+            j1 = way[j0]
+            p[j0] = p[j1]
+            j0 = j1
+            if j0 == 0:
+                break
+
+    pairs = [(p[j] - 1, j - 1) for j in range(1, col_count + 1) if p[j]]
+    if transposed:
+        return [(col, row) for row, col in pairs]
+    return pairs
 
 
 def _score_table(
     agent_rows: Any,
     ref_rows: list[dict],
-    key_fields: list[str],
     table_name: str,
     issues: list[str],
 ) -> tuple[int, int]:
@@ -94,42 +173,53 @@ def _score_table(
         return 0, total
 
     fields_per_row = len(ref_rows[0]) if ref_rows else 0
-    ref_by_key: dict[tuple, dict] = {}
-    for r in ref_rows:
-        ref_by_key[_row_key(r, key_fields)] = r
+    weights = [
+        [_row_match_score(agent_row, ref_row) for agent_row in agent_rows]
+        for ref_row in ref_rows
+    ]
+    pairs = _max_weight_assignment(weights)
+    matched_ref = {ref_index for ref_index, _ in pairs}
+    matched_agent = {agent_index for _, agent_index in pairs}
 
-    agent_by_key: dict[tuple, dict] = {}
-    for r in agent_rows:
-        if isinstance(r, dict):
-            agent_by_key[_row_key(r, key_fields)] = r
-
-    all_keys = set(ref_by_key.keys()) | set(agent_by_key.keys())
     correct = 0
-    total = 0
+    total = sum(len(ref_row) for ref_row in ref_rows)
+    total += max(0, len(agent_rows) - len(ref_rows)) * fields_per_row
 
-    for key in all_keys:
-        ref_row = ref_by_key.get(key)
-        agent_row = agent_by_key.get(key)
-
-        if ref_row is None:
-            total += fields_per_row
-            issues.append(f"{table_name}[{key}]: extra row not in reference")
-            continue
-
-        if agent_row is None:
-            total += len(ref_row)
-            issues.append(f"{table_name}[{key}]: missing row")
+    for ref_index, agent_index in pairs:
+        ref_row = ref_rows[ref_index]
+        agent_row = agent_rows[agent_index]
+        ref_label = str(ref_row.get("section", ref_index)).strip()
+        if not isinstance(agent_row, dict):
+            issues.append(f"{table_name}[ref={ref_label}]: matched agent row is not an object")
             continue
 
         for field, ref_val in ref_row.items():
-            total += 1
+            if field == "section":
+                if _section_is_present(agent_row):
+                    correct += 1
+                else:
+                    issues.append(f"{table_name}[ref={ref_label}].section: missing field")
+                continue
             if field not in agent_row:
-                issues.append(f"{table_name}[{key}].{field}: missing field")
+                issues.append(f"{table_name}[ref={ref_label}].{field}: missing field")
                 continue
             if _check_leaf(agent_row[field], ref_val, field):
                 correct += 1
             else:
-                issues.append(f"{table_name}[{key}].{field}: mismatch")
+                issues.append(f"{table_name}[ref={ref_label}].{field}: mismatch")
+
+    for ref_index, ref_row in enumerate(ref_rows):
+        if ref_index not in matched_ref:
+            issues.append(
+                f"{table_name}[ref={str(ref_row.get('section', ref_index)).strip()}]: missing row"
+            )
+
+    for agent_index, agent_row in enumerate(agent_rows):
+        if agent_index not in matched_agent:
+            label = agent_index
+            if isinstance(agent_row, dict) and _section_is_present(agent_row):
+                label = str(agent_row["section"]).strip()
+            issues.append(f"{table_name}[agent={label}]: extra row not in reference")
 
     return correct, total
 
@@ -170,13 +260,12 @@ def main() -> int:
         total = 0
 
         for key, ref_val in ref.items():
-            if key in TABLE_KEYS:
+            if key in TABLE_NAMES:
                 if not isinstance(ref_val, list):
                     continue
                 c, t = _score_table(
                     agent.get(key),
                     ref_val,
-                    TABLE_KEYS[key],
                     key,
                     issues,
                 )
