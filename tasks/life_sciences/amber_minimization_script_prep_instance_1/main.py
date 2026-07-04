@@ -60,6 +60,13 @@ Requirements:
 - Write a SLURM submission script for one GPU using Amber 22 and CUDA 11.6.2 module loads
 - Do not write extra files
 
+Canonical workflow contract:
+- In `leap.in`, source `leaprc.protein.ff14SB`, set `default PBRadii mbondi3`, load `complex_structure.pdb`, and write `{SYSTEM_BASENAME}.prmtop`, `{SYSTEM_BASENAME}.inpcrd`, and `{SYSTEM_BASENAME}_fixed.pdb`.
+- In `step2_implicit.mini.mdin`, use `imin=1`, `ntb=0`, the canonical spelling `cut=999.0`, `igb=7` or `igb=8`, and include both `ntpr` and `ntxo`. Use at least 2000 minimization cycles with `0 < ncyc < maxcyc`. If supplied, use `saltcon` in `[0.0, 0.2]`, `intdiel` in `[1.0, 4.0]`, and `extdiel` in `[60.0, 90.0]`.
+- In `submit_min.sh`, request one node, exactly one GPU, and exactly one task using `#SBATCH --ntasks-per-node=1`. Request 1-4 CPUs per task, 8-32 GB of memory, and 1-12 hours.
+- Load modules whose command text contains `amber/22` and `cuda/11.6.2`. Create/use a `params` directory, run `tleap` conditionally when topology or coordinates are absent, and invoke `pmemd.cuda -O` exactly once.
+- Wire `step2_implicit.mini.mdin`, the named topology and starting/reference coordinates, `min.out`, and `min.rst` to the corresponding `-i`, `-p`, `-c`, `-ref`, `-o`, and `-r` options.
+
 """
 
     def to_metadata(self) -> dict:

@@ -174,6 +174,12 @@ Your task:
 
 `answer.json` must be a JSON object with numeric keys `minimum_dose` and `positive_percentage`.
 
+Analysis contract:
+- Use the per-cell nuclear-to-cytoplasmic mean GFP intensity ratio as the translocation score. The control-established canonical positive classification is `Math_IntensityRatio > 4.0`; apply it unchanged to every well and do not retune it against dose-well responses.
+- For each non-control dose, compute the fraction of segmented cells above the threshold. `minimum_dose` is the smallest non-control dose with a positive fraction of at least `0.80`; `positive_percentage` is that fraction at `minimum_dose`, on the `[0, 1]` scale and rounded to four decimal places.
+- Write one row per segmented object in each measurement CSV. Every table must contain numeric `ImageNumber` and `ObjectNumber` columns, with `ImageNumber` consistently identifying the paired well image.
+- `Cells.csv` must contain `Location_` features. `Cytoplasm.csv` and `Nuclei.csv` must contain `Correlation_`, `Intensity_`, `Location_`, and `Math_` feature families, including the translocation ratio as a `Math_` feature.
+
 Do not modify files under `input/`. Write final results only under `{self.remote_output_dir}`.
 """
 

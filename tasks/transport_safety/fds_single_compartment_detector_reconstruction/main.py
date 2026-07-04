@@ -120,6 +120,14 @@ For each scenario, your CLI must write these files into the CLI `--output-dir`:
 - Do not modify files under `{self.input_dir}`.
 - Use `{self.remote_output_dir}` only for your final submitted files.
 - FDS/Smokeview are available at `{self.software_dir}/fds` and `{self.software_dir}/smokeview` for optional professional validation, but the submitted CLI must run offline with Python standard-library code.
+
+## Canonical FDS Deck Serialization
+- Create the fire-source vent with `ID='FIRE_VENT'` and `SURF_ID='FIRE_SURF'`.
+- Copy scenario vent and obstruction IDs and `xb` strings from `room_geometry.json` without reformatting the supplied `xb` text.
+- Write every detector `XYZ` coordinate with exactly two decimal places, comma-separated with no spaces.
+- Write `MESH IJK` as comma-separated integers with no spaces. Write room `XB` as `0,<room_x>,0,<room_y>,0,<room_z>`, using literal `0` lower bounds and the JSON numeric spelling of each room dimension.
+- Write `TIME T_END` with one decimal place.
+- Include `HRR_RAMP` records at all nine times documented by the reconstruction contract and write the peak fraction as `F=1.00000`.
 """
 
     def to_metadata(self) -> dict[str, Any]:
