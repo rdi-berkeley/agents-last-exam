@@ -63,7 +63,7 @@
       "description": "Required output for the DS variant."
     }
   ],
-  "evaluation": "Binary CSV evaluation. The submitted file must have the exact required columns in order, use only the variant's allowed primary and supplemental datasets, keep `goes_to_suppqual` consistent with the dataset, and include every expected normalized mapping row with no extras. Correct fixture outputs score 1.0; incomplete or wrong-key fixture outputs score 0.0.",
+  "evaluation": "Binary CSV evaluation. The submitted file must have the exact required columns in order, use only the variant's allowed primary and supplemental datasets, keep `goes_to_suppqual` consistent with the dataset, and include every expected normalized mapping row with no extras. The nine structured columns are compared exactly after whitespace normalization. `mapping_rule` and `notes` must be non-empty, and `mapping_rule` must name the row's target SDTM variable, but semantically equivalent wording is accepted. Correct fixture outputs score 1.0; incomplete, wrong-key, or structurally incorrect outputs score 0.0.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",

@@ -24,6 +24,11 @@ OUTPUT_COLUMNS = [
     "notes",
 ]
 
+FREE_TEXT_COLUMNS = {"mapping_rule", "notes"}
+EXACT_MATCH_COLUMNS = [
+    column for column in OUTPUT_COLUMNS if column not in FREE_TEXT_COLUMNS
+]
+
 KEY_COLUMNS = [
     "crf_form",
     "crf_field_label",
@@ -69,6 +74,16 @@ def normalize_cell(value: object) -> str:
 
 def _format_key(row: dict[str, str]) -> tuple[str, str, str]:
     return tuple(normalize_cell(row[column]) for column in KEY_COLUMNS)
+
+
+def _mentions_target_variable(mapping_rule: str, target_variable: str) -> bool:
+    return bool(
+        re.search(
+            rf"(?<![A-Za-z0-9_]){re.escape(target_variable)}(?![A-Za-z0-9_])",
+            mapping_rule,
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _parse_csv(text: str, *, label: str) -> tuple[list[str], list[dict[str, str]], list[str]]:
@@ -130,6 +145,18 @@ def _index_rows(
                 f"{label}: row {row_index} maps supplemental dataset {suppqual} with goes_to_suppqual={supp_flag!r}"
             )
 
+        mapping_rule = row["mapping_rule"]
+        notes = row["notes"]
+        target_variable = row["sdtm_variable"]
+        if not mapping_rule:
+            errors.append(f"{label}: row {row_index} has an empty mapping_rule")
+        elif target_variable and not _mentions_target_variable(mapping_rule, target_variable):
+            errors.append(
+                f"{label}: row {row_index} mapping_rule must name target variable {target_variable!r}"
+            )
+        if not notes:
+            errors.append(f"{label}: row {row_index} has empty notes")
+
         key = _format_key(row)
         if not all(key):
             errors.append(f"{label}: row {row_index} has an empty composite-key cell: {key!r}")
@@ -175,7 +202,7 @@ def score_mapping_csv(agent_csv: str, reference_csv: str, *, variant: str) -> Sc
     for key in sorted(reference_keys & agent_keys):
         expected = reference_index[key]
         observed = agent_index[key]
-        for column in OUTPUT_COLUMNS:
+        for column in EXACT_MATCH_COLUMNS:
             if observed[column] != expected[column]:
                 mismatches.append(
                     {
