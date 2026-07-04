@@ -182,6 +182,13 @@ schema (header + data). Include only rows for CRF-sourced fields; omit derived
 or protocol-level variables (e.g. STUDYID, DOMAIN, USUBJID) that have no
 corresponding CRF field.
 
+Canonical row and text conventions:
+- Include one row for every collected CRF field-to-SDTM target mapping supported by the annotated CRF and define.xml; do not add purely derived, assigned, protocol-level, or structural SUPPQUAL rows without a corresponding collected field.
+- Use the full descriptive form title with its short code in parentheses exactly as shown in the source metadata.
+- Copy CRF field labels and annotated item/placeholder text verbatim. Use bare placeholder text without square brackets or invented suffixes.
+- Represent a collected supplemental qualifier as its target `{self.supp_dataset}` mapping row; do not add separate infrastructure rows for RDOMAIN, IDVAR, IDVARVAL, QNAM, QLABEL, QORIG, or QEVAL unless that item is itself collected.
+- Make every `mapping_rule` and `notes` value field-specific: explicitly name the target variable and cite the applicable source form/page or metadata evidence.
+
 ```csv
 crf_form,crf_field_label,crf_item_or_placeholder,sdtm_dataset,sdtm_variable,role,origin,mapping_rule,controlled_terms_or_expected_values,goes_to_suppqual,notes
 {self.example_row}

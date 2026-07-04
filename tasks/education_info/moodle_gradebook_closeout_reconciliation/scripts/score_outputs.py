@@ -1,12 +1,25 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
 import pandas as pd
 
 from bundle_lib import PASS_THRESHOLD, canonical_cutoffs, canonical_policy, read_backup_state
+
+
+ALLOWED_GRADEBOOK_XML_SHA256 = frozenset(
+    {
+        # Historical native gradebook from the starter backup. The public task
+        # contract requires agents to preserve this immutable snapshot.
+        "ab8bc284c9c23b53655714eabff84a74a33786e231cf903d66a9d1e736ae68cd",
+        # Canonical native gradebook currently carried by the gold backup and
+        # positive fixture. Retain it so existing evaluator assets stay valid.
+        "cfd89c023266f1d507b212fea556d86823836a6daa9147d488315e8f900693f1",
+    }
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,6 +44,10 @@ def gate(name: str, points: float, max_points: float, detail: str, passed: bool 
 
 def exact_file_match(path_a: Path, path_b: Path) -> bool:
     return path_a.read_bytes() == path_b.read_bytes()
+
+
+def sha256_path(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def find_gate(gates: list[dict], name: str) -> dict:
@@ -216,6 +233,13 @@ def main() -> int:
         for relative_path in reference_backup_contract["immutable_hashes"]:
             submission_file = sub_path / relative_path
             reference_file = ref_path / relative_path
+            if relative_path == "gradebook.xml":
+                if (
+                    not submission_file.exists()
+                    or sha256_path(submission_file) not in ALLOWED_GRADEBOOK_XML_SHA256
+                ):
+                    immutable_failures.append(relative_path)
+                continue
             if not submission_file.exists() or not reference_file.exists() or not exact_file_match(submission_file, reference_file):
                 immutable_failures.append(relative_path)
 

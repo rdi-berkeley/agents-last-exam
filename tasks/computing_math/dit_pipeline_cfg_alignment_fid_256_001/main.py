@@ -134,6 +134,13 @@ Your task:
 4. Save exactly one final file to:
    `{self.output_file}`
 
+Required pipeline behavior:
+- `DiTPipeline.__call__` must expose `cfg_on_3_channels: bool = False`.
+- With classifier-free guidance active, `True` applies guidance only to the first three predicted channels; `False` applies it to all latent channels. Preserve all remaining predicted channels.
+- Support schedulers with or without `scale_model_input`.
+- Preserve learned/learned-range variance outputs, and pass only the denoising half when a fixed-variance scheduler receives a prediction with twice the latent-channel count.
+- Keep the submitted module standalone; it must import successfully outside the original Diffusers package tree.
+
 Do not modify files under `input/`.
 Do not rely on hidden evaluator files while solving.
 """
