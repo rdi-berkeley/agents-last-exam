@@ -150,6 +150,14 @@ Compute the feeder reliability indices and the section-level contribution tables
 - Do not preinstall task-specific Python packages system-wide.
 - The benchmark runtime should stay isolated from any global package state.
 
+## Conventions
+- For this task, `N_T` is the number of `PowerTransformer` objects assigned to the current feeder; each counts as one equally weighted load point. Do not use the `EnergyConsumer` count for `N_T`.
+- Use these exact row fields:
+  - `fault_rows`: `section, name, length_km, lambda_i, perm_users, t_iso_h, r_i_h, lambda_N, lambda_N_r`
+  - `device_fault_rows`: `type, section, name, device_count, lambda_per_device, affected_users, t_repair_h, lambda_N, lambda_N_r`
+  - `scheduled_rows`: `section, name, length_km, users, lambda_N, lambda_N_r`
+- `section` may be any locally unique identifier. Its literal value and row ordering are not significant.
+
 ## What You Must Do
 1. Produce one JSON file exactly at `{self.output_file}`.
 2. The JSON must include the feeder-level totals and the section-level breakdown tables.
