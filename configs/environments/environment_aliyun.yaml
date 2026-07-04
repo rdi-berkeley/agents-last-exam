@@ -1,101 +1,27 @@
 # ============================================================================
-# environment_aliyun.yaml — run ALE on Alibaba Cloud (ECS + OSS). Aliyun
-# counterpart of environment.yaml / environment_aws.yaml; same per-snapshot
-# model and the SAME image-family names.
+# environment_aliyun.yaml — run ALE on Alibaba Cloud (ECS + OSS). Alibaba
+# counterpart of environment.yaml; same per-snapshot model and the SAME
+# image-family names.
 # ============================================================================
-# Like the gcloud/aws envs, everything here is a hardcoded convention. There are
-# NO ${env:...} references: Alibaba credentials come from the ambient chain
-# (`aliyun configure` profile / ALIBABA_CLOUD_ACCESS_KEY_ID +
-# ALIBABA_CLOUD_ACCESS_KEY_SECRET env), and the VPC, vSwitches and images are
-# resolved at run time by name/tag (set up once per the Alibaba setup docs):
-#   • image            image-FAMILY name (registry key under
-#                      ale_run/environments/images/) → resolved to the newest
-#                      self-owned image tagged `ale:image-family=<name>`. Pin one
-#                      with `image_id:`.
-#   • security_group   the firewall by NAME (gcloud analogue: `network`). The
-#                      provider resolves it to its id + the VPC it lives in; that
-#                      VPC scopes the zone→vSwitch lookup.
+# Hardcoded conventions, no ${env:...} — Alibaba credentials come from your CLI
+# profile (`aliyun configure`) or the ALIBABA_CLOUD_ACCESS_KEY_* env vars; the
+# VPC, vSwitches and images are resolved by name/tag at run time (created once
+# per the docs/ale-docs-site Alibaba setup page). Per snapshot:
+#   • image            image family: ale-ubuntu22 (Linux) or ale-win10 /
+#                      ale-win-server (Windows — pick either).
+#   • security_group   the firewall, by name (gcloud analogue: `network`).
 #   • zones            Alibaba zone ids, tried in order on capacity errors.
-#   • resolution       [w, h] forced Windows desktop framebuffer (sibling of
-#                      `image:`). WINDOWS-ONLY by design — Linux/X picks its own
-#                      size and ignores it, so the Ubuntu snapshot sets none.
-#                      Same rule as gcloud/aws (see environment.yaml's note).
-#   • gpu              truthy → a GPU instance type (gn7i / NVIDIA A10).
-#   • ram_role_name    instance RAM role for in-box OSS access (only needed for
-#                      oss:// task data / output) — Alibaba analogue of AWS's
-#                      IAM instance profile.
+#   • resolution       [w, h] Windows desktop size (Windows only; Linux ignores it).
+#   • ram_role_name    instance RAM role for in-box OSS access (only for oss://
+#                      task data / output).
 #
-# VALIDATION STATUS (be honest — these differ by what was actually run):
-#   • cpu-free-ubuntu (Linux)  — ✅ validated end-to-end on cn-hangzhou (acquire
-#                                → cua → agent → eval → delete).
-#   • cpu-free / cpu-license (Windows, ale-win10) — ✅ boot + cua VALIDATED on
-#                                cn-hangzhou (win10 → "Windows 10 Pro", cua ready
-#                                ~144 s on ecs.g7). ale-win-server likewise (→
-#                                "Windows Server 2022"). NOTE on IMPORT: a Windows
-#                                image MUST be imported with an explicit
-#                                `--Platform "Windows Server 2022"` (OSType=windows)
-#                                so Alibaba injects the virtio NIC driver; omitting
-#                                Platform auto-detects it as Linux → the guest boots
-#                                with no NIC and cua never connects. On a non-GPU box
-#                                the Windows display adapter only offers 800x600, so
-#                                `resolution:` best-fits down (logged, not fatal).
-#   • gpu-free / gpu-license (GPU) — ⚠️ launches + boots, but the GPU DRIVER is
-#                                not functional (this is now a driver gap, NOT an
-#                                infra gap). Full 2026-07-02 live finding:
-#                                  – The default GPU type is the vGPU vWS family
-#                                    ecs.vgn7i-vws-* (fractional A10, UEFI-capable,
-#                                    in stock in cn-hangzhou + most regions). Do
-#                                    NOT use passthrough ecs.gn7i-c8g1 (BIOS-only →
-#                                    rejects the UEFI image) or ecs.gn7i-xr (UEFI
-#                                    but not sold in most regions).
-#                                  – VERIFIED: a vgn7i-vws-m4 box launches the UEFI
-#                                    ale-win-server image, Windows Server 2022 boots,
-#                                    cua ready ~127 s. ✅ infra path works.
-#                                  – BUT `nvidia-smi` fails: "couldn't communicate
-#                                    with the NVIDIA driver". Root cause (probed via
-#                                    Cloud Assistant): the vGPU shows up as
-#                                    "NVIDIA A10-8Q" but its driver service is
-#                                    DISABLED (CM_PROB_DISABLED_SERVICE), and a
-#                                    PHANTOM "NVIDIA L4" device lingers — the GCE
-#                                    image ships the L4 vWS driver (582.16), which is
-#                                    both the wrong GPU and a newer version than the
-#                                    Alibaba vGPU host expects (A10 wants GRID 475.14).
-#                                    Alibaba's auto-installer (Cloud Assistant
-#                                    grid_driver_install — the agent IS present on the
-#                                    imported image) uninstalls 582.16 but then FAILS
-#                                    to install 475.14 ("install failed, reboot and
-#                                    retry", empty output) — the leftover L4 driver +
-#                                    disabled-service state on this GCE-derived image
-#                                    breaks the clean install (native Alibaba images
-#                                    don't hit this). ❌ GPU compute unusable until a
-#                                    CLEAN bake of Alibaba's GRID 475.14 (purge the
-#                                    GCE L4 driver/phantom devices first, or build the
-#                                    Windows image from an Alibaba-native base). A
-#                                    scoped image-build task, NOT a config change.
-#                                    Exhaustively confirmed unfixable IN-PLACE
-#                                    (2026-07-04): FOUR install routes — Cloud
-#                                    Assistant grid_driver_install, reboot+retry,
-#                                    the bundled grid_intaller.exe run directly, and
-#                                    with the display-capturing software stopped —
-#                                    ALL fail identically & instantly at
-#                                    "InstallGpuDriver output: []". The A10-8Q stays
-#                                    CM_PROB_DISABLED_SERVICE. The installer is an
-#                                    opaque Alibaba binary that bails on the imported
-#                                    image; the 475.14 package isn't separately
-#                                    obtainable (NVIDIA vGPU needs the licensing
-#                                    portal). So GPU truly needs an Alibaba-native
-#                                    Windows image base — out of scope for a config /
-#                                    driver-install fix on the GCE-derived image.
-#                                  – Also tried + rejected: --BootMode BIOS re-import
-#                                    to use in-stock BIOS A10 (gn7i-c8g1) — launches
-#                                    but Windows never boots (UEFI/GPT image has no
-#                                    MBR boot code; a BootMode metadata flip is not
-#                                    bootable).
+# GPU tasks are NOT supported on Alibaba Cloud. The gpu-* snapshots below are
+# left in place for parity but will not run; use the cpu-* snapshots.
 # ----------------------------------------------------------------------------
 
 snapshots:
 
-  cpu-free-ubuntu:            # Linux, no GPU — the bulk of tasks
+  cpu-free-ubuntu:            # Linux — the bulk of tasks
     provider: aliyun
     image: ale-ubuntu22
     aliyun:
@@ -104,7 +30,7 @@ snapshots:
       instance_prefix: ale
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
-  cpu-free:                   # Windows, no GPU
+  cpu-free:                   # Windows
     provider: aliyun
     image: ale-win10
     resolution: [1024, 768]
@@ -114,7 +40,7 @@ snapshots:
       instance_prefix: ale
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
-  cpu-license:                # Windows requiring a licensed image (same family)
+  cpu-license:                # Windows (licensed-software tasks)
     provider: aliyun
     image: ale-win10
     resolution: [1024, 768]
@@ -124,35 +50,35 @@ snapshots:
       instance_prefix: ale
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
-  gpu-free:                   # GPU Windows — ⚠️ untested on Alibaba (see header)
+  gpu-free:                   # Windows + GPU — NOT SUPPORTED on Alibaba
     provider: aliyun
-    image: ale-win-server     # mirrors AWS; gcloud uses ale-win10. UNVERIFIED here.
+    image: ale-win-server
     resolution: [1920, 1080]
     aliyun:
       region: cn-hangzhou
       security_group: ale-sandbox
       instance_prefix: ale
-      gpu: nvidia-a10         # truthy → gn7i (A10). NOTE: baked driver is L4, not A10.
+      gpu: nvidia-a10
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
-  gpu-license:                # GPU Windows, licensed tasks — ⚠️ untested (see header)
+  gpu-license:                # Windows + GPU (licensed) — NOT SUPPORTED on Alibaba
     provider: aliyun
-    image: ale-win-server     # mirrors AWS; gcloud uses ale-win10. UNVERIFIED here.
+    image: ale-win-server
     resolution: [1920, 1080]
     aliyun:
       region: cn-hangzhou
       security_group: ale-sandbox
       instance_prefix: ale
-      gpu: nvidia-a10         # baked driver is L4, not A10 — likely needs re-bake
+      gpu: nvidia-a10
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
 # ---------------------------------------------------------------------------
-# Task data + output (substrate-coupled; mirrors environment.yaml).
+# Task data + output (mirrors environment.yaml).
 # ---------------------------------------------------------------------------
-# "baked_in_sandbox" (data baked into the image) | "oss://<bucket>".
+# Where task data comes from: "baked_in_sandbox" (baked into the image) | "oss://<bucket>".
 task_data_source: baked_in_sandbox
 
-# Output after the run: null | "local" | "oss://<bucket>". For full benchmark
-# runs set this to your results bucket and add `ram_role_name: ale-sandbox` to
-# each snapshot's aliyun: block (the in-box ossutil writes via the instance role).
+# What to do with each run's output: null | "local" | "oss://<bucket>". To keep
+# output in OSS, set the bucket here and add `ram_role_name: ale-sandbox` to each
+# snapshot's aliyun: block.
 output_path: local

@@ -66,21 +66,13 @@ logger = logging.getLogger(__name__)
 # Default instance when a task_card declares no ``vm.machineType``. CPU falls
 # back C→G (see _instance_chain); GPU has no instance fallback.
 _DEFAULT_CPU_INSTANCE = "ecs.g7.2xlarge"          # 8 vCPU / 32 GiB, general (UEFI ✓)
-# GPU default MUST be a UEFI-boot-capable type: the published ALE images are
-# UEFI (built on GCE), and RunInstances hard-rejects a UEFI image on a BIOS-only
-# instance type (``InvalidParameter.NotMatch: Image bootMode ...``). The common
-# PASSTHROUGH A10 ``ecs.gn7i-c8g1.2xlarge`` is BIOS-only → does NOT work. The
-# **vGPU virtual-workstation** family ``ecs.vgn7i-vws-*`` (fractional A10, e.g.
-# m4=A10*1/6, m8=A10*1/3) IS UEFI-capable AND widely in stock (cn-hangzhou +
-# most regions), and its vWS model mirrors GCE's ``nvidia-l4-vws`` — so it's both
-# the launchable and the driver-closest choice. VERIFIED live (2026-07-02): a
-# vgn7i-vws-m4 box launches the UEFI image, Windows Server 2022 boots, cua ready
-# in ~127 s. ⚠️ BUT nvidia-smi then fails ("couldn't communicate with the NVIDIA
-# driver") — the GCE-baked L4-vws driver does not bind to Alibaba's A10 vGPU, so
-# GPU compute is NOT functional until Alibaba's own A10 GRID/vGPU driver is baked
-# into the image. So GPU is a DRIVER gap now, not an infra gap. (Passthrough A10
-# ``ecs.gn7i-xr`` is UEFI too but isn't sold in most regions.)
-_DEFAULT_GPU_INSTANCE = "ecs.vgn7i-vws-m8.2xlarge"   # A10 vGPU vWS, UEFI, in stock
+# GPU tasks are NOT supported on Alibaba (the imported UEFI image's GPU driver
+# can't be made to bind to Alibaba's vGPU — see the PR for the full analysis).
+# This default is the closest launchable type (A10 vGPU vWS, UEFI-capable) and
+# is kept only so the wiring stays complete; a GPU run will not produce a working
+# GPU. Must be a UEFI-boot type — the common BIOS-only ``ecs.gn7i-c8g1`` is
+# rejected outright against the UEFI image.
+_DEFAULT_GPU_INSTANCE = "ecs.vgn7i-vws-m8.2xlarge"   # A10 vGPU vWS, UEFI-capable
 
 # Launch retry tuning.
 _ALIYUN_MAX_RETRIES_TRANSIENT = 3
