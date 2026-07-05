@@ -15,8 +15,9 @@
 #   • ram_role_name    instance RAM role for in-box OSS access (only for oss://
 #                      task data / output).
 #
-# GPU tasks are NOT supported on Alibaba Cloud. The gpu-* snapshots below are
-# left in place for parity but will not run; use the cpu-* snapshots.
+# GPU tasks are NOT supported on Alibaba Cloud, so this profile defines only the
+# CPU snapshots. The public task list (cpu_unlicensed.txt) is exactly the set
+# that runs here.
 # ----------------------------------------------------------------------------
 
 snapshots:
@@ -53,29 +54,9 @@ snapshots:
       ram_role_name: ale-sandbox
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
-  gpu-free:                   # Windows + GPU — NOT SUPPORTED on Alibaba
-    provider: aliyun
-    image: ale-win-server
-    resolution: [1920, 1080]
-    aliyun:
-      region: cn-hangzhou
-      security_group: ale-sandbox
-      instance_prefix: ale
-      ram_role_name: ale-sandbox
-      gpu: nvidia-a10
-      zones: [cn-hangzhou-j, cn-hangzhou-k]
-
-  gpu-license:                # Windows + GPU (licensed) — NOT SUPPORTED on Alibaba
-    provider: aliyun
-    image: ale-win-server
-    resolution: [1920, 1080]
-    aliyun:
-      region: cn-hangzhou
-      security_group: ale-sandbox
-      instance_prefix: ale
-      ram_role_name: ale-sandbox
-      gpu: nvidia-a10
-      zones: [cn-hangzhou-j, cn-hangzhou-k]
+  # No gpu-* snapshots: GPU isn't available on Alibaba, and the public task list
+  # (cpu_unlicensed.txt) has no GPU task. A gpu-* request fails fast with a clear
+  # "snapshot not configured".
 
 # ---------------------------------------------------------------------------
 # Task data + output (mirrors environment.yaml).

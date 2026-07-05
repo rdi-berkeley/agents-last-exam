@@ -48,7 +48,7 @@ uv sync --all-packages</code></pre>
         <tr>
           <td><a href="/pages/aws.html"><strong>AWS EC2</strong></a><br><code>aws</code></td>
           <td>A fresh EC2 instance for every run unit</td>
-          <td>Linux + Windows from public AMIs. GPU is wired but untested.</td>
+          <td>Linux + Windows from public AMIs. GPU tasks not supported.</td>
           <td>Production runs on AWS instead of/alongside GCP</td>
         </tr>
         <tr>
@@ -66,7 +66,7 @@ uv sync --all-packages</code></pre>
         <tr>
           <td><a href="/pages/local.html"><strong>QEMU/KVM VMs</strong></a><br><code>qemu</code></td>
           <td>A fresh QEMU/KVM guest VM for every run unit</td>
-          <td>140 CPU-compatible Ubuntu and Windows tasks in <code>qemu_support.txt</code></td>
+          <td>140 CPU-compatible Ubuntu and Windows tasks in <code>cpu_unlicensed.txt</code></td>
           <td>Full-OS local testing, including Windows, without cloud VMs</td>
         </tr>
         <tr>
@@ -103,7 +103,7 @@ uv sync --all-packages</code></pre>
         <tr><td><code>configs/environments/environment_aws.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code> (same image families on AWS EC2)</td></tr>
         <tr><td><code>configs/environments/environment_aliyun.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code> (same image families on Alibaba Cloud ECS)</td></tr>
         <tr><td><code>configs/environments/docker.yaml</code></td><td><code>selected_tasks/docker_support.txt</code></td></tr>
-        <tr><td><code>configs/environments/qemu.yaml</code></td><td><code>selected_tasks/qemu_support.txt</code></td></tr>
+        <tr><td><code>configs/environments/qemu.yaml</code></td><td><code>selected_tasks/cpu_unlicensed.txt</code></td></tr>
         <tr><td>A static environment</td><td>A small list known to match the attached machine</td></tr>
       </tbody>
     </table>

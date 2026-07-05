@@ -1,9 +1,6 @@
-# Public CPU-runnable task allowlist — the tasks that run without a GPU or a
-# software licence, shared by every CPU-only environment (QEMU, Alibaba Cloud,
-# and AWS).
-# All 140 tasks use the cpu-free / cpu-free-ubuntu snapshots. Five of them were
-# originally categorized gpu-free but reconfirmed CPU-compatible end-to-end and
-# reclassified to cpu-free at the task card (see their task_card.json).
+# Public CPU-runnable task allowlist — the unlicensed tasks that run without a
+# GPU, shared by every CPU-only environment (QEMU, Alibaba Cloud, AWS).
+# All 140 use the cpu-free / cpu-free-ubuntu snapshots.
 # Excludes all licensed tasks and all tasks that require GPU execution.
 # butterfly_flap_animation is also excluded because the image lacks After
 # Effects. skeletal_animation_reproduction remains excluded pending a positive
@@ -72,7 +69,7 @@ engineering/mpc_control_building_v1
 engineering/openroad_sky130_ibex_pnr_signoff
 engineering/pcb_layout_kicad_1
 engineering/power_10kv_feeder_reliability_001
-engineering/robotics_blender_tabletop_reconstruction  # [reclassified from gpu-free]
+engineering/robotics_blender_tabletop_reconstruction
 engineering/sanding_performance_scoring_instance_1
 engineering/sumo_urban_am_peak_calibration
 health_medicine/Clinical_Variant_Annotation
@@ -146,9 +143,9 @@ social_sciences/atwood_2022_measles_vaccine_reproduction
 transport_safety/abm_hangzhou_metro
 transport_safety/capacitated_vehicle_routing_problems
 transport_safety/fds_single_compartment_detector_reconstruction
-visual_media/atlas_outpost_graybox_navigation  # [reclassified from gpu-free]
-visual_media/blender_character_reconstruction_from_multiview_01  # [reclassified from gpu-free]
-visual_media/human_mesh_animation_reproduction  # [reclassified from gpu-free]
+visual_media/atlas_outpost_graybox_navigation
+visual_media/blender_character_reconstruction_from_multiview_01
+visual_media/human_mesh_animation_reproduction
 visual_media/inkscape_cultural_poster_design
-visual_media/uv_reproduction  # [reclassified from gpu-free]
+visual_media/uv_reproduction
 visual_media/video_storyboard_001

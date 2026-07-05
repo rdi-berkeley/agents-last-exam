@@ -28,10 +28,7 @@ agents:
   - configs/agents/claude_code.yaml               # add more lines to run a matrix
 environment: configs/environments/environment_gcloud.yaml
 
-tasks:                                            # a .txt/.yaml path, or inline
-  - path: demo/hello                              # Linux smoke — runs on a GCP
-                                                  # free trial (Windows tasks need
-                                                  # a full billing account)
+tasks: selected_tasks/hello_both.txt
 
 # ---- run-level knobs (all optional; defaults shown) ----
 # NB: task_data_source + output_path are NOT here — they are substrate-coupled

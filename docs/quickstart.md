@@ -149,10 +149,11 @@ GCP_SA_KEY=secret/gcp_key.json
 Judge-based tasks can require separate evaluator keys under
 `secret/eval_time/`. The hello-world task does not.
 
-## 8. Validate and run the Linux demo
+## 8. Validate and run the demo
 
 The shipped `example_exp.yaml` uses the Google Cloud environment and
-`selected_tasks/helloworld.txt`.
+`selected_tasks/hello_both.txt` — a `demo/hello` smoke on Linux and Windows.
+(The Windows task needs a full billing account, not the $300 free trial.)
 
 ```bash
 uv run python -m ale_run run example_exp.yaml --dry-run

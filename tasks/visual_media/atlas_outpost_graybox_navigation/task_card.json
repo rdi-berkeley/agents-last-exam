@@ -62,8 +62,8 @@
   ],
   "evaluation": "The evaluator checks required output file existence, referenced glTF sidecars, route lengths and zone budgets from named glTF nodes, cover and line-of-sight facts, Godot scene markers, and visible route metrics in `docs/layout_handoff.md`. The returned benchmark score is binary: `1.0` only if the submitted project passes the hard gates and threshold, otherwise `0.0`.",
   "vm": {
-    "machineType": "g2-standard-8",
-    "snapshot": "gpu-free",
+    "machineType": "c4-standard-8",
+    "snapshot": "cpu-free",
     "os": "windows",
     "timeout": 7200
   },

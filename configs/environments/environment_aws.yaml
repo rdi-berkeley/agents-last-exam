@@ -50,29 +50,8 @@ snapshots:
       iam_instance_profile: ale-sandbox
       zones: [us-east-1a, us-east-1b, us-east-1c]
 
-  gpu-free:                   # Windows + GPU
-    provider: aws
-    image: ale-win-server
-    resolution: [1920, 1080]
-    aws:
-      region: us-east-1
-      security_group: ale-sandbox
-      instance_prefix: ale
-      iam_instance_profile: ale-sandbox
-      gpu: nvidia-l4
-      zones: [us-east-1a, us-east-1b, us-east-1c]
-
-  gpu-license:                # Windows + GPU (licensed-software tasks)
-    provider: aws
-    image: ale-win-server
-    resolution: [1920, 1080]
-    aws:
-      region: us-east-1
-      security_group: ale-sandbox
-      instance_prefix: ale
-      iam_instance_profile: ale-sandbox
-      gpu: nvidia-l4
-      zones: [us-east-1a, us-east-1b, us-east-1c]
+  # No gpu-* snapshots: the public task list (cpu_unlicensed.txt) has no GPU
+  # task, so this profile is CPU-only.
 
 # ---------------------------------------------------------------------------
 # Task data + output (mirrors environment.yaml).

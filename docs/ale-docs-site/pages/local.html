@@ -21,7 +21,7 @@
     <div class="note">
       <div class="note-title">Supported, CPU-only</div>
       Use <code>configs/environments/qemu.yaml</code> with
-      <code>selected_tasks/qemu_support.txt</code>. GPU passthrough and licensed
+      <code>selected_tasks/cpu_unlicensed.txt</code>. GPU passthrough and licensed
       tasks are outside the current provider scope.
     </div>
 
@@ -122,11 +122,9 @@ uv run python -m ale_run run local_vm_demo.yaml</code></pre>
 
     <h2>Task coverage</h2>
     <p>
-      <code>qemu_support.txt</code> currently contains 140 unlicensed tasks:
-      all 105 <code>cpu-free-ubuntu</code> tasks, all 30
-      <code>cpu-free</code> tasks, and five tasks labeled
-      <code>gpu-free</code> whose actual workflows were selected as
-      CPU-compatible. Tasks that require GPU execution, licensed software, or a
+      <code>cpu_unlicensed.txt</code> currently contains 140 unlicensed tasks:
+      all 105 <code>cpu-free-ubuntu</code> tasks and 35 <code>cpu-free</code>
+      Windows tasks. Tasks that require GPU execution, licensed software, or a
       missing application are excluded.
     </p>
 
