@@ -173,7 +173,7 @@ env/verify_task_env.sh path/to/task_card.json path/to/task_base_dir</code></pre>
       each task card you want the image to cover. On Linux:
     </p>
     <pre><code># on the builder VM, repo root
-for t in $(grep -v '^#' selected_tasks/linux_only.txt); do
+for t in $(grep -v '^#' selected_tasks/ale_cli.txt); do
   sudo env/install_task_deps.sh "tasks/$t/task_card.json"
 done
 

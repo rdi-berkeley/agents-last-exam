@@ -125,10 +125,8 @@ aws iam add-role-to-instance-profile --instance-profile-name ale-sandbox --role-
     <pre><code>uv run python -m ale_run run my_experiment.yaml</code></pre>
 
     <div class="note">
-      <div class="note-title">GPU tasks: not yet validated</div>
-      The GPU snapshots are wired but haven't been run on AWS yet (GPU capacity
-      needs a quota increase, requested via AWS Support). Use the CPU snapshots
-      for now.
+      <div class="note-title">GPU tasks: not supported</div>
+      GPU tasks are not supported in this profile. Use the CPU snapshots.
     </div>
 
     <div class="note">

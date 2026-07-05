@@ -52,6 +52,7 @@ from .gcloud import (
     wait_cua_ready,
     _init_computer_skip_wait,
     sanitize_label_value,
+    _parse_gce_machine_type,
     _SET_RES_PY,
 )
 
@@ -284,6 +285,47 @@ def _instance_chain(instance_type: str, *, is_gpu: bool) -> tuple[str, ...]:
         return (instance_type,)
     fb = _cpu_family_fallback(instance_type)
     return (instance_type, fb) if fb else (instance_type,)
+
+
+# ecs.g7 is a 1:4 vCPU:GiB general-purpose family (UEFI-capable), which matches
+# the GCE ``*-standard-*`` ratio closely enough for every task shape we run.
+# vCPU count → ecs.g7 size suffix (large is the smallest g7; 1 vCPU rounds up).
+_ECS_G7_SIZES: tuple[tuple[int, str], ...] = (
+    (2, "large"), (4, "xlarge"), (8, "2xlarge"), (12, "3xlarge"),
+    (16, "4xlarge"), (32, "8xlarge"), (64, "16xlarge"),
+)
+
+
+def _resolve_instance_type(machine_type: str | None, *, is_gpu: bool) -> str:
+    """Concrete ecs instance type for a task card's ``vm.machineType``.
+
+    Task cards carry GCE-style names (``c4-standard-4``, ``g2-standard-8``) —
+    the same cards run on every provider. Translate to an Alibaba type:
+
+    * ``None`` → the CPU/GPU default.
+    * an ``ecs.*`` string → used verbatim (an explicit Alibaba override).
+    * a GCE-style name → parsed to a vCPU count and mapped to the matching
+      ``ecs.g7`` size. A GPU snapshot keeps the GPU default: a GCE ``g2-*`` name
+      only tells us the vCPU count, not that we want an Alibaba GPU SKU — that
+      choice lives in the snapshot's ``gpu`` field.
+    """
+    default = _DEFAULT_GPU_INSTANCE if is_gpu else _DEFAULT_CPU_INSTANCE
+    if not machine_type:
+        return default
+    if machine_type.startswith("ecs."):
+        return machine_type
+    shape = _parse_gce_machine_type(machine_type)
+    if shape is None:
+        logger.warning(
+            "unparseable machineType %r — using default %s", machine_type, default
+        )
+        return default
+    if is_gpu:
+        return _DEFAULT_GPU_INSTANCE
+    size = next(
+        (s for cap, s in _ECS_G7_SIZES if shape.vcpus <= cap), _ECS_G7_SIZES[-1][1]
+    )
+    return f"ecs.g7.{size}"
 
 
 # ============================================================================
@@ -782,9 +824,7 @@ class AliyunProvider(Provider):
         is_gpu = snap.gpu is not None
         zones = snap.zones
 
-        base_instance = spec.machine_type or (
-            _DEFAULT_GPU_INSTANCE if is_gpu else _DEFAULT_CPU_INSTANCE
-        )
+        base_instance = _resolve_instance_type(spec.machine_type, is_gpu=is_gpu)
         instances = _instance_chain(base_instance, is_gpu=is_gpu)
 
         # Resolve the image-family name (e.g. "ale-win10") to a concrete image id,
