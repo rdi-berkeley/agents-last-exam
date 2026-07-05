@@ -1,4 +1,0 @@
-# Hello-world smoke test — the single task example_exp.yaml runs by default.
-# Linux (demo/hello) so it works on a GCP free-trial account; Windows VMs
-# (demo/hello_win) require a full/upgraded billing account, not the $300 trial.
-demo/hello
