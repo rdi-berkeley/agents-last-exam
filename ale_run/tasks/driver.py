@@ -108,9 +108,12 @@ async def _detached_run_command(
         mkdir = f'cmd /c if not exist "{jdir}" mkdir "{jdir}"'
         wrap = (
             "@echo off\r\n"
+            "setlocal EnableExtensions EnableDelayedExpansion\r\n"
             f'call "{cmd_f}" > "{out_f}" 2> "{err_f}"\r\n'
-            f'echo %ERRORLEVEL%> "{rc_f}"\r\n'
+            'set "ALE_RC=!ERRORLEVEL!"\r\n'
+            f'> "{rc_f}" echo !ALE_RC!\r\n'
             f'echo done> "{done_f}"\r\n'
+            "endlocal\r\n"
         )
         launch = f'cmd /c start "" /b cmd /c "{wrap_f}"'
         done_check = f'cmd /c if exist "{done_f}" (echo __DONE__) else (echo __WAIT__)'
@@ -160,15 +163,20 @@ async def _detached_run_command(
     out = (await interface.read_bytes(out_f)).decode("utf-8", errors="replace")
     err = (await interface.read_bytes(err_f)).decode("utf-8", errors="replace")
     rc_txt = (await interface.read_bytes(rc_f)).decode("utf-8", errors="replace").strip()
+    parse_error: ValueError | TypeError | None = None
     try:
         rc = int(rc_txt)
-    except (ValueError, TypeError):
-        logger.warning("detached run_command: unparseable exit code %r; defaulting 0", rc_txt)
-        rc = 0
+    except (ValueError, TypeError) as exc:
+        parse_error = exc
+        rc = None
     try:
         await raw_run_command(cleanup)
     except Exception:  # noqa: BLE001 -- cleanup is best-effort
         pass
+    if rc is None:
+        raise RuntimeError(
+            f"detached run_command returned invalid exit code {rc_txt!r}"
+        ) from parse_error
     return CommandResult(stdout=out, stderr=err, returncode=rc)
 
 

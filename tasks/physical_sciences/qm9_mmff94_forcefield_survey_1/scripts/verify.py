@@ -293,7 +293,7 @@ def _score_phase2(agent_csv, ref_csv):
 
     for _ in range(5):
         checks.append(False)
-    # overwrite with per-row results: spec says "for each of the top 5 …" — per-row 1 check each
+    # overwrite with per-row results: spec says "for each of the top 5 ..." - per-row 1 check each
     # We model it as 4*5 = 20 per-row checks.
     # Replace the five placeholders above with the four-field aggregates expanded below.
     checks = checks[:-5]
@@ -492,7 +492,7 @@ def _score_phase4(agent_json, ref_json, agent_dir: Path):
             ref_val = _num(ref_blk.get(field))
             checks.append(_within(agent_val, ref_val, tol))
 
-        # PNG existence — file pes_scan_rank{n}.png
+        # PNG existence - file pes_scan_rank{n}.png
         n = rank.split("_", 1)[1]
         checks.append((agent_dir / f"pes_scan_rank{n}.png").exists())
 
@@ -581,7 +581,7 @@ def _score_phase5(agent_json, ref_json, phase4_ref_json):
         == _str_set(r_char.get("long_qm9_distance_molecules"))
     )
 
-    # top5_pes_summary numeric match — condense to one binary check: all entries within Phase 4 tolerances.
+    # top5_pes_summary numeric match - condense to one binary check: all entries within Phase 4 tolerances.
     a_sum = agent_json.get("top5_pes_summary") if isinstance(agent_json, dict) else None
     r_sum = ref_json.get("top5_pes_summary") or []
     all_match = isinstance(a_sum, list) and len(a_sum) == len(r_sum) and len(r_sum) > 0
