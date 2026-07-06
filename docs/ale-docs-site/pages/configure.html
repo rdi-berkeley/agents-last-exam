@@ -25,8 +25,8 @@ secret_file: secret/.env
 
 agents:
   - configs/agents/claude_code.yaml
-environment: configs/environments/environment.yaml
-tasks: selected_tasks/helloworld.txt
+environment: configs/environments/environment_gcloud.yaml
+tasks: selected_tasks/hello_both.txt
 
 output:
   root: .logs/ale
@@ -59,9 +59,11 @@ cleanup_mode: delete</code></pre>
     <table>
       <thead><tr><th>Profile</th><th>Provider routing</th><th>Compatible list</th></tr></thead>
       <tbody>
-        <tr><td><code>configs/environments/environment.yaml</code></td><td><a href="/pages/google-cloud.html">Google Cloud VMs</a> for all published snapshots</td><td><code>unlicensed.txt</code>, or <code>full.txt</code> with licensed software activated</td></tr>
+        <tr><td><code>configs/environments/environment_gcloud.yaml</code></td><td><a href="/pages/google-cloud.html">Google Cloud VMs</a> for all published snapshots</td><td><code>unlicensed.txt</code>, or <code>full.txt</code> with licensed software activated</td></tr>
+        <tr><td><code>configs/environments/environment_aws.yaml</code></td><td><a href="/pages/aws.html">AWS EC2</a> for the CPU snapshots (no GPU)</td><td><code>cpu_unlicensed.txt</code></td></tr>
+        <tr><td><code>configs/environments/environment_aliyun.yaml</code></td><td><a href="/pages/aliyun.html">Alibaba Cloud ECS</a> for the CPU snapshots (no GPU)</td><td><code>cpu_unlicensed.txt</code></td></tr>
         <tr><td><code>configs/environments/docker.yaml</code></td><td><a href="/pages/local-docker.html">Local containers</a> for <code>cpu-free-ubuntu</code></td><td><code>docker_support.txt</code></td></tr>
-        <tr><td><code>configs/environments/qemu.yaml</code></td><td><a href="/pages/local.html">QEMU/KVM VMs</a> for CPU-compatible Ubuntu and Windows snapshots</td><td><code>qemu_support.txt</code></td></tr>
+        <tr><td><code>configs/environments/qemu.yaml</code></td><td><a href="/pages/local.html">QEMU/KVM VMs</a> for CPU-compatible Ubuntu and Windows snapshots</td><td><code>cpu_unlicensed.txt</code></td></tr>
         <tr><td>Your own static profile</td><td><a href="/pages/static.html">Existing sandbox</a> for every selected task</td><td>A narrow list matching that machine</td></tr>
       </tbody>
     </table>
@@ -73,7 +75,7 @@ cleanup_mode: delete</code></pre>
       <tbody>
         <tr><td><code>cpu-free-ubuntu</code></td><td>Ubuntu, no licensed software, no required GPU</td></tr>
         <tr><td><code>cpu-free</code></td><td>Windows, no licensed software, no required GPU</td></tr>
-        <tr><td><code>gpu-free</code></td><td>Windows task categorized for GPU execution. The QEMU allowlist includes only five separately selected CPU-compatible cases.</td></tr>
+        <tr><td><code>gpu-free</code></td><td>Windows task that requires GPU execution — runs on Google Cloud only.</td></tr>
         <tr><td><code>cpu-license</code></td><td>Windows with user-activated licensed software</td></tr>
         <tr><td><code>gpu-license</code></td><td>Windows with GPU and user-activated licensed software</td></tr>
       </tbody>
@@ -89,11 +91,10 @@ cleanup_mode: delete</code></pre>
     <table>
       <thead><tr><th>List</th><th>Units before agent multiplication</th><th>Purpose</th></tr></thead>
       <tbody>
-        <tr><td><code>helloworld.txt</code></td><td>1</td><td>Linux end-to-end smoke test</td></tr>
         <tr><td><code>hello_both.txt</code></td><td>2</td><td>Ubuntu and Windows smoke test</td></tr>
         <tr><td><code>docker_support.txt</code></td><td>99</td><td>Current local-container allowlist</td></tr>
-        <tr><td><code>linux_only.txt</code></td><td>105</td><td>All published <code>cpu-free-ubuntu</code> tasks</td></tr>
-        <tr><td><code>qemu_support.txt</code></td><td>140</td><td>Current CPU-compatible QEMU/KVM allowlist</td></tr>
+        <tr><td><code>ale_cli.txt</code></td><td>105</td><td>All published <code>cpu-free-ubuntu</code> tasks</td></tr>
+        <tr><td><code>cpu_unlicensed.txt</code></td><td>140</td><td>Public CPU-runnable set — shared by QEMU, Alibaba Cloud, and AWS</td></tr>
         <tr><td><code>unlicensed.txt</code></td><td>145</td><td>All public tasks that do not require licensed software</td></tr>
         <tr><td><code>full.txt</code></td><td>152</td><td>The complete public release, including seven licensed tasks</td></tr>
       </tbody>

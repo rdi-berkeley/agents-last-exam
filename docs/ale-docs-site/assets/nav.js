@@ -22,6 +22,7 @@ window.ALE_NAV = [
       { href: "/pages/providers.html", title: "Run an experiment", children: [
         { href: "/pages/google-cloud.html",  title: "Google Cloud VMs" },
         { href: "/pages/aws.html",           title: "AWS EC2" },
+        { href: "/pages/aliyun.html",        title: "Alibaba Cloud ECS" },
         { href: "/pages/local-docker.html",  title: "Local containers" },
         { href: "/pages/local.html",         title: "QEMU/KVM VMs" },
         { href: "/pages/static.html",        title: "Existing sandbox" },

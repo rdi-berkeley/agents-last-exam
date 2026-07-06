@@ -7,6 +7,7 @@ Dispatched by the lifecycle on ``artifacts_path.output_path``:
                  fallback)
   ``"gs://X"`` → :func:`push_to_gcs` (VM-side gsutil; nothing on host)
   ``"s3://X"`` → :func:`push_to_s3` (in-box aws CLI; nothing on host)
+  ``"oss://X"`` → :func:`push_to_oss` (in-box ossutil; nothing on host)
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ _PULL_CONCURRENCY = 8
 _QEMU_SHARE_COPY_TIMEOUT_S = 3600
 _GCS_PUSH_TIMEOUT_S = 3600
 _S3_PUSH_TIMEOUT_S = 3600
+_OSS_PUSH_TIMEOUT_S = 3600
 
 
 def _output_dir(sandbox: SandboxHandle, task_data: TaskDataSpec) -> str:
@@ -374,3 +376,36 @@ async def push_to_s3(
             f"aws s3 cp failed (rc={r.returncode}): {(r.stderr or '')[:300]}"
         )
     return {"transport": "s3", "s3_path": s3_dst}
+async def push_to_oss(
+    sandbox: SandboxHandle, task_data: TaskDataSpec, *,
+    run_id: str, bucket: str,
+) -> dict[str, Any]:
+    """``output_path == 'oss://...'`` — in-box ``ossutil`` push.
+
+    Lands the env's output dir at ``<bucket>/<run_id>/output/``. Auth is the
+    instance's RAM role (AliyunProvider attaches one via ``ram_role_name``), so
+    there is no key to inject — mirror of :func:`push_to_gcs` /
+    :func:`push_to_s3` but credential-free.
+    """
+    # Trailing slash on the source is required: `ossutil cp -r <dir> <dst>/`
+    # (no slash) copies the directory ITSELF under dst, landing files at
+    # ``<dst>/output/output/...``; ``<dir>/`` copies its CONTENTS to ``<dst>/``.
+    # (Same rule ossbucket._sync_cmd applies.)
+    src = _output_dir(sandbox, task_data).rstrip("/") + "/"
+    oss_dst = f"{bucket.rstrip('/')}/{run_id}/output/"
+
+    if sandbox.is_linux:
+        cmd = f"ossutil cp -r -f {shlex.quote(src)} {shlex.quote(oss_dst)}"
+    else:
+        cmd = (
+            'powershell -NoProfile -Command "'
+            f"ossutil cp -r -f '{src}' '{oss_dst}'"
+            '"'
+        )
+    logger.info("push_to_oss: %s → %s", src, oss_dst)
+    r = await sandbox.run_command(cmd, timeout=_OSS_PUSH_TIMEOUT_S)
+    if r.returncode != 0:
+        raise RuntimeError(
+            f"ossutil cp failed (rc={r.returncode}): {(r.stderr or '')[:300]}"
+        )
+    return {"transport": "oss", "oss_path": oss_dst}

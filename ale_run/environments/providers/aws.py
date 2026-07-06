@@ -48,6 +48,7 @@ from .gcloud import (
     wait_cua_ready,
     _init_computer_skip_wait,
     sanitize_label_value,
+    _parse_gce_machine_type,
     _SET_RES_PY,
 )
 
@@ -158,6 +159,11 @@ class AwsProviderConfig:
     key_name: str = ""
     iam_instance_profile: str = ""
     associate_public_ip: bool = True
+    output_to_bucket: bool = False
+    """Set by the config loader when ``output_path`` is an ``s3://`` bucket. It
+    turns a missing ``iam_instance_profile`` from a tolerated skip into a hard
+    error — without the profile the in-box aws CLI can't upload, so a bucket
+    output would silently lose every run's files."""
     snapshots: dict[str, SnapshotConfig] = dataclass_field(default_factory=dict)
 
 
@@ -212,6 +218,7 @@ def _build_provider_config(raw: dict[str, Any]) -> AwsProviderConfig:
         key_name=str(raw.get("key_name") or ""),
         iam_instance_profile=str(raw.get("iam_instance_profile") or ""),
         associate_public_ip=bool(raw.get("associate_public_ip", True)),
+        output_to_bucket=bool(raw.get("output_to_bucket", False)),
         snapshots=snapshots,
     )
 
@@ -244,6 +251,47 @@ def _instance_chain(instance_type: str, *, is_gpu: bool) -> tuple[str, ...]:
         return (instance_type,)
     fb = _cpu_family_fallback(instance_type)
     return (instance_type, fb) if fb else (instance_type,)
+
+
+# m6i is a 1:4 vCPU:GiB general-purpose family, matching the GCE
+# ``*-standard-*`` ratio closely enough for every task shape we run.
+# vCPU count → m6i size suffix (large is the smallest; 1 vCPU rounds up).
+_EC2_M6I_SIZES: tuple[tuple[int, str], ...] = (
+    (2, "large"), (4, "xlarge"), (8, "2xlarge"), (16, "4xlarge"),
+    (32, "8xlarge"), (48, "12xlarge"), (64, "16xlarge"),
+)
+
+
+def _resolve_instance_type(machine_type: str | None, *, is_gpu: bool) -> str:
+    """Concrete EC2 instance type for a task card's ``vm.machineType``.
+
+    Task cards carry GCE-style names (``c4-standard-4``, ``g2-standard-8``) —
+    the same cards run on every provider. Translate to an EC2 type:
+
+    * ``None`` → the CPU/GPU default.
+    * a native EC2 type (contains a ``.``, e.g. ``m6i.2xlarge``) → used verbatim.
+    * a GCE-style name → parsed to a vCPU count and mapped to the matching
+      ``m6i`` size. A GPU snapshot keeps the GPU default: a GCE ``g2-*`` name
+      only tells us the vCPU count, not that we want a GPU SKU — that choice
+      lives in the snapshot's ``gpu`` field.
+    """
+    default = _DEFAULT_GPU_INSTANCE if is_gpu else _DEFAULT_CPU_INSTANCE
+    if not machine_type:
+        return default
+    if "." in machine_type:
+        return machine_type
+    shape = _parse_gce_machine_type(machine_type)
+    if shape is None:
+        logger.warning(
+            "unparseable machineType %r — using default %s", machine_type, default
+        )
+        return default
+    if is_gpu:
+        return _DEFAULT_GPU_INSTANCE
+    size = next(
+        (s for cap, s in _EC2_M6I_SIZES if shape.vcpus <= cap), _EC2_M6I_SIZES[-1][1]
+    )
+    return f"m6i.{size}"
 
 
 # ============================================================================
@@ -358,9 +406,12 @@ async def _try_run_in_subnet(
     cfg: AwsProviderConfig,
     tenancy: str,
     snapshot_tag: str,
+    iam_instance_profile: str,
 ) -> tuple[bool, str, str]:
     """Returns (ok, stdout, stderr). On capacity error returns ok=False without
-    retrying (caller moves to the next subnet); transient errors retry here."""
+    retrying (caller moves to the next subnet); transient errors retry here.
+    ``iam_instance_profile`` is the *effective* profile (existence-checked by the
+    caller), not ``cfg.iam_instance_profile`` — empty means attach none."""
     args = _build_run_args(
         name=name,
         image=image,
@@ -368,7 +419,7 @@ async def _try_run_in_subnet(
         subnet=subnet,
         security_group_id=security_group_id,
         key_name=cfg.key_name,
-        iam_instance_profile=cfg.iam_instance_profile,
+        iam_instance_profile=iam_instance_profile,
         associate_public_ip=cfg.associate_public_ip,
         tenancy=tenancy,
         snapshot_tag=snapshot_tag,
@@ -503,12 +554,49 @@ class AwsProvider(Provider):
         self._ami_cache: dict[str, str] = {}     # family name → ami id
         self._subnet_cache: dict[str, str] = {}  # az name → subnet id
         self._sg: tuple[str, str] | None = None  # (sg_id, vpc_id), resolved once
+        self._iam_profile: str | None = None     # effective profile, resolved once
 
     @property
     def config(self) -> AwsProviderConfig:
         return self._cfg
 
     # ----------------------------------------------------------- resolution
+
+    async def _effective_iam_profile(self) -> str:
+        """The instance profile to actually attach — resolved + existence-checked
+        once. Lets the config ship a default ``iam_instance_profile`` (e.g.
+        ``ale-sandbox``) that a user who only runs with ``output_path: null``/
+        ``local`` never has to create: if the profile doesn't exist we don't
+        attach it (``--iam-instance-profile Name=<missing>`` fails the launch).
+        BUT if ``output_path`` is an ``s3://`` bucket the profile is mandatory
+        (the in-box aws CLI needs it to upload), so a missing profile is a
+        fail-fast error instead of a silent skip."""
+        if self._iam_profile is not None:
+            return self._iam_profile
+        name = self._cfg.iam_instance_profile
+        if not name:
+            self._iam_profile = ""
+            return ""
+        rc, _, _ = await _run_aws(
+            "iam", "get-instance-profile", "--instance-profile-name", name,
+            region=self._cfg.region,
+        )
+        if rc == 0:
+            self._iam_profile = name
+        elif self._cfg.output_to_bucket:
+            raise RuntimeError(
+                f"output_path is an s3:// bucket but IAM instance profile {name!r} "
+                f"does not exist — create it (see the AWS setup docs) so the "
+                f"sandbox can upload output, or unset output_path"
+            )
+        else:
+            logger.warning(
+                "IAM instance profile %r not found — launching without it "
+                "(output_path isn't a bucket, so no in-box S3 access is needed)",
+                name,
+            )
+            self._iam_profile = ""
+        return self._iam_profile
 
     async def _resolve_ami(self, snap: SnapshotConfig) -> str:
         """Resolve a snapshot's image to a concrete AMI id.
@@ -615,15 +703,16 @@ class AwsProvider(Provider):
         is_gpu = snap.gpu is not None
         azs = snap.zones
 
-        base_instance = spec.machine_type or (
-            _DEFAULT_GPU_INSTANCE if is_gpu else _DEFAULT_CPU_INSTANCE
-        )
+        base_instance = _resolve_instance_type(spec.machine_type, is_gpu=is_gpu)
         instances = _instance_chain(base_instance, is_gpu=is_gpu)
 
         # Resolve the image-family name (e.g. "ale-win10") to a concrete AMI id,
         # and the security-group name to its id + the VPC that scopes subnets.
         ami_id = await self._resolve_ami(snap)
         sg_id, vpc_id = await self._resolve_security_group()
+        # instance profile to attach: the configured name if it exists, else ""
+        # (skip) — unless output_path is a bucket, in which case a miss raises.
+        iam_profile = await self._effective_iam_profile()
 
         name = generate_instance_name(
             self._cfg.instance_prefix,
@@ -663,6 +752,7 @@ class AwsProvider(Provider):
                     cfg=self._cfg,
                     tenancy=snap.tenancy,
                     snapshot_tag=spec.snapshot,
+                    iam_instance_profile=iam_profile,
                 )
                 if ok:
                     stdout = out

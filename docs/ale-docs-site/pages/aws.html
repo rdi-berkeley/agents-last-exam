@@ -106,10 +106,15 @@ aws iam put-role-policy --role-name ale-sandbox --policy-name s3 --policy-docume
 aws iam create-instance-profile --instance-profile-name ale-sandbox
 aws iam add-role-to-instance-profile --instance-profile-name ale-sandbox --role-name ale-sandbox</code></pre>
     <p>
-      Then in <code>configs/environments/environment_aws.yaml</code> set
-      <code>output_path: s3://ale-run-results-&lt;account&gt;</code> and add
-      <code>iam_instance_profile: ale-sandbox</code> under each snapshot's
-      <code>aws:</code> block.
+      The snapshots already reference the <code>ale-sandbox</code> instance
+      profile, so once it exists the sandbox is launched with it attached (that's
+      what lets the in-box aws CLI write to the bucket). All you do to switch on
+      S3 output is set
+      <code>output_path: s3://ale-run-results-&lt;account&gt;</code> in
+      <code>configs/environments/environment_aws.yaml</code>. (If the profile
+      doesn't exist it's skipped for local runs, so you only need it for S3
+      output — and if <code>output_path</code> is a bucket but the profile is
+      missing, the run fails fast with a clear message.)
     </p>
 
     <h2>④ Run</h2>
@@ -120,10 +125,8 @@ aws iam add-role-to-instance-profile --instance-profile-name ale-sandbox --role-
     <pre><code>uv run python -m ale_run run my_experiment.yaml</code></pre>
 
     <div class="note">
-      <div class="note-title">GPU tasks: not yet validated</div>
-      The GPU snapshots are wired but haven't been run on AWS yet (GPU capacity
-      needs a quota increase, requested via AWS Support). Use the CPU snapshots
-      for now.
+      <div class="note-title">GPU tasks: not supported</div>
+      GPU tasks are not supported in this profile. Use the CPU snapshots.
     </div>
 
     <div class="note">

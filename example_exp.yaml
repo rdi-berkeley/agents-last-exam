@@ -26,9 +26,9 @@ secret_file: secret/.env                          # KEY=value pairs
 
 agents:
   - configs/agents/claude_code.yaml               # add more lines to run a matrix
-environment: configs/environments/environment.yaml
+environment: configs/environments/environment_gcloud.yaml
 
-tasks: selected_tasks/helloworld.txt
+tasks: selected_tasks/hello_both.txt
 
 # ---- run-level knobs (all optional; defaults shown) ----
 # NB: task_data_source + output_path are NOT here — they are substrate-coupled

@@ -48,8 +48,14 @@ uv sync --all-packages</code></pre>
         <tr>
           <td><a href="/pages/aws.html"><strong>AWS EC2</strong></a><br><code>aws</code></td>
           <td>A fresh EC2 instance for every run unit</td>
-          <td>Linux + Windows from public AMIs. GPU is wired but untested.</td>
+          <td>Linux + Windows from public AMIs. GPU tasks not supported.</td>
           <td>Production runs on AWS instead of/alongside GCP</td>
+        </tr>
+        <tr>
+          <td><a href="/pages/aliyun.html"><strong>Alibaba Cloud ECS</strong></a><br><code>aliyun</code></td>
+          <td>A fresh ECS instance for every run unit</td>
+          <td>Linux + Windows from the same image families. GPU tasks not supported.</td>
+          <td>Production runs on Alibaba Cloud instead of/alongside GCP</td>
         </tr>
         <tr>
           <td><a href="/pages/local-docker.html"><strong>Local containers</strong></a><br><code>docker</code></td>
@@ -60,7 +66,7 @@ uv sync --all-packages</code></pre>
         <tr>
           <td><a href="/pages/local.html"><strong>QEMU/KVM VMs</strong></a><br><code>qemu</code></td>
           <td>A fresh QEMU/KVM guest VM for every run unit</td>
-          <td>140 CPU-compatible Ubuntu and Windows tasks in <code>qemu_support.txt</code></td>
+          <td>140 CPU-compatible Ubuntu and Windows tasks in <code>cpu_unlicensed.txt</code></td>
           <td>Full-OS local testing, including Windows, without cloud VMs</td>
         </tr>
         <tr>
@@ -93,9 +99,11 @@ uv sync --all-packages</code></pre>
     <table>
       <thead><tr><th>Environment</th><th>Recommended task list</th></tr></thead>
       <tbody>
-        <tr><td><code>configs/environments/environment.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code>, or <code>full.txt</code> after licensed software is activated</td></tr>
+        <tr><td><code>configs/environments/environment_gcloud.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code>, or <code>full.txt</code> after licensed software is activated</td></tr>
+        <tr><td><code>configs/environments/environment_aws.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code> (same image families on AWS EC2)</td></tr>
+        <tr><td><code>configs/environments/environment_aliyun.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code> (same image families on Alibaba Cloud ECS)</td></tr>
         <tr><td><code>configs/environments/docker.yaml</code></td><td><code>selected_tasks/docker_support.txt</code></td></tr>
-        <tr><td><code>configs/environments/qemu.yaml</code></td><td><code>selected_tasks/qemu_support.txt</code></td></tr>
+        <tr><td><code>configs/environments/qemu.yaml</code></td><td><code>selected_tasks/cpu_unlicensed.txt</code></td></tr>
         <tr><td>A static environment</td><td>A small list known to match the attached machine</td></tr>
       </tbody>
     </table>
@@ -113,6 +121,11 @@ uv sync --all-packages</code></pre>
         <div class="k">Supported</div>
         <div class="t">Google Cloud VMs</div>
         <div class="d">The broadest coverage and the production path for batch runs.</div>
+      </a>
+      <a class="card" href="/pages/aliyun.html">
+        <div class="k">Supported</div>
+        <div class="t">Alibaba Cloud</div>
+        <div class="d">Ephemeral ECS instances + OSS. Linux + Windows; GPU tasks not supported.</div>
       </a>
       <a class="card" href="/pages/local-docker.html">
         <div class="k">Supported</div>

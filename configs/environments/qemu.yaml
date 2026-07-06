@@ -12,8 +12,8 @@
 #
 # Field reference:
 #   snapshots.<tag>
-#     Logical snapshot requested by task_card.json. `gpu-free` is mapped here
-#     only for the CPU-safe tasks curated in selected_tasks/qemu_support.txt.
+#     Logical snapshot requested by task_card.json. Only the CPU snapshots are
+#     defined; the curated task list is selected_tasks/cpu_unlicensed.txt.
 #   provider
 #     Selects the local QEMU provider for this snapshot.
 #   image
@@ -70,19 +70,11 @@ snapshots:
       shm_size: 2g
       ready_timeout_s: 900
 
-  gpu-free:
-    provider: qemu
-    image: ale-win10
-    qemu:
-      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2
-      # GCS alternative: gs://ale-data-public/images/ale-win10.qcow2
-      root: ~/.cache/ale/qemu
-      runner_image: agentslastexam/ale-qemu:0.2.0
-      runner_pull_policy: missing
-      shm_size: 2g
-      ready_timeout_s: 900
+  # No gpu-* snapshots: QEMU runs on CPU only, and the CPU task list
+  # (cpu_unlicensed.txt) contains no GPU-requiring task.
 
 task_data_source: baked_in_sandbox
 # Uncomment when task_data_source or output_path uses gs://.
 # gcs_sa_key: secret/gcp_key.json
-output_path: local
+output_path: null
+# output_path: local          # uncomment to fetch each run's output back to the host

@@ -93,8 +93,8 @@
   ],
   "evaluation": "**Hard gate behavior**\n- Missing or empty `final.blend`, `reconstructed_character.glb`, `reconstructed_character.obj`, or `modeling_report.md` yields `0.0`.\n- `final.blend` must open successfully in headless Blender.\n- The documented submission layout is enforced: outputs must live under `output/submission/`.\n\n**Scoring method**\n- Setup resolves Blender from a candidate path list (`C:\\Softwares\\Blender-5.0.1`, Program Files Blender 5.0/5.1, staged software fallbacks) and verifies `blender --version` is 5.0.x (preferred) or 5.1.x (dev fallback). Fixture scores were calibrated on Blender 5.0.1.\n- The evaluator renders five fixed clay views from the submitted OBJ using the visible `validation_views.json` contract.\n- `reconstructed_character.obj` is the authoritative geometry artifact for fixture discrimination.\n- Final score combines geometry similarity (`55%`), render similarity (`35%`), and world-space bounding-box similarity (`10%`).\n- Current reviewed pass threshold: `0.8`.\n\n**Reviewed fixture behavior**\n- Positive fixture: `0.9999592870260285`\n- Negative fixture: `0.30713274039132843`",
   "vm": {
-    "machineType": "g2-standard-8",
-    "snapshot": "gpu-free",
+    "machineType": "c4-standard-8",
+    "snapshot": "cpu-free",
     "timeout": 7200
   },
   "taxonomy": {

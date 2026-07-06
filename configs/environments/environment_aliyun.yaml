@@ -1,0 +1,72 @@
+# ============================================================================
+# environment_aliyun.yaml — run ALE on Alibaba Cloud (ECS + OSS). Alibaba
+# counterpart of environment.yaml; same per-snapshot model and the SAME
+# image-family names.
+# ============================================================================
+# Hardcoded conventions, no ${env:...} — Alibaba credentials come from your CLI
+# profile (`aliyun configure`) or the ALIBABA_CLOUD_ACCESS_KEY_* env vars; the
+# VPC, vSwitches and images are resolved by name/tag at run time (created once
+# per the docs/ale-docs-site Alibaba setup page). Per snapshot:
+#   • image            image family: ale-ubuntu22 (Linux) or ale-win10 /
+#                      ale-win-server (Windows — pick either).
+#   • security_group   the firewall, by name (gcloud analogue: `network`).
+#   • zones            Alibaba zone ids, tried in order on capacity errors.
+#   • resolution       [w, h] Windows desktop size (Windows only; Linux ignores it).
+#   • ram_role_name    instance RAM role for in-box OSS access (only for oss://
+#                      task data / output).
+#
+# GPU tasks are NOT supported on Alibaba Cloud, so this profile defines only the
+# CPU snapshots. The public task list (cpu_unlicensed.txt) is exactly the set
+# that runs here.
+# ----------------------------------------------------------------------------
+
+snapshots:
+
+  cpu-free-ubuntu:            # Linux — the bulk of tasks
+    provider: aliyun
+    image: ale-ubuntu22
+    aliyun:
+      region: cn-hangzhou
+      security_group: ale-sandbox
+      instance_prefix: ale
+      ram_role_name: ale-sandbox
+      zones: [cn-hangzhou-j, cn-hangzhou-k]
+
+  cpu-free:                   # Windows
+    provider: aliyun
+    image: ale-win10
+    resolution: [1024, 768]
+    aliyun:
+      region: cn-hangzhou
+      security_group: ale-sandbox
+      instance_prefix: ale
+      ram_role_name: ale-sandbox
+      zones: [cn-hangzhou-j, cn-hangzhou-k]
+
+  cpu-license:                # Windows (licensed-software tasks)
+    provider: aliyun
+    image: ale-win10
+    resolution: [1024, 768]
+    aliyun:
+      region: cn-hangzhou
+      security_group: ale-sandbox
+      instance_prefix: ale
+      ram_role_name: ale-sandbox
+      zones: [cn-hangzhou-j, cn-hangzhou-k]
+
+  # No gpu-* snapshots: GPU isn't available on Alibaba, and the public task list
+  # (cpu_unlicensed.txt) has no GPU task. A gpu-* request fails fast with a clear
+  # "snapshot not configured".
+
+# ---------------------------------------------------------------------------
+# Task data + output (mirrors environment.yaml).
+# ---------------------------------------------------------------------------
+# Where task data comes from: "baked_in_sandbox" (baked into the image) | "oss://<bucket>".
+task_data_source: baked_in_sandbox
+
+# What to do with each run's output: null | "local" | "oss://<bucket>". The
+# snapshots already reference the `ale-sandbox` RAM role; to keep output in OSS,
+# create that role (see the setup docs) and set the bucket here. (If the role
+# doesn't exist it's skipped for non-bucket output, so local runs need nothing.)
+output_path: null
+# output_path: local          # uncomment to fetch each run's output back to the host

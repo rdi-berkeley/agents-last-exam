@@ -1,5 +1,5 @@
 # ============================================================================
-# environment.yaml — the one environment config.
+# environment_gcloud.yaml — the Google Cloud environment config.
 # ============================================================================
 # A task card declares a logical `snapshot` (its `image_category`, e.g.
 # "cpu-free-ubuntu"). For EVERY snapshot a task can ask for, this file says:
@@ -127,4 +127,5 @@ task_data_source: baked_in_sandbox
 gcs_sa_key: secret/gcp_key.json
 
 # Output dir after the run: null (skip) | "local" | "gs://<bucket>".
-output_path: local
+output_path: null
+# output_path: local          # uncomment to fetch each run's output back to the host

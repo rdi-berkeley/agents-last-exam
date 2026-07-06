@@ -19,4 +19,5 @@ image: ale-win10                      # Windows path-conventions + cua port :500
 # Task input data is baked into E:\agenthle on the image; outputs are pulled
 # back to the local run dir (no GCS bucket involved).
 task_data_source: baked_in_sandbox
-output_path: local
+output_path: null
+# output_path: local          # uncomment to fetch each run's output back to the host

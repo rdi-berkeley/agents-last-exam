@@ -49,8 +49,8 @@
   ],
   "evaluation": "**Hard gate conditions**\n- `final.blend` is missing, empty, or cannot be opened by the approved Blender runtime on the target VM.\n- `mesh_seq/` does not contain exactly 60 OBJ files.\n- Any expected frame `frame_0001.obj` through `frame_0060.obj` is missing or unreadable.\n\n**Scoring method**\n- The evaluator compares each submitted frame against the hidden reference frame for the same timestep.\n- It computes a symmetric Chamfer distance over sampled mesh surfaces when triangle data is available.\n- Distances are normalized by a single bbox diagonal derived from `input/character.obj`.\n- Final score is `exp(-40 * mean_ncd)`.\n\n**Current reviewed fixture behavior**\n- Positive fixture: `1.0`\n- Negative fixture: `0.0001573736288949276`\n- Empty/default output: `0.0`",
   "vm": {
-    "machineType": "g2-standard-8",
-    "snapshot": "gpu-free",
+    "machineType": "c4-standard-8",
+    "snapshot": "cpu-free",
     "timeout": 7200
   },
   "taxonomy": {

@@ -147,9 +147,9 @@ gcloud storage buckets add-iam-policy-binding "gs://$GCP_BUCKET" \
     <pre><code>GCP_PROJECT=&lt;your-project-id&gt;
 GCP_SA_KEY=secret/gcp_key.json</code></pre>
     <p>
-      The shipped <code>configs/environments/environment.yaml</code> maps all
-      five task snapshots to Google Cloud. Start with
-      <code>selected_tasks/helloworld.txt</code>, then use
+      The shipped <code>configs/environments/environment_gcloud.yaml</code> maps all
+      five task snapshots to Google Cloud. Start with the shipped
+      <code>example_exp.yaml</code> (a <code>demo/hello</code> smoke), then use
       <code>selected_tasks/unlicensed.txt</code> for the public unlicensed set.
       Licensed tasks require separately activated software.
     </p>
