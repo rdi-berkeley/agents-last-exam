@@ -5,7 +5,6 @@ import logging
 import os
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
 from types import SimpleNamespace
 
 try:
@@ -180,9 +179,13 @@ async def _find_output_pcb(meta: dict, session: cb.DesktopSession) -> str | None
     return candidate or None
 
 
-async def _run_kicad_drc(meta: dict, pcb_path: str, session: cb.DesktopSession) -> tuple[str | None, str | None]:
+async def _run_kicad_drc(
+    meta: dict, pcb_path: str, session: cb.DesktopSession
+) -> tuple[str | None, str | None]:
     await session.interface.create_dir(EVAL_TMP_DIR)
+    eval_pcb_path = rf"{EVAL_TMP_DIR}\submission.kicad_pcb"
     drc_json_path = rf"{EVAL_TMP_DIR}\drc_report.json"
+    drc_script_path = rf"{EVAL_TMP_DIR}\run_drc.ps1"
     candidates = [
         meta.get("kicad_cli_path") or "",
         r"C:\Users\User\AppData\Local\Programs\KiCad\10.0\bin\kicad-cli.exe",
@@ -195,38 +198,42 @@ async def _run_kicad_drc(meta: dict, pcb_path: str, session: cb.DesktopSession) 
         r"C:\Program Files\KiCad\8.0\bin\kicad-cli.exe",
     ]
     ps_candidates = "@(" + ",".join(_ps_quote(path) for path in candidates if path) + ")"
-    command = (
-        "powershell -NoProfile -Command "
-        + _ps_quote(
-            "$ErrorActionPreference='Continue'; "
-            f"$candidates={ps_candidates}; "
-            "$cli=$null; foreach($p in $candidates){ if($p -and (Test-Path $p)){ $cli=$p; break } }; "
-            "if(-not $cli){ $cmd=Get-Command kicad-cli -ErrorAction SilentlyContinue; if($cmd){ $cli=$cmd.Source } }; "
-            "if(-not $cli){ Write-Error 'kicad-cli not found'; exit 70 }; "
-            f'& $cli pcb drc --format json --output "{drc_json_path}" "{pcb_path}"; '
-            "$code=$LASTEXITCODE; "
-            f'if(Test-Path "{drc_json_path}"){{ Get-Content "{drc_json_path}" -Raw }}; '
-            "exit $code"
-        )
+    ps_script = (
+        "$ErrorActionPreference = 'Stop'\r\n"
+        f"$candidates = {ps_candidates}\r\n"
+        "$cli = $null\r\n"
+        "foreach ($path in $candidates) {\r\n"
+        "    if ($path -and (Test-Path -LiteralPath $path)) { $cli = $path; break }\r\n"
+        "}\r\n"
+        "if (-not $cli) {\r\n"
+        "    $command = Get-Command kicad-cli -ErrorAction SilentlyContinue\r\n"
+        "    if ($command) { $cli = $command.Source }\r\n"
+        "}\r\n"
+        "if (-not $cli) { Write-Error 'kicad-cli not found'; exit 70 }\r\n"
+        f"Copy-Item -LiteralPath {_ps_quote(pcb_path)} "
+        f"-Destination {_ps_quote(eval_pcb_path)} -Force\r\n"
+        f"& $cli pcb drc --format json --severity-all --severity-exclusions "
+        f"--output {_ps_quote(drc_json_path)} {_ps_quote(eval_pcb_path)}\r\n"
+        "exit $LASTEXITCODE\r\n"
     )
-    result = await session.run_command(command)
-    stdout = _cmd_stdout(result).strip()
+    await session.write_file(drc_script_path, ps_script)
+    command = (
+        'powershell -NoProfile -ExecutionPolicy Bypass -File '
+        f'"{drc_script_path}"'
+    )
+    result = await session.run_command(command, check=False)
     stderr = _cmd_stderr(result).strip()
     returncode = _cmd_returncode(result)
 
-    if stdout.startswith("{"):
-        return stdout, None
-
-    unavailable_markers = [
-        "Failed to load board",
-        "kicad-cli not found",
-        "unrecognized file format",
-    ]
-    if returncode not in (0, None) and any(marker in stderr for marker in unavailable_markers):
+    if returncode not in (0, None):
         return None, stderr or f"kicad-cli exited {returncode}"
-    if returncode not in (0, None) and not stdout:
-        return None, stderr or f"kicad-cli exited {returncode} without JSON"
-    return stdout or None, None
+
+    try:
+        raw = await session.read_bytes(drc_json_path)
+    except Exception as exc:
+        return None, f"failed to read DRC JSON: {exc}"
+
+    return raw.decode("utf-8"), None
 
 
 @cb.evaluate_task(split="train")
