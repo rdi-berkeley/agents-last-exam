@@ -313,14 +313,8 @@ async def _run_local_soft_eval(
     model = task_cfg.metadata.get("soft_eval_model", SOFT_EVAL_MODEL)
     frame_items = []
     for pair in frame_pairs:
-        try:
-            input_bytes = await session.read_bytes(pair["input_frame_path"])
-            output_bytes = await session.read_bytes(pair["output_frame_path"])
-        except Exception as exc:
-            logger.warning(
-                "[chroma soft eval] could not download frame pair for %s: %s", task_tag, exc
-            )
-            continue
+        input_bytes = await session.read_bytes(pair["input_frame_path"])
+        output_bytes = await session.read_bytes(pair["output_frame_path"])
         frame_items.append(
             {
                 "identifier": pair.get("identifier")
@@ -367,15 +361,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     soft_score = 0.0
     soft_details: dict = {"evaluations": []}
     if frame_pairs:
-        try:
-            soft_score, soft_details = await _run_local_soft_eval(task_cfg, session, frame_pairs)
-        except Exception as exc:
-            logger.warning(
-                "[chroma soft eval] local LLM evaluation failed for %s: %s",
-                task_cfg.metadata["variant_name"],
-                exc,
-            )
-            soft_score = 0.0
+        soft_score, soft_details = await _run_local_soft_eval(task_cfg, session, frame_pairs)
 
     soft_by_identifier = {
         str(item.get("identifier")): float(item.get("score", 0.0) or 0.0)
@@ -394,6 +380,8 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         detail.update(frame_result)
         combined_scores.append(float(frame_result["final_frame_score"]))
 
+    if frame_pairs and not soft_eval_available:
+        raise RuntimeError("chroma soft evaluation returned no evaluations")
     if not soft_eval_available:
         final_score = 0.0
     elif combined_scores:

@@ -9,6 +9,7 @@ from tasks.common_config import GeneralTaskConfig
 from tasks.common_setup import BaseTaskSetup
 from tasks.utils.evaluation import (
     EvaluationContext,
+    JudgeInfrastructureError,
     collect_matching_files,
     llm_vision_yes_no_judge,
 )
@@ -174,6 +175,8 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
                         )
                         ctx.add_score(eval_player["score"] * 0.5)
 
+                    except JudgeInfrastructureError:
+                        raise
                     except Exception as e:
                         ctx.log_error(identifier=file, error=e)
                 else:
@@ -182,6 +185,8 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             ctx.finalize(num_reference_files=len(reference_files), num_output_files=len(output_files))
             return [ctx.get_final_score(num_items=len(reference_files))]
 
+    except JudgeInfrastructureError:
+        raise
     except Exception as e:
         logger.error(f"Evaluation error: {e}")
 

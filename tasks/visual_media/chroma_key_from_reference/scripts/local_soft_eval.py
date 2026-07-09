@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from tasks.utils.evaluation import EvaluationContext, llm_vision_binary_checklist_judge
-
-logger = logging.getLogger(__name__)
-
 
 def build_soft_eval_prompt(task_tag: str, index: int, time_sec: float) -> str:
     return f"""You are evaluating task completion for a keying-related editing task.
@@ -73,45 +69,32 @@ async def run_soft_eval_local(
                 index=int(item["index"]),
                 time_sec=float(item["time_sec"]),
             )
-            try:
-                result = await llm_vision_binary_checklist_judge(
-                    prompt_intro=prompt,
-                    checklist_items=build_soft_eval_checklist(),
-                    image_bytes=item["input_bytes"],
-                    reference_image_bytes=item["output_bytes"],
-                    model=model,
-                    max_tokens=256,
-                    return_details=True,
-                    eval_context=ctx,
-                    identifier=identifier,
-                )
-                score = float(result.get("score") or 0.0)
-                total_score += score
-                evaluated += 1
-                evaluations.append(
-                    {
-                        "identifier": identifier,
-                        "index": int(item["index"]),
-                        "time_sec": float(item["time_sec"]),
-                        "score": score,
-                        "vlm_response": result.get("vlm_response"),
-                        "checklist_answers": result.get("checklist_answers"),
-                        "checklist_scores": result.get("checklist_scores"),
-                        "summary": result.get("summary"),
-                    }
-                )
-            except Exception as exc:
-                logger.warning("[chroma soft eval] frame %s failed: %s", identifier, exc)
-                ctx.log_error(identifier, exc, score=0.0)
-                evaluations.append(
-                    {
-                        "identifier": identifier,
-                        "index": int(item["index"]),
-                        "time_sec": float(item["time_sec"]),
-                        "score": 0.0,
-                        "error": str(exc),
-                    }
-                )
+            result = await llm_vision_binary_checklist_judge(
+                prompt_intro=prompt,
+                checklist_items=build_soft_eval_checklist(),
+                image_bytes=item["input_bytes"],
+                reference_image_bytes=item["output_bytes"],
+                model=model,
+                max_tokens=256,
+                return_details=True,
+                eval_context=ctx,
+                identifier=identifier,
+            )
+            score = float(result.get("score") or 0.0)
+            total_score += score
+            evaluated += 1
+            evaluations.append(
+                {
+                    "identifier": identifier,
+                    "index": int(item["index"]),
+                    "time_sec": float(item["time_sec"]),
+                    "score": score,
+                    "vlm_response": result.get("vlm_response"),
+                    "checklist_answers": result.get("checklist_answers"),
+                    "checklist_scores": result.get("checklist_scores"),
+                    "summary": result.get("summary"),
+                }
+            )
 
         final_score = total_score / max(1, evaluated)
         _, details = ctx.finalize(

@@ -1,13 +1,13 @@
 {
   "taskId": "life_sciences/WGS_Variant_Calling",
   "title": "WGS Variant Calling",
-  "summary": "Run a germline whole-genome variant-calling workflow from staged sequencing data and summarize benchmark metrics against the provided truth calls.",
+  "summary": "Run a germline variant-calling workflow on real HG002 reads from a 1 Mb GRCh38 chromosome 17 region and produce a filtered VCF for evaluator-side benchmarking.",
   "category": "life_sciences",
   "software": [],
-  "taskPrompt": "You are given a tiny paired-end genomic sequencing dataset plus a small reference and truth set.\n\nYour task is to run an Ubuntu-native germline variant-calling workflow using `bwa`, `samtools`, and `bcftools`, then summarize benchmark metrics against the provided truth calls.\n\nTask directory:\n- `base`\n\nInput directory:\n- `base/input`\n\nAvailable environment:\n- a Linux terminal is open at `base`\n- conda environment `wf1-env` is preinstalled\n\nRequired outputs under `base/output`:\n- `region_R1_fastqc.html`\n- `region_R2_fastqc.html`\n- `multiqc_report.html`\n- `flagstat.txt`\n- `duplication_metrics.txt`\n- `variants.filtered.vcf.gz`\n- `variants.filtered.vcf.gz.tbi`\n- `rtg_summary.csv` appended under the existing header\n\nDo not ask for confirmation. Execute directly.",
+  "taskPrompt": "You are given paired-end HG002 sequencing reads covering a 1 Mb region of GRCh38 chromosome 17, plus the GRCh38 chromosome 17 reference.\n\nRun an Ubuntu-native germline variant-calling workflow using `bwa`, `samtools`, and `bcftools`, then produce a filtered VCF containing SNP and INDEL calls.\n\nTask directory:\n- `base`\n\nInput directory:\n- `base/input`\n\nAvailable environment:\n- `bwa`, `samtools`, `bcftools`, FastQC, MultiQC, and RTG Tools are preinstalled on `PATH`\n- truth calls and confident regions are evaluator-only and are not part of the solve-time input\n\nRequired outputs under `base/output`:\n- `region_R1_fastqc.html`\n- `region_R2_fastqc.html`\n- `multiqc_report.html`\n- `flagstat.txt`\n- `duplication_metrics.txt`\n- `variants.filtered.vcf.gz`\n- `variants.filtered.vcf.gz.tbi`\n- `rtg_summary.csv` with the header `Type,Precision,Sensitivity,F_measure` and rows for SNP and INDEL; metric values may be `NA` because truth is hidden\n\nThe evaluator independently recomputes SNP and INDEL precision, recall, and F1 from the submitted VCF. It does not trust the values in `rtg_summary.csv`.\n\nDo not ask for confirmation. Execute directly.",
   "agentMustDo": [
-    "Run a small Ubuntu-native germline variant-calling workflow on paired-end reads and summarize truth-comparison metrics.",
-    "Write outputs only under `output/` while keeping committed fixtures untouched.",
+    "Run an Ubuntu-native germline variant-calling workflow on real HG002 paired-end reads from the staged 1 Mb chr17 region.",
+    "Write outputs only under `output/` while keeping the staged input files untouched.",
     "Work directly on Ubuntu; Windows + WSL is no longer the canonical runtime."
   ],
   "inputFiles": [
@@ -27,19 +27,19 @@
       "name": "chr17.fa",
       "format": "fa",
       "path": "input/chr17.fa",
-      "description": ""
+      "description": "GRCh38 chromosome 17 reference FASTA."
     },
     {
-      "name": "truth_chr17.vcf",
-      "format": "vcf",
-      "path": "input/truth_chr17.vcf",
-      "description": ""
+      "name": "chr17.fa.fai",
+      "format": "fai",
+      "path": "input/chr17.fa.fai",
+      "description": "FASTA index for the chromosome 17 reference."
     },
     {
-      "name": "eval_region_confident.bed",
-      "format": "bed",
-      "path": "input/eval_region_confident.bed",
-      "description": ""
+      "name": "chr17.dict",
+      "format": "dict",
+      "path": "input/chr17.dict",
+      "description": "Sequence dictionary for the chromosome 17 reference."
     }
   ],
   "referenceFiles": [
@@ -92,7 +92,7 @@
       "description": "output/rtg_summary.csv"
     }
   ],
-  "evaluation": "- FastQC and MultiQC HTML files must be present and non-trivial\n- mapping rate must clear the synthetic threshold\n- duplication rate must stay below the synthetic maximum\n- variant VCF plus index must exist\n- summary metrics for SNPs and INDELs must meet the target precision / recall / F1 cutoffs",
+  "evaluation": "The evaluator checks the QC reports, mapping rate, duplication rate, compressed VCF, tabix index, and informational CSV. It then independently recomputes SNP and INDEL precision, recall, and F1 from the submitted VCF against evaluator-only GIAB HG002 truth restricted to evaluator-only confident regions. Self-reported CSV values do not affect the score. Thresholds are mapping rate >= 95%, duplication rate <= 20%, SNP precision/recall/F1 >= 0.99, INDEL precision >= 0.97, recall >= 0.91, and F1 >= 0.94.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",

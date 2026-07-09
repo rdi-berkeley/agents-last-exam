@@ -63,8 +63,10 @@ def _stack(paths: list[Path], out_path: Path) -> Path:
 
 
 def run_local_soft_eval(frame_pairs: list[dict], local_tmp_dir: Path) -> float:
-    if not _load_api_key() or not frame_pairs:
+    if not frame_pairs:
         return 0.0
+    if not _load_api_key():
+        raise RuntimeError("OPENAI_API_KEY is not set for UV soft evaluation")
     local_tmp_dir.mkdir(parents=True, exist_ok=True)
     sheets = []
     for pair in frame_pairs:

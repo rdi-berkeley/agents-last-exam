@@ -17,6 +17,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class JudgeInfrastructureError(RuntimeError):
+    """Raised when an external judge cannot produce a valid evaluation."""
+
+
 def eval_credentials_dir() -> Path:
     """Directory of evaluator-side per-service env files (`<repo>/secret/eval_time`).
     Override with ``AGENTHLE_EVAL_CREDENTIALS_DIR``. This module lives at
@@ -256,7 +260,10 @@ def _normalize_binary_response(raw: str) -> str | None:
 
 
 def _binary_score_from_response(raw: str) -> float:
-    return 1.0 if _normalize_binary_response(raw) == "YES" else 0.0
+    normalized = _normalize_binary_response(raw)
+    if normalized is None:
+        raise ValueError(f"Judge returned a non-binary response: {raw[:200]!r}")
+    return 1.0 if normalized == "YES" else 0.0
 
 
 def _vision_token_param_candidates(client: AsyncOpenAI, max_tokens: int) -> list[dict]:
@@ -469,7 +476,6 @@ async def llm_vision_judge(
         - str with LLM response otherwise
     """
     result = None
-    error_msg = None
     resolved_model = resolve_llm_judge_model(default=model)
 
     try:
@@ -505,19 +511,10 @@ async def llm_vision_judge(
         }
 
     except Exception as e:
-        logger.error(f"Error in llm_vision_judge: {e}")
-        error_msg = f"Error: {str(e)}"
-        mode = "comparison" if reference_image_bytes else "single"
-
-        result = {
-            "vlm_response": None,
-            "score": 0.0,
-            "prompt": prompt,
-            "model": resolved_model,
-            "mode": mode,
-            "max_tokens": max_tokens,
-            "error": error_msg,
-        }
+        logger.exception("Error in llm_vision_judge")
+        if eval_context is not None and identifier is not None:
+            eval_context.log_error(identifier, e)
+        raise JudgeInfrastructureError(f"llm_vision_judge failed: {e}") from e
 
     # Auto-log to EvaluationContext if provided
     if eval_context is not None and identifier is not None:
@@ -536,7 +533,7 @@ async def llm_vision_judge(
     elif return_binary_score:
         return result["score"]
     else:
-        return result["vlm_response"] if result["vlm_response"] else error_msg
+        return result["vlm_response"]
 
 
 async def llm_vision_yes_no_judge(
@@ -691,7 +688,7 @@ def _parse_binary_answer(value: Any) -> float:
         return 1.0
     if text in {"NO", "N", "FALSE", "0", "FAIL"}:
         return 0.0
-    return 0.0
+    raise ValueError(f"Judge returned a non-binary checklist answer: {value!r}")
 
 
 async def llm_vision_binary_checklist_judge(
@@ -751,7 +748,9 @@ async def llm_vision_binary_checklist_judge(
         checklist_scores: dict[str, float] = {}
         normalized_answers: dict[str, str] = {}
         for key, _question in checklist_items:
-            score = _parse_binary_answer(answers_payload.get(key, "NO"))
+            if key not in answers_payload:
+                raise ValueError(f"Judge response is missing checklist answer {key!r}")
+            score = _parse_binary_answer(answers_payload[key])
             checklist_scores[key] = score
             normalized_answers[key] = "YES" if score >= 1.0 else "NO"
         score = sum(checklist_scores.values()) / len(checklist_items)
@@ -768,19 +767,12 @@ async def llm_vision_binary_checklist_judge(
             "summary": raw.get("summary") if isinstance(raw, dict) else None,
         }
     except Exception as e:
-        logger.error(f"Error in llm_vision_binary_checklist_judge: {e}")
-        result = {
-            "vlm_response": None,
-            "score": 0.0,
-            "prompt": prompt,
-            "model": resolve_llm_judge_model(default=model),
-            "mode": mode,
-            "max_tokens": max_tokens,
-            "error": f"Error: {str(e)}",
-            "checklist_answers": {key: "NO" for key, _question in checklist_items},
-            "checklist_scores": {key: 0.0 for key, _question in checklist_items},
-            "summary": None,
-        }
+        logger.exception("Error in llm_vision_binary_checklist_judge")
+        if eval_context is not None and identifier is not None:
+            eval_context.log_error(identifier, e)
+        raise JudgeInfrastructureError(
+            f"llm_vision_binary_checklist_judge failed: {e}"
+        ) from e
 
     if eval_context is not None and identifier is not None:
         eval_context.log_evaluation(
@@ -1275,6 +1267,8 @@ async def evaluate_milestone_mode(
                     )
                     ctx.add_score(score / len(reference_files))
 
+                except JudgeInfrastructureError:
+                    raise
                 except Exception as e:
                     ctx.log_error(identifier=file, error=e)
 
@@ -1413,6 +1407,8 @@ async def evaluate_deliverable_mode(
                         )
                         ctx.add_score(score / len(reference_files))
 
+                    except JudgeInfrastructureError:
+                        raise
                     except Exception as e:
                         ctx.log_error(identifier=identifier, error=e)
                 else:
@@ -1428,6 +1424,8 @@ async def evaluate_deliverable_mode(
                 total_actions_replayed=len(actions_to_execute),
             )
 
+        except JudgeInfrastructureError:
+            raise
         except Exception as e:
             logger.error(f"Error in deliverable evaluation: {e}")
             ctx.evaluation_details["error"] = str(e)

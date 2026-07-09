@@ -91,7 +91,7 @@ async def query_milestone(
 
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
-    from tasks.utils.evaluation import evaluate_milestone_mode
+    from tasks.utils.evaluation import JudgeInfrastructureError, evaluate_milestone_mode
 
     remote_output_path = task_cfg.metadata["remote_output_dir"]
     reference_path = task_cfg.metadata["reference_dir"]
@@ -109,6 +109,8 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         
         return [final_score]
 
+    except JudgeInfrastructureError:
+        raise
     except Exception as e:
         logger.error(f"Evaluation error: {e}")
         return [0.0]

@@ -1,19 +1,25 @@
 """Ubuntu-native germline variant-calling benchmark."""
 
-import csv
-import io
 import logging
+import os
 import posixpath
 import re
+import shlex
+from pathlib import Path
 from typing import Optional
 
 import cua_bench as cb
 from tasks.common_setup import BaseTaskSetup
 from tasks.linux_runtime import LinuxTaskConfig
+from tasks.life_sciences.WGS_Variant_Calling.scoring import (
+    MAX_COMPRESSED_VCF_BYTES,
+    score_vcf_bytes,
+    validate_summary_csv,
+    validate_tabix_index,
+)
 
 logger = logging.getLogger(__name__)
 
-MINIFORGE_ROOT = "/opt/toolchains/miniforge3"
 CANONICAL_OUTPUT_DIR_NAMES = {"output", "output_test_pos", "output_test_neg"}
 
 
@@ -29,16 +35,14 @@ def _canonical_output_dir_name(path: str) -> str:
 class TaskConfig(LinuxTaskConfig):
     DOMAIN_NAME: str = "life_sciences"
     VARIANT_NAME: str = "base"
-    CONDA_ENV: str = "wf1-env"
-
-    MIN_MAPPING_RATE: float = 80.0
-    MAX_DUPLICATION_RATE: float = 30.0
-    MIN_SNP_F1: float = 0.95
-    MIN_SNP_PRECISION: float = 0.95
-    MIN_SNP_RECALL: float = 0.95
-    MIN_INDEL_F1: float = 0.90
-    MIN_INDEL_PRECISION: float = 0.90
-    MIN_INDEL_RECALL: float = 0.90
+    MIN_MAPPING_RATE: float = 95.0
+    MAX_DUPLICATION_RATE: float = 20.0
+    MIN_SNP_F1: float = 0.99
+    MIN_SNP_PRECISION: float = 0.99
+    MIN_SNP_RECALL: float = 0.99
+    MIN_INDEL_F1: float = 0.94
+    MIN_INDEL_PRECISION: float = 0.97
+    MIN_INDEL_RECALL: float = 0.91
 
     FASTQC_R1_FILE: str = "region_R1_fastqc.html"
     FASTQC_R2_FILE: str = "region_R2_fastqc.html"
@@ -60,10 +64,11 @@ class TaskConfig(LinuxTaskConfig):
     @property
     def task_description(self) -> str:
         return f"""\
-You are given a tiny paired-end genomic sequencing dataset plus a small reference and truth set.
+You are given paired-end HG002 sequencing reads covering a 1 Mb region of GRCh38 chromosome 17, \
+plus the GRCh38 chromosome 17 reference.
 
 Your task is to run an Ubuntu-native germline variant-calling workflow using `bwa`, `samtools`, \
-and `bcftools`, then summarize benchmark metrics against the provided truth calls.
+and `bcftools`, then produce a filtered VCF containing SNP and INDEL calls.
 
 ## Task Directory
 `{self.task_dir}`
@@ -72,21 +77,24 @@ and `bcftools`, then summarize benchmark metrics against the provided truth call
 `{self.input_dir}`
 
 ## Available Environment
-- Open a Linux terminal yourself, `cd "{self.task_dir}"`, then activate the preinstalled \
-conda environment: `source "{MINIFORGE_ROOT}/etc/profile.d/conda.sh" && conda activate "{self.CONDA_ENV}"`
-- conda environment `{self.CONDA_ENV}` is preinstalled with bwa, samtools, bcftools, FastQC, MultiQC
+- `bwa`, `samtools`, `bcftools`, FastQC, MultiQC, and RTG Tools are preinstalled on `PATH`.
+- The truth VCF and confident-region BED are evaluator-only and are not part of the solve-time input.
 
 ## Required Outputs
 Save all outputs under `{self.remote_output_dir}`:
-- `{self.FASTQC_R1_FILE}` — FastQC report for mate 1
-- `{self.FASTQC_R2_FILE}` — FastQC report for mate 2
-- `{self.MULTIQC_FILE}` — MultiQC aggregate report
-- `{self.FLAGSTAT_FILE}` — samtools flagstat output
-- `{self.DUPLICATION_FILE}` — Picard-style duplication metrics
-- `{self.VCF_FILE}` — filtered variant calls (bgzipped)
-- `{self.VCF_INDEX_FILE}` — tabix index for the VCF
-- `{self.RTG_SUMMARY_FILE}` — CSV starting with the exact header line \
-`Type,Precision,Sensitivity,F_measure`, then your benchmark rows appended below
+- `{self.FASTQC_R1_FILE}` - FastQC report for mate 1
+- `{self.FASTQC_R2_FILE}` - FastQC report for mate 2
+- `{self.MULTIQC_FILE}` - MultiQC aggregate report
+- `{self.FLAGSTAT_FILE}` - samtools flagstat output
+- `{self.DUPLICATION_FILE}` - Picard-style duplication metrics
+- `{self.VCF_FILE}` - filtered variant calls (bgzipped)
+- `{self.VCF_INDEX_FILE}` - tabix index for the VCF
+- `{self.RTG_SUMMARY_FILE}` - informational CSV with the exact header \
+`Type,Precision,Sensitivity,F_measure` and rows for `SNP` and `INDEL`. Because truth is hidden, \
+the metric values may be `NA`; the evaluator does not trust or score these self-reported values.
+
+The evaluator independently recomputes SNP and INDEL precision, recall, and F1 from the submitted \
+VCF against evaluator-only truth.
 
 Do not ask for confirmation. Execute directly.
 """
@@ -130,6 +138,12 @@ _setup = BaseTaskSetup()
 @cb.setup_task(split="train")
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
+    output_dir = shlex.quote(task_cfg.metadata["remote_output_dir"])
+    await session.run_command(
+        f"if [ -d {output_dir} ]; then "
+        f"find {output_dir} -mindepth 1 -maxdepth 1 -exec rm -rf -- {{}} +; "
+        f"else mkdir -p -- {output_dir}; fi"
+    )
 
 
 def parse_mapping_rate(flagstat_text: str) -> Optional[float]:
@@ -175,33 +189,11 @@ def parse_duplication_rate(metrics_text: str) -> Optional[float]:
     return None
 
 
-def parse_rtg_summary(summary_text: str) -> Optional[dict]:
-    reader = csv.DictReader(io.StringIO(summary_text))
-    results: dict[str, float] = {}
-    for row in reader:
-        row = {key.strip(): value.strip() for key, value in row.items()}
-        variant_type = row.get("Type", "").upper()
-        try:
-            precision = float(row.get("Precision", 0))
-            sensitivity = float(row.get("Sensitivity", 0))
-            f_measure = float(row.get("F_measure", 0))
-        except (TypeError, ValueError):
-            continue
-        if variant_type == "SNP":
-            results["snp_precision"] = precision
-            results["snp_recall"] = sensitivity
-            results["snp_f1"] = f_measure
-        elif variant_type == "INDEL":
-            results["indel_precision"] = precision
-            results["indel_recall"] = sensitivity
-            results["indel_f1"] = f_measure
-    return results if results else None
-
-
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     output_dir = task_cfg.metadata["remote_output_dir"]
     score = 0.0
+    vcf_bytes: bytes | None = None
 
     try:
         qc_files = [
@@ -248,7 +240,14 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     try:
         vcf_bytes = await session.read_bytes(f"{output_dir}/{config.VCF_FILE}")
         tbi_bytes = await session.read_bytes(f"{output_dir}/{config.VCF_INDEX_FILE}")
-        if vcf_bytes and len(vcf_bytes) > 50 and tbi_bytes and len(tbi_bytes) > 0:
+        summary_bytes = await session.read_bytes(f"{output_dir}/{config.RTG_SUMMARY_FILE}")
+        if (
+            vcf_bytes
+            and len(vcf_bytes) > 50
+            and len(vcf_bytes) <= MAX_COMPRESSED_VCF_BYTES
+            and validate_tabix_index(tbi_bytes or b"")
+            and validate_summary_csv(summary_bytes or b"")
+        ):
             score += 0.10
             logger.info("Checkpoint 3 PASSED")
         else:
@@ -257,22 +256,29 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         logger.info("Checkpoint 3 FAILED: %s", exc)
 
     try:
-        summary_bytes = await session.read_bytes(f"{output_dir}/{config.RTG_SUMMARY_FILE}")
-        metrics = parse_rtg_summary(summary_bytes.decode()) if summary_bytes else None
-        if metrics:
-            for key, threshold in [
-                ("snp_f1", task_cfg.metadata["min_snp_f1"]),
-                ("snp_precision", task_cfg.metadata["min_snp_precision"]),
-                ("snp_recall", task_cfg.metadata["min_snp_recall"]),
-                ("indel_f1", task_cfg.metadata["min_indel_f1"]),
-                ("indel_precision", task_cfg.metadata["min_indel_precision"]),
-                ("indel_recall", task_cfg.metadata["min_indel_recall"]),
-            ]:
-                if metrics.get(key, 0.0) >= threshold:
-                    score += 0.10
-            logger.info("Checkpoint 4 metrics=%s", metrics)
-        else:
-            logger.info("Checkpoint 4 FAILED")
+        if not vcf_bytes:
+            raise ValueError("submitted VCF is missing")
+        evaluator_data_dir = Path(
+            os.environ.get(
+                "WGS_VARIANT_CALLING_EVAL_DATA_DIR",
+                Path(__file__).resolve().parents[3]
+                / "secret"
+                / "eval_data"
+                / "WGS_Variant_Calling",
+            )
+        )
+        report = score_vcf_bytes(vcf_bytes, evaluator_data_dir)
+        for value, threshold in [
+            (report.snp.f1, task_cfg.metadata["min_snp_f1"]),
+            (report.snp.precision, task_cfg.metadata["min_snp_precision"]),
+            (report.snp.recall, task_cfg.metadata["min_snp_recall"]),
+            (report.indel.f1, task_cfg.metadata["min_indel_f1"]),
+            (report.indel.precision, task_cfg.metadata["min_indel_precision"]),
+            (report.indel.recall, task_cfg.metadata["min_indel_recall"]),
+        ]:
+            if value >= threshold:
+                score += 0.10
+        logger.info("Checkpoint 4 independently recomputed metrics=%s", report)
     except Exception as exc:
         logger.info("Checkpoint 4 FAILED: %s", exc)
 
