@@ -18,6 +18,7 @@ PAGE_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 BULLET_LINE_RE = re.compile(r"^\s*(?:[-*+]|(?:\d+[\.\)]))\s+(?P<content>.+?)\s*$")
+MARKDOWN_TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
 
 DOC_ALIASES = {
     "announcement": (
@@ -199,9 +200,26 @@ def _split_sections(text: str) -> list[Section]:
 
 def _looks_like_claim_title(title: str) -> bool:
     title_norm = _normalize_text(title)
+    if MARKDOWN_TABLE_ROW_RE.match(title) or _is_negative_assurance(title_norm):
+        return False
     return (
         title_norm.startswith("finding ")
         or any(hint in title_norm for hint in CLAIM_TITLE_HINTS)
+    )
+
+
+def _is_negative_assurance(normalized: str) -> bool:
+    has_claim_hint = any(hint in normalized for hint in CLAIM_TITLE_HINTS)
+    if has_claim_hint and (
+        normalized.startswith(("no ", "without "))
+        or any(
+            phrase in normalized
+            for phrase in ("not found", "none found", "not present", "no evidence of")
+        )
+    ):
+        return True
+    return any(phrase in normalized for phrase in ("未发现", "未见", "不存在")) and any(
+        word in normalized for word in ("问题", "错误", "矛盾", "不一致", "差异")
     )
 
 

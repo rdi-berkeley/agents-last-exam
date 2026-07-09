@@ -708,23 +708,19 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         shutil.rmtree(local_tmp)
     local_tmp.mkdir(parents=True, exist_ok=True)
     localized_pairs = []
-    try:
-        for idx, pair in enumerate(frame_pairs):
-            ref_path = local_tmp / f"reference_{idx}_{pair['view']}.png"
-            cand_path = local_tmp / f"candidate_{idx}_{pair['view']}.png"
-            ref_path.write_bytes(await session.read_bytes(pair["reference_image"]))
-            cand_path.write_bytes(await session.read_bytes(pair["candidate_image"]))
-            localized_pairs.append(
-                {
-                    "view": pair["view"],
-                    "reference_image": str(ref_path),
-                    "candidate_image": str(cand_path),
-                }
-            )
-        soft_score = run_local_soft_eval(localized_pairs, local_tmp)
-    except Exception:
-        logger.warning("Local soft eval failed; falling back to hard-only", exc_info=True)
-        soft_score = hard_score
+    for idx, pair in enumerate(frame_pairs):
+        ref_path = local_tmp / f"reference_{idx}_{pair['view']}.png"
+        cand_path = local_tmp / f"candidate_{idx}_{pair['view']}.png"
+        ref_path.write_bytes(await session.read_bytes(pair["reference_image"]))
+        cand_path.write_bytes(await session.read_bytes(pair["candidate_image"]))
+        localized_pairs.append(
+            {
+                "view": pair["view"],
+                "reference_image": str(ref_path),
+                "candidate_image": str(cand_path),
+            }
+        )
+    soft_score = run_local_soft_eval(localized_pairs, local_tmp)
     final_score = hard_score if hard_fail else (0.3 * hard_score + 0.7 * soft_score)
     logger.info(
         "uv_reproduction eval task=%s hard=%.4f soft=%.4f final=%.4f",

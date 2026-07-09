@@ -1,7 +1,6 @@
 """Local evaluator for computing_math/cfr_game_theory_equilibrium."""
 
 import json
-import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -496,24 +495,33 @@ class LeducBestResponse:
         return (br0 - br1_p0) / 2.0
 
     def _compute_br(self, br_player):
-        cf_action_vals = {}
-        for i, c0 in enumerate(LEDUC4_DECK):
-            for j, c1 in enumerate(LEDUC4_DECK):
-                if i == j:
-                    continue
-                remaining = [c for c in LEDUC4_DECK if c != c0 and c != c1]
-                for community in remaining:
-                    deal_prob = 1.0 / (8 * 7 * 6)
-                    self._cf_br_traverse(
-                        LeducState([c0, c1], community),
-                        deal_prob,
-                        1.0,
-                        br_player,
-                        cf_action_vals,
-                    )
+        occurrences = self._collect_br_information_sets(br_player)
         br_policy = {}
-        for key, values in cf_action_vals.items():
-            br_policy[key] = int(np.argmax(values) if br_player == 0 else np.argmin(values))
+        # Successor information sets must have one fixed action before their values
+        # are used to choose an action at a predecessor information set.
+        ordered_keys = sorted(
+            occurrences,
+            key=lambda key: (
+                occurrences[key][0][0].history.count("/"),
+                len(occurrences[key][0][0].history.replace("/", "")),
+            ),
+            reverse=True,
+        )
+        for key in ordered_keys:
+            states = occurrences[key]
+            actions = states[0][0].get_actions()
+            action_values = np.zeros(len(actions))
+            for state, counterfactual_reach in states:
+                state_actions = state.get_actions()
+                if state_actions != actions:
+                    raise ValueError(f"inconsistent actions in information set {key!r}")
+                for index, action in enumerate(actions):
+                    action_values[index] += counterfactual_reach * self._eval_br_policy(
+                        state.apply(action), br_player, br_policy
+                    )
+            br_policy[key] = int(
+                np.argmax(action_values) if br_player == 0 else np.argmin(action_values)
+            )
 
         total = 0.0
         for i, c0 in enumerate(LEDUC4_DECK):
@@ -523,61 +531,75 @@ class LeducBestResponse:
                 remaining = [c for c in LEDUC4_DECK if c != c0 and c != c1]
                 for community in remaining:
                     deal_prob = 1.0 / (8 * 7 * 6)
-                    total += self._eval_br_policy(LeducState([c0, c1], community), deal_prob, br_player, br_policy)
+                    total += deal_prob * self._eval_br_policy(
+                        LeducState([c0, c1], community), br_player, br_policy
+                    )
         return total
 
-    def _cf_br_traverse(self, state, deal_prob, opp_reach, br_player, cf_vals):
+    def _collect_br_information_sets(self, br_player):
+        occurrences = {}
+
+        def traverse(state, counterfactual_reach):
+            if state.is_terminal():
+                return
+
+            actions = state.get_actions()
+            if not actions:
+                return
+
+            if state.current_player == br_player:
+                occurrences.setdefault(state.info_key(), []).append(
+                    (state, counterfactual_reach)
+                )
+                # Counterfactual reach excludes the best responder's own actions.
+                for action in actions:
+                    traverse(state.apply(action), counterfactual_reach)
+                return
+
+            strategy = self._strategy_for_state(state)
+            for index, action in enumerate(actions):
+                traverse(
+                    state.apply(action),
+                    counterfactual_reach * float(strategy[index]),
+                )
+
+        deal_prob = 1.0 / (8 * 7 * 6)
+        for i, c0 in enumerate(LEDUC4_DECK):
+            for j, c1 in enumerate(LEDUC4_DECK):
+                if i == j:
+                    continue
+                remaining = [c for c in LEDUC4_DECK if c != c0 and c != c1]
+                for community in remaining:
+                    traverse(LeducState([c0, c1], community), deal_prob)
+        return occurrences
+
+    def _strategy_for_state(self, state):
+        actions = state.get_actions()
+        strategy = self.avg_strategy.get(state.info_key())
+        if strategy is None or len(strategy) != len(actions):
+            return np.ones(len(actions)) / len(actions)
+        return strategy
+
+    def _eval_br_policy(self, state, br_player, policy):
         if state.is_terminal():
-            return deal_prob * opp_reach * state.terminal_utility_p0()
+            return state.terminal_utility_p0()
 
         actions = state.get_actions()
         if not actions:
             return 0.0
 
-        player = state.current_player
         key = state.info_key()
-        n_actions = len(actions)
+        if state.current_player == br_player:
+            if key not in policy:
+                raise ValueError(f"best-response policy missing information set {key!r}")
+            chosen = policy[key]
+            return self._eval_br_policy(state.apply(actions[chosen]), br_player, policy)
 
-        if player == br_player:
-            if key not in cf_vals:
-                cf_vals[key] = np.zeros(n_actions)
-            action_values = np.zeros(n_actions)
-            for idx, action in enumerate(actions):
-                value = self._cf_br_traverse(state.apply(action), deal_prob, opp_reach, br_player, cf_vals)
-                action_values[idx] = value
-                cf_vals[key][idx] += value
-            return float(np.max(action_values) if br_player == 0 else np.min(action_values))
-
-        strat = self.avg_strategy.get(key)
-        if strat is None or len(strat) != n_actions:
-            strat = np.ones(n_actions) / n_actions
-        total = 0.0
-        for idx, action in enumerate(actions):
-            total += self._cf_br_traverse(state.apply(action), deal_prob, opp_reach * float(strat[idx]), br_player, cf_vals)
-        return total
-
-    def _eval_br_policy(self, state, prob, br_player, policy):
-        if state.is_terminal():
-            return prob * state.terminal_utility_p0()
-
-        actions = state.get_actions()
-        if not actions:
-            return 0.0
-
-        player = state.current_player
-        key = state.info_key()
-        if player == br_player:
-            chosen = policy.get(key, 0)
-            if chosen >= len(actions):
-                chosen = 0
-            return self._eval_br_policy(state.apply(actions[chosen]), prob, br_player, policy)
-
-        strat = self.avg_strategy.get(key)
-        if strat is None or len(strat) != len(actions):
-            strat = np.ones(len(actions)) / len(actions)
+        strategy = self._strategy_for_state(state)
         return sum(
-            self._eval_br_policy(state.apply(actions[idx]), prob * float(strat[idx]), br_player, policy)
-            for idx in range(len(actions))
+            float(strategy[index])
+            * self._eval_br_policy(state.apply(action), br_player, policy)
+            for index, action in enumerate(actions)
         )
 
 

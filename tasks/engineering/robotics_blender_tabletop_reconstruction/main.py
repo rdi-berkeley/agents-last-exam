@@ -35,7 +35,6 @@ MIN_PNG_BYTES = 5_000
 MIN_OBJ_BYTES = 100
 
 VLM_JUDGE_MODEL = "gpt-5.5"
-VLM_FALLBACK_SCORE = 0.5
 _ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
@@ -278,8 +277,7 @@ async def _vlm_render_score(
         cand_b64 = base64.standard_b64encode(cand_bytes).decode()
         return _call_vlm_judge(ref_b64, cand_b64)
     except Exception as exc:
-        logger.warning("VLM render comparison failed (%s); using fallback", exc)
-        return VLM_FALLBACK_SCORE
+        raise RuntimeError("VLM render comparison failed") from exc
 
 
 def _final_score(
