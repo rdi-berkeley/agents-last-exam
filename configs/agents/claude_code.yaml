@@ -37,6 +37,13 @@ config:
   # Bypass all tool-permission prompts (required for headless runs).
   dangerously_skip_permissions: true
 
+  # Capture Claude Code's built-in OpenTelemetry stream: the deployer starts a
+  # run-local OTLP/HTTP receiver and stores raw OTLP batches, flattened per-event
+  # logs (API request timing/tokens/cost/request-id, tool arguments + duration,
+  # prompts), cumulative metrics, and a summary in the run dir. No upstream CLI
+  # changes. false = run with telemetry off.
+  otel_enabled: true
+
   # ── Reasoning depth: TWO knobs, which one is live depends on the model ──
   # (verified by capturing the CLI's actual request body, 2.1.170)
 

@@ -95,6 +95,15 @@ class ClaudeCodeConfig:
     disabled_tools: tuple[str, ...] = _DISABLED_TOOLS
     dangerously_skip_permissions: bool = True
 
+    otel_enabled: bool = True
+    """Capture Claude Code's built-in OpenTelemetry stream for every run. The
+    deployer starts a run-local OTLP/HTTP receiver and points the CLI at it
+    (``CLAUDE_CODE_ENABLE_TELEMETRY=1`` + ``OTEL_*`` env vars), storing raw OTLP
+    batches, flattened per-event logs (API request timing/tokens/cost/request-id,
+    tool arguments/duration, prompts), cumulative metrics, and a summary in
+    ``work_dir``. No upstream Claude Code changes are required. Set ``false`` to
+    run the CLI with telemetry off."""
+
     max_thinking_tokens: int | None = 31999
     """Extended-thinking token budget, passed to the CLI via the
     ``MAX_THINKING_TOKENS`` env var (Claude Code's documented knob —
