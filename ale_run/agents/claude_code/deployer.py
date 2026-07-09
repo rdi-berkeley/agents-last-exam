@@ -42,6 +42,7 @@ from ale_run.base_interface import (
 )
 
 from .config import ClaudeCodeConfig
+from .telemetry import ClaudeCodeOtelCollector, recover_telemetry_artifacts
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,15 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
 
     default_executor: ClassVar[str] = "sandbox"
     supported_executors: ClassVar[frozenset[str]] = frozenset({"sandbox"})
-    hot_artifacts: ClassVar[tuple[str, ...]] = ("transcript.jsonl", "stderr.log")
+    # otel_requests.jsonl is the raw OTLP write-ahead log: mirror it incrementally
+    # off the sandbox so long tasks do not depend solely on the final gather.
+    # The derived telemetry.jsonl / telemetry_summary.json are rebuilt from it in
+    # parse_artifacts, so they are deliberately NOT hot.
+    hot_artifacts: ClassVar[tuple[str, ...]] = (
+        "transcript.jsonl",
+        "stderr.log",
+        "otel_requests.jsonl",
+    )
 
     @property
     def version(self) -> str | None:
@@ -253,6 +262,7 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
         stderr_log = wd / "stderr.log"
         pid_file = wd / "claude.pid"
         mcp_config = wd / "mcp_config.json"
+        collector = ClaudeCodeOtelCollector(wd) if cfg.otel_enabled else None
 
         # Reset prior-run files so the puller's "rotation detected" logic
         # sees a clean slate.
@@ -270,52 +280,65 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
             cfg=cfg,
             mcp_config=str(mcp_config),
         )
-        env = self._build_env(cfg)
+        # Start the run-local OTLP receiver BEFORE composing env, so its
+        # endpoint can be injected into the CLI's telemetry env vars.
+        otel_endpoint: str | None = None
+        if collector is not None:
+            collector.start()
+            otel_endpoint = collector.endpoint
+            logger.info("claude_code: OTel collector listening at %s", otel_endpoint)
+        env = self._build_env(cfg, otel_endpoint=otel_endpoint)
 
         t0 = time.monotonic()
-        # Open output files; subprocess inherits the descriptors and the
-        # parent's references can close after spawn (the child keeps them).
-        with open(prompt_file, "rb") as pin, \
-             open(transcript_file, "wb") as tout, \
-             open(stderr_log, "wb") as terr:
-            proc = await asyncio.to_thread(
-                subprocess.Popen,
-                argv,
-                stdin=pin,
-                stdout=tout,
-                stderr=terr,
-                env=env,
-                cwd=str(wd),
-                # Detach: child outlives any incidental signal sent to us.
-                start_new_session=True if hasattr(os, "setsid") else False,
-            )
-        pid_file.write_text(str(proc.pid), encoding="ascii")
-        logger.info("claude_code: spawned pid=%s argv0=%s", proc.pid, argv[0])
-
-        # Wait for the child to finish.
-        # The episode wall budget is orchestration-owned: the executor
-        # wraps launch() in asyncio.wait_for(timeout=timeout_s) (derived
-        # from the task), so we just wait for the child here. If that
-        # budget fires we are cancelled mid-await; reap the child before
-        # propagating so it cannot outlive the run.
         try:
-            while proc.poll() is None:
-                await asyncio.sleep(_POLL_INTERVAL_S)
-        except asyncio.CancelledError:
-            try:
-                proc.terminate()
-            except ProcessLookupError:
-                pass
-            try:
-                await asyncio.wait_for(
-                    asyncio.to_thread(proc.wait), timeout=_TERM_GRACE_S,
+            # Open output files; subprocess inherits the descriptors and the
+            # parent's references can close after spawn (the child keeps them).
+            with open(prompt_file, "rb") as pin, \
+                 open(transcript_file, "wb") as tout, \
+                 open(stderr_log, "wb") as terr:
+                proc = await asyncio.to_thread(
+                    subprocess.Popen,
+                    argv,
+                    stdin=pin,
+                    stdout=tout,
+                    stderr=terr,
+                    env=env,
+                    cwd=str(wd),
+                    # Detach: child outlives any incidental signal sent to us.
+                    start_new_session=True if hasattr(os, "setsid") else False,
                 )
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            pid_file.write_text(str(proc.pid), encoding="ascii")
+            logger.info("claude_code: spawned pid=%s argv0=%s", proc.pid, argv[0])
+
+            # Wait for the child to finish.
+            # The episode wall budget is orchestration-owned: the executor
+            # wraps launch() in asyncio.wait_for(timeout=timeout_s) (derived
+            # from the task), so we just wait for the child here. If that
+            # budget fires we are cancelled mid-await; reap the child before
+            # propagating so it cannot outlive the run.
+            try:
+                while proc.poll() is None:
+                    await asyncio.sleep(_POLL_INTERVAL_S)
+            except asyncio.CancelledError:
                 try:
-                    proc.kill()
+                    proc.terminate()
                 except ProcessLookupError:
                     pass
-            raise
+                try:
+                    await asyncio.wait_for(
+                        asyncio.to_thread(proc.wait), timeout=_TERM_GRACE_S,
+                    )
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    try:
+                        proc.kill()
+                    except ProcessLookupError:
+                        pass
+                raise
+        finally:
+            # Stop the collector so it drains the final batch and writes the
+            # derived telemetry files, whether the run completed or was killed.
+            if collector is not None:
+                collector.stop()
 
         duration_s = time.monotonic() - t0
         exit_code = proc.returncode
@@ -374,7 +397,9 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
             argv += ["--disallowedTools", tool]
         return argv
 
-    def _build_env(self, cfg: ClaudeCodeConfig) -> dict[str, str]:
+    def _build_env(
+        self, cfg: ClaudeCodeConfig, *, otel_endpoint: str | None = None,
+    ) -> dict[str, str]:
         """Compose the env dict subprocess will see.
 
         OpenRouter remap mirrors the previous shell-script logic, just in
@@ -443,6 +468,28 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
                 f"claude_code: unknown provider {cfg.provider!r} "
                 "(expected 'openrouter' or 'direct')"
             )
+
+        # OpenTelemetry: point Claude Code's built-in exporter at the run-local
+        # OTLP/HTTP receiver. Claude Code emits per-event logs (api_request,
+        # tool_result, tool_decision, user_prompt, api_error, ...) and cumulative
+        # metrics; we take both over http/json so the collector can parse JSON
+        # directly. Short export intervals keep the raw WAL near-real-time for the
+        # incremental sandbox pull. Prompt + tool-detail logging is enabled so the
+        # events carry the operational context (prompt text, tool arguments) the
+        # transcript alone omits. No upstream Claude Code changes are required.
+        if otel_endpoint is not None:
+            env.update({
+                "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+                "OTEL_LOGS_EXPORTER": "otlp",
+                "OTEL_METRICS_EXPORTER": "otlp",
+                "OTEL_TRACES_EXPORTER": "none",
+                "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
+                "OTEL_EXPORTER_OTLP_ENDPOINT": otel_endpoint,
+                "OTEL_LOGS_EXPORT_INTERVAL": "1000",
+                "OTEL_METRIC_EXPORT_INTERVAL": "10000",
+                "OTEL_LOG_USER_PROMPTS": "1",
+                "OTEL_LOG_TOOL_DETAILS": "1",
+            })
         return env
 
     def _diagnose_failure(
@@ -480,6 +527,15 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
         run_result: AgentRunResult,
         builder: TrajectoryBuilder,
     ) -> None:
+        # Rebuild derived telemetry (telemetry.jsonl / telemetry_metrics.jsonl /
+        # telemetry_summary.json) from the incrementally-mirrored raw OTLP WAL,
+        # so a task whose final directory gather was interrupted still yields
+        # complete telemetry. Best-effort: never let it break artifact parsing.
+        try:
+            recover_telemetry_artifacts(work_dir)
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning("claude_code: could not recover telemetry artifacts: %s", exc)
+
         transcript_file = work_dir / "transcript.jsonl"
         if not transcript_file.exists():
             builder.add_step(
@@ -537,6 +593,9 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
             "exit_code": run_result.exit_code,
             "transcript_path": str(transcript_file),
             "stderr_path": run_result.stderr_path,
+            "telemetry_path": str(work_dir / "telemetry.jsonl"),
+            "telemetry_metrics_path": str(work_dir / "telemetry_metrics.jsonl"),
+            "telemetry_summary_path": str(work_dir / "telemetry_summary.json"),
         })
 
     @classmethod
