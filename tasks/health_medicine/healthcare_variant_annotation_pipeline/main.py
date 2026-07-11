@@ -175,7 +175,6 @@ Output rules:
 - `run_log.json` must be valid UTF-8 JSON with at least these keys:
   `{{"status": "<any non-empty string>", "annotated_variants_written": <int>, "reportable_variants_written": <int>}}`
 - Treat `{self.input_dir}` as read-only source data
-- Do not use hidden evaluator-owned files
 
 Recommended setup:
 - You may work with the system `python`, or create a task-local environment from `{self.runtime_env_dir}` with:

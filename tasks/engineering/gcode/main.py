@@ -134,16 +134,10 @@ The .prt file has faces colored by precision requirement:
 - Tight tolerance faces (e.g., VDI12/15): require finer finish toolpaths
 - Loose tolerance faces (e.g., spray/texture faces): standard finish is acceptable
 
-## Evaluation
-Your toolpaths will be automatically evaluated by:
-1. Gate check: PowerMill exports per-toolpath collision / gouge status; any collision
-   or gouge reported in that export yields score 0
-2. Geometric accuracy: your saved project is simulated to `output/agent_sim.stl`, then
-   compared against a hidden expert `reference/reference_sim.stl`
-3. STL scoring:
-   - 10,000 surface points are sampled from the agent STL
-   - final score = 0.70 * fraction within 0.3 mm of the reference surface
-     + 0.30 * fraction within 2.0 mm
+## Quality Requirements
+- The stock simulation must complete without collisions or gouging
+- The machined geometry must reproduce the supplied `.prt` target accurately
+- Keep critical finished surfaces within 0.3 mm and all modeled surfaces within 2.0 mm
 
 ## Important
 - Work ONLY within the project at `{self.output_pm_project}`

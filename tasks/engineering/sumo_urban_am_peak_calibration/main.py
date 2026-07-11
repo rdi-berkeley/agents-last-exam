@@ -224,7 +224,6 @@ Required output files:
 Rules:
 - Do not modify files under `{self.input_dir}`.
 - Keep any runtime state you create outside `input/`; the staged wrappers already use `{self.runtime_state_dir}` by default.
-- Do not rely on evaluator-only data or fixture directories.
 - You do not need to submit simulation result folders; the evaluator re-runs your SUMO configuration itself.
 """
 

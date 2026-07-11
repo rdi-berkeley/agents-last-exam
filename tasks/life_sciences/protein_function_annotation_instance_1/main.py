@@ -173,7 +173,6 @@ You are working on a Linux VM to annotate one staged protein with InterProScan.
 - The summary must include gamma-tubulin family identity plus microtubule nucleation and minus-end initiation or equivalent wording.
 - Write only these three files under `{self.visible_output_dir}`.
 - Do not modify files under `{self.input_dir}` or `{self.software_dir}`.
-- Do not read or modify hidden evaluator-owned directories.
 """
 
     def to_metadata(self) -> dict[str, Any]:

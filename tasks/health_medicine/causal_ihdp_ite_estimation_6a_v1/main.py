@@ -256,7 +256,6 @@ Rules:
 - `ite_hat` must equal `mu1_hat - mu0_hat` row by row.
 - You may keep helper code under `output/` and may emit extra artifact files if you want.
 - Do not modify files under `input/`.
-- During solve time, treat `input/` plus `software/` as your visible task surface; `reference/`, `output_test_pos/`, and `output_test_neg/` are evaluator-side paths, not solve-time inputs.
 - Write solver-created files only under `{_remote_join(self.task_dir, 'output')}`.
 """
 

@@ -78,7 +78,6 @@ and `bcftools`, then produce a filtered VCF containing SNP and INDEL calls.
 
 ## Available Environment
 - `bwa`, `samtools`, `bcftools`, FastQC, MultiQC, and RTG Tools are preinstalled on `PATH`.
-- The truth VCF and confident-region BED are evaluator-only and are not part of the solve-time input.
 
 ## Required Outputs
 Save all outputs under `{self.remote_output_dir}`:
@@ -90,11 +89,7 @@ Save all outputs under `{self.remote_output_dir}`:
 - `{self.VCF_FILE}` - filtered variant calls (bgzipped)
 - `{self.VCF_INDEX_FILE}` - tabix index for the VCF
 - `{self.RTG_SUMMARY_FILE}` - informational CSV with the exact header \
-`Type,Precision,Sensitivity,F_measure` and rows for `SNP` and `INDEL`. Because truth is hidden, \
-the metric values may be `NA`; the evaluator does not trust or score these self-reported values.
-
-The evaluator independently recomputes SNP and INDEL precision, recall, and F1 from the submitted \
-VCF against evaluator-only truth.
+`Type,Precision,Sensitivity,F_measure` and rows for `SNP` and `INDEL`; metric values may be `NA`.
 
 Do not ask for confirmation. Execute directly.
 """

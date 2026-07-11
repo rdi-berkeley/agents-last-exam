@@ -133,7 +133,6 @@ Environment notes:
 - Use `{self.setup_runtime_script}` to materialize the staged task-local Python environment.
 - Use `{self.run_runtime_script}` to run Python inside that environment.
 - Do not modify files under `{self.input_dir}`.
-- Do not modify hidden evaluator data.
 """
 
     def to_metadata(self) -> dict:

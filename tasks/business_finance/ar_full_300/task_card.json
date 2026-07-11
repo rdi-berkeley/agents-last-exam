@@ -14,8 +14,7 @@
     "Parse each PDF to extract core technical personnel data.",
     "Output a single consolidated Excel file at `{remote_output_dir}\\final_dataset.xlsx`.",
     "Browser entry point: `software\\open_chrome.bat` (full VM path: `{task_dir}\\software\\open_chrome.bat`)",
-    "Python entry point: `software\\python.bat` (full VM path: `{task_dir}\\software\\python.bat`)",
-    "PowerShell is evaluator-only for remote MD5 verification and is not part of the solve-time software contract."
+    "Python entry point: `software\\python.bat` (full VM path: `{task_dir}\\software\\python.bat`)"
   ],
   "inputFiles": [
     {

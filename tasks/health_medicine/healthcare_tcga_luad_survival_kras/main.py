@@ -115,7 +115,7 @@ Required output files:
 - `cox_results.json`
 - `analysis.R`
 
-Do not modify staged inputs or evaluator-only directories.
+Do not modify staged inputs.
 Do not ask for confirmation. Execute directly.
 """
 

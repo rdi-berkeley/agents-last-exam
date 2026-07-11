@@ -159,7 +159,6 @@ Save these outputs exactly under `{self.remote_output_dir}`:
 You only pass if all required output files exist, are readable, and satisfy the task-specific correctness checks against hidden reference data.
 Focus on this correctness target:
 - {self.spec.evaluation_hint}
-Do not read from `reference/`, `output_test_pos/`, or `output_test_neg/`.
 """
 
     def to_metadata(self) -> dict:
