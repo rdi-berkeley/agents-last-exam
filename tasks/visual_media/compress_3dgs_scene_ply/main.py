@@ -229,7 +229,6 @@ Required output files:
 Important:
 - the holdout filenames are public
 - the visible JPGs for those holdout names are placeholders only
-- hidden evaluator images are used for scoring after you finish
 - do not modify files under `{self.input_dir}`
 """
 

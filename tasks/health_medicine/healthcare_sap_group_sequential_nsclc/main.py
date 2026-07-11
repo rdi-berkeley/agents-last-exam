@@ -119,7 +119,7 @@ Required output filenames:
 - `power_curve.png`
 - `boundary_plot.png`
 
-Read the protocol and instructions, compute the group-sequential design quantities, document the SAP, and include a reproducible R script. Do not use internet access. Hidden reference values and grading logic are not visible during solve time.
+Read the protocol and instructions, compute the group-sequential design quantities, document the SAP, and include a reproducible R script. Do not use internet access.
 """
 
     def to_metadata(self) -> dict:

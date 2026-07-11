@@ -187,7 +187,6 @@ Rules:
 - Use the exact per-slice target cluster counts from `{self.slice_config_file}`.
 - Treat `{self.input_dir}` as read-only.
 - Keep all solver-created files under `{self.remote_output_dir}`.
-- Do not use hidden evaluator-owned directories in your workflow.
 {replay_note}
 """
 

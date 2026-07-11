@@ -28,7 +28,7 @@
       "name": "Completed submission package",
       "format": "Python CLI plus generated artifacts",
       "path": "output/reconstruct_fire_case.py",
-      "description": "The evaluator runs the submitted CLI against visible and hidden same-schema scenarios."
+      "description": "Benchmark validation artifact for the documented output contract."
     }
   ],
   "evaluation": "Offline deterministic Python evaluator. The submitted CLI is run against same-schema fire reconstruction scenarios, and the normalized score is returned as raw_score / 100. Reference fixture scores 1.0; untouched starter scores 0.0.",

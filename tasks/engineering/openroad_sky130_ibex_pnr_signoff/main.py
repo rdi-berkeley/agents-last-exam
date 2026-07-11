@@ -246,7 +246,6 @@ You are working on Linux on an RTL-to-GDSII signoff-closure task for lowRISC ibe
 - `{self.output_audit_dir}/pass*.stamp` if any completed pass exists
 
 Do not modify files under `{self.input_dir}`.
-Do not rely on hidden evaluator-only data.
 """
 
     def to_metadata(self) -> dict[str, Any]:

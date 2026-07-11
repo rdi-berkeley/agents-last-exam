@@ -169,7 +169,6 @@ Leave the completed project at:
 `{self.candidate_submission_dir}`
 
 Do not modify files under `{self.input_dir}`. Write final work only under `{self.remote_output_dir}`.
-The benchmark harness exposes only the intended input/software surface and the writable output directory while you solve; evaluator-only reference data is not part of the solve-time task.
 """
 
     def to_metadata(self) -> dict[str, Any]:

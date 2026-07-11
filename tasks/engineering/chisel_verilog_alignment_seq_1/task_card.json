@@ -47,7 +47,7 @@
       "name": "Golden answer",
       "format": "json",
       "path": "reference/answer.json",
-      "description": "Evaluator-only ground truth with correct chisel_sources set"
+      "description": "Benchmark validation artifact."
     }
   ],
   "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- output/answer.json missing or invalid JSON\n- chisel_sources field missing, not a list, or contains non-matching elements\n- Any file under src/, generated/, or TASK.md was modified\n\n**Scoring method (additive, max 1.0):**\n\n| Check | Weight | Method |\n|---|---|---|\n| Valid JSON with all 3 required fields, regex-valid chisel_sources | 0.10 | Schema + regex validation |\n| target_signal exactly equals 'stateReg == 2'h2' | 0.10 | Exact string match |\n| chisel_sources set-equals reference | 0.80 | Unordered set equality, no partial credit |\n\n**Expected positive fixture score:** 1.0\n**Expected negative fixture score:** 0.2 (valid JSON + correct target_signal only)",

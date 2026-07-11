@@ -142,7 +142,6 @@ Required pipeline behavior:
 - Keep the submitted module standalone; it must import successfully outside the original Diffusers package tree.
 
 Do not modify files under `input/`.
-Do not rely on hidden evaluator files while solving.
 """
 
     def to_metadata(self) -> dict[str, Any]:

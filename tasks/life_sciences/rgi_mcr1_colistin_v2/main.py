@@ -183,7 +183,6 @@ Important constraints:
 - Use the provided `{self.card_json}` instead of downloading a different CARD version.
 - Use contig mode, not protein mode.
 - Report the specific best-hit ARO gene name from the RGI TSV rather than a generic enzyme-family label.
-- Keep hidden evaluator-owned directories out of your workflow.
 """
 
     def to_metadata(self) -> dict[str, Any]:

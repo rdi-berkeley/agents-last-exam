@@ -171,7 +171,6 @@ class HomeworkGradingNumericalPDEsConfig(LinuxTaskConfig):
             "   - `grader_manifest.json`\n\n"
             "## Rules\n"
             f"- Treat `{self.input_dir}` as read-only.\n"
-            f"- Do not read or modify evaluator-only files under `{self.reference_dir}`.\n"
             "- Keep student IDs stable across every output file.\n"
             f"- Use the task-local `{self.software_dir}/python` wrapper if you want to script the grading workflow (it `exec`s the preinstalled system Python).\n"
             f"- Write final deliverables only under `{self.remote_output_dir}`.\n"

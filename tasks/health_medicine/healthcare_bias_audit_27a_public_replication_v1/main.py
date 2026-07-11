@@ -235,7 +235,6 @@ Rules:
 - Do not add race as a model feature.
 - Do not replace the supplied workflow with a different analytical pipeline.
 - Do not use the original paper's `17.7% -> 46.5%` value or the later `59%` correction as the graded answer.
-- Treat the staged solve-time files as read-only and do not rely on any hidden evaluator-only data.
 - If you create scratch files under `{self.remote_output_dir}`, clean them up before finishing so only the required deliverables remain.
 """
 

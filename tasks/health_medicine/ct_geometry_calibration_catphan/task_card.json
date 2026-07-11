@@ -44,7 +44,7 @@
       "name": "Evaluator reference image",
       "format": "NumPy .npy (float32, 512x512)",
       "path": "reference/reference_image.npy",
-      "description": "Evaluator-owned clean copy of the reference image for scoring."
+      "description": "Benchmark validation artifact."
     }
   ],
   "evaluation": "Binary pass/fail scoring. Computes SSIM and unnormalized MSE between the agent's reconstructed_calibrated.npy and the reference image. Score = 1.0 if SSIM >= 0.95 AND MSE <= 4e-6; else 0.0. Missing output files yield 0.0.",

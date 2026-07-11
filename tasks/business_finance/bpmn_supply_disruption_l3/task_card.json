@@ -22,7 +22,7 @@
       "name": "task_prompt.md",
       "format": "Markdown",
       "path": "input/task_prompt.md",
-      "description": "Agent-visible task contract derived from the raw submission prompt with evaluator-only sections removed"
+      "description": "Agent-visible task contract derived from the supplied task materials."
     },
     {
       "name": "starter_project/original_process.bpmn20.xml",

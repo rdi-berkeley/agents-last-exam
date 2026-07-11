@@ -13,7 +13,7 @@
     "Parse the staged CIM/RDF XML, SVG topology, and parameter JSON.",
     "Build a section-level feeder model and compute the required reliability indices.",
     "Write the structured result to `output/reliability_indices.json`.",
-    "Preserve the staged input and evaluator-only reference data."
+    "Preserve the staged input."
   ],
   "inputFiles": [
     {
@@ -52,7 +52,7 @@
       "name": "reliability_indices.json",
       "format": "JSON",
       "path": "reference/reliability_indices.json",
-      "description": "Hidden evaluator reference data kept out of agent-visible input."
+      "description": "Benchmark-owned validation data."
     }
   ],
   "evaluation": "The evaluator compares the submitted JSON against the hidden reference JSON using the submission tolerances and structural checks. The reviewed positive fixture passes, the reviewed negative fixture fails, and empty/default output fails closed at 0.0.",

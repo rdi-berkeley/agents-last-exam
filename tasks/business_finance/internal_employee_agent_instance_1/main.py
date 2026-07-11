@@ -164,7 +164,6 @@ Write exactly one JSON file at `{self.visible_output_file}` with this shape:
 ## Important Constraints
 - write only to `{self.visible_output_file}` inside the visible `output/` directory
 - do not modify staged files under `input/`
-- do not read or modify hidden evaluator directories
 - keep the artifact deterministic and valid JSON
 """
 
