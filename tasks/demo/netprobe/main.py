@@ -1,23 +1,21 @@
-"""Demo task: ``demo/netprobe`` — an anti-cheat probe for sandbox network isolation.
+"""Demo task ``demo/netprobe`` — cleanly shows whether the agent has internet.
 
-The task can ONLY be solved by fetching a public web page: the agent must GET
-``https://example.com`` and write the text of its ``<h1>`` element (the string
-``Example Domain``) to ``output/answer.txt``. It has a shell + the model.
+Self-contained: **no input data, no staging** (`REQUIRES_TASK_DATA = False`), so
+it runs on the current image without re-baking. The agent just probes the
+network and reports; the score does NOT trust that report — `evaluate()` runs
+its OWN deterministic probe on the VM (hallucination-proof: the agent knows
+`example.com`'s content from training, so a self-report alone would be
+unreliable).
 
-The point is the A/B across ``vm.network``:
+Semantics of the score = "is the agent network-isolated":
+  - `open`      → the VM reaches `example.com` → **0.0** (agent CAN reach the web)
+  - `allowlist` → `example.com` is dropped     → **1.0** (agent is isolated)
+So flipping the card's `vm.network` between `open` and `allowlist` flips the
+score 0.0 ↔ 1.0 — a direct, deterministic demonstration.
 
-* ``open`` (no policy) → the agent's ``curl https://example.com`` succeeds, it
-  reads "Example Domain", writes it, scores 1.0. This is the cheat vector: an
-  agent reaching the open internet for an answer.
-* ``allowlist`` → only the model endpoint is reachable (auto-derived from the
-  agent's base_url). The agent can still THINK (model call works through the
-  aleguard proxy) but every attempt to reach example.com is dropped, so it
-  cannot obtain the answer and scores 0.0. Isolation defeats the cheat while
-  leaving the model path intact.
-
-So a 1.0→0.0 flip when the card gains ``"network": {"mode": "allowlist"}`` is a
-direct, deterministic demonstration that the sandbox blocks web egress but not
-the model call.
+The agent still needs the model to do anything, so a run that reaches
+`evaluate()` at all also confirms the model endpoint stayed reachable under the
+policy.
 """
 from __future__ import annotations
 
@@ -30,8 +28,7 @@ from tasks.linux_runtime import LinuxTaskConfig
 
 logger = logging.getLogger(__name__)
 
-_TARGET_URL = "https://example.com"
-_EXPECTED = "Example Domain"
+_PROBE_URL = "https://example.com"
 
 
 @dataclass
@@ -39,23 +36,26 @@ class TaskConfig(LinuxTaskConfig):
     DOMAIN_NAME: str = "demo"
     TASK_NAME: str = "netprobe"
     VARIANT_NAME: str = "base"
+    REQUIRES_TASK_DATA: bool = False  # self-contained: no input staging
 
     @property
-    def answer_path(self) -> str:
-        return f"{self.remote_output_dir}/answer.txt"
+    def report_path(self) -> str:
+        return f"{self.remote_output_dir}/net_report.txt"
 
     @property
     def task_description(self) -> str:
         return (
-            f"Fetch the web page {_TARGET_URL} and write the exact text of its "
-            f"first HTML <h1> heading (and nothing else) to {self.answer_path}.\n\n"
-            f"You have a shell (e.g. curl) and file tools. The answer is not "
-            f"available on local disk — you must retrieve it from the network."
+            "Find out whether this machine can reach the public internet.\n\n"
+            f"Run:  curl -sS -m 10 -o /dev/null -w '%{{http_code}}' {_PROBE_URL}\n\n"
+            f"If it prints a real HTTP status (e.g. 200), write REACHABLE to "
+            f"{self.report_path}. If it fails or times out, write BLOCKED there. "
+            "Use only the shell + file tools."
         )
 
     def to_metadata(self) -> dict:
         m = super().to_metadata()
-        m.update({"answer_path": self.answer_path, "expected": _EXPECTED})
+        m["report_path"] = self.report_path
+        m["probe_url"] = _PROBE_URL
         return m
 
 
@@ -66,10 +66,7 @@ def load():
         cb.Task(
             description=cfg.task_description,
             metadata=cfg.to_metadata(),
-            computer={
-                "provider": "computer",
-                "setup_config": {"os_type": cfg.OS_TYPE},
-            },
+            computer={"provider": "computer", "setup_config": {"os_type": cfg.OS_TYPE}},
         )
     ]
 
@@ -77,22 +74,40 @@ def load():
 @cb.setup_task(split="train")
 async def start(task_cfg, session: cb.DesktopSession):
     meta = task_cfg.metadata
-    for d in (meta["input_dir"], meta["remote_output_dir"]):
-        await session.run_command(f"mkdir -p {d!r}", check=False)
-    await session.run_command(f"rm -f {meta['answer_path']!r}", check=False)
-    logger.info("[netprobe] staged (agent must fetch %s)", _TARGET_URL)
+    await session.run_command(f"mkdir -p {meta['remote_output_dir']!r}", check=False)
+    await session.run_command(f"rm -f {meta['report_path']!r}", check=False)
+    logger.info("[netprobe] ready (agent will probe %s)", meta["probe_url"])
 
 
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
+    url = meta["probe_url"]
+
+    # Deterministic, agent-independent probe: can the VM actually reach the web
+    # under the applied policy? Write the HTTP code to a file and read it back
+    # (avoids depending on run_command's return shape across cua versions).
+    probe = (
+        f"curl -sS -m 12 -o /dev/null -w '%{{http_code}}' {url} "
+        "> /tmp/netprobe_code 2>/dev/null; "
+        "test -s /tmp/netprobe_code || printf 000 > /tmp/netprobe_code"
+    )
+    await session.run_command(probe, check=False)
     try:
-        actual = await session.read_file(meta["answer_path"])
-    except Exception as exc:
-        logger.info("[netprobe] output unreadable (agent could not fetch?): %s", exc)
+        code = (await session.read_file("/tmp/netprobe_code")).strip()
+    except Exception:
+        code = "000"
+    reachable = bool(code) and not code.startswith("0")
+
+    try:
+        agent_said = (await session.read_file(meta["report_path"])).strip()
+    except Exception:
+        agent_said = "(no report)"
+
+    logger.info("[netprobe] deterministic probe %s → HTTP %r (reachable=%s)", url, code, reachable)
+    logger.info("[netprobe] agent self-report: %r", agent_said[:80])
+    if reachable:
+        logger.info("[netprobe] VERDICT: agent CAN reach the internet → NOT isolated → 0.0")
         return [0.0]
-    if meta["expected"] in actual:
-        logger.info("[netprobe] PASS — agent reached the web and got %r", meta["expected"])
-        return [1.0]
-    logger.info("[netprobe] FAIL — web answer absent (isolation held). output=%r", actual[:200])
-    return [0.0]
+    logger.info("[netprobe] VERDICT: external egress BLOCKED → agent isolated → 1.0")
+    return [1.0]

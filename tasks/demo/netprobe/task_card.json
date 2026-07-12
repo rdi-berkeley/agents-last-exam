@@ -1,7 +1,7 @@
 {
   "taskId": "demo/netprobe",
-  "title": "Anti-cheat network probe: fetch a web answer (blocked under isolation)",
-  "summary": "The agent must GET https://example.com and write its <h1> text ('Example Domain') to output/answer.txt. Solvable only with web access. Under vm.network.allowlist the model call still works (agent thinks) but the example.com fetch is dropped, so the task scores 0.0 — demonstrating egress isolation defeats a web-answer cheat while keeping the model path open. Remove the network block (open mode) and it scores 1.0.",
+  "title": "Network-isolation probe: does the agent have internet access?",
+  "summary": "Self-contained (no input data / no staging). The agent probes https://example.com and reports; evaluate() runs its OWN deterministic curl probe on the VM (not trusting the agent's report) and scores 1.0 when external egress is BLOCKED (agent isolated) and 0.0 when it is REACHABLE. Flip the card's vm.network between allowlist and open to flip the score 1.0 <-> 0.0 — a clean demonstration that the sandbox blocks web egress while the model call still works.",
   "category": "demo",
   "vm": {
     "snapshot": "cpu-free-ubuntu",
