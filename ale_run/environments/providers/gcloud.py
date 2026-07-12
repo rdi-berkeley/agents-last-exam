@@ -903,7 +903,16 @@ class GcloudProvider(Provider):
             # + GCS injection (host→VM ingress) are unaffected. No silent
             # fallback: if enforcement can't be installed, raise → the VM is
             # deleted and the run fails loudly rather than running unisolated.
-            if image.os == "linux" and spec.network.mode != "open":
+            if spec.network.mode != "open":
+                if image.os != "linux":
+                    # aleguard is a Linux mechanism (nftables + SO_ORIGINAL_DST).
+                    # Fail closed on Windows rather than run an unisolated VM
+                    # while assert_network_supported claimed gcloud enforces.
+                    raise RuntimeError(
+                        f"gcloud: network policy (mode={spec.network.mode}) is "
+                        f"Linux-only; snapshot {spec.snapshot!r} is {image.os} "
+                        "— Windows egress enforcement is not implemented"
+                    )
                 await self._apply_network_policy(cua_url, spec.network)
 
             return SandboxHandle(
