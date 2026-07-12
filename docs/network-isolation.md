@@ -1,6 +1,6 @@
 # Sandbox Network Isolation — Design & Rationale
 
-**Status:** design / exploration (no implementation yet)
+**Status:** schema + plumbing landed (fail-closed); enforcement staged as follow-ups
 **Branch:** `feat/sandbox-network-isolation`
 
 ## Goal
@@ -232,10 +232,51 @@ class NetworkPolicy:
 
 - `SandboxSpec` gains `network: NetworkPolicy = NetworkPolicy()`.
 - **Default allow set is auto-derived**, not written by hand: the resolved agent
-  config's `base_url` host is always added to `allow` before enforcement, so
-  `allowlist` mode "just works" for any experiment without extra config.
-- Experiment/task config selects the `mode` (and any *extra* hostnames a task
-  legitimately needs). The common case is one line: `network: {mode: allowlist}`.
+  config's `base_url` host is unioned into the allow set before enforcement
+  (`NetworkPolicy.effective_allow` / `model_host_from_env`), so `allowlist` mode
+  "just works" for any experiment without naming the endpoint.
+
+### 3.1a Where the policy is read from — **per task card** (decided)
+
+The policy is declared **per task**, in each task's `task_card.json`, under the
+existing `vm` block (alongside `snapshot` / `machineType` / `timeout`). This is
+the same place every other per-task sandbox knob already lives, and it flows
+through the same three-hop chain:
+
+```
+task_card.json  "vm": { …, "network": { "mode": …, "allow": [ … ] } }
+      │  ale_run/tasks/loader.py       _enrich_with_task_card()  → NetworkPolicy.from_card
+      ▼
+task_meta["network"]
+      │  ale_run/orchestration/lifecycle.py  _build_env_spec()
+      ▼
+SandboxSpec.network
+      │  ale_run/environments/env.py   reset_async()  → provider.assert_network_supported (fail-closed)
+      ▼
+Provider.acquire(spec)   ← enforcement point (egress cut-off + proxy)
+```
+
+Field standard (mirrors the existing `vm` fields):
+
+```jsonc
+"vm": {
+  "snapshot": "cpu-free-ubuntu",
+  "machineType": "c4-standard-4",
+  "timeout": 7200,
+  "network": {
+    "mode": "allowlist",              // "open" (default) | "allowlist" | "off"
+    "allow": ["pypi.org"]              // optional; extra hosts beyond the auto-derived base_url host
+  }
+}
+```
+
+- **Omitting `network` = `open`** → every existing task card is unchanged and
+  keeps today's behaviour (backward compatible).
+- `allow` never needs to list the model endpoint — it rides in from the injected
+  `base_url`.
+- `mode: "off"` is full air-gap; the model host is *not* auto-added (suited to
+  host-side agents that don't call the model from inside the VM).
+- Malformed `vm.network` fails **at task load**, not mid-run.
 
 ### 3.2 Components
 
@@ -322,7 +363,31 @@ No experiment ever writes the model hostname explicitly — it rides along with 
 
 ## Part 5 — Scope of this PR
 
-This PR is **design/exploration only** — this document. No behavior changes yet.
-Implementation (the `NetworkPolicy` type, the proxy, and the per-provider
-adapters) follows in subsequent commits once the open questions above are
-settled.
+Staged deliberately so enforcement never ships half-done and silently
+non-enforcing.
+
+**In this PR (schema + plumbing, safe to merge):**
+
+- `NetworkPolicy` type + `SandboxSpec.network` field
+  (`ale_run/base_interface/sandbox.py`).
+- `task_card.json` `vm.network` parsing + validation at load
+  (`ale_run/tasks/loader.py`), threaded to `SandboxSpec`
+  (`ale_run/orchestration/lifecycle.py`).
+- Auto-derivation helpers (`effective_allow`, `model_host_from_env`).
+- **Fail-closed guard**: `Provider.assert_network_supported`, called in
+  `ALEEnv.reset_async` before `acquire`. A task that asks for `allowlist`/`off`
+  on a provider that hasn't set `enforces_network_policy` **raises**
+  (`NetworkPolicyUnsupportedError`) rather than running unisolated. `open` is
+  always allowed. So merging this changes **nothing** for existing cards (all
+  `open`), and any *new* isolation request is refused until a provider actually
+  enforces it — never silently ignored.
+- Unit tests (`tests/test_network_policy.py`).
+
+**Follow-up PRs (enforcement, one provider at a time):**
+
+- The host-side egress proxy (allow by `CONNECT`/SNI hostname).
+- Per-provider egress cut-off + proxy routing (`qemu` first — cheapest; then
+  `gcloud`), each flipping its `enforces_network_policy` flag once wired.
+- Proxy env injection into the agent + resolving the effective allow set from
+  the injected `base_url` at acquire time.
+- The open questions in Part 4.

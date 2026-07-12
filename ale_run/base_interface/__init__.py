@@ -36,6 +36,9 @@ from .agent_deployer import (
 from .executor import BaseExecutor, GatherReport
 from .sandbox import (
     OS,
+    NetworkMode,
+    NetworkPolicy,
+    NetworkPolicyUnsupportedError,
     Provider,
     RangeResult,
     ReleaseMode,
@@ -71,6 +74,9 @@ __all__ = [
     "GatherReport",
     # sandbox.py
     "OS",
+    "NetworkMode",
+    "NetworkPolicy",
+    "NetworkPolicyUnsupportedError",
     "Provider",
     "RangeResult",
     "ReleaseMode",

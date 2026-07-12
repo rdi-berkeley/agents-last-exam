@@ -29,6 +29,7 @@ from typing import Any
 from ..base_interface import (
     AgentRunResult,
     BaseExecutor,
+    NetworkPolicy,
     SandboxSpec,
     Provider,
     Trajectory,
@@ -673,6 +674,7 @@ def _build_env_spec(task_meta: dict[str, Any], *, unit: RunUnit | None = None) -
         task_id=task_id,
         harness=harness,
         model_tag=model_tag,
+        network=task_meta.get("network") or NetworkPolicy(),
     )
 
 
