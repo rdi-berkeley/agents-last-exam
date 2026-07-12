@@ -207,6 +207,7 @@ PROXY_PORT = 15599
 _ALLOW_FILE = "/etc/aleguard/allow"
 _PROXY_PY = "/opt/aleguard/aleguard.py"
 _LOG_FILE = "/var/log/aleguard.log"
+_BOOT_LOG = "/tmp/aleguard.boot.log"
 
 
 def build_nft_ruleset(mode: str) -> str:
@@ -252,6 +253,11 @@ def build_nft_ruleset(mode: str) -> str:
         "  chain out {\n"
         "    type filter hook output priority 0; policy drop;\n"
         "    oif lo accept\n"
+        # Redirected :80/:443 packets have had their dst rewritten to 127.0.0.1
+        # by nat_out (which runs first); their oif is not yet lo here, so accept
+        # them by destination or they hit the default drop and never reach the
+        # proxy.
+        "    ip daddr 127.0.0.0/8 accept\n"
         "    ct state established,related accept\n"
         "    meta skuid __UID__ accept\n"
         "    udp dport 53 accept\n"
@@ -271,15 +277,35 @@ def build_setup_script(mode: str, allow_hosts: list[str], proxy_py_b64: str) -> 
         start_proxy = (
             "pkill -f aleguard.py 2>/dev/null || true\n"
             f"base64 -d > {_PROXY_PY} <<'ALEB64'\n{proxy_py_b64}\nALEB64\n"
-            f"setsid runuser -u aleproxy -- python3 {_PROXY_PY} "
+            # The proxy runs unprivileged as aleproxy, so its log must be a path
+            # aleproxy owns (/var/log is root-only). Boot stderr goes to a
+            # separate root path so a startup crash is diagnosable.
+            f"touch {_LOG_FILE} && chown aleproxy {_LOG_FILE}\n"
+            f"setsid runuser -u aleproxy -- /usr/bin/python3 {_PROXY_PY} "
             f"--port {PROXY_PORT} --allow-file {_ALLOW_FILE} --log-file {_LOG_FILE} "
-            ">/dev/null 2>&1 &\n"
+            f">{_BOOT_LOG} 2>&1 &\n"
             f"for i in $(seq 1 100); do ss -ltn 2>/dev/null | grep -q ':{PROXY_PORT} ' "
             "&& break; sleep 0.1; done\n"
+            # Fail loudly if the proxy never bound — otherwise the nft redirect
+            # below would send all egress to a dead port and silently sever the
+            # model path.
+            f"ss -ltn 2>/dev/null | grep -q ':{PROXY_PORT} ' || "
+            f"{{ echo ALEGUARD_PROXY_FAILED; cat {_BOOT_LOG} {_LOG_FILE} 2>/dev/null; exit 1; }}\n"
         )
     return (
         "set -e\n"
         "mkdir -p /opt/aleguard /etc/aleguard\n"
+        # Govern a single family: disable IPv6 so every connection takes the v4
+        # path the proxy/nft controls. Otherwise a dual-stack client prefers a
+        # CDN's AAAA, bypasses the v4 redirect, and either escapes or (with the
+        # v6 table) fails — either way the proxy never sees it.
+        "sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1 || true\n"
+        "sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1 || true\n"
+        # REDIRECT rewrites an external dst to 127.0.0.1; without route_localnet
+        # the kernel drops the (src=VM-IP → dst=127.0.0.1) packet as martian, so
+        # it never reaches the loopback proxy. This is THE enabler for the
+        # transparent redirect.
+        "sysctl -w net.ipv4.conf.all.route_localnet=1 >/dev/null 2>&1 || true\n"
         "id -u aleproxy >/dev/null 2>&1 || useradd -r -M -s /usr/sbin/nologin aleproxy\n"
         "ALEUID=$(id -u aleproxy)\n"
         f"cat > {_ALLOW_FILE} <<'ALEALLOW'\n{allow_lines}\nALEALLOW\n"

@@ -1026,9 +1026,14 @@ class GcloudProvider(Provider):
             policy.mode, list(policy.allow), proxy_b64,
         )
 
+        # cua-server runs commands as a NON-root user; the setup needs root
+        # (nftables, useradd, /opt, /etc). Stage the script in a user-writable
+        # tmp path, then run it under passwordless sudo.
         session = RemoteDesktopSession(api_url=cua_url, os_type="linux")
         _init_computer_skip_wait(session)
-        res = await session.run_command(script, check=False)
+        script_path = "/tmp/aleguard_setup.sh"
+        await session.write_file(script_path, script)
+        res = await session.run_command(f"sudo -n bash {script_path}", check=False)
         out = (res.get("stdout") or "") if isinstance(res, dict) else ""
         err = (res.get("stderr") or "") if isinstance(res, dict) else ""
         if "ALEGUARD_OK" not in out:

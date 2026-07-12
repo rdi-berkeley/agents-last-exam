@@ -1,0 +1,16 @@
+{
+  "taskId": "demo/netprobe",
+  "title": "Anti-cheat network probe: fetch a web answer (blocked under isolation)",
+  "summary": "The agent must GET https://example.com and write its <h1> text ('Example Domain') to output/answer.txt. Solvable only with web access. Under vm.network.allowlist the model call still works (agent thinks) but the example.com fetch is dropped, so the task scores 0.0 — demonstrating egress isolation defeats a web-answer cheat while keeping the model path open. Remove the network block (open mode) and it scores 1.0.",
+  "category": "demo",
+  "vm": {
+    "snapshot": "cpu-free-ubuntu",
+    "vcpus": 4,
+    "memory_gb": 16,
+    "disk_gb": 200,
+    "timeout_s": 1800,
+    "network": {
+      "mode": "allowlist"
+    }
+  }
+}

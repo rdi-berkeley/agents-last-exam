@@ -78,6 +78,7 @@ def test_nft_allowlist_shape():
     assert "meta skuid __UID__ return" in r            # proxy's own egress not redirected
     assert "meta skuid __UID__ accept" in r            # proxy egress permitted
     assert "policy drop" in r                          # default-deny output
+    assert "ip daddr 127.0.0.0/8 accept" in r          # redirected pkts reach the proxy
     assert "udp dport 53 accept" in r                  # DNS resolution allowed
     assert "table ip6 aleguard6" in r and "reject" in r  # IPv6 killed
 
