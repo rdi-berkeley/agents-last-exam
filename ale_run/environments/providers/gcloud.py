@@ -19,6 +19,7 @@ derived from the machine family (c4/m4/x4 → hyperdisk-balanced, else pd-ssd).
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import logging
@@ -752,6 +753,11 @@ def _init_computer_skip_wait(session: Any) -> None:
 class GcloudProvider(Provider):
     """Provider backed by ``gcloud compute instances create / delete``."""
 
+    # This provider enforces per-task egress policy in-guest (nftables +
+    # aleguard transparent proxy) at acquire time — so the fail-closed guard in
+    # ALEEnv lets non-``open`` policies through for gcloud. Linux only.
+    enforces_network_policy = True
+
     def __init__(self, config: GcloudProviderConfig | dict[str, Any]):
         if isinstance(config, dict):
             config = _build_provider_config(config)
@@ -893,6 +899,13 @@ class GcloudProvider(Provider):
                 except Exception as e:  # noqa: BLE001
                     logger.error("gcloud: GCS credential injection failed on %s: %s", name, e)
 
+            # Per-task egress isolation (Linux only). Applied last so code-ship
+            # + GCS injection (host→VM ingress) are unaffected. No silent
+            # fallback: if enforcement can't be installed, raise → the VM is
+            # deleted and the run fails loudly rather than running unisolated.
+            if image.os == "linux" and spec.network.mode != "open":
+                await self._apply_network_policy(cua_url, spec.network)
+
             return SandboxHandle(
                 id=name,
                 endpoint=cua_url,
@@ -987,6 +1000,46 @@ class GcloudProvider(Provider):
         await session.write_bytes(dest, data)
         logger.info("gcloud: injected GCS SA key -> %s (project=%s)", dest, project_id)
         return dest, project_id
+
+    @staticmethod
+    async def _apply_network_policy(cua_url: str, policy: Any) -> None:
+        """Install in-guest egress isolation on a Linux VM (nftables + the
+        aleguard transparent proxy). Raises on failure (no silent fallback).
+
+        ``allowlist`` → only the hosts in ``policy.allow`` (already includes the
+        auto-derived model endpoint, folded in by the orchestrator) are
+        reachable; everything else is dropped. ``off`` → full air-gap.
+        """
+        from cua_bench.computers.remote import RemoteDesktopSession
+        from . import aleguard
+
+        if policy.mode == "allowlist" and not policy.allow:
+            raise RuntimeError(
+                "gcloud: network mode=allowlist but the allow-list is empty "
+                "(no model host resolved and no task-declared hosts) — refusing "
+                "to strand the agent with no reachable endpoint"
+            )
+
+        proxy_src = Path(__file__).with_name("aleguard.py").read_text(encoding="utf-8")
+        proxy_b64 = base64.b64encode(proxy_src.encode("utf-8")).decode("ascii")
+        script = aleguard.build_setup_script(
+            policy.mode, list(policy.allow), proxy_b64,
+        )
+
+        session = RemoteDesktopSession(api_url=cua_url, os_type="linux")
+        _init_computer_skip_wait(session)
+        res = await session.run_command(script, check=False)
+        out = (res.get("stdout") or "") if isinstance(res, dict) else ""
+        err = (res.get("stderr") or "") if isinstance(res, dict) else ""
+        if "ALEGUARD_OK" not in out:
+            raise RuntimeError(
+                f"gcloud: could not apply network policy (mode={policy.mode}, "
+                f"allow={sorted(policy.allow)}): {err or out or 'no output'}"
+            )
+        logger.info(
+            "gcloud: applied network policy mode=%s allow=%s",
+            policy.mode, sorted(policy.allow),
+        )
 
     # ------------------------------------------------------------------ release
 

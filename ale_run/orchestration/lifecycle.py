@@ -650,6 +650,34 @@ def _extract_score(eval_output: Any) -> float | None:
     return None
 
 
+def resolve_model_host(cfg: dict[str, Any]) -> str | None:
+    """Best-effort model API hostname the agent will call, from its config.
+
+    Precedence: an explicit ``base_url`` (covers OpenRouter/Anthropic-direct
+    with a custom endpoint, Ark, yunwu/云雾, any gateway) wins; otherwise the
+    provider's documented default endpoint. Returns None when it can't be
+    determined — the caller then relies on task-declared ``allow`` and, in
+    ``allowlist`` mode, the provider fails loudly on an empty allow-list rather
+    than stranding the agent."""
+    from urllib.parse import urlparse
+
+    base_url = cfg.get("base_url")
+    if base_url:
+        return urlparse(str(base_url)).hostname
+    provider = str(cfg.get("provider") or "openrouter").lower()
+    if provider == "openrouter":
+        return "openrouter.ai"
+    if provider == "direct":
+        model = str(cfg.get("model") or "").lower()
+        if "claude" in model or "anthropic" in model:
+            return "api.anthropic.com"
+        if "gpt" in model or "openai" in model or model.startswith(("o1", "o3", "o4")):
+            return "api.openai.com"
+        if "gemini" in model or "google" in model:
+            return "generativelanguage.googleapis.com"
+    return None
+
+
 def _build_env_spec(task_meta: dict[str, Any], *, unit: RunUnit | None = None) -> SandboxSpec:
     snapshot = task_meta.get("image_category") or task_meta.get("snapshot_name")
     if not snapshot:
@@ -664,6 +692,17 @@ def _build_env_spec(task_meta: dict[str, Any], *, unit: RunUnit | None = None) -
         if unit is not None
         else ""
     )
+    # Fold the auto-derived model endpoint host into the allow-list so a task
+    # never has to name it (and it tracks the experiment's base_url). Only for
+    # allowlist mode; off = air-gap keeps the model blocked too.
+    policy = task_meta.get("network") or NetworkPolicy()
+    if policy.mode == "allowlist" and unit is not None:
+        model_host = resolve_model_host(unit.agent_spec.config)
+        if model_host:
+            policy = NetworkPolicy(
+                mode=policy.mode,
+                allow=tuple(sorted(set(policy.allow) | {model_host})),
+            )
     return SandboxSpec(
         snapshot=snapshot,
         os=os_type,
@@ -674,7 +713,7 @@ def _build_env_spec(task_meta: dict[str, Any], *, unit: RunUnit | None = None) -
         task_id=task_id,
         harness=harness,
         model_tag=model_tag,
-        network=task_meta.get("network") or NetworkPolicy(),
+        network=policy,
     )
 
 
