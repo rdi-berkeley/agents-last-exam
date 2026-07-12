@@ -245,9 +245,10 @@ New-Item -ItemType Directory -Force -Path 'C:\\aleguard' | Out-Null
 New-NetFirewallRule -DisplayName 'aleguard-dns-udp' -Direction Outbound -Protocol UDP -RemotePort 53 -Action Allow -Profile Any | Out-Null
 New-NetFirewallRule -DisplayName 'aleguard-dns-tcp' -Direction Outbound -Protocol TCP -RemotePort 53 -Action Allow -Profile Any | Out-Null
 {launch}
-# Default-deny all other outbound (inbound left as-is so the cua channel and its
-# stateful replies survive). This is the hard blocking guarantee.
-Set-NetFirewallProfile -All -Enabled True -DefaultOutboundAction Block
+# Default-deny all other outbound. Keep inbound DEFAULT-ALLOW so the cua control
+# channel (host->VM ingress) is never severed — inbound is already gated by the
+# cloud network firewall. This is the hard, client-agnostic blocking guarantee.
+Set-NetFirewallProfile -All -Enabled True -DefaultInboundAction Allow -DefaultOutboundAction Block
 {proxy_cfg}
 Write-Output 'ALEGUARD_OK'
 """

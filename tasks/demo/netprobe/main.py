@@ -44,12 +44,13 @@ class TaskConfig(LinuxTaskConfig):
 
     @property
     def task_description(self) -> str:
+        # Deliberately trivial + always-completable: running at all needs a model
+        # round-trip, so a completed run confirms the model stayed reachable under
+        # the policy. Whether the *network* is reachable is judged by evaluate()'s
+        # own deterministic probe, not by anything the agent does.
         return (
-            "Find out whether this machine can reach the public internet.\n\n"
-            f"Run:  curl -sS -m 10 -o /dev/null -w '%{{http_code}}' {_PROBE_URL}\n\n"
-            f"If it prints a real HTTP status (e.g. 200), write REACHABLE to "
-            f"{self.report_path}. If it fails or times out, write BLOCKED there. "
-            "Use only the shell + file tools."
+            f"Write exactly the word DONE to the file {self.report_path} using "
+            "your file tools, then stop. Do not run any other commands."
         )
 
     def to_metadata(self) -> dict:
@@ -100,12 +101,12 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     reachable = bool(code) and not code.startswith("0")
 
     try:
-        agent_said = (await session.read_file(meta["report_path"])).strip()
+        marker = (await session.read_file(meta["report_path"])).strip()
     except Exception:
-        agent_said = "(no report)"
+        marker = "(missing)"
 
     logger.info("[netprobe] deterministic probe %s → HTTP %r (reachable=%s)", url, code, reachable)
-    logger.info("[netprobe] agent self-report: %r", agent_said[:80])
+    logger.info("[netprobe] agent marker (model reachable if present): %r", marker[:40])
     if reachable:
         logger.info("[netprobe] VERDICT: agent CAN reach the internet → NOT isolated → 0.0")
         return [0.0]
