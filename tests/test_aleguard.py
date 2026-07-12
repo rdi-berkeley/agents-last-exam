@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ale_run.environments.providers.aleguard import (
+from ale_run.environments.netguard.aleguard import (
     PROXY_PORT,
     build_nft_ruleset,
     build_setup_script,

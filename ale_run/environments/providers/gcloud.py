@@ -19,7 +19,6 @@ derived from the machine family (c4/m4/x4 → hyperdisk-balanced, else pd-ssd).
 from __future__ import annotations
 
 import asyncio
-import base64
 import hashlib
 import json
 import logging
@@ -33,6 +32,7 @@ from typing import Any
 import requests
 
 from ...base_interface import SandboxSpec, Provider, ReleaseMode, SandboxHandle
+from ..netguard import apply_network_policy
 
 logger = logging.getLogger(__name__)
 
@@ -899,23 +899,7 @@ class GcloudProvider(Provider):
                 except Exception as e:  # noqa: BLE001
                     logger.error("gcloud: GCS credential injection failed on %s: %s", name, e)
 
-            # Per-task egress isolation (Linux only). Applied last so code-ship
-            # + GCS injection (host→VM ingress) are unaffected. No silent
-            # fallback: if enforcement can't be installed, raise → the VM is
-            # deleted and the run fails loudly rather than running unisolated.
-            if spec.network.mode != "open":
-                if image.os != "linux":
-                    # aleguard is a Linux mechanism (nftables + SO_ORIGINAL_DST).
-                    # Fail closed on Windows rather than run an unisolated VM
-                    # while assert_network_supported claimed gcloud enforces.
-                    raise RuntimeError(
-                        f"gcloud: network policy (mode={spec.network.mode}) is "
-                        f"Linux-only; snapshot {spec.snapshot!r} is {image.os} "
-                        "— Windows egress enforcement is not implemented"
-                    )
-                await self._apply_network_policy(cua_url, spec.network)
-
-            return SandboxHandle(
+            handle = SandboxHandle(
                 id=name,
                 endpoint=cua_url,
                 os=image.os,
@@ -931,6 +915,14 @@ class GcloudProvider(Provider):
                     "gcs_user_project": gcs_user_project,
                 },
             )
+
+            # Per-task egress isolation, applied last so code-ship + GCS
+            # injection (host→VM ingress) are unaffected. Provider-agnostic:
+            # netguard dispatches on the guest OS and drives it over the handle.
+            # No silent fallback — a failure raises here, inside the post-create
+            # try, so the VM is deleted and the run fails loudly.
+            await apply_network_policy(handle, spec.network)
+            return handle
         except BaseException:
             # Delete the just-created VM so a post-create failure doesn't leak
             # it (the caller never got a handle to clean it up). Best-effort.
@@ -1009,51 +1001,6 @@ class GcloudProvider(Provider):
         await session.write_bytes(dest, data)
         logger.info("gcloud: injected GCS SA key -> %s (project=%s)", dest, project_id)
         return dest, project_id
-
-    @staticmethod
-    async def _apply_network_policy(cua_url: str, policy: Any) -> None:
-        """Install in-guest egress isolation on a Linux VM (nftables + the
-        aleguard transparent proxy). Raises on failure (no silent fallback).
-
-        ``allowlist`` → only the hosts in ``policy.allow`` (already includes the
-        auto-derived model endpoint, folded in by the orchestrator) are
-        reachable; everything else is dropped. ``off`` → full air-gap.
-        """
-        from cua_bench.computers.remote import RemoteDesktopSession
-        from . import aleguard
-
-        if policy.mode == "allowlist" and not policy.allow:
-            raise RuntimeError(
-                "gcloud: network mode=allowlist but the allow-list is empty "
-                "(no model host resolved and no task-declared hosts) — refusing "
-                "to strand the agent with no reachable endpoint"
-            )
-
-        proxy_src = Path(__file__).with_name("aleguard.py").read_text(encoding="utf-8")
-        proxy_b64 = base64.b64encode(proxy_src.encode("utf-8")).decode("ascii")
-        script = aleguard.build_setup_script(
-            policy.mode, list(policy.allow), proxy_b64,
-        )
-
-        # cua-server runs commands as a NON-root user; the setup needs root
-        # (nftables, useradd, /opt, /etc). Stage the script in a user-writable
-        # tmp path, then run it under passwordless sudo.
-        session = RemoteDesktopSession(api_url=cua_url, os_type="linux")
-        _init_computer_skip_wait(session)
-        script_path = "/tmp/aleguard_setup.sh"
-        await session.write_file(script_path, script)
-        res = await session.run_command(f"sudo -n bash {script_path}", check=False)
-        out = (res.get("stdout") or "") if isinstance(res, dict) else ""
-        err = (res.get("stderr") or "") if isinstance(res, dict) else ""
-        if "ALEGUARD_OK" not in out:
-            raise RuntimeError(
-                f"gcloud: could not apply network policy (mode={policy.mode}, "
-                f"allow={sorted(policy.allow)}): {err or out or 'no output'}"
-            )
-        logger.info(
-            "gcloud: applied network policy mode=%s allow=%s",
-            policy.mode, sorted(policy.allow),
-        )
 
     # ------------------------------------------------------------------ release
 
