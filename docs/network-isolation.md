@@ -1,6 +1,6 @@
 # Sandbox Network Isolation — Design & Rationale
 
-**Status:** schema + plumbing landed (fail-closed); **Google Cloud enforcement implemented & validated e2e**; other providers still fail-closed
+**Status:** schema + plumbing (fail-closed) + **provider-agnostic `netguard` enforcement (Linux `aleguard` + Windows `winguard`), wired for Google Cloud and validated e2e**; other providers fail-closed. One known gap: routing the Node-based model call through the Windows proxy (see Part 5).
 **Branch:** `feat/sandbox-network-isolation`
 
 ## Goal
@@ -361,87 +361,110 @@ No experiment ever writes the model hostname explicitly — it rides along with 
   and (b) asserts a deliberate `curl https://example.com` is refused, run on
   gcloud + qemu.
 
-## Part 5 — Implementation: Google Cloud (`aleguard`)
+## Part 5 — Implementation: `netguard` (in-guest, provider-agnostic)
 
-The enforcement that ships in this PR is **Google Cloud only**. A design
-refinement vs Part 3: rather than a *host-side* proxy plus a VPC egress
-firewall, gcloud enforces **in-guest** with a tiny transparent proxy
-(`aleguard`) + nftables. This is simpler (no extra proxy VM to run per-run, no
-VPC firewall bookkeeping), needs zero agent cooperation (no `HTTPS_PROXY`), and
-keeps every change inside the gcloud provider. Trade-off: enforcement lives
-inside the guest, so it defends against an agent using its normal tools — the
-realistic cheat — not against an actively adversarial root that flushes
-nftables. (A future host/VPC-layer variant can close that gap; the policy
-surface is unchanged.)
+Enforcement is a property of the **guest OS, not the provider**: any Linux
+sandbox is governed the same way, any Windows sandbox the same way. So it lives
+in `ale_run/environments/netguard/`, exposing one entry point:
 
-**How it works** (`ale_run/environments/providers/aleguard.py`, applied by
-`GcloudProvider._apply_network_policy` at `acquire`, Linux only):
+```python
+await apply_network_policy(handle, policy)   # dispatches on handle.os
+```
 
-1. `aleguard` — a stdlib-only transparent proxy — runs in the VM as an
-   unprivileged `aleproxy` user.
-2. nftables `nat/output` **REDIRECTs** all `:80/:443` (except `aleproxy`'s own
-   egress) to it; `filter/output` is **default-drop**, permitting only
-   loopback, established (so the cua control channel's replies survive), DNS,
-   and `aleproxy`.
-3. For each connection `aleguard` reads the **original destination**
-   (`SO_ORIGINAL_DST`) and the target **hostname** from the plaintext TLS SNI /
-   HTTP Host — no decryption — and forwards iff the host matches the allow-list,
-   else drops and logs `DENY`.
-4. `off` mode installs a drop-all ruleset with no proxy (true air-gap; cua still
-   works because it is ingress).
+which drives the guest **only** through the provider-agnostic `SandboxHandle`
+API (`write_file` / `run_command`). A provider opts in with one line
+(`enforces_network_policy = True`) and one call from `acquire`. This PR wires
+**only Google Cloud**; every other provider keeps the flag `False` and
+**fails closed** on a non-`open` policy. Design refinement vs Part 3: in-guest
+(no extra proxy VM, no VPC-firewall bookkeeping) — the trade-off is it defends
+against an agent's normal tools (the realistic cheat), not an adversarial root
+that flushes the rules.
 
 The allow-list is the model endpoint host, **auto-derived** from the agent
-config by `resolve_model_host` (explicit `base_url`, else the provider's
-default) and folded in by `_build_env_spec` — so a task card never names it and
-it tracks endpoint swaps. `GcloudProvider.enforces_network_policy = True`.
+config by `resolve_model_host` (explicit `base_url`, else the provider default)
+and folded in by `_build_env_spec` — a task card never names it.
 
-Three kernel details this required (all discovered/fixed via e2e, see the fix
-commit): disable IPv6 on the guest (dual-stack clients prefer a CDN's AAAA and
-bypass the v4 redirect), `sysctl route_localnet=1` (or the REDIRECT-to-127.0.0.1
-packet is dropped as martian), and accept `ip daddr 127.0.0.0/8` in the filter
-chain (a redirected packet's `oif` is not yet `lo` when the filter chain sees
-it).
+### Linux — `aleguard` (transparent, nftables + SNI proxy)
+
+1. `aleguard` (stdlib-only transparent proxy) runs as an unprivileged
+   `aleproxy` user.
+2. nftables `nat/output` **REDIRECTs** all `:80/:443` (except `aleproxy`'s own
+   egress) to it; `filter/output` is **default-drop** (only loopback,
+   established/cua, DNS, `aleproxy` survive).
+3. Per connection it reads the original dst (`SO_ORIGINAL_DST`) + the **hostname**
+   from the plaintext TLS SNI / HTTP Host — no decryption — and forwards iff
+   allow-listed, else drops + logs `DENY`. `off` = drop-all air-gap.
+
+Transparent ⇒ **zero client cooperation** (curl / Node / anything is governed).
+Three kernel details found via e2e: disable guest IPv6 (dual-stack prefers a CDN
+AAAA and bypasses the v4 redirect); `sysctl route_localnet=1` (REDIRECT→127.0.0.1
+else martian-dropped); accept `ip daddr 127.0.0.0/8` in the filter chain (a
+redirected packet's `oif` isn't `lo` yet).
+
+### Windows — `winguard` (Windows Firewall + CONNECT proxy)
+
+Windows has no in-kernel transparent-REDIRECT equivalent without a signed
+WFP/WinDivert driver (not baked), so the design is two layers:
+
+1. **Windows Firewall default-deny outbound** (`Set-NetFirewallProfile
+   -DefaultOutboundAction Block`, inbound left allow so cua survives), permitting
+   only the proxy process + DNS. This is the **hard, client-agnostic blocking
+   guarantee** — any client dialing out directly is dropped.
+2. **`winguard`** (stdlib CONNECT proxy) does the **hostname** allow-listing for
+   proxy-aware clients: it reads the host from the `CONNECT host:443` line /
+   `Host` header and forwards iff allow-listed. The system/WinHTTP proxy +
+   `HTTPS_PROXY` + `NODE_USE_ENV_PROXY` are pointed at it. `off` = default-deny
+   with no proxy. Upstream is forced to IPv4 (a stray AAAA slips the firewall's
+   program allow-rule → `WinError 5`).
 
 ### What shipped in this PR
 
-- `NetworkPolicy` + `SandboxSpec.network`; `vm.network` parsed/validated at load
-  and threaded to the spec; `resolve_model_host` auto-derivation.
-- **Fail-closed guard** `Provider.assert_network_supported` (in
-  `ALEEnv.reset_async`): a non-`open` policy on a provider without
-  `enforces_network_policy` **raises** rather than running unisolated. `open`
-  changes nothing → every existing task card is unaffected.
-- `aleguard` + `GcloudProvider` enforcement (this section).
-- Anti-cheat demo task `demo/netprobe`.
-- Unit tests: `tests/test_network_policy.py`, `tests/test_aleguard.py`
-  (real-ClientHello SNI parsing, nft/setup builders).
+- `NetworkPolicy` + `SandboxSpec.network`; `vm.network` parsed/validated at load,
+  threaded to the spec; `resolve_model_host` auto-derivation.
+- **Fail-closed guard** `Provider.assert_network_supported` — non-`open` on a
+  provider without `enforces_network_policy` **raises**. `open` changes nothing.
+- `netguard` (aleguard + winguard) + `GcloudProvider` opt-in.
+- Self-contained demo task `demo/netprobe` (`REQUIRES_TASK_DATA=False`, no
+  staging; `evaluate()` runs its own deterministic probe → score 1.0 isolated /
+  0.0 reachable).
+- Unit tests: `test_network_policy.py` (14), `test_aleguard.py` (9,
+  real-ClientHello SNI), `test_winguard.py` (9).
 
-### Validated end-to-end on Google Cloud (`cpu-free-ubuntu`)
+### Validated end-to-end on Google Cloud
 
-- **Core allowlist:** model hosts reachable through the proxy
-  (`openrouter.ai` 200, `api.anthropic.com` 404, `yunwu.ai` 200); every other
-  host (`google.com` / `example.com` / `github.com`) blocked (`000`); aleguard
-  log shows `ALLOW` model-hosts + `DENY` the rest.
-- **Endpoint-agnostic:** the three distinct endpoints above all pass — swapping
-  `base_url` later needs no code change.
-- **Off mode:** model host *and* everything else blocked; cua control channel
-  still alive (air-gap with orchestration intact).
-- **Concurrency ×4:** four independent VMs each enforce correctly; proxied
-  model-call latency ~0.12 s per VM (per-VM proxy, no shared bottleneck).
-- **Pipeline integration:** a real `ale_run` run applied
-  `mode=allowlist allow=['openrouter.ai']`, auto-derived from the claude_code
-  config.
-- **Agent-runtime model path:** Node.js (v24, the claude/codex CLI runtime)
-  `https.get` reached `openrouter.ai/api/v1/models` (200) through the proxy and
-  was reset on `google.com` — the real client stack, not just curl.
+**Linux (`cpu-free-ubuntu`):**
+- Core allowlist: model hosts reachable via the proxy (openrouter 200, anthropic
+  404, + a custom gateway 200), all other hosts blocked (`000`); log shows
+  `ALLOW`/`DENY`. Endpoint-agnostic across the three.
+- Off = air-gap (model + all blocked), cua alive.
+- Concurrency ×4: independent, ~0.12 s proxied latency each.
+- Pipeline: a real `ale_run` run + the `demo/netprobe` task — policy auto-applied
+  `allow=['openrouter.ai']`, agent ran (model path OK), eval scored **1.0
+  (isolated)**.
+- Node.js v24 (the CLI runtime): `https.get` → openrouter 200 through the proxy,
+  google reset.
 
-### Not yet done (follow-ups)
+**Windows (`cpu-free` / ale-win10):**
+- Firewall default-deny **blocks all direct egress** (model + google + Windows
+  telemetry `wns`/OCSP) — the anti-cheat guarantee, proven.
+- Proxy allow-lists by hostname: **model reachable through the proxy** (curl `-x`,
+  REACH), forbidden hosts denied (log `ALLOW openrouter` / `DENY google`).
+- cua control channel survives the firewall.
 
-- Enforcement for the other providers (`qemu` cheapest — the VM already runs in
-  a `NET_ADMIN` container; then `docker`/`static`), each flipping its
-  `enforces_network_policy` flag.
-- Optional host/VPC-layer enforcement for tamper-resistance against a root
-  agent.
-- Baked task data for `demo/netprobe` so the anti-cheat A/B runs through the
-  full pipeline (its enforcement path is already validated; only the task's
-  input data isn't baked into the image).
+### Known gap / follow-ups
+
+- **Windows + the Node-based model call.** The firewall blocks all direct egress
+  and the proxy is the only way out, but Node's `fetch`/undici (claude_code's
+  runtime) does **not** honor `HTTPS_PROXY` by default, and the machine-level
+  proxy env doesn't reach the already-running agent process. So a *real* claude
+  run on Windows under `allowlist` would have its model call dropped by the
+  firewall. The blocking is solid; making claude's model call traverse the proxy
+  needs either `NODE_USE_ENV_PROXY` injected into the agent's env or a `base_url`
+  reverse-proxy (winguard already has the forwarding path) — a scoped follow-up.
+  Proxy-aware clients (curl/Python) already work end-to-end. (Windows-schannel
+  clients also need `--ssl-no-revoke`, since the OCSP responder is off-allow-list;
+  Node/OpenSSL is unaffected.)
+- Enforcement for `qemu` (cheapest — VM already in a `NET_ADMIN` container),
+  `docker`, `static`.
+- Optional host/VPC-layer enforcement for tamper-resistance against a root agent.
 - The open questions in Part 4.
