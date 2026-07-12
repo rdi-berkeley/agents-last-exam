@@ -65,26 +65,48 @@ aws ec2 authorize-security-group-ingress --group-id $SG --protocol tcp --port 33
     <h2>② Copy the sandbox images</h2>
     <p>
       A task boots from a prebaked image (the OS, the professional software, and
-      the task data, ready to go). ALE publishes them publicly; copy the one(s)
-      you need into your account once. Pick by what your tasks run on:
+      the task data, ready to go). ALE publishes the following images publicly
+      from account <code>435756742641</code> in <code>us-east-1</code>. Copy the
+      one(s) you need into your account once.
     </p>
-    <ul>
-      <li><code>ale-ubuntu22</code> — Linux (the bulk of tasks)</li>
-      <li><code>ale-win10</code> or <code>ale-win-server</code> — Windows; either
-        one works, pick one</li>
-    </ul>
+    <table>
+      <thead><tr><th>Image family</th><th>Public AMI</th><th>Platform</th><th>Disk</th></tr></thead>
+      <tbody>
+        <tr><td><code>ale-ubuntu22</code></td><td><code>ami-0dbf407fb3a0b4568</code></td><td>Ubuntu 22.04</td><td>185 GiB</td></tr>
+        <tr><td><code>ale-win10</code></td><td><code>ami-093d4af6e17e73d7e</code></td><td>Windows 10 BYOL</td><td>180 GiB</td></tr>
+        <tr><td><code>ale-win-server</code></td><td><code>ami-06321a4af826d9f17</code></td><td>Windows Server</td><td>135 GiB</td></tr>
+      </tbody>
+    </table>
+    <p>
+      The AMIs have public launch permission and their backing EBS snapshots
+      have public create-volume permission. A cross-account copy creates an
+      independent AMI and snapshot owned by your account. The copies are private
+      by default.
+    </p>
     <pre><code># copy an image into your account (repeat per image you need)
 fam=ale-ubuntu22                       # or ale-win10 / ale-win-server
-src=$(aws ec2 describe-images --region us-east-1 --owners 670060057810 \
-  --filters "Name=description,Values=$fam" --query 'Images[0].ImageId' --output text)
-new=$(aws ec2 copy-image --source-region us-east-1 --source-image-id $src \
+src=$(aws ec2 describe-images --region us-east-1 --owners 435756742641 \
+  --filters "Name=description,Values=$fam" "Name=state,Values=available" \
+  --query 'sort_by(Images,&amp;CreationDate)[-1].ImageId' --output text)
+test "$src" != None
+new=$(aws ec2 copy-image --region us-east-1 --source-region us-east-1 --source-image-id $src \
   --name $fam --description $fam --query ImageId --output text)
-aws ec2 create-tags --resources $new --tags Key=ale:image-family,Value=$fam</code></pre>
+aws ec2 create-tags --region us-east-1 --resources $new \
+  --tags Key=Name,Value=$fam Key=ale:image-family,Value=$fam
+aws ec2 wait image-available --region us-east-1 --image-ids $new</code></pre>
     <p>
       The environment config refers to images by these family names, so once
-      copied they're picked up automatically. (Copying a Windows image takes a
-      while — it's a large disk.)
+      copied they're picked up automatically. AMI tags are not copied across
+      accounts, which is why the command adds both tags explicitly. Copying a
+      Windows image can take a while because it has a large backing disk.
     </p>
+
+    <div class="note">
+      <div class="note-title">Windows licensing</div>
+      <code>ale-win10</code> uses a bring-your-own-license (BYOL) Windows image.
+      Use it only when your organization has the required Microsoft license.
+      Otherwise use <code>ale-win-server</code>.
+    </div>
 
     <h2>③ Keep run output in S3 <span style="font-weight:400">(recommended for real runs)</span></h2>
     <p>
