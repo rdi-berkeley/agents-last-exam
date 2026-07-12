@@ -76,8 +76,10 @@ Software Provided:
   - Full path on this VM: `{self.task_dir}\\software\\python.bat`
   - Runs the preinstalled Python runtime with UTF-8 mode enabled.
 
-Output File:
-1) {self.remote_output_dir}\\final_dataset.xlsx
+Output Files:
+1) {self.remote_output_dir}\\downloads\\
+   - Save each downloaded PDF here, keeping its original filename from file_list.txt.
+2) {self.remote_output_dir}\\final_dataset.xlsx
    - One sheet.
    - One row per person.
    - Required columns (exact names):

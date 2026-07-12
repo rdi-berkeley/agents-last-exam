@@ -64,8 +64,10 @@ Input Files:
    - UTF-8 text file, one PDF filename per line.
    - Example line: `688001_某公司_2023年年报.pdf`
 
-Output File:
-1) {self.remote_output_dir}\final_dataset.xlsx
+Output Files:
+1) {self.remote_output_dir}\\downloads\\
+   - Save each downloaded PDF here, keeping its original filename from file_list.txt.
+2) {self.remote_output_dir}\\final_dataset.xlsx
    - One sheet.
    - One row per person.
    - Required columns (exact names):
