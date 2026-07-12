@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import socket
 import sys
 
 _IO_CHUNK = 65536
@@ -106,8 +107,12 @@ class Proxy:
         self.audit.info("ALLOW %s %s:%s", method, host, port)
 
         try:
+            # Force IPv4 upstream: a dual-stack host may pick an AAAA the
+            # firewall's program-allow rule doesn't cover, so the proxy's own
+            # egress gets denied (WinError 5). Model endpoints are v4-reachable.
             up_reader, up_writer = await asyncio.wait_for(
-                asyncio.open_connection(host, port), _CONNECT_TIMEOUT_S
+                asyncio.open_connection(host, port, family=socket.AF_INET),
+                _CONNECT_TIMEOUT_S,
             )
         except (asyncio.TimeoutError, OSError) as exc:
             self.audit.info("UPSTREAM-FAIL %s:%s %s", host, port, exc)
@@ -172,7 +177,8 @@ def _load_allow(path: str) -> "frozenset[str]":
 async def _serve(port: int, allow: "frozenset[str]", audit: logging.Logger) -> None:
     proxy = Proxy(allow, audit)
     server = await asyncio.start_server(proxy.handle, "127.0.0.1", port)
-    audit.info("winguard listening on 127.0.0.1:%d allow=%s", port, sorted(allow))
+    audit.info("winguard listening on 127.0.0.1:%d exe=%s allow=%s",
+               port, sys.executable, sorted(allow))
     async with server:
         await server.serve_forever()
 
@@ -215,8 +221,14 @@ def build_setup_ps1(mode: str, allow_hosts: "list[str]", proxy_b64: str) -> str:
     proxy_cfg = ""
     if mode != "off":
         launch = f"""
-$py = (Get-Command python -ErrorAction SilentlyContinue).Source
-if (-not $py) {{ $py = 'C:\\ale-run\\.venv\\Scripts\\python.exe' }}
+# Use an explicit real python.exe, NOT `Get-Command python` — the latter can
+# resolve to the WindowsApps *alias* whose path won't match the real process
+# that opens the upstream socket, so the firewall allow-rule would miss it and
+# the proxy's own egress would be dropped.
+$py = 'C:\\ale-run\\.venv\\Scripts\\python.exe'
+if (-not (Test-Path $py)) {{ $py = "$env:LOCALAPPDATA\\Programs\\Python\\Python312\\python.exe" }}
+if (-not (Test-Path $py)) {{ $py = (Get-Command python -ErrorAction SilentlyContinue).Source }}
+Write-Output "aleguard-python=$py"
 [IO.File]::WriteAllBytes('C:\\aleguard\\winguard.py', [Convert]::FromBase64String('{proxy_b64}'))
 Set-Content -Path 'C:\\aleguard\\allow' -Value @'
 {allow_lines}
@@ -227,7 +239,11 @@ Start-Sleep -Milliseconds 1500
 $listening = $false
 for ($i=0; $i -lt 40; $i++) {{ if (Test-NetConnection -ComputerName 127.0.0.1 -Port {port} -InformationLevel Quiet -WarningAction SilentlyContinue) {{ $listening = $true; break }}; Start-Sleep -Milliseconds 250 }}
 if (-not $listening) {{ Write-Output 'ALEGUARD_PROXY_FAILED'; Get-Content 'C:\\aleguard\\winguard.log' -ErrorAction SilentlyContinue; exit 1 }}
-New-NetFirewallRule -DisplayName 'aleguard-proxy' -Direction Outbound -Program $py -Action Allow -Profile Any | Out-Null
+# Allow the proxy's outbound. Rule matches by program path; cover every real
+# python.exe that exists so a venv-launcher re-exec can't slip past the rule.
+$pyPaths = @($py, "$env:LOCALAPPDATA\\Programs\\Python\\Python312\\python.exe", 'C:\\Program Files\\Python312\\python.exe') | Where-Object {{ Test-Path $_ }} | Select-Object -Unique
+$i = 0
+foreach ($pp in $pyPaths) {{ New-NetFirewallRule -DisplayName "aleguard-proxy-$i" -Direction Outbound -Program $pp -Action Allow -Profile Any | Out-Null; $i++ }}
 """
         proxy_cfg = f"""
 netsh winhttp set proxy proxy-server="127.0.0.1:{port}" bypass-list="localhost;127.0.0.1" | Out-Null
