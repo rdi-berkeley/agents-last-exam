@@ -1,6 +1,6 @@
 # Sandbox Network Isolation — Design & Rationale
 
-**Status:** schema + plumbing landed (fail-closed); enforcement staged as follow-ups
+**Status:** schema + plumbing landed (fail-closed); **Google Cloud enforcement implemented & validated e2e**; other providers still fail-closed
 **Branch:** `feat/sandbox-network-isolation`
 
 ## Goal
@@ -361,33 +361,87 @@ No experiment ever writes the model hostname explicitly — it rides along with 
   and (b) asserts a deliberate `curl https://example.com` is refused, run on
   gcloud + qemu.
 
-## Part 5 — Scope of this PR
+## Part 5 — Implementation: Google Cloud (`aleguard`)
 
-Staged deliberately so enforcement never ships half-done and silently
-non-enforcing.
+The enforcement that ships in this PR is **Google Cloud only**. A design
+refinement vs Part 3: rather than a *host-side* proxy plus a VPC egress
+firewall, gcloud enforces **in-guest** with a tiny transparent proxy
+(`aleguard`) + nftables. This is simpler (no extra proxy VM to run per-run, no
+VPC firewall bookkeeping), needs zero agent cooperation (no `HTTPS_PROXY`), and
+keeps every change inside the gcloud provider. Trade-off: enforcement lives
+inside the guest, so it defends against an agent using its normal tools — the
+realistic cheat — not against an actively adversarial root that flushes
+nftables. (A future host/VPC-layer variant can close that gap; the policy
+surface is unchanged.)
 
-**In this PR (schema + plumbing, safe to merge):**
+**How it works** (`ale_run/environments/providers/aleguard.py`, applied by
+`GcloudProvider._apply_network_policy` at `acquire`, Linux only):
 
-- `NetworkPolicy` type + `SandboxSpec.network` field
-  (`ale_run/base_interface/sandbox.py`).
-- `task_card.json` `vm.network` parsing + validation at load
-  (`ale_run/tasks/loader.py`), threaded to `SandboxSpec`
-  (`ale_run/orchestration/lifecycle.py`).
-- Auto-derivation helpers (`effective_allow`, `model_host_from_env`).
-- **Fail-closed guard**: `Provider.assert_network_supported`, called in
-  `ALEEnv.reset_async` before `acquire`. A task that asks for `allowlist`/`off`
-  on a provider that hasn't set `enforces_network_policy` **raises**
-  (`NetworkPolicyUnsupportedError`) rather than running unisolated. `open` is
-  always allowed. So merging this changes **nothing** for existing cards (all
-  `open`), and any *new* isolation request is refused until a provider actually
-  enforces it — never silently ignored.
-- Unit tests (`tests/test_network_policy.py`).
+1. `aleguard` — a stdlib-only transparent proxy — runs in the VM as an
+   unprivileged `aleproxy` user.
+2. nftables `nat/output` **REDIRECTs** all `:80/:443` (except `aleproxy`'s own
+   egress) to it; `filter/output` is **default-drop**, permitting only
+   loopback, established (so the cua control channel's replies survive), DNS,
+   and `aleproxy`.
+3. For each connection `aleguard` reads the **original destination**
+   (`SO_ORIGINAL_DST`) and the target **hostname** from the plaintext TLS SNI /
+   HTTP Host — no decryption — and forwards iff the host matches the allow-list,
+   else drops and logs `DENY`.
+4. `off` mode installs a drop-all ruleset with no proxy (true air-gap; cua still
+   works because it is ingress).
 
-**Follow-up PRs (enforcement, one provider at a time):**
+The allow-list is the model endpoint host, **auto-derived** from the agent
+config by `resolve_model_host` (explicit `base_url`, else the provider's
+default) and folded in by `_build_env_spec` — so a task card never names it and
+it tracks endpoint swaps. `GcloudProvider.enforces_network_policy = True`.
 
-- The host-side egress proxy (allow by `CONNECT`/SNI hostname).
-- Per-provider egress cut-off + proxy routing (`qemu` first — cheapest; then
-  `gcloud`), each flipping its `enforces_network_policy` flag once wired.
-- Proxy env injection into the agent + resolving the effective allow set from
-  the injected `base_url` at acquire time.
+Three kernel details this required (all discovered/fixed via e2e, see the fix
+commit): disable IPv6 on the guest (dual-stack clients prefer a CDN's AAAA and
+bypass the v4 redirect), `sysctl route_localnet=1` (or the REDIRECT-to-127.0.0.1
+packet is dropped as martian), and accept `ip daddr 127.0.0.0/8` in the filter
+chain (a redirected packet's `oif` is not yet `lo` when the filter chain sees
+it).
+
+### What shipped in this PR
+
+- `NetworkPolicy` + `SandboxSpec.network`; `vm.network` parsed/validated at load
+  and threaded to the spec; `resolve_model_host` auto-derivation.
+- **Fail-closed guard** `Provider.assert_network_supported` (in
+  `ALEEnv.reset_async`): a non-`open` policy on a provider without
+  `enforces_network_policy` **raises** rather than running unisolated. `open`
+  changes nothing → every existing task card is unaffected.
+- `aleguard` + `GcloudProvider` enforcement (this section).
+- Anti-cheat demo task `demo/netprobe`.
+- Unit tests: `tests/test_network_policy.py`, `tests/test_aleguard.py`
+  (real-ClientHello SNI parsing, nft/setup builders).
+
+### Validated end-to-end on Google Cloud (`cpu-free-ubuntu`)
+
+- **Core allowlist:** model hosts reachable through the proxy
+  (`openrouter.ai` 200, `api.anthropic.com` 404, `yunwu.ai` 200); every other
+  host (`google.com` / `example.com` / `github.com`) blocked (`000`); aleguard
+  log shows `ALLOW` model-hosts + `DENY` the rest.
+- **Endpoint-agnostic:** the three distinct endpoints above all pass — swapping
+  `base_url` later needs no code change.
+- **Off mode:** model host *and* everything else blocked; cua control channel
+  still alive (air-gap with orchestration intact).
+- **Concurrency ×4:** four independent VMs each enforce correctly; proxied
+  model-call latency ~0.12 s per VM (per-VM proxy, no shared bottleneck).
+- **Pipeline integration:** a real `ale_run` run applied
+  `mode=allowlist allow=['openrouter.ai']`, auto-derived from the claude_code
+  config.
+- **Agent-runtime model path:** Node.js (v24, the claude/codex CLI runtime)
+  `https.get` reached `openrouter.ai/api/v1/models` (200) through the proxy and
+  was reset on `google.com` — the real client stack, not just curl.
+
+### Not yet done (follow-ups)
+
+- Enforcement for the other providers (`qemu` cheapest — the VM already runs in
+  a `NET_ADMIN` container; then `docker`/`static`), each flipping its
+  `enforces_network_policy` flag.
+- Optional host/VPC-layer enforcement for tamper-resistance against a root
+  agent.
+- Baked task data for `demo/netprobe` so the anti-cheat A/B runs through the
+  full pipeline (its enforcement path is already validated; only the task's
+  input data isn't baked into the image).
 - The open questions in Part 4.
