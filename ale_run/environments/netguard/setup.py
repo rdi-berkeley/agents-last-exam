@@ -89,7 +89,12 @@ def build_windows(mode: str, hosts: list[str], proxy_b64: str) -> str:
             "Start-Process -FilePath $py -ArgumentList '\"C:\\netguard\\proxy.py\"','--map','\"C:\\netguard\\map.json\"','--log','\"C:\\netguard\\netguard.log\"' -WindowStyle Hidden\n"
             "for($i=0;$i -lt 40;$i++){ if(Test-NetConnection 127.0.0.1 -Port 443 -InformationLevel Quiet -WarningAction SilentlyContinue){break}; Start-Sleep -Milliseconds 250 }\n"
             "if(-not (Test-NetConnection 127.0.0.1 -Port 443 -InformationLevel Quiet -WarningAction SilentlyContinue)){ Write-Output NETGUARD_PROXY_FAILED; Get-Content C:\\netguard\\netguard.log -EA SilentlyContinue; exit 1 }\n"
-            "New-NetFirewallRule -DisplayName netguard-proxy -Direction Outbound -Program $py -Action Allow -Profile Any | Out-Null\n"
+            # Allow the proxy's outbound. The venv launcher can re-exec, so the
+            # process that opens the upstream socket may be a different python.exe
+            # than $py — cover every real python path or its egress is denied
+            # (WinError 5).
+            "$pyPaths=@($py,\"$env:LOCALAPPDATA\\Programs\\Python\\Python312\\python.exe\",'C:\\Program Files\\Python312\\python.exe')|Where-Object{Test-Path $_}|Select-Object -Unique\n"
+            "$i=0; foreach($pp in $pyPaths){ New-NetFirewallRule -DisplayName \"netguard-proxy-$i\" -Direction Outbound -Program $pp -Action Allow -Profile Any | Out-Null; $i++ }\n"
         )
     return (
         "$ErrorActionPreference='Stop'\n"
