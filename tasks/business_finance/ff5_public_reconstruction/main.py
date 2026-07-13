@@ -152,7 +152,7 @@ If you want the pinned Python runtime manifest, it is staged at:
 - `{self.runtime_pyproject}`
 - `{self.runtime_lock}`
 
-Your job is to reconstruct the monthly U.S. Fama-French five factors from public data starting at `2015-01`, following the full instructions in `agent_prompt.md`.
+Your job is to reconstruct the monthly U.S. Fama-French five factors from public data for exactly `2015-01` through `2026-02`, inclusive, following the full instructions in `agent_prompt.md`. Do not include any earlier or later month.
 
 Write exactly one required file:
 - `{self.output_file}`

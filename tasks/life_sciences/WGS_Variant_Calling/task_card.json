@@ -92,7 +92,7 @@
       "description": "output/rtg_summary.csv"
     }
   ],
-  "evaluation": "The evaluator checks the QC reports, mapping rate, duplication rate, compressed VCF, tabix index, and informational CSV. It then independently recomputes SNP and INDEL precision, recall, and F1 from the submitted VCF against evaluator-only GIAB HG002 truth restricted to evaluator-only confident regions. Self-reported CSV values do not affect the score. Thresholds are mapping rate >= 95%, duplication rate <= 20%, SNP precision/recall/F1 >= 0.99, INDEL precision >= 0.97, recall >= 0.91, and F1 >= 0.94.",
+  "evaluation": "Offline validation of the documented QC, VCF, index, and summary output contract.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",

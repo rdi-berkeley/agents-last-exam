@@ -131,10 +131,7 @@ Requirements:
 7. Explain any filtering choices in `DECISIONS.md` with concrete numeric values.
 
 Rules:
-- Treat `{self.input_dir}` plus any intended visible `software/` entry points as
-  the solve-time surface.
 - Write solver-created files only under `{self.remote_output_dir}`.
-- Hidden benchmarking against evaluator-side truth happens after you finish.
 """
 
     def to_metadata(self) -> dict[str, Any]:
