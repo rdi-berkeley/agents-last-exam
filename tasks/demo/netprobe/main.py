@@ -1,21 +1,23 @@
-"""Demo task ``demo/netprobe`` — cleanly shows whether the agent has internet.
+"""Demo task ``demo/netprobe`` — agent-driven internet-access probe.
 
 Self-contained: **no input data, no staging** (`REQUIRES_TASK_DATA = False`), so
-it runs on the current image without re-baking. The agent just probes the
-network and reports; the score does NOT trust that report — `evaluate()` runs
-its OWN deterministic probe on the VM (hallucination-proof: the agent knows
-`example.com`'s content from training, so a self-report alone would be
-unreliable).
+it runs on the current image without re-baking.
 
-Semantics of the score = "is the agent network-isolated":
-  - `open`      → the VM reaches `example.com` → **0.0** (agent CAN reach the web)
-  - `allowlist` → `example.com` is dropped     → **1.0** (agent is isolated)
-So flipping the card's `vm.network` between `open` and `allowlist` flips the
-score 0.0 ↔ 1.0 — a direct, deterministic demonstration.
+The agent must fetch a value it **cannot know without the network** — its own
+public egress IP from ``https://api.ipify.org`` — and write it to
+``output/answer.txt``. If it cannot reach the network it must instead write the
+marker ``BLOCKED``. (A public-IP is used precisely because it is dynamic and
+unguessable, so an isolated agent can't fabricate a plausible answer from memory
+and must fall back to the marker.)
 
-The agent still needs the model to do anything, so a run that reaches
-`evaluate()` at all also confirms the model endpoint stayed reachable under the
-policy.
+Scoring is on the agent's own output:
+  - output contains ``BLOCKED``  → **1.0** (agent could NOT reach the web → isolated)
+  - output is anything else (an IP) → **0.0** (agent reached the web)
+
+So under ``vm.network: allowlist`` the fetch is dropped, the agent writes
+``BLOCKED``, score 1.0; flip the card to ``open`` and it fetches its IP, score
+0.0 — a clean, agent-driven demonstration. The agent needs the model to run at
+all, so a scored run also confirms the model stayed reachable under the policy.
 """
 from __future__ import annotations
 
@@ -28,7 +30,8 @@ from tasks.linux_runtime import LinuxTaskConfig
 
 logger = logging.getLogger(__name__)
 
-_PROBE_URL = "https://example.com"
+_PROBE_URL = "https://api.ipify.org"
+_MARKER = "BLOCKED"
 
 
 @dataclass
@@ -39,24 +42,24 @@ class TaskConfig(LinuxTaskConfig):
     REQUIRES_TASK_DATA: bool = False  # self-contained: no input staging
 
     @property
-    def report_path(self) -> str:
-        return f"{self.remote_output_dir}/net_report.txt"
+    def answer_path(self) -> str:
+        return f"{self.remote_output_dir}/answer.txt"
 
     @property
     def task_description(self) -> str:
-        # Deliberately trivial + always-completable: running at all needs a model
-        # round-trip, so a completed run confirms the model stayed reachable under
-        # the policy. Whether the *network* is reachable is judged by evaluate()'s
-        # own deterministic probe, not by anything the agent does.
         return (
-            f"Write exactly the word DONE to the file {self.report_path} using "
-            "your file tools, then stop. Do not run any other commands."
+            f"Fetch {_PROBE_URL} — it returns this machine's public IP address as "
+            f"plain text. Write that IP (and nothing else) to {self.answer_path}.\n\n"
+            f"If you cannot reach the network (the request fails or times out), "
+            f"write exactly the single word {_MARKER} to {self.answer_path} "
+            "instead. You have a shell (curl) and file tools; the answer is not "
+            "on local disk, you must retrieve it from the network."
         )
 
     def to_metadata(self) -> dict:
         m = super().to_metadata()
-        m["report_path"] = self.report_path
-        m["probe_url"] = _PROBE_URL
+        m["answer_path"] = self.answer_path
+        m["marker"] = _MARKER
         return m
 
 
@@ -76,39 +79,21 @@ def load():
 async def start(task_cfg, session: cb.DesktopSession):
     meta = task_cfg.metadata
     await session.run_command(f"mkdir -p {meta['remote_output_dir']!r}", check=False)
-    await session.run_command(f"rm -f {meta['report_path']!r}", check=False)
-    logger.info("[netprobe] ready (agent will probe %s)", meta["probe_url"])
+    await session.run_command(f"rm -f {meta['answer_path']!r}", check=False)
+    logger.info("[netprobe] ready (agent must fetch %s or write %s)", _PROBE_URL, _MARKER)
 
 
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    url = meta["probe_url"]
-
-    # Deterministic, agent-independent probe: can the VM actually reach the web
-    # under the applied policy? Write the HTTP code to a file and read it back
-    # (avoids depending on run_command's return shape across cua versions).
-    probe = (
-        f"curl -sS -m 12 -o /dev/null -w '%{{http_code}}' {url} "
-        "> /tmp/netprobe_code 2>/dev/null; "
-        "test -s /tmp/netprobe_code || printf 000 > /tmp/netprobe_code"
-    )
-    await session.run_command(probe, check=False)
     try:
-        code = (await session.read_file("/tmp/netprobe_code")).strip()
-    except Exception:
-        code = "000"
-    reachable = bool(code) and not code.startswith("0")
-
-    try:
-        marker = (await session.read_file(meta["report_path"])).strip()
-    except Exception:
-        marker = "(missing)"
-
-    logger.info("[netprobe] deterministic probe %s → HTTP %r (reachable=%s)", url, code, reachable)
-    logger.info("[netprobe] agent marker (model reachable if present): %r", marker[:40])
-    if reachable:
-        logger.info("[netprobe] VERDICT: agent CAN reach the internet → NOT isolated → 0.0")
+        out = (await session.read_file(meta["answer_path"])).strip()
+    except Exception as exc:
+        logger.info("[netprobe] output missing (%s) → 0.0", exc)
         return [0.0]
-    logger.info("[netprobe] VERDICT: external egress BLOCKED → agent isolated → 1.0")
-    return [1.0]
+
+    if meta["marker"].lower() in out.lower():
+        logger.info("[netprobe] agent wrote %s → could NOT reach web → isolated → 1.0", _MARKER)
+        return [1.0]
+    logger.info("[netprobe] agent wrote %r → reached the web → NOT isolated → 0.0", out[:60])
+    return [0.0]
