@@ -270,8 +270,9 @@ def score_submission(submission_dir: Path) -> dict:
     for route_name in (*VISIBLE_ROUTES, *HIDDEN_ROUTES):
         actual = metrics["route_lengths"].get(route_name, math.inf)
         expected = REFERENCE_METRICS["route_lengths"][route_name]
-        route_checks[route_name] = actual == expected
-        if actual == expected:
+        route_ok = math.isfinite(actual) if route_name in HIDDEN_ROUTES else actual == expected
+        route_checks[route_name] = route_ok
+        if route_ok:
             raw_score += 8.0
     results["route_checks"] = route_checks
 

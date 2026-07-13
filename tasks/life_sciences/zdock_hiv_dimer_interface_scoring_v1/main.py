@@ -88,8 +88,9 @@ You are evaluating precomputed HIV protease dimer docking predictions on a Linux
 
 ## Your Task
 1. Use `{self.native_complex_file}` to derive native Chain A / Chain B interface residues.
-   An interface residue is any residue with at least one atom within 5 Angstrom of any atom
-   on the opposite chain.
+   Throughout all interface and contact calculations, use protein `ATOM` records only and exclude
+   `HETATM` records. An interface residue is any residue with at least one heavy atom within 5
+   Angstrom of any heavy atom on the opposite chain.
 2. Unpack `{self.pose_archive_file}` to obtain `complex.1.pdb` through `complex.10.pdb`.
 3. For each docking pose, identify predicted interface residues using the same 5 Angstrom
    atom-distance cutoff.

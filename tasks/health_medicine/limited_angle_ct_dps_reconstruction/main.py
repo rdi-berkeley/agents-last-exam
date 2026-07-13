@@ -25,7 +25,7 @@ SCRIPTS_PATH = SCRIPT_DIR / "scripts"
 if str(SCRIPTS_PATH) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_PATH))
 
-from score_outputs import score_reconstruction_bytes
+from score_outputs import score_reconstruction_bytes  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +94,6 @@ The binary pass condition is:
 - Write your final answer only under `{self.remote_output_dir}`.
 - Do not use the internet or any external model weights beyond the staged checkpoint.
 
-## Visibility Note
-The benchmark harness exposes only the staged `input/`, `software/`, and the designated writable output directory during solve time. Other evaluator-controlled staged assets may exist in the canonical admin package but are not part of the solve-time surface.
 """
 
     def to_metadata(self) -> dict:

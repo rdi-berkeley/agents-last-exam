@@ -225,7 +225,8 @@ def _call_vlm_judge(ref_b64: str, cand_b64: str) -> float:
     client = openai.OpenAI(api_key=_load_openai_key())
     resp = client.chat.completions.create(
         model=VLM_JUDGE_MODEL,
-        max_tokens=256,
+        max_completion_tokens=2048,
+        response_format={"type": "json_object"},
         messages=[
             {
                 "role": "user",

@@ -44,7 +44,6 @@ Input directory:
 Available environment:
 - Linux terminal access
 - Python 3 on the VM
-- `uv` is available for evaluator-side tooling, but you should not rely on hidden benchmark scripts
 
 Your task:
 1. Inspect `complex_structure.pdb`
