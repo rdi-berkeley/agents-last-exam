@@ -750,6 +750,7 @@ def _collect_env_passthrough() -> dict[str, str]:
         "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
         "GROK_API_KEY",
+        "MOONSHOT_API_KEY",
         "FACTORY_API_KEY",
         "CURSOR_AUTH_JSON_PATH",
         "CURSOR_AUTH_JSON",
