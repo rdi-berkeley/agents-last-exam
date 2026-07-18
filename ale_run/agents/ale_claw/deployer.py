@@ -108,10 +108,15 @@ class AleClawDeployer(BaseAgentDeployer):
                 raise RuntimeError(
                     f"{type(self).__name__}: failed to import {mod!r}: {e}"
                 ) from e
-        if not any(_os.environ.get(k) for k in self._api_key_alternatives):
+        # A literal cfg.api_key (custom gateway, e.g. Meta) is passed directly to
+        # agent.run() and never lives in os.environ, so it satisfies the gate on
+        # its own — only require an env key when no cfg.api_key is provided.
+        if not self.config.api_key and not any(
+            _os.environ.get(k) for k in self._api_key_alternatives
+        ):
             raise RuntimeError(
-                f"{type(self).__name__}: no LLM API key in env — set one of "
-                f"{', '.join(self._api_key_alternatives)}"
+                f"{type(self).__name__}: no LLM API key — set config.api_key or "
+                f"one of {', '.join(self._api_key_alternatives)} in env"
             )
         Path(self.executor.work_dir).mkdir(parents=True, exist_ok=True)
         logger.info(
@@ -367,7 +372,13 @@ class AleClawDeployer(BaseAgentDeployer):
 
             async def _drive() -> None:
                 nonlocal step, task_completed
-                async for result in agent.run(run_input):
+                # cfg.base_url / cfg.api_key (custom OpenAI-compatible gateway,
+                # e.g. Meta) thread straight through OpenClawComputerAgent.run →
+                # litellm as api_base/api_key kwargs — no os.environ mutation.
+                async for result in agent.run(
+                    run_input, api_base=cfg.base_url, api_key=cfg.api_key,
+                    **cfg.extra_generation_kwargs,
+                ):
                     sys.stdout.flush()
                     step += 1
                     for k in total_usage:
