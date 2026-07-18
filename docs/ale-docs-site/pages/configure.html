@@ -32,6 +32,8 @@ output:
   root: .logs/ale
 concurrency: 1
 wall_time_s: 7200
+auto_resume: true
+max_attempts: 3
 cleanup_mode: delete</code></pre>
     <p>
       Relative paths resolve from the experiment file's directory. Keep the file
@@ -42,7 +44,7 @@ cleanup_mode: delete</code></pre>
     <table>
       <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
       <tbody>
-        <tr><td><code>name</code></td><td>Names the experiment directory and defines the scope searched by <code>--resume</code>.</td></tr>
+        <tr><td><code>name</code></td><td>Names the experiment directory and defines the scope searched by auto-resume.</td></tr>
         <tr><td><code>secret_file</code></td><td>Loads <code>KEY=value</code> entries before referenced YAML files are parsed.</td></tr>
         <tr><td><code>agents</code></td><td>One or more agent preset paths. ALE runs the Cartesian product of agents and tasks.</td></tr>
         <tr><td><code>environment</code></td><td>Exactly one environment profile, which routes task snapshots to providers.</td></tr>
@@ -50,6 +52,8 @@ cleanup_mode: delete</code></pre>
         <tr><td><code>output.root</code></td><td>The host directory for run records. This is separate from the environment's task-output destination.</td></tr>
         <tr><td><code>concurrency</code></td><td>Maximum run units active at once.</td></tr>
         <tr><td><code>wall_time_s</code></td><td>Optional experiment-wide agent time limit. When omitted, each task card supplies its own timeout.</td></tr>
+        <tr><td><code>auto_resume</code></td><td>Defaults to <code>true</code>. Skips prior completed/timeout units and retries newly failed units.</td></tr>
+        <tr><td><code>max_attempts</code></td><td>Total attempts per failed unit in one invocation when auto-resume is enabled. Accepts 1 through 3 and defaults to 3.</td></tr>
         <tr><td><code>cleanup_mode</code></td><td><code>delete</code>, <code>stop</code>, or <code>keep</code> for provider-managed sandboxes.</td></tr>
         <tr><td><code>prompt_suffix</code></td><td>Optional text appended to every task instruction and recorded in the trajectory.</td></tr>
       </tbody>

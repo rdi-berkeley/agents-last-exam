@@ -10,8 +10,9 @@ LOG_SPEC.md is the source of truth; this class is its only writer. Layout:
         origin_log/<agent_name>/    deployer work_dir pulled from VM
         output/                     agent output, when output_path="local"
 
-The constructor refuses to overwrite an existing run dir
-(``FileExistsError``). Each finalize write is wrapped in try/except; the
+The constructor never overwrites an existing run dir. If multiple attempts of
+the same unit start within one second, it appends a numeric suffix to allocate a
+new directory. Each finalize write is wrapped in try/except; the
 ``events.jsonl`` is the authoritative trace even if one of the other writes
 fails.
 """
@@ -67,24 +68,36 @@ class RunWriter:
         task_path: str,
         variant_index: int,
     ):
-        self._ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+        base_ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
         self._slug_agent = slug_agent(agent_id)
         self._slug_model = slug_model(model)
         self._slug_task = slug_task(task_path)
         self._variant_index = variant_index
 
-        self._run_dir = (
+        variant_dir = (
             output_root
             / self._slug_agent
             / self._slug_model
             / self._slug_task
             / f"v{variant_index}"
-            / self._ts
         )
-        # Refuse to overwrite — LOG_SPEC §1 collision policy.
-        if self._run_dir.exists():
-            raise FileExistsError(f"run dir already exists: {self._run_dir}")
-        self._run_dir.mkdir(parents=True, exist_ok=False)
+        variant_dir.mkdir(parents=True, exist_ok=True)
+        for collision_index in range(1000):
+            self._ts = (
+                base_ts
+                if collision_index == 0
+                else f"{base_ts}_{collision_index:02d}"
+            )
+            self._run_dir = variant_dir / self._ts
+            try:
+                self._run_dir.mkdir(exist_ok=False)
+            except FileExistsError:
+                continue
+            break
+        else:
+            raise FileExistsError(
+                f"could not allocate a unique run dir under {variant_dir}"
+            )
         (self._run_dir / "origin_log").mkdir(parents=True, exist_ok=True)
         (self._run_dir / "output").mkdir(parents=True, exist_ok=True)
 

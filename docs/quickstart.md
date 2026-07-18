@@ -178,12 +178,16 @@ Windows snapshots to their corresponding images and zones.
 ```yaml
 tasks: selected_tasks/unlicensed.txt
 concurrency: 8
+auto_resume: true
+max_attempts: 3
 cleanup_mode: delete
 ```
 
 Choose concurrency according to project quota, GPU availability, LLM rate
-limits, and budget. Use `--resume` to skip units already recorded as
-`completed` or `timeout`.
+limits, and budget. Auto-resume is enabled by default: prior `completed` and
+`timeout` units are skipped, and failed units are automatically requeued up to
+`max_attempts`. Use `--disable-resume` for a one-off run of every selected unit
+with no retries.
 
 ## Cleanup and recovery
 
