@@ -1,7 +1,9 @@
 # ale_claw — native OpenClaw harness driving the VM through the MCP substrate
 # (host-side agent; non-GUI tools route through the vm_mcp_server bridge). Uses
-# litellm internally. Auth: keys live in the operator's shell env, read directly
-# by litellm — OPENROUTER_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY.
+# litellm internally. Auth: by default keys live in the operator's shell env,
+# read directly by litellm — OPENROUTER_API_KEY / ANTHROPIC_API_KEY /
+# OPENAI_API_KEY. To hit a custom OpenAI-compatible gateway instead, set
+# base_url/api_key in config: (see below) — no env var needed.
 #
 # Consolidated preset; `model:` is an example, every `config:` key is the
 # dataclass default (ale_run/agents/ale_claw/config.py).
@@ -20,6 +22,24 @@ model: openrouter/anthropic/claude-sonnet-4.6
 config:
   # Hard ceiling on the run loop (mapped to OpenClaw's max_steps).
   max_turns: 100
+
+  # ---- custom OpenAI-compatible gateway (all default to none) ----
+  # Route an `openai/<model>` id at a custom endpoint instead of the provider
+  # default. base_url + api_key are passed straight to litellm as api_base/api_key
+  # call kwargs — they never touch os.environ, so no global OpenAI redirect and no
+  # key leak; api_key also satisfies the credential gate (no env key needed).
+  # extra_generation_kwargs merges extra params into every request (later keys
+  # win) for gateway-specific quirks.
+  #
+  # Example — Meta's `super_nova_ext` (OpenAI-compatible Responses API): set the
+  # top-level `model: openai/super_nova_ext` and uncomment:
+  #   base_url: https://api.ai.meta.com/v1
+  #   api_key: ${env:SUPERNOVA_API_KEY}
+  #   extra_generation_kwargs:
+  #     truncation: disabled   # Meta rejects the loop's default truncation=auto
+  base_url: null
+  api_key: null
+  extra_generation_kwargs: {}
 
   # ---- substrate transport ----
   # How non-GUI tools (read/write/edit/exec) reach the VM. "mcp" = via the
