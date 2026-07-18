@@ -66,12 +66,19 @@ class Runner:
     async def run(
         self,
         units: Iterable[RunUnit] | None = None,
+        *,
+        max_attempts: int = 1,
     ) -> list[UnitResult]:
         """Run all units (or a filtered subset). Returns ``list[UnitResult]``.
 
-        No aggregation, no summary — caller does whatever rollup it wants.
+        Failed units are requeued until they succeed or reach ``max_attempts``.
+        Only the final result for each unit is returned; every attempt retains
+        its own run directory on disk.
         """
         from .lifecycle import install_signal_handlers, run_one_unit
+
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be at least 1")
 
         install_signal_handlers()
         unit_list = list(units) if units is not None else self.enumerate_units()
@@ -86,20 +93,39 @@ class Runner:
         logger.info("runner: %d units, concurrency=%d", len(unit_list), n)
 
         async def _drive(u: RunUnit) -> UnitResult:
-            logger.info("[%s] queued", u.slug)
-            result = await run_one_unit(
-                unit=u,
-                router=self._router,
-                output_root=self._output_root,
-                artifacts=self._spec.artifacts,
-                sem=sem,
-                cleanup_mode=self._spec.cleanup_mode,
-                prompt_suffix=self._spec.prompt_suffix,
-                wall_time_s=self._spec.wall_time_s,
-            )
-            logger.info("[%s] done: status=%s score=%s duration=%.1fs",
-                        u.slug, result.status, result.score, result.duration_s or 0)
-            return result
+            for attempt in range(1, max_attempts + 1):
+                logger.info(
+                    "[%s] queued (attempt %d/%d)", u.slug, attempt, max_attempts,
+                )
+                result = await run_one_unit(
+                    unit=u,
+                    router=self._router,
+                    output_root=self._output_root,
+                    artifacts=self._spec.artifacts,
+                    sem=sem,
+                    cleanup_mode=self._spec.cleanup_mode,
+                    prompt_suffix=self._spec.prompt_suffix,
+                    wall_time_s=self._spec.wall_time_s,
+                )
+                logger.info(
+                    "[%s] done: status=%s score=%s duration=%.1fs (attempt %d/%d)",
+                    u.slug,
+                    result.status,
+                    result.score,
+                    result.duration_s or 0,
+                    attempt,
+                    max_attempts,
+                )
+                if result.status != "failed" or attempt == max_attempts:
+                    return result
+                logger.warning(
+                    "[%s] failed on attempt %d/%d; requeued",
+                    u.slug,
+                    attempt,
+                    max_attempts,
+                )
+
+            raise AssertionError("unreachable")
 
         results = await asyncio.gather(
             *(_drive(u) for u in unit_list),

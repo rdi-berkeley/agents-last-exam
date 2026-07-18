@@ -20,8 +20,8 @@ Shape:
 * ``tasks: <path>`` string form. ``.txt`` → one task path per line
   (variant 0); ``.yaml`` → list of ``{path, variants}`` entries. An inline
   list of ``{path, variants}`` is also accepted.
-* Run-level keys live at the experiment top level: ``output``,
-  ``artifacts_path``, ``concurrency``, ``cleanup_mode``, ``prompt_suffix``.
+* Run-level keys live at the experiment top level: ``output``, ``concurrency``,
+  ``auto_resume``, ``max_attempts``, ``cleanup_mode``, ``prompt_suffix``.
 
 Other behavior:
 
@@ -62,6 +62,8 @@ _TOP_LEVEL_KEYS = frozenset({
     # run-level fields:
     "output",
     "concurrency",
+    "auto_resume",
+    "max_attempts",
     "cleanup_mode",
     "prompt_suffix",
     "wall_time_s",
@@ -198,6 +200,18 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
     # and live in the environment yaml instead (see _build_environment_from_path).
     output = _build_output(raw.get("output") or {})
     concurrency = _build_concurrency(raw)
+    auto_resume = raw.get("auto_resume", True)
+    if not isinstance(auto_resume, bool):
+        raise TypeError(
+            f"auto_resume must be a boolean, got {type(auto_resume).__name__}"
+        )
+    max_attempts = raw.get("max_attempts", 3)
+    if not isinstance(max_attempts, int) or isinstance(max_attempts, bool):
+        raise TypeError(
+            f"max_attempts must be an integer, got {type(max_attempts).__name__}"
+        )
+    if not 1 <= max_attempts <= 3:
+        raise ValueError(f"max_attempts must be between 1 and 3, got {max_attempts}")
     cleanup_mode = _build_cleanup_mode(raw)
     prompt_suffix = str(raw.get("prompt_suffix") or "")
     wall_time_s = raw.get("wall_time_s")
@@ -238,6 +252,8 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
         tasks=tasks,
         artifacts=artifacts,
         concurrency=concurrency,
+        auto_resume=auto_resume,
+        max_attempts=max_attempts,
         cleanup_mode=cleanup_mode,
         prompt_suffix=prompt_suffix,
         wall_time_s=wall_time_s,

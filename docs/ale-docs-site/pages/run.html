@@ -40,13 +40,23 @@ uv run python -m ale_run run my_experiment.yaml \
       latency, and LLM rate limits can all become the practical bound.
     </p>
 
-    <h2>Resume an interrupted sweep</h2>
-    <pre><code>uv run python -m ale_run run my_experiment.yaml --resume</code></pre>
+    <h2>Resume and retry failed units</h2>
+    <pre><code>auto_resume: true
+max_attempts: 3</code></pre>
     <p>
-      Resume scans prior <code>run.json</code> files under the same experiment
-      name and output root. Units with status <code>completed</code> or
-      <code>timeout</code> are skipped. Failed, cancelled, malformed, and missing
-      units run again.
+      Auto-resume is enabled by default. It scans prior <code>run.json</code>
+      files under the same experiment name and output root, skips units with
+      status <code>completed</code> or <code>timeout</code>, and immediately
+      requeues newly failed units. <code>max_attempts</code> accepts 1 through 3
+      and counts the initial run within that invocation. Every attempt keeps
+      its own run directory.
+    </p>
+    <h3>Disable resume for one invocation</h3>
+    <pre><code>uv run python -m ale_run run my_experiment.yaml --disable-resume</code></pre>
+    <p>
+      This command-line override runs every selected unit exactly once. It does
+      not scan prior results or retry failures. Set <code>auto_resume: false</code>
+      in the experiment YAML to make that behavior persistent.
     </p>
 
     <h2 id="output-path">Choose where task output goes</h2>

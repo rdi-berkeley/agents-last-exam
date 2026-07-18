@@ -38,6 +38,8 @@ output:
   root: .logs/ale                                 # host-side run-log dir
 concurrency: 1                                    # units in flight (caps VMs + LLM RPM)
 wall_time_s: 7200                                 # max seconds an agent may run per unit (then stopped, status=timeout)
+auto_resume: true                                 # skip prior completed/timeout units and retry failures
+max_attempts: 3                                   # total attempts per failed unit (1..3)
 cleanup_mode: delete                              # delete | stop | keep
 
 # Appended verbatim (as its own paragraph) to EVERY task's prompt before it

@@ -39,10 +39,9 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--task", action="append", dest="filter_tasks",
                        metavar="PATH", help="Filter: only run these task paths.")
     p_run.add_argument(
-        "--resume", action="store_true",
-        help="Skip any (agent, task, variant) unit that already has a prior run "
-             "whose status is 'completed' or 'timeout' under the output dir; "
-             "re-run everything else. Lets a re-invocation fill only the gaps.",
+        "--disable-resume", action="store_true",
+        help="Run every selected unit exactly once, without scanning prior "
+             "results or automatically retrying failures.",
     )
     p_run.add_argument("--verbose", "-v", action="store_true")
 
@@ -71,7 +70,8 @@ async def _cmd_run(args: argparse.Namespace) -> int:
     runner = Runner(spec)
     units = _filter_units(runner.enumerate_units(), args)
 
-    if args.resume:
+    auto_resume = spec.auto_resume and not args.disable_resume
+    if auto_resume:
         units = _filter_resume(units, runner.output_root)
 
     if args.dry_run:
@@ -91,7 +91,10 @@ async def _cmd_run(args: argparse.Namespace) -> int:
             print(f"  {u.agent_id:20s}  {u.task_path:40s}  v{u.variant_index}")
         return 0
 
-    results = await runner.run(units)
+    results = await runner.run(
+        units,
+        max_attempts=spec.max_attempts if auto_resume else 1,
+    )
     _print_results_table(results)
     bad = sum(1 for r in results if r.status not in ("completed",))
     return 0 if bad == 0 else 1

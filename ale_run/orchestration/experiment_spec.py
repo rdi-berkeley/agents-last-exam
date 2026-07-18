@@ -138,6 +138,15 @@ class ExperimentSpec:
     ``StaticProvider`` (one shared VM) must stay at 1 to avoid work_dir
     collisions."""
 
+    auto_resume: bool = True
+    """When enabled, skip prior completed/timeout units and automatically
+    retry newly failed units. Disable in YAML or with ``--disable-resume`` to
+    run every selected unit exactly once."""
+
+    max_attempts: int = 3
+    """Maximum total attempts per failed unit in one invocation when
+    ``auto_resume`` is enabled. Must be between 1 and 3."""
+
     cleanup_mode: str = "delete"
     """VM disposition after a unit finishes.
 
