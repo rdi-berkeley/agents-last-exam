@@ -65,11 +65,10 @@ export OPENROUTER_API_KEY=...
 uv run python -m ale_run run experiments/my_experiment.yaml
 ```
 
-At least one LLM provider key must be present in the environment:
-
-- `OPENROUTER_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `OPENAI_API_KEY`
+At least one LLM provider key must be present in the environment
+(`OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) — or set
+`base_url` + `api_key` in the config to point litellm at a custom
+OpenAI-compatible gateway instead (see the config knobs below).
 
 To enable `web_search`, also export `BRAVE_API_KEY` and remove
 `web_search` from `disabled_tools`.
@@ -79,6 +78,8 @@ To enable `web_search`, also export `BRAVE_API_KEY` and remove
 The full config surface lives in `config.py`, but most users only need these:
 
 - `model`: main model id in LiteLLM format
+- `base_url` / `api_key`: point litellm at a custom OpenAI-compatible gateway
+- `extra_generation_kwargs`: extra per-request params (gateway quirks)
 - `max_turns`: hard cap on the action loop
 - `thinking_level`: base reasoning level
 - `disabled_tools`: tools to hide from the model

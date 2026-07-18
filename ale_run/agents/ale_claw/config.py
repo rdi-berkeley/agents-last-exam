@@ -41,6 +41,31 @@ class AleClawConfig:
     OpenRouter routes work via the vendored ``unified_loop`` (registered for
     ``openrouter/.*`` regex)."""
 
+    # ---- custom OpenAI-compatible gateway (optional) ----
+    base_url: str | None = None
+    """Custom OpenAI-compatible endpoint. When set, it is passed straight to
+    ``agent.run(api_base=...)`` → ``litellm`` as ``api_base``, so LiteLLM hits
+    ``<base_url>/responses`` (or ``/chat/completions``) instead of the provider
+    default. Threaded as a direct call kwarg — it does NOT touch ``os.environ``,
+    so it cannot leak into other runs' OpenAI traffic. ``None`` ⇒ provider
+    default. Pair with an ``openai/<model>`` model id to route via LiteLLM's
+    OpenAI-compatible client at this base."""
+
+    api_key: str | None = None
+    """Literal API key for ``base_url``. When set (typically via
+    ``api_key: ${env:...}`` in the agent yaml, resolved host-side), it is passed
+    to ``agent.run(api_key=...)`` → ``litellm`` as a direct kwarg and also
+    satisfies the install() credential gate — so no global ``OPENAI_API_KEY`` is
+    needed and no key leaks into ``os.environ``. ``None`` ⇒ litellm resolves
+    creds from env as before."""
+
+    extra_generation_kwargs: dict = field(default_factory=dict)
+    """Extra kwargs merged into every model request (passed to ``agent.run`` →
+    ``litellm``). An escape hatch for gateway-specific quirks the loop hardcodes
+    otherwise. Later keys win, so this overrides the loop's defaults. Example for
+    Meta's Responses gateway (which rejects the loop's default ``truncation:
+    auto``): ``{truncation: disabled}``. Empty ⇒ loop defaults unchanged."""
+
     max_turns: int | None = 100
     """Mapped to OpenClaw's ``max_steps``. Hard ceiling on the agent run loop."""
 

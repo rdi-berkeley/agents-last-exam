@@ -680,3 +680,73 @@ class UnifiedAgentConfig(AsyncAgentConfig):
 
     def get_capabilities(self) -> List[AgentCapability]:
         return ["click", "step"]
+
+
+# ---------------------------------------------------------------------------
+# Route Meta's `super_nova_ext` (OpenAI-compatible Responses API) to the CUA
+# OpenAI Responses loop.
+#
+# The vendored OpenAI Responses loop (agent.loops.openai.OpenAIComputerUseConfig)
+# only auto-registers for model ids matching `.*(computer-use-preview|gpt-5.4)`,
+# so an arbitrary slug like `openai/super_nova_ext` would otherwise fall to the
+# priority -100 `.*` generic_vlm loop (Chat Completions). Meta's guide wants the
+# Responses API, so we re-register that exact same loop class for the super_nova
+# slug at a priority above the fallback. No fork of cua-agent — we just bind the
+# already-imported loop class to one more model regex.
+#
+# Reuse is deliberate: for a non-`computer-use-preview` model this loop emits the
+# GUI tool as a plain `{"type":"function"}` (Meta-accepted), sends no
+# previous_response_id (Meta-required), and replays full input each turn.
+#
+# One wrinkle: ale-claw's canonical message format is Chat-Completions style —
+# user content blocks are `{"type":"text",...}` / `{"type":"image_url",...}`
+# (see _message_shapes). The vendored Responses loop forwards them verbatim;
+# OpenAI tolerates that, but Meta's strict Responses API rejects it
+# ("`input[N].content` did not match any supported type"). So the subclass below
+# normalizes user-role content blocks to Responses shape (input_text/input_image)
+# right before the API call. Assistant/tool/function_call items come back from
+# Meta already Responses-shaped, so only the harness-authored user turns need it.
+from agent.loops.openai import OpenAIComputerUseConfig  # noqa: E402
+
+
+def _chat_blocks_to_responses(messages):
+    """Convert ale-claw's Chat-style user content blocks → Responses `input_*`.
+
+    Only touches list-valued content on user/system/developer roles; everything
+    else (string content, assistant/tool/function_call items) passes through.
+    """
+    out = []
+    for m in messages:
+        if (
+            isinstance(m, dict)
+            and m.get("role") in ("user", "system", "developer")
+            and isinstance(m.get("content"), list)
+        ):
+            new_content = []
+            for b in m["content"]:
+                if not isinstance(b, dict):
+                    new_content.append(b)
+                    continue
+                t = b.get("type")
+                if t == "text":
+                    new_content.append({"type": "input_text", "text": b.get("text", "")})
+                elif t == "image_url":
+                    iu = b.get("image_url")
+                    url = iu.get("url") if isinstance(iu, dict) else iu
+                    new_content.append({"type": "input_image", "image_url": url})
+                else:
+                    new_content.append(b)
+            out.append({**m, "content": new_content})
+        else:
+            out.append(m)
+    return out
+
+
+@register_agent(models=r".*super_nova_ext.*", priority=20)
+class SuperNovaResponsesConfig(OpenAIComputerUseConfig):
+    """OpenAI Responses loop + Chat→Responses content normalization for Meta."""
+
+    async def predict_step(self, messages, model, *args, **kwargs):
+        return await super().predict_step(
+            _chat_blocks_to_responses(messages), model, *args, **kwargs
+        )
