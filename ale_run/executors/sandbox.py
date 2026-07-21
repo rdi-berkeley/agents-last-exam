@@ -1,7 +1,8 @@
 """SandboxExecutor — deployer runs INSIDE the cua-server sandbox VM.
 
-The framework ships the ``ale_run/`` source tree to the sandbox (one-time
-per run, size-skipped on repeats), writes a ``_spec.json`` into the
+The framework packs ``ale_run/`` once per host process, ships the archive to
+the sandbox, and extracts it there (digest-skipped on repeats). It then writes
+a ``_spec.json`` into the
 deployer's work_dir, fires a small launcher that ``setsid``-spawns
 ``python -m ale_run.executors._sandbox_entry <spec>``, then polls until
 the in-sandbox process drops a ``_done.marker``.
@@ -29,11 +30,19 @@ declares ``hot_artifacts``) is exposed as a module-level function,
 from __future__ import annotations
 
 import asyncio
+import base64
+import gzip
+import hashlib
+import io
 import json
 import logging
 import shlex
+import stat
+import subprocess
+import tarfile
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -106,6 +115,88 @@ _TICK_FAILED = -2    # download_range failed (transport / remote command error)
 _TICK_NO_FILE = -1   # remote file does not exist (yet)
 _TAIL_LIVE_FAIL_WARN = 3  # consecutive live-tick failures before a WARNING log
 
+# Source archive deployment. The marker lives inside the installed tree and
+# makes retained sandboxes a one-command cache hit.
+_ALE_ARCHIVE_MARKER = ".archive.sha256"
+_ARCHIVE_IO_RETRIES = 3
+_ARCHIVE_IO_BACKOFFS_S = (0.5, 1.0)
+
+_ALE_ARCHIVE_CACHE_CHECK = """\
+import pathlib
+import sys
+
+marker = pathlib.Path(sys.argv[1])
+expected = sys.argv[2]
+try:
+    actual = marker.read_text(encoding="utf-8").strip()
+except OSError:
+    actual = ""
+raise SystemExit(0 if actual == expected else 1)
+"""
+
+_ALE_ARCHIVE_EXTRACT = """\
+import hashlib
+import pathlib
+import shutil
+import sys
+import tarfile
+
+archive = pathlib.Path(sys.argv[1])
+dest = pathlib.Path(sys.argv[2])
+expected = sys.argv[3]
+marker = dest / ".archive.sha256"
+
+try:
+    if marker.read_text(encoding="utf-8").strip() == expected:
+        archive.unlink(missing_ok=True)
+        raise SystemExit(0)
+except OSError:
+    pass
+
+payload = archive.read_bytes()
+actual = hashlib.sha256(payload).hexdigest()
+if actual != expected:
+    raise RuntimeError(f"archive digest mismatch: expected {expected}, got {actual}")
+
+suffix = expected[:16]
+tmp = dest.with_name(dest.name + ".tmp-" + suffix)
+backup = dest.with_name(dest.name + ".old-" + suffix)
+shutil.rmtree(tmp, ignore_errors=True)
+shutil.rmtree(backup, ignore_errors=True)
+tmp.mkdir(parents=True)
+
+with tarfile.open(archive, mode="r:gz") as tf:
+    root = tmp.resolve()
+    members = tf.getmembers()
+    for member in members:
+        target = (tmp / member.name).resolve()
+        if target != root and root not in target.parents:
+            raise RuntimeError(f"unsafe archive member: {member.name}")
+        if member.issym() or member.islnk():
+            raise RuntimeError(f"archive links are not allowed: {member.name}")
+    tf.extractall(tmp, members=members)
+
+if dest.exists():
+    dest.replace(backup)
+try:
+    tmp.replace(dest)
+except BaseException:
+    if backup.exists() and not dest.exists():
+        backup.replace(dest)
+    raise
+shutil.rmtree(backup, ignore_errors=True)
+marker.write_text(expected + "\\n", encoding="utf-8")
+archive.unlink(missing_ok=True)
+"""
+
+
+@dataclass(frozen=True)
+class _AleArchive:
+    payload: bytes
+    digest: str
+    files: int
+    source_bytes: int
+
 
 @dataclass
 class SandboxExecutor(BaseExecutor):
@@ -139,7 +230,7 @@ class SandboxExecutor(BaseExecutor):
             else f"{wd}\\_launcher.ps1"
         )
 
-        # 1. Ship ale_run/ to sandbox (size-skip on repeats)
+        # 1. Ship the ale_run/ archive to the sandbox (digest-skip on repeats)
         try:
             await self._ship_ale_subtree(ale_src_root)
         except Exception as e:                                      # noqa: BLE001
@@ -412,59 +503,64 @@ class SandboxExecutor(BaseExecutor):
     # ------------------------------------------------------------------
 
     async def _ship_ale_subtree(self, ale_src_root: str) -> None:
-        """scp every ``ale_run/**/*.py`` into the sandbox at ``ale_src_root``.
+        """Upload one cached ``ale_run`` archive and extract it atomically.
 
-        Idempotent: per-file size compare against the remote first;
-        skip when bytes match.
-
-        Vendored upstream agent sources (``ale_run/agents/*/upstream/``) are
-        skipped: they carry no ``__init__.py``, are never imported by the
-        in-sandbox ``_sandbox_entry`` runner, and deployers that need them
-        re-fetch from their own git remote inside the container.  Shipping
-        them is pure waste -- the hermes fork alone is 1337 .py files, each a
-        base64 round-trip over the CUA endpoint, which under host load can
-        stretch the ship phase into tens of minutes.
+        A digest marker skips repeated deployment to a retained sandbox. The
+        archive excludes vendored upstream trees and ``node_modules`` because
+        deployers fetch or rebuild those independently.
         """
-        host_root = _host_ale_root()
+        started = time.monotonic()
+        archive = _build_ale_archive(_host_ale_root())
         sandbox = self.sandbox
         sep = "/" if sandbox.is_linux else "\\"
+        root = ale_src_root.rstrip(sep)
+        parent = root.rsplit(sep, 1)[0]
+        marker = f"{root}{sep}{_ALE_ARCHIVE_MARKER}"
+        remote_archive = f"{parent}{sep}.ale-src-{archive.digest[:16]}.tar.gz"
 
-        await sandbox.mkdir(ale_src_root)
-
-        files: list[tuple[Path, str]] = []
-        patterns = (
-            "*.py",
-            "agents/*/pyproject.toml",
-            # cua MCP bridge source (package.json + package-lock.json + src/*.js).
-            # Shipped so the in-sandbox ensure-step can install the bridge into
-            # mcp_server_dir; node_modules is never shipped (rebuilt on-VM by
-            # npm install). Scoped to the bridge dir so we don't sweep stray
-            # json across the tree. See ensure_cua_mcp_server.
-            "agents/_assets/cua_mcp_server/**/*.js",
-            "agents/_assets/cua_mcp_server/**/*.json",
+        cache_check = _python_command(
+            sandbox,
+            _ALE_ARCHIVE_CACHE_CHECK,
+            marker,
+            archive.digest,
         )
-        for pattern in patterns:
-            for src_path in sorted(host_root.rglob(pattern)):
-                rel = src_path.relative_to(host_root)
-                if "upstream" in rel.parts or "node_modules" in rel.parts:
-                    continue
-                sandbox_rel = "ale_run" + sep + rel.as_posix().replace("/", sep)
-                files.append((src_path, sandbox_rel))
+        cached = await _retry_archive_io(
+            lambda: sandbox.run_command(cache_check, timeout=30),
+            label="archive cache check",
+        )
+        if cached.returncode == 0:
+            logger.info(
+                "sandbox: ale archive cache hit sandbox=%s digest=%s elapsed=%.2fs",
+                sandbox.id, archive.digest[:16], time.monotonic() - started,
+            )
+            return
 
-        for src_path, rel in files:
-            remote_path = f"{ale_src_root.rstrip(sep)}{sep}{rel}"
-            data = src_path.read_bytes()
-            try:
-                remote_bytes = await sandbox.read_file(remote_path)
-                if remote_bytes == data:
-                    continue
-            except FileNotFoundError:
-                pass
-            except RuntimeError:
-                pass  # transport miss → treat as cache miss; overwrite below
-            parent = remote_path.rsplit(sep, 1)[0]
-            await sandbox.mkdir(parent)
-            await sandbox.write_file(remote_path, data)
+        await _retry_archive_io(
+            lambda: sandbox.write_file(remote_archive, archive.payload),
+            label="archive upload",
+        )
+        extract = _python_command(
+            sandbox,
+            _ALE_ARCHIVE_EXTRACT,
+            remote_archive,
+            root,
+            archive.digest,
+        )
+        result = await _retry_archive_io(
+            lambda: sandbox.run_command(extract, timeout=180),
+            label="archive extraction",
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"ale archive extract failed rc={result.returncode}: "
+                f"{(result.stderr or result.stdout or '')[:500]}"
+            )
+        logger.info(
+            "sandbox: ale archive shipped sandbox=%s files=%d source_bytes=%d "
+            "archive_bytes=%d digest=%s elapsed=%.2fs",
+            sandbox.id, archive.files, archive.source_bytes,
+            len(archive.payload), archive.digest[:16], time.monotonic() - started,
+        )
 
     async def _read_pid(self, pid_file: str) -> int | None:
         """Poll for the launcher's pid file. Returns None on timeout."""
@@ -734,6 +830,92 @@ def _local_offset(dst: Path) -> int:
 def _host_ale_root() -> Path:
     """Host's ``ale_run/`` package root."""
     return Path(__file__).resolve().parents[1]
+
+
+@lru_cache(maxsize=None)
+def _build_ale_archive(host_root: Path) -> _AleArchive:
+    """Build a deterministic gzip-compressed tarball for one source root."""
+    files: list[Path] = []
+    patterns = (
+        "*.py",
+        "agents/*/pyproject.toml",
+        "agents/_assets/cua_mcp_server/**/*.js",
+        "agents/_assets/cua_mcp_server/**/*.json",
+    )
+    for pattern in patterns:
+        for src_path in sorted(host_root.rglob(pattern)):
+            rel = src_path.relative_to(host_root)
+            if "upstream" in rel.parts or "node_modules" in rel.parts:
+                continue
+            files.append(src_path)
+
+    out = io.BytesIO()
+    source_bytes = 0
+    with gzip.GzipFile(
+        fileobj=out,
+        mode="wb",
+        filename="",
+        mtime=0,
+        compresslevel=6,
+    ) as compressed:
+        with tarfile.open(
+            fileobj=compressed,
+            mode="w",
+            format=tarfile.PAX_FORMAT,
+        ) as tf:
+            for src_path in files:
+                data = src_path.read_bytes()
+                source_bytes += len(data)
+                rel = src_path.relative_to(host_root).as_posix()
+                info = tarfile.TarInfo(name=f"ale_run/{rel}")
+                info.size = len(data)
+                info.mode = stat.S_IMODE(src_path.stat().st_mode)
+                info.mtime = 0
+                info.uid = info.gid = 0
+                info.uname = info.gname = ""
+                tf.addfile(info, io.BytesIO(data))
+
+    payload = out.getvalue()
+    return _AleArchive(
+        payload=payload,
+        digest=hashlib.sha256(payload).hexdigest(),
+        files=len(files),
+        source_bytes=source_bytes,
+    )
+
+
+def _python_command(
+    sandbox: SandboxHandle,
+    script: str,
+    *args: str,
+) -> str:
+    """Build a shell-safe command that runs ``script`` with string args."""
+    encoded = base64.b64encode(script.encode("utf-8")).decode("ascii")
+    bootstrap = f"import base64;exec(base64.b64decode('{encoded}'))"
+    argv = [sandbox.python, "-c", bootstrap, *args]
+    if sandbox.is_linux:
+        return " ".join(shlex.quote(part) for part in argv)
+    return subprocess.list2cmdline(argv)
+
+
+async def _retry_archive_io(operation: Any, *, label: str) -> Any:
+    """Retry transport-level archive I/O failures with a short backoff."""
+    for attempt in range(_ARCHIVE_IO_RETRIES):
+        try:
+            result = await operation()
+            if getattr(result, "returncode", 0) < 0:
+                detail = getattr(result, "stderr", "") or getattr(result, "stdout", "")
+                raise RuntimeError(f"transport rc={result.returncode}: {detail[:200]}")
+            return result
+        except RuntimeError:
+            if attempt == _ARCHIVE_IO_RETRIES - 1:
+                raise
+            logger.warning(
+                "sandbox: %s transport failure (attempt %d/%d); retrying",
+                label, attempt + 1, _ARCHIVE_IO_RETRIES,
+            )
+            await asyncio.sleep(_ARCHIVE_IO_BACKOFFS_S[attempt])
+    raise AssertionError("unreachable")
 
 
 def _config_to_kwargs(cfg: Any) -> dict[str, Any]:

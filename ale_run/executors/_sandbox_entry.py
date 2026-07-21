@@ -2,8 +2,8 @@
 
     python -m ale_run.executors._sandbox_entry <spec_path>
 
-inside the sandbox VM after :class:`SandboxExecutor` has scp'd the
-``ale_run/`` source tree to the sandbox's ``ale_src_root`` and exported
+inside the sandbox VM after :class:`SandboxExecutor` has extracted the
+``ale_run/`` source archive under the sandbox's ``ale_src_root`` and exported
 that directory on ``PYTHONPATH``.
 
 Reads ``<spec_path>`` (a JSON file the host wrote into the sandbox's
