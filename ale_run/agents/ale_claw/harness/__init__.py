@@ -33,7 +33,10 @@ from .model.cache_policy import (
     apply_openclaw_cache_markers,
     supports_anthropic_cache,
 )
-from .tools.computer_handler import OpenClawComputerHandler
+from .tools.computer_handler import (
+    OpenClawComputerHandler,
+    coordinate_space_for_model,
+)
 from .canonical.canonical import (
     CanonicalMessage,
     CompactionSummaryBlock,
@@ -111,6 +114,7 @@ from .model import unified_loop  # noqa: F401
 __all__ = [
     "OpenClawComputerAgent",
     "OpenClawComputerHandler",
+    "coordinate_space_for_model",
     "OpenClawImageRetentionCallback",
     "OpenClawTrajectorySaverCallback",
     "CanonicalMessage",

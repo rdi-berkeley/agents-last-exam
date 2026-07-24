@@ -245,13 +245,35 @@ class AleClawDeployer(BaseAgentDeployer):
         # gui_transport=mcp → drive GUI through the cua bridge; else the session
         # handler. The MCP handler inits lazily (the runtime connects later,
         # around the drive loop), so don't _initialize it here.
+        # Pointer coordinate space — most models emit screen pixels, but the
+        # Gemini family grounds clicks to a normalized [0, 1000) grid. Detect
+        # from the model that actually drives the handler (gui_model when the
+        # main agent has no computer), unless the config forces a space.
+        from .harness.tools.computer_handler import coordinate_space_for_model
+        coord_driver_model = (
+            (cfg.gui_model or cfg.model)
+            if cfg.disable_main_computer
+            else cfg.model
+        )
+        coordinate_space = cfg.coordinate_space or coordinate_space_for_model(
+            coord_driver_model
+        )
+        logger.info(
+            "ale-claw: coordinate_space=%s (driver_model=%s, override=%s)",
+            coordinate_space, coord_driver_model, cfg.coordinate_space,
+        )
+
         computer_handler = None
         if not cfg.disable_main_computer:
             if cfg.gui_transport == "mcp" and mcp_runtime is not None:
                 from .harness.tools.computer_handler import MCPComputerHandler
-                computer_handler = MCPComputerHandler(mcp_runtime, os_type=sb.os)
+                computer_handler = MCPComputerHandler(
+                    mcp_runtime, os_type=sb.os, coordinate_space=coordinate_space
+                )
             else:
-                computer_handler = OpenClawComputerHandler(session.computer)
+                computer_handler = OpenClawComputerHandler(
+                    session.computer, coordinate_space=coordinate_space
+                )
                 await computer_handler._initialize()            # noqa: SLF001
 
         # ---- 6. Tools + disabled_tools filter ----
