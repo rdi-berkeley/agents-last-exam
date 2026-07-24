@@ -1,0 +1,13 @@
+{
+  "taskId": "demo/clickhit_win",
+  "title": "Demo: Can the agent click where it means to? (Windows)",
+  "summary": "Minimal pointer-accuracy smoke test. setup() paints one off-center target (a red box with a white crosshair) onto the desktop wallpaper and starts a global low-level mouse hook that records the screen-pixel coordinate of every left click. The agent must take a screenshot and click the crosshair at the center of the box. evaluate() passes iff a recorded click landed within a tight tolerance of the target. Because the target sits far from screen center, a harness that fails to rescale a model's normalized [0,1000) coordinates (e.g. Gemini) lands hundreds of pixels away and scores 0.0; a correct pixel mapping scores 1.0. Isolates the click path the way demo/seecheck isolates the vision path.",
+  "category": "demo",
+  "vm": {
+    "snapshot": "cpu-free",
+    "vcpus": 4,
+    "memory_gb": 16,
+    "disk_gb": 200,
+    "timeout_s": 600
+  }
+}

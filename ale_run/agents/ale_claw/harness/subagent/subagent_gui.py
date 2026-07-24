@@ -30,6 +30,10 @@ from agent import ComputerAgent
 from agent.callbacks.base import AsyncCallbackHandler
 
 from ..memory.memory import MemoryGetTool, MemorySearchTool, MemoryStore, MemoryWriteTool
+from ..tools.computer_handler import (
+    OpenClawComputerHandler,
+    coordinate_space_for_model,
+)
 from .subagent_registry import (
     SubagentRegistry,
     SubagentUsage,
@@ -303,15 +307,29 @@ class _TranscriptWriter:
 # ---------------------------------------------------------------------------
 
 
-def _build_gui_agent(
+async def _build_gui_agent(
     session: Any,
     model: str,
     thinking_params: dict[str, Any] | None,
     memory_store: MemoryStore | None,
     inbox: "asyncio.Queue[str]",
 ) -> ComputerAgent:
-    """Construct the lightweight GUI ComputerAgent (computer tool + optional memory)."""
-    tools: list[Any] = [session._computer]
+    """Construct the lightweight GUI ComputerAgent (computer tool + optional memory).
+
+    The raw ``session._computer`` is wrapped in an
+    :class:`OpenClawComputerHandler` so the subagent gets the same
+    chord-vs-sequence keypress semantics, tolerant coordinate coercion, and —
+    crucially for Gemini-family GUI models — normalized→pixel scaling as the
+    main agent. The coordinate space is derived from *this subagent's* model,
+    since delegate_gui runs may pick a different model than the main agent.
+    ``make_computer_handler`` returns an already-``AsyncComputerHandler`` as-is
+    without initializing it, so we ``_initialize`` here (idempotent)."""
+    computer = OpenClawComputerHandler(
+        session._computer,
+        coordinate_space=coordinate_space_for_model(model),
+    )
+    await computer._initialize()            # noqa: SLF001
+    tools: list[Any] = [computer]
     if memory_store is not None:
         tools.extend([
             MemorySearchTool(memory_store),
@@ -413,7 +431,7 @@ async def run_gui_subagent(
     registry.attach_inbox(run_id, inbox)
 
     try:
-        agent = _build_gui_agent(session, model, thinking_params, memory_store, inbox)
+        agent = await _build_gui_agent(session, model, thinking_params, memory_store, inbox)
         summary = await _relay_until_done(
             agent, instruction, run_id, max_steps, usage, transcript
         )

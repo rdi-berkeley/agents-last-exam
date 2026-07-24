@@ -38,6 +38,17 @@ Why coerce pointer coordinates:
     ``None`` to the parent. The agent loop converts ``ToolError`` into a
     ``function_call_output`` that the model sees on the next turn, so the
     run stays alive instead of crashing.
+
+Why scale normalized coordinates:
+    Some GUI models (notably the Gemini family) ground clicks to a fixed
+    ``[0, 1000)`` grid rather than to screen pixels — regardless of the
+    "Screen resolution: WxH pixels" hint the ``computer`` tool advertises.
+    Passed through unscaled, a normalized click at ``(500, 500)`` lands near
+    the top-left of a 1920x1080 screen instead of its center. When a handler
+    is told its model emits ``"normalized"`` coordinates, it maps them back to
+    pixels (``px = n / 1000 * W``) before the usual pixel-space path runs; the
+    default ``"pixel"`` space is an unscaled pass-through. See
+    :class:`_PointerCoords` and :func:`coordinate_space_for_model`.
 """
 
 from __future__ import annotations
@@ -99,9 +110,99 @@ def _coerce_xy(x: Any, y: Any) -> Tuple[Optional[int], Optional[int]]:
     return _coerce_int(x), _coerce_int(y)
 
 
-class OpenClawComputerHandler(cuaComputerHandler):
-    """cuaComputerHandler with sequential multi-key keypress and tolerant
-    coercion for malformed pointer coordinates."""
+NORMALIZED_GRID = 1000
+"""Grid size for models that emit *normalized* pointer coordinates.
+
+Gemini-family GUI models ground clicks to a fixed ``[0, 1000)`` grid rather
+than to screen pixels. To recover a pixel coordinate we divide by this and
+multiply by the screen dimension: ``px = n / NORMALIZED_GRID * W``.
+
+Note the model emits values in ``0-999`` but the denominator is ``1000`` (not
+999), per Google's reference denormalization ``int(x / 1000 * width)``. See
+the Gemini computer-use docs: https://ai.google.dev/gemini-api/docs/computer-use
+"""
+
+
+def coordinate_space_for_model(model_id: Optional[str]) -> str:
+    """Best-effort pointer coordinate space for a LiteLLM model id.
+
+    Returns ``"normalized"`` for Gemini-family models (which ground clicks to a
+    fixed ``[0, 1000)`` grid) and ``"pixel"`` for everything else. This is only
+    a default — callers can force either space via
+    ``AleClawConfig.coordinate_space``.
+    """
+    if model_id and "gemini" in model_id.lower():
+        return "normalized"
+    return "pixel"
+
+
+class _PointerCoords:
+    """Coordinate coercion + optional normalized→pixel scaling for pointers.
+
+    Mixed into both computer handlers so the two coordinate conventions live in
+    one place. ``_coord_space`` — set by each handler's ``__init__`` — selects
+    the behavior:
+
+    - ``"pixel"`` (default): the model already emits screen-pixel coords, so
+      just coerce and pass through.
+    - ``"normalized"``: the model emits a :data:`NORMALIZED_GRID` grid (Gemini),
+      so coerce, then scale to pixels using the live screen size.
+
+    Requires the host handler to provide an async ``get_dimensions()`` returning
+    ``(width, height)`` — both handlers satisfy this.
+    """
+
+    _coord_space: str = "pixel"
+
+    def _require_xy(self, action: str, x: Any, y: Any) -> Tuple[int, int]:
+        nx, ny = _coerce_xy(x, y)
+        if nx is None or ny is None:
+            raise ToolError(
+                f"computer.{action} requires both x and y coordinates "
+                f"(got x={x!r}, y={y!r}); pass them as separate integers, "
+                f'e.g. {{"action": "{action}", "x": 420, "y": 390}}.'
+            )
+        return nx, ny
+
+    async def _scale_xy(self, x: int, y: int) -> Tuple[int, int]:
+        """Map (x, y) to pixel space when the model emits normalized coords."""
+        if self._coord_space != "normalized":
+            return x, y
+        w, h = await self.get_dimensions()
+        px = round(x / NORMALIZED_GRID * w)
+        py = round(y / NORMALIZED_GRID * h)
+        return max(0, min(w - 1, px)), max(0, min(h - 1, py))
+
+    async def _pointer_xy(self, action: str, x: Any, y: Any) -> Tuple[int, int]:
+        """Coerce then (for normalized models) scale a single (x, y) pair."""
+        nx, ny = self._require_xy(action, x, y)
+        return await self._scale_xy(nx, ny)
+
+    async def _scale_path(
+        self, path: List[Dict[str, int]]
+    ) -> List[Dict[str, int]]:
+        """Scale every point of a drag ``path`` when coords are normalized."""
+        if self._coord_space != "normalized":
+            return path
+        scaled: List[Dict[str, int]] = []
+        for pt in path:
+            px, py = await self._scale_xy(
+                _coerce_int(pt.get("x")) or 0, _coerce_int(pt.get("y")) or 0
+            )
+            scaled.append({**pt, "x": px, "y": py})
+        return scaled
+
+
+class OpenClawComputerHandler(_PointerCoords, cuaComputerHandler):
+    """cuaComputerHandler with sequential multi-key keypress, tolerant
+    coercion for malformed pointer coordinates, and optional normalized→pixel
+    scaling for models (e.g. Gemini) that emit a ``[0, 1000)`` grid."""
+
+    def __init__(
+        self, cua_computer: Any, *, coordinate_space: str = "pixel"
+    ) -> None:
+        super().__init__(cua_computer)
+        self._coord_space = coordinate_space
 
     def _normalize_key(self, key: str) -> str:
         parent = getattr(super(), "_normalize_key", None)
@@ -117,36 +218,26 @@ class OpenClawComputerHandler(cuaComputerHandler):
         for k in keys:
             await self.interface.press_key(self._normalize_key(k))
 
-    def _require_xy(self, action: str, x: Any, y: Any) -> Tuple[int, int]:
-        nx, ny = _coerce_xy(x, y)
-        if nx is None or ny is None:
-            raise ToolError(
-                f"computer.{action} requires both x and y coordinates "
-                f"(got x={x!r}, y={y!r}); pass them as separate integers, "
-                f'e.g. {{"action": "{action}", "x": 420, "y": 390}}.'
-            )
-        return nx, ny
-
     async def click(self, x: Any, y: Any = None, button: str = "left") -> None:
-        nx, ny = self._require_xy("click", x, y)
+        nx, ny = await self._pointer_xy("click", x, y)
         await super().click(nx, ny, button)
 
     async def double_click(self, x: Any, y: Any = None) -> None:
-        nx, ny = self._require_xy("double_click", x, y)
+        nx, ny = await self._pointer_xy("double_click", x, y)
         await super().double_click(nx, ny)
 
     async def right_click(self, x: Any, y: Any = None) -> None:
-        nx, ny = self._require_xy("right_click", x, y)
+        nx, ny = await self._pointer_xy("right_click", x, y)
         await super().right_click(nx, ny)
 
     async def move(self, x: Any, y: Any = None) -> None:
-        nx, ny = self._require_xy("move", x, y)
+        nx, ny = await self._pointer_xy("move", x, y)
         await super().move(nx, ny)
 
     async def scroll(
         self, x: Any, y: Any = None, scroll_x: Any = 0, scroll_y: Any = 0
     ) -> None:
-        nx, ny = self._require_xy("scroll", x, y)
+        nx, ny = await self._pointer_xy("scroll", x, y)
         sx = _coerce_int(scroll_x) or 0
         sy = _coerce_int(scroll_y) or 0
         await super().scroll(nx, ny, sx, sy)
@@ -160,10 +251,10 @@ class OpenClawComputerHandler(cuaComputerHandler):
         end_y: Any = None,
     ) -> None:
         if path:
-            await super().drag(path=path)
+            await super().drag(path=await self._scale_path(path))
             return
-        sx, sy = self._require_xy("drag (start)", start_x, start_y)
-        ex, ey = self._require_xy("drag (end)", end_x, end_y)
+        sx, sy = await self._pointer_xy("drag (start)", start_x, start_y)
+        ex, ey = await self._pointer_xy("drag (end)", end_x, end_y)
         await super().drag(start_x=sx, start_y=sy, end_x=ex, end_y=ey)
 
 
@@ -176,7 +267,7 @@ def _normalize_key(key: str) -> str:
     return _KEY_MAPPING.get(key.upper(), key.lower())
 
 
-class MCPComputerHandler:
+class MCPComputerHandler(_PointerCoords):
     """GUI computer handler that drives the VM through the cua MCP bridge.
 
     Implements the ``AsyncComputerHandler`` protocol (a ``runtime_checkable``
@@ -185,20 +276,29 @@ class MCPComputerHandler:
     is routed over MCP (Phase 2). Every action becomes a cua-bridge tool call;
     the harness no longer touches ``RemoteDesktopSession`` for GUI.
 
-    Coordinates: the model emits **pixel** coords in screenshot space, but the
-    cua bridge speaks **normalized [0, 1000]**. We convert px→[0,1000] here using
-    the screen size (fetched once via the bridge's ``get_screen_size`` tool); the
-    bridge converts back to pixels. Rounding is ≤ 1px at typical resolutions.
+    Coordinates: the model emits **pixel** coords in screenshot space (or, for
+    ``coordinate_space="normalized"`` models like Gemini, a [0, 1000) grid that
+    :class:`_PointerCoords` first rescales to pixels), but the cua bridge speaks
+    **normalized [0, 1000]**. We convert px→[0,1000] here using the screen size
+    (fetched once via the bridge's ``get_screen_size`` tool); the bridge converts
+    back to pixels. Rounding is ≤ 1px at typical resolutions.
 
     Keypress keeps the harness's chord-vs-sequence rule (mirrors
     :class:`OpenClawComputerHandler`): a list is a *sequence* of independent
     presses (one ``key`` call each), a ``+``/``-`` string is a *chord*.
     """
 
-    def __init__(self, runtime: "MCPRuntime", *, os_type: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        runtime: "MCPRuntime",
+        *,
+        os_type: Optional[str] = None,
+        coordinate_space: str = "pixel",
+    ) -> None:
         self._runtime = runtime
         self._os_type = (os_type or "").lower()
         self._dims: Optional[Tuple[int, int]] = None
+        self._coord_space = coordinate_space
         # Present for parity with cua handlers that expose ``.interface``; the
         # MCP path has no direct interface object.
         self.interface = None
@@ -262,23 +362,23 @@ class MCPComputerHandler:
     # -- pointer --
 
     async def click(self, x: Any, y: Any = None, button: str = "left") -> None:
-        nx, ny = self._require_xy("click", x, y)
+        nx, ny = await self._pointer_xy("click", x, y)
         await self._call_cua("click", {"coordinate": await self._to_norm(nx, ny), "button": button})
 
     async def double_click(self, x: Any, y: Any = None) -> None:
-        nx, ny = self._require_xy("double_click", x, y)
+        nx, ny = await self._pointer_xy("double_click", x, y)
         await self._call_cua("click", {"coordinate": await self._to_norm(nx, ny), "clicks": 2})
 
     async def right_click(self, x: Any, y: Any = None) -> None:
-        nx, ny = self._require_xy("right_click", x, y)
+        nx, ny = await self._pointer_xy("right_click", x, y)
         await self._call_cua("click", {"coordinate": await self._to_norm(nx, ny), "button": "right"})
 
     async def move(self, x: Any, y: Any = None) -> None:
-        nx, ny = self._require_xy("move", x, y)
+        nx, ny = await self._pointer_xy("move", x, y)
         await self._call_cua("mouse_move", {"coordinate": await self._to_norm(nx, ny)})
 
     async def scroll(self, x: Any, y: Any = None, scroll_x: Any = 0, scroll_y: Any = 0) -> None:
-        nx, ny = self._require_xy("scroll", x, y)
+        nx, ny = await self._pointer_xy("scroll", x, y)
         coord = await self._to_norm(nx, ny)
         sx = _coerce_int(scroll_x) or 0
         sy = _coerce_int(scroll_y) or 0
@@ -298,11 +398,12 @@ class MCPComputerHandler:
         end_y: Any = None,
     ) -> None:
         if path:
+            path = await self._scale_path(path)
             sx, sy = path[0]["x"], path[0]["y"]
             ex, ey = path[-1]["x"], path[-1]["y"]
         else:
-            sx, sy = self._require_xy("drag (start)", start_x, start_y)
-            ex, ey = self._require_xy("drag (end)", end_x, end_y)
+            sx, sy = await self._pointer_xy("drag (start)", start_x, start_y)
+            ex, ey = await self._pointer_xy("drag (end)", end_x, end_y)
         await self._call_cua("drag", {
             "start_coordinate": await self._to_norm(sx, sy),
             "coordinate": await self._to_norm(ex, ey),
@@ -341,12 +442,3 @@ class MCPComputerHandler:
 
     async def terminate(self, status: str = "success") -> Dict[str, Any]:
         return {"status": status}
-
-    def _require_xy(self, action: str, x: Any, y: Any) -> Tuple[int, int]:
-        nx, ny = _coerce_xy(x, y)
-        if nx is None or ny is None:
-            raise ToolError(
-                f"computer.{action} requires both x and y coordinates "
-                f"(got x={x!r}, y={y!r}); pass them as separate integers."
-            )
-        return nx, ny

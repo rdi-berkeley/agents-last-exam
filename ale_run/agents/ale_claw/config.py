@@ -126,6 +126,25 @@ class AleClawConfig:
     With both transports on ``"mcp"`` (the default), ale_claw never touches
     ``RemoteDesktopSession`` for tool I/O."""
 
+    # ---- pointer coordinate space ----
+    coordinate_space: str | None = None
+    """Coordinate space the GUI model emits for pointer actions.
+
+    - ``None`` (default): auto-detect from :attr:`model` — Gemini-family models
+      ground clicks to a normalized ``[0, 1000)`` grid, everything else emits
+      screen pixels (see ``harness.tools.computer_handler
+      .coordinate_space_for_model``).
+    - ``"pixel"``: coords are already screen pixels; pass through unchanged.
+    - ``"normalized"``: coords are on a ``[0, 1000)`` grid; the computer handler
+      rescales them to pixels using the live screen size before acting.
+
+    Gemini computer-use models ground to a fixed 0-1000 grid regardless of the
+    "Screen resolution: WxH pixels" hint in the ``computer`` tool description, so
+    their raw clicks land in the wrong place unless rescaled. When main and GUI
+    subagent models differ, the space is chosen from the model that actually
+    drives the computer handler (``gui_model`` when ``disable_main_computer``,
+    else ``model``); set this explicitly to override if they disagree."""
+
     # ---- thinking levels (off | low | medium | high) ----
     thinking_level: str | None = None
     """Base thinking level. None → resolved-default for the model
@@ -171,6 +190,14 @@ class AleClawConfig:
             )
         if self.gui_transport is None:
             self.gui_transport = self.substrate_transport
+        if self.coordinate_space is not None and self.coordinate_space not in (
+            "pixel",
+            "normalized",
+        ):
+            raise ValueError(
+                f"AleClawConfig.coordinate_space={self.coordinate_space!r} "
+                "not in {pixel, normalized, None}"
+            )
         for level_field, value in [
             ("thinking_level", self.thinking_level),
             ("flush_thinking_level", self.flush_thinking_level),
