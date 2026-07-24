@@ -525,7 +525,10 @@ class OpenClawComputerAgent(ComputerAgent):
             isinstance(handler, cuaComputerHandler)
             and not isinstance(handler, OpenClawComputerHandler)
         ):
-            upgraded = OpenClawComputerHandler(handler.cua_computer)
+            upgraded = OpenClawComputerHandler(
+                handler.cua_computer,
+                coordinate_space=getattr(handler, "_coord_space", "pixel"),
+            )
             await upgraded._initialize()
             self.computer_handler = upgraded
 
