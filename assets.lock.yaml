@@ -1,0 +1,17 @@
+# Large data, pinned by revision. Anything that does not belong in git goes here.
+#
+# `visibility` travels with the data rather than with the task, and it is enforced
+# centrally: a component marked `verify` can never be staged before the agent runs, no
+# matter which stage a task lists it under. One task out of a hundred and fifty asking
+# in the wrong place would otherwise leak the answers.
+
+repo: agents-last-exam/example-assets   # Hugging Face dataset holding the bundles
+revision: ""                            # pin a commit; empty means "not configured yet"
+
+components: {}
+  # hello_inputs:
+  #   path: artifacts/hello-inputs.tar.zst
+  #   visibility: setup                  # staged into /ale/input before the agent
+  # hello_answers:
+  #   path: artifacts/hello-answers.tar.zst
+  #   visibility: verify                 # appears only at /ale/reference during scoring

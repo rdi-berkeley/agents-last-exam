@@ -1,0 +1,34 @@
+# The minimum a task must declare. Delete what you do not need — every field below
+# except `image` has a working default.
+#
+# The identifier is NOT written here: it comes from this folder's path
+# (tasks/example_task -> example-example_task, given domain `example`).
+
+image: sandbox-base-cli
+resources: { cpus: 1, memory_mb: 1024 }
+network: { mode: block } # block | allowlist (+ allowed_hosts) | open
+timeouts: { setup: 60, agent: 300, verify: 120 }
+
+# Stages are symmetric: each names the assets and kits it needs. Scripts are not
+# declared — this folder's setup/ and verify/ directories are copied in when their
+# stage runs, and run.sh executes if present.
+setup:
+  assets: [] # component names from assets.lock.yaml
+  kits: [] # kit names from kits.lock.yaml
+  prebakeable: false # true only if this setup is deterministic (no per-episode secrets)
+verify:
+  assets: []
+  kits: [example-kit]
+
+# Values substituted into instruction.md as ${name}. Strict: every declared parameter
+# must be used, and every ${placeholder} must be declared.
+params:
+  greeting: hello
+
+# Optional. Each variant becomes its own task instance with its own identity.
+# variants:
+#   - { name: base }
+#   - { name: loud, params: { greeting: HELLO } }
+
+validate: { min_reward: 1.0 }
+metadata: { tags: [example] }

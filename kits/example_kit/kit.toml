@@ -1,0 +1,16 @@
+# A kit is a Python library shared by this domain's tasks — a grader protocol, a
+# scoring toolkit, a simulation adapter. It is copied into /ale/kits/<name> and put on
+# PYTHONPATH for whichever stage asked for it. Never pip-installed: guest interpreters
+# belong to the image, not to us.
+
+name = "example-kit"
+package = "example_kit"          # import name; may differ from the kit name
+description = "Worked example of a shared verification library."
+
+python_min = "3.8"               # oldest guest interpreter this kit supports
+runtime = "stdlib"               # stdlib | image_deps
+# requires = ["numpy"]           # only for runtime = "image_deps"; the image must
+                                 # already provide these, and an import probe checks it
+
+# Versions are content hashes written to kits.lock.yaml by `just lock`.
+# Never write a hash by hand.

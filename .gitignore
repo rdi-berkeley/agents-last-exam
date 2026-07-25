@@ -1,0 +1,8 @@
+# Local engine caches and run output
+.ale-cache/
+runs/
+__pycache__/
+*.py[cod]
+
+# Materialised assets never belong in git
+.assets/

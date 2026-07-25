@@ -1,0 +1,11 @@
+# Domain manifest. One per task repository.
+
+name: example                    # namespace; also the registry key. Lowercase slug.
+requires_core: ">=0.1,<0.2"      # engine versions this repository's tasks target
+
+# Extensions this domain's tasks reference by name. Extensions live in the engine
+# repository and enter through review; most domains need none.
+requires_extensions: []
+
+# Used by tasks that do not declare an image of their own.
+default_image: sandbox-base-cli
