@@ -1,0 +1,19 @@
+# Proves that a tool result actually reached the model.
+#
+# The token is random and never appears in the prompt, so any score above zero means
+# the agent genuinely read the file: a model that hallucinates cannot match it. That is
+# the whole point of the task, and it is why setup must mint the token per episode
+# rather than have it baked into an image.
+
+image: sandbox-base-cli
+resources: { cpus: 1, memory_mb: 1024 }
+network: { mode: block }
+timeouts: { setup: 60, agent: 600, verify: 60 }
+
+setup:
+  prebakeable: false # the secret must be fresh every episode
+
+validate: { min_reward: 1.0 }
+metadata:
+  tags: [smoke, tool-fidelity]
+  ported_from: tasks/demo/readfile_secret (cua_bench format)
