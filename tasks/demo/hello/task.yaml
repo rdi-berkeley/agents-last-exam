@@ -1,22 +1,32 @@
-# Two variants that share a name and little else, which is what the data layout says:
-# `base` is a GUI task (read a code off the screen), `json_kv` is a file-writing task.
-# Each carries its own bundle, so each declares its own assets.
+# Two variants that share a name and little else: `base` reads a code off a web page in
+# a desktop session, `json_kv` writes a file. Each names its own data and says where it
+# wants it — the paths below are this task's choice, not a framework layout.
 
 resources: { cpus: 2, memory_mb: 2048 }
 network: { mode: block }
 timeouts: { setup: 120, agent: 900, verify: 120 }
 
 image: sandbox-base-cli
-setup: { assets: [demo_hello_json_kv] }
-verify: { assets: [demo_hello_json_kv_reference] }
+setup:
+  assets:
+    - { component: demo_hello_json_kv_input, dest: /ale/input }
+verify:
+  assets:
+    - { component: demo_hello_json_kv_reference, dest: /ale/reference }
+artifacts: [/ale/output]
 
 variants:
-  - name: json_kv # runnable with a file-only agent
-  - name: base # GUI: needs the desktop image and desktop tools
+  - name: json_kv
+  - name: base
     image: sandbox-base-gui
     harness_family: policy
-    setup: { assets: [demo_hello_base] }
-    verify: { assets: [demo_hello_base_reference] }
+    setup:
+      assets:
+        - { component: demo_hello_base_input, dest: /ale/input }
+        - { component: demo_hello_base_software, dest: /ale/software }
+    verify:
+      assets:
+        - { component: demo_hello_base_reference, dest: /ale/reference }
 
 validate: { min_reward: 1.0 }
 metadata:

@@ -1,27 +1,28 @@
-# Task data, pinned by bucket and revision.
+# Task data, pinned to a dataset commit.
 #
-# Visibility travels with the data rather than with the task, and it is enforced
-# centrally: a component marked `verify` cannot be staged before the agent runs, no
-# matter which stage a task lists it under. The `reference/` directory inside these
-# bundles holds gold answers, which is exactly why that rule exists.
+# Commits are immutable, so a recorded revision is something a later run can reproduce —
+# unlike a bucket path, whose contents can change underneath an old result.
+#
+# Visibility travels with the data: a component marked `verify` is materialised only
+# during scoring, whatever destination a task gives it.
 
-repo: gs://ale-data-public
-revision: "2026-06-06" # bucket has no immutable revisions yet; see note below
+repo: agents-last-exam/ale-tasks-assets
+revision: 1d0d026c7a21226f619b74f3912e23573c7105ab
 
 components:
-  demo_hello_base:
-    path: demo/hello/base
+  demo_hello_base_input:
+    path: demo/hello/base/input
+    visibility: setup
+  demo_hello_base_software:
+    path: demo/hello/base/software
     visibility: setup
   demo_hello_base_reference:
-    path: demo/hello/base
+    path: demo/hello/base/reference
     visibility: verify
-  demo_hello_json_kv:
-    path: demo/hello/json_kv
+
+  demo_hello_json_kv_input:
+    path: demo/hello/json_kv/input
     visibility: setup
   demo_hello_json_kv_reference:
-    path: demo/hello/json_kv
+    path: demo/hello/json_kv/reference
     visibility: verify
-# NOTE: a bundle currently carries input/, software/ and reference/ together, so a
-# component is declared twice — once for the agent-visible half, once for scoring. The
-# staging code only projects reference/ during verification, so the split is enforced
-# rather than trusted. Splitting the bundles in the bucket would remove the duplication.
