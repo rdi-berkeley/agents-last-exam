@@ -1,0 +1,30 @@
+name: tasks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The rules live in the engine, not in this file. Tightening a lint reaches every task
+# repository as a version bump here — no template merge required.
+env:
+  ENGINE: ale-run==0.1.*
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Lint task and kit structure
+        run: uvx --from "$ENGINE" ale lint .
+
+      - name: Kit hashes are current
+        run: uvx --from "$ENGINE" ale kit lock . --check
+
+      - name: Oracles reach their declared scores
+        run: uvx --from "$ENGINE" ale validate .

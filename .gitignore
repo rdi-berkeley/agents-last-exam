@@ -60,3 +60,13 @@ secret/eval_time/openai.env
 
 # Stray cua-bench eval artifacts written to cwd during host-side task eval
 trycua/
+
+# --- from ale-tasks-base template ---
+# Local engine caches and run output
+.ale-cache/
+runs/
+__pycache__/
+*.py[cod]
+
+# Materialised assets never belong in git
+.assets/

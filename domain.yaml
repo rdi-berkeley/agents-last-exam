@@ -1,0 +1,10 @@
+# Domain manifest for the Agents' Last Exam task collection.
+
+name: ale                        # namespace; registry key for this repository
+requires_core: ">=0.1,<0.2"      # engine versions these tasks target
+
+# Extensions referenced by name. The collection's tasks use the core components only.
+requires_extensions: []
+
+# Tasks that declare no image of their own fall back to this.
+default_image: sandbox-base-cli
