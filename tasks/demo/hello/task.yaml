@@ -19,8 +19,7 @@ verify:
       revision: 1d0d026c7a21226f619b74f3912e23573c7105ab
       path: demo/hello/json_kv/reference
       dest: /ale/reference
-artifacts:
-  - { path: /ale/output }
+artifacts: [/ale/output]
 
 variants:
   - name: json_kv

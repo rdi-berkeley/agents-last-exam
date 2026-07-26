@@ -8,8 +8,7 @@
 image: sandbox-base-cli
 resources: { cpus: 1, memory_mb: 1024 }
 network: { mode: block }
-artifacts:
-  - { path: /ale/output }
+artifacts: [/ale/output]
 
 timeouts: { setup: 60, agent: 600, verify: 60 }
 
