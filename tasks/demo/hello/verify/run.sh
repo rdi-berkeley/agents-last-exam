@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Compare against the gold answer, which only exists during this stage.
+# Compare the answer with the gold file, whatever this variant calls it.
+#
+# The two variants ship differently named reference files, so the file is discovered
+# rather than assumed — one verifier serves both.
 set -euo pipefail
 
-expected="$(tr -d '[:space:]' < /ale/reference/expected.txt)"
-actual="$(tr -d '[:space:]' < /ale/output/answer.txt 2>/dev/null || true)"
+gold="$(find /ale/reference -maxdepth 1 -type f | head -1)"
+expected="$(tr -d '[:space:]' < "$gold")"
+actual="$(cat /ale/output/* 2>/dev/null | tr -d '[:space:]' || true)"
 
 if [ -n "$actual" ] && [ "$actual" = "$expected" ]; then
     printf '{"rewards": {"reward": 1.0}}' > "$ALE_VERDICT_PATH"

@@ -1,6 +1,6 @@
 # Two variants that share a name and little else: `base` reads a code off a web page in
-# a desktop session, `json_kv` writes a file. Each names its own data and says where it
-# wants it — the paths below are this task's choice, not a framework layout.
+# a desktop session, `json_kv` writes a file. Each says where its data comes from and
+# where it should land — nothing here is inherited from a domain-level file.
 
 resources: { cpus: 2, memory_mb: 2048 }
 network: { mode: block }
@@ -9,24 +9,39 @@ timeouts: { setup: 120, agent: 900, verify: 120 }
 image: sandbox-base-cli
 setup:
   assets:
-    - { component: demo_hello_json_kv_input, dest: /ale/input }
+    - repo: agents-last-exam/ale-tasks-assets
+      revision: 1d0d026c7a21226f619b74f3912e23573c7105ab
+      path: demo/hello/json_kv/input
+      dest: /ale/input
 verify:
   assets:
-    - { component: demo_hello_json_kv_reference, dest: /ale/reference }
-artifacts: [/ale/output]
+    - repo: agents-last-exam/ale-tasks-assets
+      revision: 1d0d026c7a21226f619b74f3912e23573c7105ab
+      path: demo/hello/json_kv/reference
+      dest: /ale/reference
+artifacts:
+  - { path: /ale/output }
 
 variants:
   - name: json_kv
   - name: base
     image: sandbox-base-gui
-    harness_family: policy
     setup:
       assets:
-        - { component: demo_hello_base_input, dest: /ale/input }
-        - { component: demo_hello_base_software, dest: /ale/software }
+        - repo: agents-last-exam/ale-tasks-assets
+          revision: 1d0d026c7a21226f619b74f3912e23573c7105ab
+          path: demo/hello/base/input
+          dest: /ale/input
+        - repo: agents-last-exam/ale-tasks-assets
+          revision: 1d0d026c7a21226f619b74f3912e23573c7105ab
+          path: demo/hello/base/software
+          dest: /ale/software
     verify:
       assets:
-        - { component: demo_hello_base_reference, dest: /ale/reference }
+        - repo: agents-last-exam/ale-tasks-assets
+          revision: 1d0d026c7a21226f619b74f3912e23573c7105ab
+          path: demo/hello/base/reference
+          dest: /ale/reference
 
 validate: { min_reward: 1.0 }
 metadata:
