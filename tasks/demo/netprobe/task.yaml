@@ -1,0 +1,19 @@
+# The adversarial probe. It exists to fail: every attempt it makes must be refused, and
+# the one legitimate path — the model gateway — must work. A green run here is evidence
+# for the isolation claims, not a formality.
+
+image: sandbox-base-cli
+resources: { cpus: 1, memory_mb: 512 }
+network: { mode: block }
+timeouts: { setup: 120, agent: 60, verify: 120 }
+
+setup:
+  assets: []
+  kits: []
+verify:
+  assets: []
+  kits: []
+
+artifacts: [/ale/output]
+validate: { min_reward: 1.0 }
+metadata: { tags: [smoke, security] }
