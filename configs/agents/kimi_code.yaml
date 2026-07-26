@@ -1,0 +1,28 @@
+# Kimi Code CLI using Moonshot's native Kimi API.
+# Auth: export MOONSHOT_API_KEY before launching the experiment.
+
+harness: kimi_code
+model: kimi-k3
+
+config:
+  # Direct Moonshot API routing. KIMI_MODEL_* values are injected only into
+  # the CLI process and are not persisted to Kimi Code's config.toml.
+  api_key_env: MOONSHOT_API_KEY
+  base_url: https://api.moonshot.ai/v1
+  provider_type: kimi
+
+  # Kimi K3's tested model metadata.
+  max_context_size: 1048576
+  capabilities:
+    - image_in
+    - thinking
+  thinking_effort: max
+
+  # Keep Moonshot's anonymous product telemetry disabled. ALE's run-local
+  # OpenTelemetry capture separately records API and tool timings.
+  disable_telemetry: true
+  otel_enabled: true
+  disable_auto_update: true
+
+  # Official npm package, dynamically installed when absent or stale.
+  cli_version: "@moonshot-ai/kimi-code@0.27.0"

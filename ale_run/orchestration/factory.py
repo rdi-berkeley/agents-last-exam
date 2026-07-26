@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 # check that an agent shortcut is recognized.
 _AGENT_FQNS: dict[str, str] = {
     "claude_code": "ale_run.agents.claude_code.deployer.ClaudeCodeDeployer",
+    "kimi_code": "ale_run.agents.kimi_code.deployer.KimiCodeDeployer",
     "ale_claw": "ale_run.agents.ale_claw.deployer.AleClawDeployer",
     "gemini_cli": "ale_run.agents.gemini_cli.deployer.GeminiCliDeployer",
     "grok_cli": "ale_run.agents.grok_cli.deployer.GrokCliDeployer",
