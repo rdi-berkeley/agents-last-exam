@@ -8,6 +8,7 @@ The reconcile must now report an error when pulls keep failing.
 
 Run: ``python tests/test_tail_reconcile.py``.
 """
+
 import asyncio
 import os
 import sys
@@ -22,8 +23,13 @@ S._TAIL_RECONCILE_DELAY_S = 0.0  # speed up the bounded reconcile retries
 
 
 class _MockExec:
-    def __init__(self, *, content=b"", fail=False, missing=False):
-        self.content, self.fail, self.missing = content, fail, missing
+    def __init__(self, *, content=b"", fail=False, missing=False, stagnant=False):
+        self.content, self.fail, self.missing, self.stagnant = (
+            content,
+            fail,
+            missing,
+            stagnant,
+        )
         self.calls = 0
 
     async def download_range(self, *, src, start, max_bytes):
@@ -32,20 +38,33 @@ class _MockExec:
             return RangeResult(success=False, error="simulated transport error")
         if self.missing:
             return RangeResult(success=True, new_size=-1)
-        return RangeResult(success=True, new_size=len(self.content),
-                           new_data=self.content[start:start + max_bytes])
+        if self.stagnant:
+            return RangeResult(success=True, new_size=len(self.content), new_data=b"")
+        return RangeResult(
+            success=True,
+            new_size=len(self.content),
+            new_data=self.content[start : start + max_bytes],
+        )
 
 
-def _run(content=b"", fail=False, missing=False):
-    ex = _MockExec(content=content, fail=fail, missing=missing)
+def _run(content=b"", fail=False, missing=False, stagnant=False):
+    ex = _MockExec(
+        content=content,
+        fail=fail,
+        missing=missing,
+        stagnant=stagnant,
+    )
     d = tempfile.mkdtemp()
     dst = os.path.join(d, "transcript.jsonl")
     stop = asyncio.Event()
     stop.set()  # skip the live loop; exercise the reconcile directly
-    err = asyncio.run(S.tail_hot_artifacts(
-        executor=ex, targets=[("C:\\x\\transcript.jsonl", __import__("pathlib").Path(dst))],
-        stop_event=stop,
-    ))
+    err = asyncio.run(
+        S.tail_hot_artifacts(
+            executor=ex,
+            targets=[("C:\\x\\transcript.jsonl", __import__("pathlib").Path(dst))],
+            stop_event=stop,
+        )
+    )
     return err, dst, ex
 
 
@@ -83,9 +102,50 @@ def test_jsonl_boundary_safe():
     assert got == b'{"done":1}\n', f"committed a partial line: {got!r}"
 
 
+def test_reconcile_drains_more_than_two_chunks():
+    original = S._TAIL_CHUNK_BYTES
+    S._TAIL_CHUNK_BYTES = 8
+    try:
+        content = b"".join(b'{"n":%d}\n' % index for index in range(10))
+        err, dst, ex = _run(content=content)
+    finally:
+        S._TAIL_CHUNK_BYTES = original
+    assert err is None
+    with open(dst, "rb") as f:
+        assert f.read() == content
+    assert ex.calls > 2
+
+
+def test_jsonl_record_larger_than_range_chunk():
+    original = S._TAIL_CHUNK_BYTES
+    S._TAIL_CHUNK_BYTES = 8
+    try:
+        content = b'{"image":"' + b"x" * 80 + b'"}\n'
+        err, dst, ex = _run(content=content)
+    finally:
+        S._TAIL_CHUNK_BYTES = original
+    assert err is None
+    with open(dst, "rb") as f:
+        assert f.read() == content
+    assert ex.calls > 10
+    assert not os.path.exists(
+        os.path.join(os.path.dirname(dst), f".{os.path.basename(dst)}.tail-part")
+    )
+
+
+def test_reconcile_reports_repeated_no_progress():
+    err, _, ex = _run(content=b'{"a":1}\n', stagnant=True)
+    assert err is not None
+    assert "no progress" in err
+    assert ex.calls == S._TAIL_RECONCILE_RETRIES + 1
+
+
 if __name__ == "__main__":
     test_persistent_failure_is_reported()
     test_success_mirrors_and_no_error()
     test_missing_file_is_not_an_error()
     test_jsonl_boundary_safe()
+    test_reconcile_drains_more_than_two_chunks()
+    test_jsonl_record_larger_than_range_chunk()
+    test_reconcile_reports_repeated_no_progress()
     print("test_tail_reconcile: ALL PASS")

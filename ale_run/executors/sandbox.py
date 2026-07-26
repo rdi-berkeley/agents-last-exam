@@ -100,11 +100,19 @@ _TAIL_RECONCILE_TIMEOUT_S = 60.0
 _TAIL_RECONCILE_RETRIES = 3
 _TAIL_RECONCILE_DELAY_S = 1.0
 _TAIL_CHUNK_BYTES = 16 * 1024 * 1024
+_TAIL_LIVE_MAX_CHUNKS = 4
 
 # _tick_one return sentinels (negative = not a real remote byte size).
 _TICK_FAILED = -2    # download_range failed (transport / remote command error)
 _TICK_NO_FILE = -1   # remote file does not exist (yet)
 _TAIL_LIVE_FAIL_WARN = 3  # consecutive live-tick failures before a WARNING log
+
+
+@dataclass
+class _TailState:
+    committed: int
+    fetched: int
+    pending_path: Path
 
 
 @dataclass
@@ -592,7 +600,7 @@ def _build_launcher(
 async def tail_hot_artifacts(
     *,
     executor: BaseExecutor,
-    targets: list[tuple[str, Path]],   # [(sandbox_src, host_dst), ...]
+    targets: list[tuple[str, Path]],  # [(sandbox_src, host_dst), ...]
     stop_event: asyncio.Event,
     interval_s: float = _TAIL_INTERVAL_S,
 ) -> str | None:
@@ -600,11 +608,11 @@ async def tail_hot_artifacts(
     mirrors at ``interval_s`` cadence. Returns first reconcile error or
     ``None`` on clean stop.
 
-    JSONL boundary-safe: only commit bytes up to the last ``\\n`` so a
-    half-written record isn't appended; the same bytes are re-fetched
-    next tick once the writer flushes a newline.
+    JSONL boundary-safe: complete records are appended to ``dst`` while an
+    incomplete trailing record is spooled to a hidden host-side file. This
+    permits records larger than one range chunk without exposing partial JSONL.
     """
-    offsets: dict[str, int] = {src: _local_offset(dst) for src, dst in targets}
+    states = {src: _init_tail_state(dst) for src, dst in targets}
     fails: dict[str, int] = {src: 0 for src, _ in targets}
     while not stop_event.is_set():
         try:
@@ -613,11 +621,21 @@ async def tail_hot_artifacts(
         except asyncio.TimeoutError:
             pass
         for src, dst in targets:
-            try:
-                rc = await _tick_one(executor, src, dst, offsets)
-            except Exception as e:                                  # noqa: BLE001
-                rc = _TICK_FAILED
-                logger.debug("tail tick raised for %s: %s", src, e)
+            rc = _TICK_NO_FILE
+            for _ in range(_TAIL_LIVE_MAX_CHUNKS):
+                try:
+                    rc, progressed = await _tick_one(
+                        executor,
+                        src,
+                        dst,
+                        states[src],
+                    )
+                except Exception as e:                              # noqa: BLE001
+                    rc = _TICK_FAILED
+                    progressed = False
+                    logger.debug("tail tick raised for %s: %s", src, e)
+                if rc < 0 or not progressed or states[src].fetched >= rc:
+                    break
             # Don't fail silently: a persistently failing pull means the host
             # mirror is stalling (e.g. download_range broken / VM unreachable).
             if rc == _TICK_FAILED:
@@ -626,39 +644,65 @@ async def tail_hot_artifacts(
                     logger.warning(
                         "tail: %d consecutive failed pulls of %s — host mirror "
                         "stalling (retrying; final reconcile will report)",
-                        fails[src], src,
+                        fails[src],
+                        src,
                     )
             else:
                 fails[src] = 0
 
-    # Final reconcile: keep pulling each file until its size stops growing, so
-    # the host mirror is complete. A failed pull (_TICK_FAILED) must NOT be
-    # mistaken for "stable" — doing so silently dropped large transcripts
-    # (the failure sentinel repeated → looked like an unchanging size → break).
-    deadline = time.monotonic() + _TAIL_RECONCILE_TIMEOUT_S
+    # A stable remote size does not mean the host mirror has caught up. Drain
+    # until the fetched offset reaches that size, then confirm it once more.
     last_err: str | None = None
     for src, dst in targets:
+        deadline = time.monotonic() + _TAIL_RECONCILE_TIMEOUT_S
         prev_size: int | None = None
         target_err: str | None = None
-        for _ in range(_TAIL_RECONCILE_RETRIES + 1):
+        failed_pulls = 0
+        while True:
             if time.monotonic() > deadline:
-                target_err = (
-                    f"reconcile timeout after {_TAIL_RECONCILE_TIMEOUT_S}s for {src}"
-                )
+                target_err = f"reconcile timeout after {_TAIL_RECONCILE_TIMEOUT_S}s for {src}"
                 break
             try:
-                size = await _tick_one(executor, src, dst, offsets)
-            except Exception as e:                                  # noqa: BLE001
+                size, progressed = await _tick_one(
+                    executor,
+                    src,
+                    dst,
+                    states[src],
+                )
+            except Exception as e:  # noqa: BLE001
                 target_err = f"tick raised for {src}: {e}"
+                failed_pulls += 1
+                if failed_pulls > _TAIL_RECONCILE_RETRIES:
+                    break
                 await asyncio.sleep(_TAIL_RECONCILE_DELAY_S)
                 continue
             if size == _TICK_FAILED:
                 target_err = f"download_range failed for {src}"
+                failed_pulls += 1
+                if failed_pulls > _TAIL_RECONCILE_RETRIES:
+                    break
                 await asyncio.sleep(_TAIL_RECONCILE_DELAY_S)
                 continue
             target_err = None  # a successful pull clears a prior transient error
+            if size == _TICK_NO_FILE:
+                break
+            if states[src].fetched < size:
+                if progressed:
+                    failed_pulls = 0
+                    continue
+                target_err = (
+                    f"download_range made no progress for {src}: "
+                    f"offset={states[src].fetched} size={size}"
+                )
+                failed_pulls += 1
+                if failed_pulls > _TAIL_RECONCILE_RETRIES:
+                    break
+                await asyncio.sleep(_TAIL_RECONCILE_DELAY_S)
+                continue
+            failed_pulls = 0
             if size == prev_size:
-                break          # size stabilized → host mirror is complete
+                _discard_pending(states[src])
+                break
             prev_size = size
             await asyncio.sleep(_TAIL_RECONCILE_DELAY_S)
         if target_err and last_err is None:
@@ -670,47 +714,90 @@ async def _tick_one(
     executor: BaseExecutor,
     src: str,
     dst: Path,
-    offsets: dict[str, int],
-) -> int:
-    """Pull a chunk starting at ``offsets[src]``, commit jsonl-safe to
-    ``dst``, return the remote size."""
-    start = offsets[src]
+    state: _TailState,
+) -> tuple[int, bool]:
+    """Pull one chunk, commit complete JSONL records, return size/progress."""
+    start = state.fetched
     rr = await executor.download_range(
-        src=src, start=start, max_bytes=_TAIL_CHUNK_BYTES,
+        src=src,
+        start=start,
+        max_bytes=_TAIL_CHUNK_BYTES,
     )
     if not rr.success:
-        return _TICK_FAILED
+        return _TICK_FAILED, False
     size = rr.new_size
     if size == _TICK_NO_FILE:
-        offsets[src] = 0
+        state.committed = 0
+        state.fetched = 0
+        _discard_pending(state)
         if dst.exists():
             try:
                 dst.unlink()
             except OSError:
                 pass
-        return _TICK_NO_FILE
+        return _TICK_NO_FILE, False
     if size < start:
         # rotation/truncation
-        offsets[src] = 0
+        state.committed = 0
+        state.fetched = 0
+        _discard_pending(state)
         if dst.exists():
             try:
                 dst.unlink()
             except OSError:
                 pass
-        return size
+        return size, True
     delta = rr.new_data
     if not delta:
-        return size
+        return size, False
+
+    state.pending_path.parent.mkdir(parents=True, exist_ok=True)
+    pending_size = state.pending_path.stat().st_size if state.pending_path.exists() else 0
+    with state.pending_path.open("ab") as pending:
+        pending.write(delta)
+        pending.flush()
+    state.fetched += len(delta)
+
     last_nl = delta.rfind(b"\n")
     if last_nl == -1:
-        return size
-    safe = delta[: last_nl + 1]
+        return size, True
+
+    commit_bytes = pending_size + last_nl + 1
     dst.parent.mkdir(parents=True, exist_ok=True)
-    with open(dst, "ab") as f:
-        f.write(safe)
-        f.flush()
-    offsets[src] += len(safe)
-    return size
+    with state.pending_path.open("rb") as pending, dst.open("ab") as mirror:
+        remaining = commit_bytes
+        while remaining:
+            chunk = pending.read(min(1024 * 1024, remaining))
+            if not chunk:
+                break
+            mirror.write(chunk)
+            remaining -= len(chunk)
+        mirror.flush()
+        leftover = pending.read()
+    if leftover:
+        state.pending_path.write_bytes(leftover)
+    else:
+        state.pending_path.unlink(missing_ok=True)
+    state.committed += commit_bytes
+    return size, True
+
+
+def _init_tail_state(dst: Path) -> _TailState:
+    committed = _local_offset(dst)
+    if dst.exists() and dst.stat().st_size != committed:
+        with dst.open("r+b") as file:
+            file.truncate(committed)
+    pending_path = dst.with_name(f".{dst.name}.tail-part")
+    pending_path.unlink(missing_ok=True)
+    return _TailState(
+        committed=committed,
+        fetched=committed,
+        pending_path=pending_path,
+    )
+
+
+def _discard_pending(state: _TailState) -> None:
+    state.pending_path.unlink(missing_ok=True)
 
 
 def _local_offset(dst: Path) -> int:
@@ -719,11 +806,20 @@ def _local_offset(dst: Path) -> int:
     if not dst.exists():
         return 0
     try:
-        data = dst.read_bytes()
+        size = dst.stat().st_size
+        with dst.open("rb") as file:
+            end = size
+            while end > 0:
+                start = max(0, end - 64 * 1024)
+                file.seek(start)
+                data = file.read(end - start)
+                last_nl = data.rfind(b"\n")
+                if last_nl != -1:
+                    return start + last_nl + 1
+                end = start
     except OSError:
         return 0
-    last_nl = data.rfind(b"\n")
-    return 0 if last_nl == -1 else last_nl + 1
+    return 0
 
 
 # ======================================================================
