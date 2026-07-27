@@ -1,0 +1,37 @@
+# xAI Grok Build using the official built-in model catalog.
+# Auth: export XAI_API_KEY before launching the experiment.
+
+harness: grok_build
+model: grok-4.5
+
+config:
+  api_key_env: XAI_API_KEY
+  base_url: null
+  # For a custom endpoint, set base_url plus one of:
+  # chat_completions | responses | messages. The resolved key remains process-only.
+  api_backend: responses
+
+  # Grok Build runs headlessly inside ALE's already-isolated VM.
+  always_approve: true
+  disable_auto_update: true
+  sandbox_profile: "off"
+
+  # Optional model/runtime controls.
+  context_window: null
+  max_completion_tokens: null
+  reasoning_effort: null
+  max_turns: null
+  disable_web_search: false
+  # exit_plan_mode requires an interactive approval client.
+  plan_mode: false
+  disabled_tools:
+    - ask_user_question
+    - enter_plan_mode
+    - exit_plan_mode
+
+  # CUA MCP startup and per-tool deadlines.
+  mcp_startup_timeout_s: 60
+  mcp_tool_timeout_s: 6000
+
+  # Official package, pinned for reproducible sandbox installs.
+  cli_version: "@xai-official/grok@0.2.112"

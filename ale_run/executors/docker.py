@@ -46,7 +46,12 @@ from ..base_interface import (
     RangeResult,
     SandboxHandle,
 )
-from ._secrets import SECRET_GATHER_EXCLUDES, SECRETS_FILE, write_secrets
+from ._secrets import (
+    SECRET_GATHER_EXCLUDES,
+    SECRETS_FILE,
+    config_to_kwargs_and_secrets,
+    write_secrets,
+)
 
 if TYPE_CHECKING:
     from ..base_interface import AgentRunResult, BaseAgentDeployer
@@ -124,13 +129,14 @@ class DockerExecutor(BaseExecutor):
         #    work_dir IS the host log dir for docker runs, so _spec.json is a
         #    host log file and must stay keyless. The env goes in a separate
         #    _secrets.json that the entry reads once and deletes.
+        config_kwargs, config_secrets = config_to_kwargs_and_secrets(self.config)
         spec = {
             "ale_src_root": "/ale_src",  # container view
             "deployer_module": deployer_cls.__module__,
             "deployer_class": deployer_cls.__name__,
             "config_module": self.config.__class__.__module__,
             "config_class": self.config.__class__.__name__,
-            "config_kwargs": _config_to_kwargs(self.config),
+            "config_kwargs": config_kwargs,
             "sandbox_kwargs": _sandbox_to_kwargs(self.sandbox),
             "work_dir": "/work",
             "secrets_file": SECRETS_FILE,
@@ -142,7 +148,10 @@ class DockerExecutor(BaseExecutor):
         # 1b. Write the read-once secrets sidecar into the bind mount. The
         #     in-container entry reads it then deletes it, so it does not
         #     persist in the host log dir. chmod 600 while it lives.
-        write_secrets(host_work, dict(self.env or {}))
+        write_secrets(
+            host_work,
+            {**dict(self.env or {}), **config_secrets},
+        )
 
         # 2. Write env-file (keeps api keys off cmdline + docker inspect).
         #    Lives in a private tempdir OUTSIDE the bind-mounted work_dir so
@@ -359,17 +368,6 @@ def _image_present(tag: str) -> bool:
         return r.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
-
-
-def _config_to_kwargs(cfg) -> dict:
-    import dataclasses
-
-    out = {}
-    for f in dataclasses.fields(cfg):
-        val = getattr(cfg, f.name)
-        if isinstance(val, (str, int, float, bool, type(None), list, dict, tuple)):
-            out[f.name] = val
-    return out
 
 
 def _sandbox_to_kwargs(sb: SandboxHandle) -> dict:

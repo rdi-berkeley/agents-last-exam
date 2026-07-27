@@ -127,6 +127,7 @@ def test_reference_password_is_not_forwarded_to_agent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "agent-key")
+    monkeypatch.setenv("XAI_API_KEY", "xai-key")
     monkeypatch.setenv("MOONSHOT_API_KEY", "moonshot-key")
     monkeypatch.setenv(
         baked_in_sandbox.REFERENCE_ARCHIVE_PASSWORD_ENV,
@@ -136,6 +137,7 @@ def test_reference_password_is_not_forwarded_to_agent(
     env = _collect_env_passthrough()
 
     assert env["OPENAI_API_KEY"] == "agent-key"
+    assert env["XAI_API_KEY"] == "xai-key"
     assert env["MOONSHOT_API_KEY"] == "moonshot-key"
     assert baked_in_sandbox.REFERENCE_ARCHIVE_PASSWORD_ENV not in env
 

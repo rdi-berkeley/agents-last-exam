@@ -38,8 +38,12 @@ async def _run() -> dict:
     # mount and delete it immediately so it never persists in the host
     # log dir (work_dir is bind-mounted = host log dir for docker runs).
     # Fall back to a legacy in-spec env if present (older host writers).
-    from ale_run.executors._secrets import read_and_delete_secrets
+    from ale_run.executors._secrets import (
+        read_and_delete_secrets,
+        restore_config_secrets,
+    )
     env = read_and_delete_secrets(SPEC_PATH.parent) or (spec.get("env") or {})
+    config_kwargs, env = restore_config_secrets(spec["config_kwargs"], env)
     for k, v in env.items():
         os.environ[str(k)] = str(v)
 
@@ -62,7 +66,7 @@ async def _run() -> dict:
     cfg_cls = getattr(cfg_mod, spec["config_class"])
     dep_cls = getattr(dep_mod, spec["deployer_class"])
 
-    cfg = cfg_cls(**spec["config_kwargs"])
+    cfg = cfg_cls(**config_kwargs)
     sandbox = SandboxHandle(**spec["sandbox_kwargs"])
     executor = LocalExecutor(
         config=cfg,
