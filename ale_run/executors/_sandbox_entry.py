@@ -49,6 +49,8 @@ def run(spec: dict, env: dict | None = None) -> dict:
     # compatibility, but the writer no longer puts secrets in the spec.
     if env is None:
         env = spec.get("env") or {}
+    from ale_run.executors._secrets import restore_config_secrets
+    config_kwargs, env = restore_config_secrets(spec["config_kwargs"], env)
     for k, v in env.items():
         os.environ[str(k)] = str(v)
 
@@ -66,7 +68,7 @@ def run(spec: dict, env: dict | None = None) -> dict:
         cfg_cls = getattr(cfg_mod, spec["config_class"])
         dep_cls = getattr(dep_mod, spec["deployer_class"])
 
-        cfg = cfg_cls(**spec["config_kwargs"])
+        cfg = cfg_cls(**config_kwargs)
         sandbox = SandboxHandle(**spec["sandbox_kwargs"])
         # We are running INSIDE the sandbox: cua-server is co-located on
         # loopback at the image's declared port. The handle's ``endpoint`` was

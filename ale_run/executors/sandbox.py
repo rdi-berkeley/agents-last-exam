@@ -43,7 +43,11 @@ from ..base_interface import (
     RangeResult,
     SandboxHandle,
 )
-from ._secrets import SECRET_GATHER_EXCLUDES, SECRETS_FILE
+from ._secrets import (
+    SECRET_GATHER_EXCLUDES,
+    SECRETS_FILE,
+    config_to_kwargs_and_secrets,
+)
 
 if TYPE_CHECKING:
     from ..base_interface import AgentRunResult, BaseAgentDeployer
@@ -168,12 +172,13 @@ class SandboxExecutor(BaseExecutor):
         #    _spec.json is gathered back to host .logs and must stay keyless.
         #    The env goes in a separate _secrets.json that the entry reads
         #    once and deletes (see _secrets.py).
+        config_kwargs, config_secrets = config_to_kwargs_and_secrets(self.config)
         spec = {
             "deployer_module": deployer_cls.__module__,
             "deployer_class": deployer_cls.__name__,
             "config_module": self.config.__class__.__module__,
             "config_class": self.config.__class__.__name__,
-            "config_kwargs": _config_to_kwargs(self.config),
+            "config_kwargs": config_kwargs,
             "sandbox_kwargs": _sandbox_to_kwargs(self.sandbox),
             "work_dir": self.work_dir,
             "secrets_file": SECRETS_FILE,
@@ -184,7 +189,10 @@ class SandboxExecutor(BaseExecutor):
 
         # 4b. Write the transient secrets sidecar (read-once + self-deleted
         #     by the entry). Never gathered to host logs.
-        await sb.write_file(secrets_path, json.dumps(dict(self.env or {})))
+        await sb.write_file(
+            secrets_path,
+            json.dumps({**dict(self.env or {}), **config_secrets}),
+        )
 
         # 5. Write launcher script + fire it (short RPC: returns in seconds)
         launcher_body = _build_launcher(
@@ -830,17 +838,6 @@ def _local_offset(dst: Path) -> int:
 def _host_ale_root() -> Path:
     """Host's ``ale_run/`` package root."""
     return Path(__file__).resolve().parents[1]
-
-
-def _config_to_kwargs(cfg: Any) -> dict[str, Any]:
-    import dataclasses
-
-    out: dict[str, Any] = {}
-    for f in dataclasses.fields(cfg):
-        val = getattr(cfg, f.name)
-        if isinstance(val, (str, int, float, bool, type(None), list, dict, tuple)):
-            out[f.name] = val
-    return out
 
 
 def _sandbox_to_kwargs(sb: SandboxHandle) -> dict[str, Any]:
