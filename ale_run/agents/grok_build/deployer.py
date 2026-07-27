@@ -37,6 +37,12 @@ _VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 _MIN_NODE_VERSION = (20, 0, 0)
 _DATA_URL_RE = re.compile(r"data:(image/[A-Za-z0-9.+-]+);base64,([A-Za-z0-9+/=_-]+)")
 _CUSTOM_MODEL_ALIAS = "ale-custom"
+_SANDBOX_PROFILE = "off"
+_HEADLESS_DISABLED_TOOLS = (
+    "ask_user_question",
+    "enter_plan_mode",
+    "exit_plan_mode",
+)
 _SESSION_EXPORTS = {
     "chat_history.jsonl": "session_chat_history.jsonl",
     "updates.jsonl": "session_updates.jsonl",
@@ -443,7 +449,7 @@ class GrokBuildDeployer(BaseAgentDeployer):
                 # including API keys. Session JSONL is the trajectory source,
                 # so discard this unsafe duplicate rather than gathering it.
                 "GROK_LOG_FILE": os.devnull,
-                "GROK_SANDBOX": config.sandbox_profile,
+                "GROK_SANDBOX": _SANDBOX_PROFILE,
                 "GROK_MEMORY": "0",
                 "GROK_CURSOR_SKILLS_ENABLED": "0",
                 "GROK_CURSOR_RULES_ENABLED": "0",
@@ -486,7 +492,8 @@ class GrokBuildDeployer(BaseAgentDeployer):
             "--output-format",
             "streaming-json",
             "--sandbox",
-            config.sandbox_profile,
+            _SANDBOX_PROFILE,
+            "--no-plan",
         ]
         if config.always_approve:
             argv.append("--always-approve")
@@ -494,15 +501,13 @@ class GrokBuildDeployer(BaseAgentDeployer):
             argv.append("--no-auto-update")
         if config.disable_web_search:
             argv.append("--disable-web-search")
-        if not config.plan_mode:
-            argv.append("--no-plan")
-        if config.disabled_tools:
-            argv.extend(
-                [
-                    "--disallowed-tools",
-                    ",".join(config.disabled_tools),
-                ]
-            )
+        disabled_tools = tuple(dict.fromkeys((*_HEADLESS_DISABLED_TOOLS, *config.disabled_tools)))
+        argv.extend(
+            [
+                "--disallowed-tools",
+                ",".join(disabled_tools),
+            ]
+        )
         if config.reasoning_effort:
             argv.extend(["--reasoning-effort", config.reasoning_effort])
         if config.max_turns is not None:

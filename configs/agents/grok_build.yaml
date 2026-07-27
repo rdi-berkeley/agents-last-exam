@@ -14,20 +14,17 @@ config:
   # Grok Build runs headlessly inside ALE's already-isolated VM.
   always_approve: true
   disable_auto_update: true
-  sandbox_profile: "off"
-
-  # Optional model/runtime controls.
-  context_window: null
-  max_completion_tokens: null
-  reasoning_effort: null
-  max_turns: null
   disable_web_search: false
-  # exit_plan_mode requires an interactive approval client.
-  plan_mode: false
-  disabled_tools:
-    - ask_user_question
-    - enter_plan_mode
-    - exit_plan_mode
+
+  # The harness always uses `--sandbox off` and `--no-plan`, and always removes
+  # ask_user_question / enter_plan_mode / exit_plan_mode. Add other tool names
+  # here only when an experiment needs further restrictions.
+  # disabled_tools:
+  #   - image_gen
+
+  # Optional custom-endpoint metadata. Omitted values are not written to TOML.
+  # context_window: 262144
+  # max_completion_tokens: 32768
 
   # CUA MCP startup and per-tool deadlines.
   mcp_startup_timeout_s: 60

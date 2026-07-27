@@ -5,12 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-_HEADLESS_DISABLED_TOOLS = (
-    "ask_user_question",
-    "enter_plan_mode",
-    "exit_plan_mode",
-)
-
 
 @dataclass
 class GrokBuildConfig:
@@ -38,9 +32,8 @@ class GrokBuildConfig:
     always_approve: bool = True
     disable_auto_update: bool = True
     disable_web_search: bool = False
-    plan_mode: bool = False
-    sandbox_profile: str = "off"
-    disabled_tools: tuple[str, ...] = _HEADLESS_DISABLED_TOOLS
+    disabled_tools: tuple[str, ...] = ()
+    """Additional tools to remove beyond ALE's mandatory headless exclusions."""
 
     mcp_startup_timeout_s: int = 60
     mcp_tool_timeout_s: int = 6000

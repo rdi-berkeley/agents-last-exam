@@ -31,6 +31,7 @@ The harness passes:
 - `--always-approve` so tool calls do not wait for an interactive user
 - `--no-auto-update` so a benchmark run cannot change its own CLI version
 - `--sandbox off` because the ALE VM is already the isolation boundary
+- `--no-plan` because ALE episodes have no interactive plan-approval client
 - `--output-format streaming-json` for incremental output and final usage
 
 `transcript.jsonl` contains `thought`, `text`, `end`, and `error` events. Grok
@@ -82,11 +83,11 @@ invokes them through Grok's `search_tool` and `use_tool` wrappers.
 The trajectory parser unwraps `use_tool` so ALE records the underlying CUA tool
 name and arguments.
 
-ALE launches with `--no-plan` by default. Grok Build's plan approval is an
-interactive client flow, so `exit_plan_mode` cannot complete in a headless
-episode even when `--always-approve` is set. The default
-`--disallowed-tools` list therefore removes `ask_user_question`,
-`enter_plan_mode`, and `exit_plan_mode`.
+These are harness invariants rather than user-facing options. Grok Build's plan
+approval is an interactive client flow, so `exit_plan_mode` cannot complete in
+a headless episode even when `--always-approve` is set. The harness always
+removes `ask_user_question`, `enter_plan_mode`, and `exit_plan_mode`.
+`disabled_tools` only adds further exclusions.
 
 MCP image results are stored as data URLs in Grok's chat history or its
 run-local MCP spill files. The parser converts them to
@@ -114,6 +115,11 @@ Supported `api_backend` values are `chat_completions`, `responses`, and
 `messages`. Custom gateways must emit the selected protocol exactly. For
 example, a Responses gateway that adds unknown SSE event types can be rejected
 by Grok Build's strict event decoder.
+
+`context_window` is optional custom-model metadata used to schedule automatic
+context compaction. When it is omitted (or `null` in a programmatic config), the
+harness does not write the field and Grok Build uses its catalog/provider
+metadata. Direct xAI catalog models do not need this override.
 
 `api_key` may be supplied directly through `${env:...}`, or `api_key_env` may
 name the executor environment variable to read. In both cases the deployer

@@ -54,10 +54,6 @@ def test_expected_version_parses_scoped_npm_spec() -> None:
     assert _expected_version("@xai-official/grok") is None
 
 
-def test_headless_plan_mode_is_disabled_by_default() -> None:
-    assert GrokBuildConfig().plan_mode is False
-
-
 def test_default_model_matches_official_cli_catalog() -> None:
     assert GrokBuildConfig().model == "grok-4.5"
 
@@ -157,7 +153,7 @@ def test_build_argv_uses_supported_headless_flags(tmp_path: Path) -> None:
         reasoning_effort="high",
         max_turns=42,
         disable_web_search=True,
-        plan_mode=False,
+        disabled_tools=("image_gen", "ask_user_question"),
     )
     deployer = GrokBuildDeployer(_executor(tmp_path, config))
     deployer._grok_path = "/opt/grok"
@@ -178,7 +174,7 @@ def test_build_argv_uses_supported_headless_flags(tmp_path: Path) -> None:
     assert "--disable-web-search" in argv
     assert "--no-plan" in argv
     assert argv[argv.index("--disallowed-tools") + 1] == (
-        "ask_user_question,enter_plan_mode,exit_plan_mode"
+        "ask_user_question,enter_plan_mode,exit_plan_mode,image_gen"
     )
     assert argv[argv.index("--reasoning-effort") + 1] == "high"
     assert argv[argv.index("--max-turns") + 1] == "42"
