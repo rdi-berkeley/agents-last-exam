@@ -58,18 +58,24 @@ the complete `total_cost_usd` field.
 
 ## Telemetry
 
-Grok Build records native session events for each model loop and tool call. The
-harness normalizes them into:
+The harness enables Grok Build's native **external OpenTelemetry** stream and
+points it at a run-local OTLP/HTTP protobuf receiver. SpaceXAI product analytics,
+Mixpanel, and trace upload are separately forced off. The external content gates
+remain closed, so prompts, source paths, and tool parameters are not exported.
 
-- `telemetry.jsonl`: the session's timestamped native events
-- `telemetry_summary.json`: request/session IDs, aggregate API duration and
-  usage, per-loop first-token and generation timing, plus native and MCP tool
-  durations and outcomes
+- `otel_requests.jsonl`: complete raw OTLP batches in a bounded-record WAL,
+  incrementally mirrored from the sandbox
+- `telemetry.jsonl`: flattened `grok_code.*` OTLP log events
+- `telemetry_metrics.jsonl`: flattened token, turn, tool, session, and error
+  metric points
+- `telemetry_summary.json`: API calls/errors, tool decisions/results, MCP
+  connections, event counts, and aggregate metrics
 
-Unlike Kimi Code's JavaScript client, Grok Build runs its model transport in a
-native binary, so Node/Undici OpenTelemetry injection cannot observe its HTTP
-trace IDs or status codes. The harness uses Grok's own events rather than
-adding a duplicate proxy or modifying upstream.
+Grok also records richer run-local session events used by the trajectory parser.
+The harness keeps those independently as `native_telemetry.jsonl` and
+`native_telemetry_summary.json`, including loop timing, first-token timing, and
+MCP durations. They are not mislabeled as OTEL or allowed to overwrite the
+external stream.
 
 ## MCP And Screenshots
 
@@ -119,9 +125,17 @@ config:
 ```
 
 Supported `api_backend` values are `chat_completions`, `responses`, and
-`messages`. Custom gateways must emit the selected protocol exactly. For
-example, a Responses gateway that adds unknown SSE event types can be rejected
-by Grok Build's strict event decoder.
+`messages`; all three are implemented by Grok Build. `base_url` must be the API
+root that exposes the selected wire protocol: `<base_url>/chat/completions`,
+`<base_url>/responses`, or `<base_url>/messages`. Custom gateways must emit that
+protocol exactly. For example, a Responses gateway that adds unknown SSE event
+types can be rejected by Grok Build's strict event decoder.
+
+`reasoning_effort` is passed as `--reasoning-effort`. Grok Build accepts the
+canonical levels `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`
+plus model-specific menu IDs, but the selected model must advertise or accept
+the value. The built-in `grok-4.5` catalog supports `high`, `medium`, and `low`;
+ALE pins `high`.
 
 `context_window` is optional custom-model metadata used to schedule automatic
 context compaction. When it is omitted (or `null` in a programmatic config), the
@@ -146,4 +160,5 @@ both process-only.
 - https://docs.x.ai/build/cli/headless-scripting
 - https://docs.x.ai/build/features/mcp-servers
 - https://docs.x.ai/build/settings
+- https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-pager/docs/user-guide/24-monitoring-usage.md
 - https://www.npmjs.com/package/@xai-official/grok

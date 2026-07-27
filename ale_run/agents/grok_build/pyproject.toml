@@ -3,7 +3,9 @@ name = "ale-grok-build"
 version = "0.1.0"
 description = "xAI Grok Build in-sandbox deployer for ALE."
 requires-python = ">=3.12,<3.14"
-dependencies = []
+dependencies = [
+    "opentelemetry-proto==1.44.0",
+]
 
 [build-system]
 requires = ["hatchling"]

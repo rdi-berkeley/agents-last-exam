@@ -26,7 +26,8 @@ from ale_run.base_interface import (
 )
 
 from .config import GrokBuildConfig
-from .telemetry import recover_telemetry_artifacts
+from .otel import GrokBuildOtelCollector, recover_otel_artifacts
+from .telemetry import recover_native_telemetry_artifacts
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,7 @@ class GrokBuildDeployer(BaseAgentDeployer):
         "session_events.jsonl",
         "session_summary.json",
         "session_media.jsonl",
+        "otel_requests.jsonl",
     )
 
     @property
@@ -289,76 +291,92 @@ class GrokBuildDeployer(BaseAgentDeployer):
                 pass
         prompt_file.write_text(prompt, encoding="utf-8")
 
-        env = self._build_env(config, work_dir=work_dir)
         grok_cwd = _grok_cwd(
             work_dir,
             is_linux=self.executor.sandbox.is_linux,
         )
         grok_cwd.mkdir(parents=True, exist_ok=True)
         argv = self._build_argv(config, grok_cwd=grok_cwd, prompt_file=prompt_file)
+        collector = GrokBuildOtelCollector(work_dir) if config.otel_enabled else None
+        process: subprocess.Popen[bytes] | None = None
         started = time.monotonic()
-        stdout = await asyncio.to_thread(transcript_file.open, "wb")
-        stderr = await asyncio.to_thread(stderr_file.open, "wb")
         try:
-            process = await asyncio.to_thread(
-                subprocess.Popen,
-                argv,
-                stdin=subprocess.DEVNULL,
-                stdout=stdout,
-                stderr=stderr,
-                cwd=str(grok_cwd),
-                env=env,
-                start_new_session=hasattr(os, "setsid"),
-            )
-        finally:
-            await asyncio.to_thread(stdout.close)
-            await asyncio.to_thread(stderr.close)
-        pid_file.write_text(str(process.pid), encoding="ascii")
-        logger.info("grok_build: spawned pid=%s", process.pid)
-
-        try:
-            while process.poll() is None:
-                await asyncio.sleep(_POLL_INTERVAL_S)
-        except asyncio.CancelledError:
-            try:
-                process.terminate()
-            except ProcessLookupError:
-                pass
-            try:
-                await asyncio.wait_for(
-                    asyncio.to_thread(process.wait),
-                    timeout=_TERM_GRACE_S,
+            if collector is not None:
+                collector.start()
+                logger.info(
+                    "grok_build: external OTel collector listening at %s",
+                    collector.endpoint,
                 )
-            except (TimeoutError, asyncio.CancelledError):
+            env = self._build_env(
+                config,
+                work_dir=work_dir,
+                otel_endpoint=collector.endpoint if collector else None,
+            )
+            stdout = await asyncio.to_thread(transcript_file.open, "wb")
+            stderr = await asyncio.to_thread(stderr_file.open, "wb")
+            try:
+                process = await asyncio.to_thread(
+                    subprocess.Popen,
+                    argv,
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout,
+                    stderr=stderr,
+                    cwd=str(grok_cwd),
+                    env=env,
+                    start_new_session=hasattr(os, "setsid"),
+                )
+            finally:
+                await asyncio.to_thread(stdout.close)
+                await asyncio.to_thread(stderr.close)
+            pid_file.write_text(str(process.pid), encoding="ascii")
+            logger.info("grok_build: spawned pid=%s", process.pid)
+
+            try:
+                while process.poll() is None:
+                    await asyncio.sleep(_POLL_INTERVAL_S)
+            except asyncio.CancelledError:
                 try:
-                    process.kill()
+                    process.terminate()
                 except ProcessLookupError:
                     pass
-            raise
+                try:
+                    await asyncio.wait_for(
+                        asyncio.to_thread(process.wait),
+                        timeout=_TERM_GRACE_S,
+                    )
+                except (TimeoutError, asyncio.CancelledError):
+                    try:
+                        process.kill()
+                    except ProcessLookupError:
+                        pass
+                raise
 
-        await asyncio.to_thread(
-            self._export_session_artifacts,
-            work_dir,
-            transcript_file,
-        )
-        duration_s = time.monotonic() - started
-        status = "completed" if process.returncode == 0 else "failed"
-        error = None
-        if status == "failed":
-            error = self._diagnose_failure(
-                transcript_file=transcript_file,
-                stderr_file=stderr_file,
-                exit_code=process.returncode,
+            await asyncio.to_thread(
+                self._export_session_artifacts,
+                work_dir,
+                transcript_file,
             )
-        return AgentRunResult(
-            status=status,
-            pid=process.pid,
-            exit_code=process.returncode,
-            transcript_path=str(transcript_file),
-            stderr_path=str(stderr_file),
-            duration_s=duration_s,
-            error=error,
-        )
+            duration_s = time.monotonic() - started
+            status = "completed" if process.returncode == 0 else "failed"
+            error = None
+            if status == "failed":
+                error = self._diagnose_failure(
+                    transcript_file=transcript_file,
+                    stderr_file=stderr_file,
+                    exit_code=process.returncode,
+                )
+            return AgentRunResult(
+                status=status,
+                pid=process.pid,
+                exit_code=process.returncode,
+                transcript_path=str(transcript_file),
+                stderr_path=str(stderr_file),
+                duration_s=duration_s,
+                error=error,
+            )
+        finally:
+            if collector is not None:
+                collector.stop()
 
     def _write_config(self, config: GrokBuildConfig, *, work_dir: Path) -> None:
         sandbox = self.executor.sandbox
@@ -383,10 +401,24 @@ class GrokBuildDeployer(BaseAgentDeployer):
                 lines.append(f"context_window = {config.context_window}")
             if config.max_completion_tokens is not None:
                 lines.append(f"max_completion_tokens = {config.max_completion_tokens}")
+            if config.reasoning_effort is not None:
+                lines.extend(
+                    [
+                        "supports_reasoning_effort = true",
+                        f"reasoning_effort = {_toml_string(config.reasoning_effort)}",
+                    ]
+                )
             lines.append("")
 
         lines.extend(
             [
+                "[features]",
+                "telemetry = false",
+                "",
+                "[telemetry]",
+                "trace_upload = false",
+                "mixpanel_enabled = false",
+                "",
                 "[cli]",
                 "auto_update = false",
                 "",
@@ -429,6 +461,7 @@ class GrokBuildDeployer(BaseAgentDeployer):
         config: GrokBuildConfig,
         *,
         work_dir: Path,
+        otel_endpoint: str | None = None,
     ) -> dict[str, str]:
         env = os.environ.copy()
         env.update(self.executor.env or {})
@@ -460,8 +493,39 @@ class GrokBuildDeployer(BaseAgentDeployer):
                 "GROK_CLAUDE_MCPS_ENABLED": "0",
                 "GROK_CLAUDE_HOOKS_ENABLED": "0",
                 "GROK_DISABLE_AUTOUPDATER": "1",
+                "GROK_TELEMETRY_ENABLED": "0",
+                "GROK_TELEMETRY_TRACE_UPLOAD": "0",
+                "GROK_TELEMETRY_MIXPANEL_ENABLED": "0",
+                "GROK_EXTERNAL_OTEL": "0",
+                "OTEL_LOGS_EXPORTER": "none",
+                "OTEL_METRICS_EXPORTER": "none",
+                "OTEL_TRACES_EXPORTER": "none",
             }
         )
+        for variable in (
+            "OTEL_EXPORTER_OTLP_HEADERS",
+            "OTEL_EXPORTER_OTLP_LOGS_HEADERS",
+            "OTEL_EXPORTER_OTLP_METRICS_HEADERS",
+        ):
+            env.pop(variable, None)
+        if otel_endpoint is not None:
+            env.update(
+                {
+                    "GROK_EXTERNAL_OTEL": "1",
+                    "OTEL_LOGS_EXPORTER": "otlp",
+                    "OTEL_METRICS_EXPORTER": "otlp",
+                    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+                    "OTEL_EXPORTER_OTLP_ENDPOINT": otel_endpoint,
+                    "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": f"{otel_endpoint}/v1/logs",
+                    "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": f"{otel_endpoint}/v1/metrics",
+                    "OTEL_EXPORTER_OTLP_TIMEOUT": "10000",
+                    "OTEL_BLRP_SCHEDULE_DELAY": "1000",
+                    "OTEL_LOGS_EXPORT_INTERVAL": "1000",
+                    "OTEL_METRIC_EXPORT_INTERVAL": "1000",
+                    "OTEL_LOG_USER_PROMPTS": "0",
+                    "OTEL_LOG_TOOL_DETAILS": "0",
+                }
+            )
         if config.base_url:
             env["ALE_GROK_BUILD_API_KEY"] = api_key
         else:
@@ -658,14 +722,18 @@ class GrokBuildDeployer(BaseAgentDeployer):
         usage_source = terminal_event if terminal_event.get("usage") else update_terminal
         cls._apply_usage(usage_source, builder)
         try:
-            recover_telemetry_artifacts(
+            recover_native_telemetry_artifacts(
                 work_dir,
                 events_file=events_file,
                 updates_file=updates_file,
                 terminal_event=terminal_event,
             )
         except (OSError, TypeError, ValueError) as exc:
-            logger.warning("grok_build: telemetry recovery failed: %s", exc)
+            logger.warning("grok_build: native telemetry recovery failed: %s", exc)
+        try:
+            recover_otel_artifacts(work_dir)
+        except (OSError, TypeError, ValueError) as exc:
+            logger.warning("grok_build: OTel recovery failed: %s", exc)
 
         metadata = {
             "exit_code": run_result.exit_code,
@@ -677,7 +745,10 @@ class GrokBuildDeployer(BaseAgentDeployer):
             "updates_path": str(updates_file) if updates_file else None,
             "events_path": str(events_file) if events_file else None,
             "telemetry_path": str(work_dir / "telemetry.jsonl"),
+            "telemetry_metrics_path": str(work_dir / "telemetry_metrics.jsonl"),
             "telemetry_summary_path": str(work_dir / "telemetry_summary.json"),
+            "native_telemetry_path": str(work_dir / "native_telemetry.jsonl"),
+            "native_telemetry_summary_path": str(work_dir / "native_telemetry_summary.json"),
             "stop_reason": terminal_event.get("stopReason") or update_terminal.get("stop_reason"),
             "num_turns": terminal_event.get("num_turns") or update_terminal.get("numTurns"),
             "model_usage": terminal_event.get("modelUsage")

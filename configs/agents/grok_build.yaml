@@ -7,10 +7,28 @@ model: grok-4.5
 config:
   api_key_env: XAI_API_KEY
 
-  # Optional custom endpoint. Omit these fields for direct xAI catalog routing.
+  # Optional custom endpoint. Omit both fields for direct xAI catalog routing.
+  # All three values below are natively supported by Grok Build. Choose whichever
+  # protocol base_url exposes; base_url must be its API root, so Grok can call
+  # <base_url>/responses, /chat/completions, or /messages.
   # The resolved key remains process-only.
   # base_url: https://api.example.com/v1
-  # api_backend: responses  # responses | chat_completions | messages
+  # api_backend: responses
+  # Supported values:
+  #   responses        -> OpenAI Responses API
+  #   chat_completions -> OpenAI Chat Completions API
+  #   messages         -> Anthropic Messages API
+
+  # Explicitly pin reasoning depth instead of relying on CLI/model defaults.
+  # Grok Build accepts none|minimal|low|medium|high|xhigh|max or a model-specific
+  # menu id; the selected model/endpoint must support the chosen value.
+  # The built-in grok-4.5 catalog supports high|medium|low and defaults to high.
+  reasoning_effort: high
+
+  # Capture Grok Build's native external OpenTelemetry stream in the run dir.
+  # SpaceXAI product analytics and trace upload remain disabled; prompt text,
+  # code paths, and tool parameters are not enabled in the external OTEL stream.
+  otel_enabled: true
 
   # ALE invariants are not configurable: the harness always auto-approves,
   # disables CLI updates, uses `--sandbox off` and `--no-plan`, and removes

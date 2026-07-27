@@ -8,6 +8,8 @@ from dataclasses import fields
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from ale_run.agents.grok_build.config import GrokBuildConfig
 from ale_run.agents.grok_build.deployer import (
     GrokBuildDeployer,
@@ -56,7 +58,10 @@ def test_expected_version_parses_scoped_npm_spec() -> None:
 
 
 def test_default_model_matches_official_cli_catalog() -> None:
-    assert GrokBuildConfig().model == "grok-4.5"
+    config = GrokBuildConfig()
+    assert config.model == "grok-4.5"
+    assert config.reasoning_effort == "high"
+    assert config.otel_enabled is True
 
 
 def test_headless_invariants_are_not_public_config_fields() -> None:
@@ -76,6 +81,7 @@ def test_headless_invariants_are_not_public_config_fields() -> None:
 
 def test_primary_session_exports_are_hot_artifacts() -> None:
     assert {
+        "otel_requests.jsonl",
         "session_chat_history.jsonl",
         "session_updates.jsonl",
         "session_events.jsonl",
@@ -102,7 +108,31 @@ def test_build_env_isolates_home_and_keeps_custom_key_ephemeral(tmp_path: Path) 
     assert env["GROK_SANDBOX"] == "off"
     assert env["GROK_CURSOR_MCPS_ENABLED"] == "0"
     assert env["GROK_CLAUDE_MCPS_ENABLED"] == "0"
+    assert env["GROK_TELEMETRY_ENABLED"] == "0"
+    assert env["GROK_TELEMETRY_TRACE_UPLOAD"] == "0"
+    assert env["GROK_EXTERNAL_OTEL"] == "0"
+    assert env["OTEL_LOGS_EXPORTER"] == "none"
     assert "grok.log" not in GrokBuildDeployer.hot_artifacts
+
+
+def test_build_env_routes_external_otel_to_run_local_collector(tmp_path: Path) -> None:
+    config = GrokBuildConfig()
+    deployer = GrokBuildDeployer(_executor(tmp_path, config))
+
+    env = deployer._build_env(
+        config,
+        work_dir=tmp_path,
+        otel_endpoint="http://127.0.0.1:4318",
+    )
+
+    assert env["GROK_EXTERNAL_OTEL"] == "1"
+    assert env["OTEL_LOGS_EXPORTER"] == "otlp"
+    assert env["OTEL_METRICS_EXPORTER"] == "otlp"
+    assert env["OTEL_EXPORTER_OTLP_PROTOCOL"] == "http/protobuf"
+    assert env["OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"] == "http://127.0.0.1:4318/v1/logs"
+    assert env["OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"] == ("http://127.0.0.1:4318/v1/metrics")
+    assert env["OTEL_LOG_USER_PROMPTS"] == "0"
+    assert env["OTEL_LOG_TOOL_DETAILS"] == "0"
 
 
 def test_custom_model_key_does_not_replace_xai_imagine_key(tmp_path: Path) -> None:
@@ -156,6 +186,12 @@ def test_write_config_registers_cua_and_custom_model_without_secret(
     assert 'api_backend = "chat_completions"' in rendered
     assert 'env_key = "ALE_GROK_BUILD_API_KEY"' in rendered
     assert "context_window = 262144" in rendered
+    assert "supports_reasoning_effort = true" in rendered
+    assert 'reasoning_effort = "high"' in rendered
+    assert "[features]" in rendered
+    assert "telemetry = false" in rendered
+    assert "[telemetry]" in rendered
+    assert "trace_upload = false" in rendered
     assert "auto_update = false" in rendered
     assert "[mcp_servers.cua]" in rendered
     assert 'args = ["/opt/cua_mcp_server/src/index.js"]' in rendered
@@ -163,6 +199,27 @@ def test_write_config_registers_cua_and_custom_model_without_secret(
     assert "startup_timeout_sec" not in rendered
     assert "tool_timeout_sec" not in rendered
     assert "must-not-be-written" not in rendered
+
+
+@pytest.mark.parametrize("api_backend", ["responses", "chat_completions", "messages"])
+def test_write_config_supports_every_grok_api_backend(
+    tmp_path: Path,
+    api_backend: str,
+) -> None:
+    config = GrokBuildConfig(
+        model="custom-model",
+        base_url="https://provider.example/v1",
+        api_backend=api_backend,  # type: ignore[arg-type]
+    )
+    deployer = GrokBuildDeployer(_executor(tmp_path, config))
+    deployer._node_path = "/usr/bin/node"
+    (tmp_path / "grok-home").mkdir()
+
+    deployer._write_config(config, work_dir=tmp_path)
+
+    rendered = (tmp_path / "grok-home" / "config.toml").read_text(encoding="utf-8")
+    assert 'base_url = "https://provider.example/v1"' in rendered
+    assert f'api_backend = "{api_backend}"' in rendered
 
 
 def test_build_argv_uses_supported_headless_flags(tmp_path: Path) -> None:
@@ -477,7 +534,7 @@ def test_exported_session_recovers_trajectory_when_session_tree_is_missing(
     assert (tmp_path / "session_chat_history.jsonl").is_file()
     assert (tmp_path / "session_events.jsonl").is_file()
     assert (tmp_path / "session_media.jsonl").is_file()
-    assert (tmp_path / "telemetry_summary.json").is_file()
+    assert (tmp_path / "native_telemetry_summary.json").is_file()
     assert builder.trajectory.steps[0].tool_calls[0].name == "cua__screenshot"
     image = builder.trajectory.steps[1].observation.results[0].content[1].image
     assert image.data == image_data

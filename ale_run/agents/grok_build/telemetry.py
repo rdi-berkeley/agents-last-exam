@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 
-def recover_telemetry_artifacts(
+def recover_native_telemetry_artifacts(
     work_dir: Path,
     *,
     events_file: Path | None,
@@ -24,7 +24,7 @@ def recover_telemetry_artifacts(
     """
     events = list(_json_lines(events_file))
     updates = list(_json_lines(updates_file))
-    _write_jsonl_atomic(work_dir / "telemetry.jsonl", events)
+    _write_jsonl_atomic(work_dir / "native_telemetry.jsonl", events)
 
     terminal = terminal_event or {}
     usage, session_id = _terminal_usage(updates, terminal)
@@ -45,10 +45,10 @@ def recover_telemetry_artifacts(
         "artifacts": {
             "events": str(events_file) if events_file else None,
             "updates": str(updates_file) if updates_file else None,
-            "normalized_events": "telemetry.jsonl",
+            "normalized_events": "native_telemetry.jsonl",
         },
     }
-    (work_dir / "telemetry_summary.json").write_text(
+    (work_dir / "native_telemetry_summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
