@@ -388,7 +388,7 @@ class GrokBuildDeployer(BaseAgentDeployer):
         lines.extend(
             [
                 "[cli]",
-                f"auto_update = {'false' if config.disable_auto_update else 'true'}",
+                "auto_update = false",
                 "",
                 "[compat.cursor]",
                 "skills = false",
@@ -419,8 +419,6 @@ class GrokBuildDeployer(BaseAgentDeployer):
                     + "]"
                 ),
                 ("env = { CUA_SERVER_URL = " + _toml_string(self.executor.cua_bridge_url()) + " }"),
-                f"startup_timeout_sec = {config.mcp_startup_timeout_s}",
-                f"tool_timeout_sec = {config.mcp_tool_timeout_s}",
                 "",
             ]
         )
@@ -461,12 +459,9 @@ class GrokBuildDeployer(BaseAgentDeployer):
                 "GROK_CLAUDE_AGENTS_ENABLED": "0",
                 "GROK_CLAUDE_MCPS_ENABLED": "0",
                 "GROK_CLAUDE_HOOKS_ENABLED": "0",
+                "GROK_DISABLE_AUTOUPDATER": "1",
             }
         )
-        if config.disable_auto_update:
-            env["GROK_DISABLE_AUTOUPDATER"] = "1"
-        else:
-            env.pop("GROK_DISABLE_AUTOUPDATER", None)
         if config.base_url:
             env["ALE_GROK_BUILD_API_KEY"] = api_key
         else:
@@ -494,13 +489,9 @@ class GrokBuildDeployer(BaseAgentDeployer):
             "--sandbox",
             _SANDBOX_PROFILE,
             "--no-plan",
+            "--always-approve",
+            "--no-auto-update",
         ]
-        if config.always_approve:
-            argv.append("--always-approve")
-        if config.disable_auto_update:
-            argv.append("--no-auto-update")
-        if config.disable_web_search:
-            argv.append("--disable-web-search")
         disabled_tools = tuple(dict.fromkeys((*_HEADLESS_DISABLED_TOOLS, *config.disabled_tools)))
         argv.extend(
             [

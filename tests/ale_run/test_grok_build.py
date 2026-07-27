@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import shutil
+from dataclasses import fields
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -56,6 +57,21 @@ def test_expected_version_parses_scoped_npm_spec() -> None:
 
 def test_default_model_matches_official_cli_catalog() -> None:
     assert GrokBuildConfig().model == "grok-4.5"
+
+
+def test_headless_invariants_are_not_public_config_fields() -> None:
+    config_fields = {field.name for field in fields(GrokBuildConfig)}
+    assert config_fields.isdisjoint(
+        {
+            "always_approve",
+            "disable_auto_update",
+            "disable_web_search",
+            "mcp_startup_timeout_s",
+            "mcp_tool_timeout_s",
+            "plan_mode",
+            "sandbox_profile",
+        }
+    )
 
 
 def test_primary_session_exports_are_hot_artifacts() -> None:
@@ -140,9 +156,12 @@ def test_write_config_registers_cua_and_custom_model_without_secret(
     assert 'api_backend = "chat_completions"' in rendered
     assert 'env_key = "ALE_GROK_BUILD_API_KEY"' in rendered
     assert "context_window = 262144" in rendered
+    assert "auto_update = false" in rendered
     assert "[mcp_servers.cua]" in rendered
     assert 'args = ["/opt/cua_mcp_server/src/index.js"]' in rendered
     assert 'CUA_SERVER_URL = "http://127.0.0.1:5000"' in rendered
+    assert "startup_timeout_sec" not in rendered
+    assert "tool_timeout_sec" not in rendered
     assert "must-not-be-written" not in rendered
 
 
@@ -152,7 +171,6 @@ def test_build_argv_uses_supported_headless_flags(tmp_path: Path) -> None:
         base_url="https://api.moonshot.ai/v1",
         reasoning_effort="high",
         max_turns=42,
-        disable_web_search=True,
         disabled_tools=("image_gen", "ask_user_question"),
     )
     deployer = GrokBuildDeployer(_executor(tmp_path, config))
@@ -171,7 +189,7 @@ def test_build_argv_uses_supported_headless_flags(tmp_path: Path) -> None:
     assert argv[argv.index("--output-format") + 1] == "streaming-json"
     assert "--always-approve" in argv
     assert "--no-auto-update" in argv
-    assert "--disable-web-search" in argv
+    assert "--disable-web-search" not in argv
     assert "--no-plan" in argv
     assert argv[argv.index("--disallowed-tools") + 1] == (
         "ask_user_question,enter_plan_mode,exit_plan_mode,image_gen"

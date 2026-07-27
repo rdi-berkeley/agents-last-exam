@@ -29,14 +29,8 @@ class GrokBuildConfig:
     reasoning_effort: str | None = None
     max_turns: int | None = None
 
-    always_approve: bool = True
-    disable_auto_update: bool = True
-    disable_web_search: bool = False
     disabled_tools: tuple[str, ...] = ()
     """Additional tools to remove beyond ALE's mandatory headless exclusions."""
-
-    mcp_startup_timeout_s: int = 60
-    mcp_tool_timeout_s: int = 6000
 
     cli_version: str = "@xai-official/grok@0.2.112"
     """Pinned official npm package installed dynamically when missing or stale."""

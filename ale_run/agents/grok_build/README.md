@@ -34,6 +34,12 @@ The harness passes:
 - `--no-plan` because ALE episodes have no interactive plan-approval client
 - `--output-format streaming-json` for incremental output and final usage
 
+These are harness invariants, not experiment knobs. Grok's built-in web tools
+remain enabled: `web_search` searches the internet and `web_fetch` retrieves a
+URL. They are separate from `search_tool`, which searches the schemas exposed by
+connected MCP servers (for example, discovering the `cua__*` tools). An
+experiment can remove any additional built-in tool through `disabled_tools`.
+
 `transcript.jsonl` contains `thought`, `text`, `end`, and `error` events. Grok
 Build does not emit tool calls on stdout. The harness therefore parses the
 run-local session's `chat_history.jsonl` for model messages and tool results,
@@ -74,9 +80,10 @@ The deployer writes this shape to `$GROK_HOME/config.toml`:
 command = "/path/to/node"
 args = ["/path/to/cua_mcp_server/src/index.js"]
 env = { CUA_SERVER_URL = "http://127.0.0.1:5000" }
-startup_timeout_sec = 60
-tool_timeout_sec = 6000
 ```
+
+The harness uses the pinned Grok Build release's MCP defaults rather than
+exposing transport deadlines as agent configuration.
 
 Grok Build namespaces MCP tools as `cua__<tool>`. The model discovers and
 invokes them through Grok's `search_tool` and `use_tool` wrappers.

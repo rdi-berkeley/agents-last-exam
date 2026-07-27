@@ -6,29 +6,23 @@ model: grok-4.5
 
 config:
   api_key_env: XAI_API_KEY
-  base_url: null
-  # For a custom endpoint, set base_url plus one of:
-  # chat_completions | responses | messages. The resolved key remains process-only.
-  api_backend: responses
 
-  # Grok Build runs headlessly inside ALE's already-isolated VM.
-  always_approve: true
-  disable_auto_update: true
-  disable_web_search: false
+  # Optional custom endpoint. Omit these fields for direct xAI catalog routing.
+  # The resolved key remains process-only.
+  # base_url: https://api.example.com/v1
+  # api_backend: responses  # responses | chat_completions | messages
 
-  # The harness always uses `--sandbox off` and `--no-plan`, and always removes
-  # ask_user_question / enter_plan_mode / exit_plan_mode. Add other tool names
-  # here only when an experiment needs further restrictions.
+  # ALE invariants are not configurable: the harness always auto-approves,
+  # disables CLI updates, uses `--sandbox off` and `--no-plan`, and removes
+  # ask_user_question / enter_plan_mode / exit_plan_mode.
+  # Web search/fetch remain available by default. Add tool names only when an
+  # experiment needs further restrictions.
   # disabled_tools:
   #   - image_gen
 
   # Optional custom-endpoint metadata. Omitted values are not written to TOML.
   # context_window: 262144
   # max_completion_tokens: 32768
-
-  # CUA MCP startup and per-tool deadlines.
-  mcp_startup_timeout_s: 60
-  mcp_tool_timeout_s: 6000
 
   # Official package, pinned for reproducible sandbox installs.
   cli_version: "@xai-official/grok@0.2.112"
