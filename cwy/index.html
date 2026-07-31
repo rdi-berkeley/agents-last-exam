@@ -3,9 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="从人的角度理解 ALE 任务 computing_math/cp_test_gen_1：原始题面、中文翻译、解题思路和 CodeSmith 实际运行记录。">
+  <meta name="description" content="从人的角度理解 ALE 任务 computing_math/cp_test_gen_1：原始题面、中文翻译、题目解释和 CodeSmith 实际运行记录。">
   <title>ALE 任务解读：Binary String Copying 测试生成器</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@700&display=swap');
+
     :root {
       --paper: #f6f2e8;
       --paper-deep: #eee7d7;
@@ -474,16 +476,15 @@
       <div class="brand">
         <div class="eyebrow">Agents' Last Exam</div>
         <h1>Binary String Copying 测试生成器</h1>
-        <p>从题面原文到实际 CodeSmith 运行的完整人类视角解读。</p>
+        <p>从题面原文、Codex 生成策略到官方 0.5 分结果的完整解读。</p>
       </div>
       <nav aria-label="页面目录">
         <h2>目录</h2>
         <a href="#overview">0. 一句话理解</a>
-        <a href="#problem">1. 题目原文与翻译</a>
-        <a href="#solution">2. 人类解题思路</a>
-        <a href="#codesmith">3. CodeSmith 怎么解</a>
-        <a href="#verifier">4. 官方怎么评分</a>
-        <a href="#assessment">5. 它真正测什么</a>
+        <a href="#problem">1. 原始题目与完整翻译</a>
+        <a href="#solution">2. 初学者从零理解</a>
+        <a href="#codesmith">3. CodeDesk 实际解题</a>
+        <a href="#verifier">4. 官方完整评测</a>
       </nav>
       <div class="side-note">
         原始题面取自仓库中的 <code>task_card.json</code> 与 <code>main.py</code>。英文题面保持原文，中文内容为逐段翻译和解释。
@@ -494,7 +495,7 @@
       <header class="hero" id="overview">
         <div class="kicker">Task ID · computing_math/cp_test_gen_1</div>
         <h2>让 AI 代替竞赛测试工程师，设计能抓住错误程序的数据</h2>
-        <p class="lead">这道任务不是让 AI 解 Binary String Copying，也不是让它输出一个数字。AI 要提交一个 <code>gen.cpp</code>。这个程序根据 seed 自动生成测试数据，目标是在不查看隐藏程序源码的情况下，让正确程序保持 AC，并让错误或低效程序暴露为 WA、TLE 或不稳定的 AC/WA。</p>
+        <p class="lead">本任务要求 AI 提交一个 <code>gen.cpp</code>。这个程序根据 seed 自动生成 Binary String Copying 的测试数据，目标是在无法查看隐藏程序源码的情况下，让正确程序保持 AC，并让错误或低效程序暴露为 WA、TLE 或不稳定的 AC/WA。</p>
         <div class="meta-row">
           <span class="tag">输出：gen.cpp</span>
           <span class="tag">运行：50 seeds</span>
@@ -507,13 +508,44 @@
         <div class="summary-card"><strong>人的角色</strong><span>算法竞赛出题人、Hack 数据设计者、测试工程师</span></div>
         <div class="summary-card"><strong>输入材料</strong><span>算法题 PDF，以及只列出 a 到 j 编号的 Excel</span></div>
         <div class="summary-card"><strong>提交产物</strong><span>一个可编译、接收 seed、输出合法测试的 C++ 程序</span></div>
-        <div class="summary-card"><strong>当前状态</strong><span>候选 gen.cpp 已完成；隐藏 reference 尚未下载完，因此官方分数未知</span></div>
+        <div class="summary-card"><strong>真实结果</strong><span>官方隐藏程序已跑完：5/10 分，即 0.5；通过阈值为 0.9</span></div>
       </div>
 
       <section id="problem">
         <div class="section-label">Chapter 01</div>
-        <h2>题目原文与完整中文翻译</h2>
-        <p>下面英文内容是任务对 Agent 展示的原始题面。这里不改写、不总结。路径使用任务卡中的公开形式 <code>default/input</code> 和 <code>default/output</code>。</p>
+        <h2>原始任务、全部输入文件与完整中文翻译</h2>
+        <p>这一章只还原 Agent 开始答题时真正看到的内容。它看到 ALE 任务说明、一个算法题 PDF 和一个 Excel；它看不到隐藏程序源码、正确标签和评分脚本。</p>
+
+        <h3>1.1 开始答题时有哪些文件</h3>
+        <table>
+          <thead><tr><th>位置</th><th>文件</th><th>实际内容</th><th>Agent 用它做什么</th></tr></thead>
+          <tbody>
+            <tr><td>任务页面</td><td><code>task_card.json</code> / <code>main.py</code> 中的 task prompt</td><td>要求编写 <code>gen.cpp</code>，说明 50 个 seed、规模限制和建议攻击的边界情况</td><td>理解最终要交什么、输出到哪里、官方大致怎样评测</td></tr>
+            <tr><td><code>default/input</code></td><td><code>Binary String Copying Problem Statement.pdf</code></td><td>两页 Codeforces 原题，包含题意、Input、Output、约束、样例与样例解释</td><td>理解合法测试输入的格式，以及算法题的正确语义</td></tr>
+            <tr><td><code>default/input</code></td><td><code>Binary String Copying Inputs.xlsx</code></td><td>一张表，列名为 Submission ID、Problem、Outputted Tags；第 2–11 行只列出 a、b、c、d、e、f、g、h、i、j</td><td>知道共有 10 个隐藏解题程序，但无法看到它们的实现和正确标签</td></tr>
+            <tr><td><code>default/output</code></td><td><code>gen.cpp</code></td><td>开始时不存在，是 Agent 必须创建的最终答案</td><td>接收 seed，向标准输出打印一份完整、合法、具有攻击性的算法题输入</td></tr>
+          </tbody>
+        </table>
+        <div class="code-card">
+          <header><span>Binary String Copying Inputs.xlsx</span><span>可见 Excel 的全部有效内容</span></header>
+          <pre>Submission ID | Problem                | Outputted Tags
+a             | Binary String Copying  |
+b             | Binary String Copying  |
+c             | Binary String Copying  |
+d             | Binary String Copying  |
+e             | Binary String Copying  |
+f             | Binary String Copying  |
+g             | Binary String Copying  |
+h             | Binary String Copying  |
+i             | Binary String Copying  |
+j             | Binary String Copying  |</pre>
+        </div>
+        <div class="callout">
+          <strong>最重要的可见性边界：</strong>答题阶段只有上面三份信息。<code>a.cpp</code> 到 <code>j.cpp</code>、<code>Binary String Copying GT.xlsx</code> 和 <code>judge.sh</code> 都属于隐藏评测材料，Agent 结束答题后才由 ALE 注入。
+        </div>
+
+        <h3>1.2 ALE 任务说明英文原文</h3>
+        <p>下面英文内容来自任务卡，保持逐字原文。路径使用任务卡中的公开形式 <code>default/input</code> 和 <code>default/output</code>。</p>
 
         <div class="source-block">
           <div class="source-title"><span>Original task prompt</span><span>Verbatim</span></div>
@@ -552,7 +584,7 @@ Your generator will be called as `./gen $seed` for seeds 1 through 50 to produce
         </div>
 
         <div class="translation">
-          <h3>完整中文翻译</h3>
+          <h3>1.3 ALE 任务说明完整中文翻译</h3>
           <p>你的任务是编写 <code>gen.cpp</code>。它是一个 C++ 程序，每次运行时向标准输出打印一份完整且合法的测试用例，并通过 <code>argv[1]</code> 接收一个整数 seed，例如 <code>./gen 1</code>、<code>./gen 2</code>、<code>./gen 50</code>，从而让不同运行产生不同输出。</p>
 
           <p>题目说明位于 <code>Binary String Copying Problem Statement.pdf</code>。10 个提交的编号列在 <code>Binary String Copying Inputs.xlsx</code> 中。每个编号都是一个字母，按照表格从上到下依次排列，第 2 行是 a，第 3 行是 b，以此类推。你无法看到这些提交的具体实现，因此只能从题目本身的结构出发，推理哪些输入会对不同算法形成压力，并据此设计生成器。</p>
@@ -596,82 +628,250 @@ Your generator will be called as `./gen $seed` for seeds 1 through 50 to produce
           <h4>评测方式</h4>
           <p>评测器会使用 seed 1 到 50 调用生成器，即执行 <code>./gen $seed</code>，从而得到 50 份测试数据。提交 j 作为参考正确程序。其余 9 个提交会在全部 50 份测试上运行，每次执行的时间限制为 2 秒，内存限制为 256 MB。每个提交的最终 verdict 是它在 50 份测试中出现过的全部结果的并集，可能包括 AC、TLE、WA、RE，并按照 AC/TLE/WA/RE 的顺序使用斜杠连接。</p>
         </div>
+
+        <h3>1.4 PDF 中的算法题英文原文</h3>
+        <p>下面是 <code>Binary String Copying Problem Statement.pdf</code> 的实质内容。PDF 是 Codeforces 1849C 的两页网页打印版；网页导航等无关文字不重复展示，题意、Input、Output、约束、样例和样例解释完整保留。</p>
+        <div class="source-block">
+          <div class="source-title"><span>C. Binary String Copying</span><span>Problem statement</span></div>
+          <pre>time limit per test: 2 seconds
+memory limit per test: 256 megabytes
+
+You are given a string s consisting of n characters 0 and/or 1.
+
+You make m copies of this string, let the i-th copy be the string t_i. Then you perform exactly one operation on each of the copies: for the i-th copy, you sort its substring [l_i; r_i] (the substring from the l_i-th character to the r_i-th character, both endpoints inclusive). Note that each operation affects only one copy, and each copy is affected by only one operation.
+
+Your task is to calculate the number of different strings among t_1, t_2, ..., t_m. Note that the initial string s should be counted only if at least one of the copies stays the same after the operation.
+
+Input
+The first line contains a single integer t (1 &lt;= t &lt;= 10^4) — the number of test cases.
+
+The first line of each test case contains two integers n and m (1 &lt;= n, m &lt;= 2 * 10^5) — the length of s and the number of copies, respectively.
+
+The second line contains n characters 0 and/or 1 — the string s.
+
+Then m lines follow. The i-th of them contains two integers l_i and r_i (1 &lt;= l_i &lt;= r_i &lt;= n) — the description of the operation applied to the i-th copy.
+
+The sum of n over all test cases does not exceed 2 * 10^5. The sum of m over all test cases does not exceed 2 * 10^5.
+
+Output
+Print one integer — the number of different strings among t_1, t_2, ..., t_m.
+
+Example Input
+3
+6 5
+101100
+1 2
+1 3
+2 4
+5 5
+1 6
+6 4
+100111
+2 2
+1 4
+1 3
+1 2
+1 1
+0
+1 1
+
+Example Output
+3
+3
+1
+
+Note
+Consider the first example. The five copies, in input order, change as follows:
+1. Sort [1,2]: 101100 -&gt; 011100.
+2. Sort [1,3]: 101100 -&gt; 011100.
+3. Sort [2,4]: 101100 -&gt; 101100.
+4. Sort [5,5]: 101100 -&gt; 101100.
+5. Sort [1,6]: 101100 -&gt; 000111.
+There are three different strings: 000111, 011100 and 101100.
+
+Consider the second example:
+1. Sort [2,2]: 100111 -&gt; 100111.
+2. Sort [1,4]: 100111 -&gt; 001111.
+3. Sort [1,3]: 100111 -&gt; 001111.
+4. Sort [1,2]: 100111 -&gt; 010111.
+There are three different strings: 001111, 010111 and 100111.</pre>
+        </div>
+
+        <div class="translation">
+          <h3>1.5 PDF 算法题完整中文翻译</h3>
+          <p><strong>C. 二进制字符串复制</strong></p>
+          <p>单个测试的时间限制为 2 秒，内存限制为 256 MB。</p>
+          <p>给定一个长度为 <code>n</code>、只包含字符 0 和 1 的字符串 <code>s</code>。</p>
+          <p>将这个字符串复制 <code>m</code> 份，第 <code>i</code> 份记为 <code>t_i</code>。对每一份副本恰好执行一次操作：在第 <code>i</code> 份副本中，把从第 <code>l_i</code> 个字符到第 <code>r_i</code> 个字符的子串按升序排序，两个端点都包含在内。每次操作只影响一份副本，每份副本也只执行一次操作。</p>
+          <p>任务是计算 <code>t_1、t_2、...、t_m</code> 中有多少个不同的完整字符串。只有当至少一份副本执行操作后仍与原字符串相同时，原字符串 <code>s</code> 才会被计入。</p>
+
+          <h4>Input（输入）</h4>
+          <ul>
+            <li>第一行是整数 <code>t</code>，满足 <code>1 &lt;= t &lt;= 10^4</code>，表示测试组数。</li>
+            <li>每组测试的第一行包含 <code>n</code> 和 <code>m</code>，均满足 <code>1 &lt;= n,m &lt;= 2*10^5</code>。<code>n</code> 是字符串长度，<code>m</code> 是副本数，也等于查询数。</li>
+            <li>第二行是长度为 <code>n</code> 的二进制字符串 <code>s</code>。</li>
+            <li>随后有 <code>m</code> 行。第 <code>i</code> 行给出 <code>l_i r_i</code>，满足 <code>1 &lt;= l_i &lt;= r_i &lt;= n</code>，表示第 <code>i</code> 份副本需要排序的区间。</li>
+            <li>所有测试组的 <code>n</code> 总和不超过 200000，<code>m</code> 总和也不超过 200000。</li>
+          </ul>
+
+          <h4>Output（输出）</h4>
+          <p>对每组测试输出一个整数，表示执行各自操作后，<code>m</code> 份副本中不同完整字符串的数量。</p>
+
+          <h4>样例解释</h4>
+          <p>第一组的五份副本分别得到 <code>011100、011100、101100、101100、000111</code>，去重后有三个字符串，因此输出 3。第二组得到 <code>100111、001111、001111、010111</code>，去重后也有三个字符串，因此输出 3。第三组只有一个长度为 1 的字符串，排序后不变，因此输出 1。</p>
+        </div>
       </section>
 
       <section id="solution">
         <div class="section-label">Chapter 02</div>
-        <h2>如果你是人，这道题应该怎么解</h2>
+        <h2>从零开始：先看懂算法题，再看懂 ALE 要你做什么</h2>
         <div class="callout">
-          <strong>先分清两层题目：</strong>内层是 Binary String Copying 算法题；外层才是 ALE 任务。你不提交内层题目的解法，而是提交一个能生成内层题目测试数据的程序。
+          <strong>完整的一句话：</strong>ALE 给 CodeDesk 一道现成算法题，让它编写一个自动测试数据生成器 <code>gen.cpp</code>；官方再用这些数据测试 10 个隐藏解题程序，并根据测试数据能否区分正确程序、错误程序和慢程序来给 <code>gen.cpp</code> 打分。
         </div>
 
-        <h3>2.1 先理解内层算法题</h3>
-        <p>对二进制字符串的区间 <code>[l,r]</code> 排序，等价于把区间内的 0 全部移到前面、1 全部移到后面。判断两次操作是否产生同一结果时，关键不是原始的 <code>l,r</code>，而是：</p>
-        <ol>
-          <li>区间内第一个 1 的位置，记作 <code>L</code>；</li>
-          <li>区间内最后一个 0 的位置，记作 <code>R</code>；</li>
-          <li>如果 <code>L &gt; R</code>，区间本来已经有序，排序不会改变字符串；</li>
-          <li>否则，真正发生变化的核心范围由 <code>(L,R)</code> 决定。多个不同的 <code>[l,r]</code> 可能归一化到同一个 <code>(L,R)</code>。</li>
-        </ol>
-
-        <h3>2.2 再猜隐藏错误程序会错在哪里</h3>
+        <h3>2.1 先分清两层任务</h3>
         <table>
-          <thead><tr><th>可能的错误实现</th><th>对应攻击数据</th><th>预期结果</th></tr></thead>
+          <thead><tr><th>层次</th><th>谁完成</th><th>输入</th><th>输出</th></tr></thead>
           <tbody>
-            <tr><td>直接把不同的 <code>[l,r]</code> 当成不同答案</td><td>设计大量不同区间，但它们归一化到相同 <code>(L,R)</code></td><td>WA</td></tr>
-            <tr><td>没有合并所有“不改变原串”的查询</td><td>全 0、全 1、单点区间、已经有序的子串</td><td>WA</td></tr>
-            <tr><td>第一个 1 或最后一个 0 的边界处理错误</td><td>变化只发生在开头、结尾或很窄的边界窗口</td><td>WA</td></tr>
-            <tr><td>每次查询复制、排序或哈希长子串</td><td><code>sum(n)=sum(m)=200000</code>，大量宽区间</td><td>TLE</td></tr>
-            <tr><td>随机化或哈希实现不稳定</td><td>部分 seed 使用温和小数据，部分 seed 使用大型对抗结构</td><td>AC/WA</td></tr>
+            <tr><td>内层：Binary String Copying 算法题</td><td>隐藏程序 a.cpp 到 j.cpp</td><td>字符串、查询区间</td><td>不同结果字符串的数量，例如 2 或 3</td></tr>
+            <tr><td>外层：ALE 测试生成任务</td><td>CodeDesk / 参测 Agent</td><td>算法题 PDF、任务说明、a–j 的编号</td><td>能够自动生成算法题输入的 <code>gen.cpp</code></td></tr>
+          </tbody>
+        </table>
+        <p>CodeDesk 的交付物是一个“出测试数据的程序”。Binary String Copying 的数字答案由 a–j 计算。</p>
+
+        <h3>2.2 内层算法题中的每个符号是什么意思</h3>
+        <table>
+          <thead><tr><th>符号</th><th>含义</th><th>例子</th></tr></thead>
+          <tbody>
+            <tr><td><code>t</code></td><td>一份输入里有多少组互相独立的测试</td><td><code>t=3</code> 表示后面有三组</td></tr>
+            <tr><td><code>n</code></td><td>原始二进制字符串长度</td><td><code>0101</code> 的 n 是 4</td></tr>
+            <tr><td><code>m</code></td><td>原字符串复制多少份，也等于查询数量</td><td><code>m=4</code> 表示有四份副本、四个区间</td></tr>
+            <tr><td><code>s</code></td><td>每份副本共同使用的原字符串</td><td><code>s=0101</code></td></tr>
+            <tr><td><code>l_i,r_i</code></td><td>第 i 份副本中要排序的左右端点</td><td><code>2 3</code> 表示排序第 2–3 位</td></tr>
+            <tr><td><code>t_i</code></td><td>第 i 份副本执行一次排序后的完整字符串</td><td><code>0101</code> 经 <code>[2,3]</code> 得到 <code>0011</code></td></tr>
           </tbody>
         </table>
 
-        <h3>2.3 设计一个 seed 驱动的生成器</h3>
-        <div class="flow" aria-label="人类解题流程">
-          <div class="flow-step"><b>读题</b><span>确定正确结果的归一化规律与完整输入格式。</span></div>
-          <div class="flow-step"><b>列错误模式</b><span>边界、去重、复杂度、随机化和哈希。</span></div>
-          <div class="flow-step"><b>造测试族</b><span>小规模穷举、结构化大串、随机串和极限查询。</span></div>
-          <div class="flow-step"><b>写 gen.cpp</b><span>接收 seed，输出合法输入，严格控制总 n 与总 m。</span></div>
-          <div class="flow-step"><b>本地验证</b><span>编译，运行 1 到 50，检查格式、边界和资源规模。</span></div>
+        <h3>2.3 每条查询独立作用于原字符串</h3>
+        <p>假设原字符串是 <code>0101</code>，有四条查询。官方先复制四份完全相同的 <code>0101</code>，然后每份只执行自己对应的一条查询。</p>
+        <table>
+          <thead><tr><th>副本</th><th>起点</th><th>查询</th><th>排序过程</th><th>最终结果</th></tr></thead>
+          <tbody>
+            <tr><td>第 1 份</td><td><code>0101</code></td><td><code>[1,1]</code></td><td>单个 0 排序后不变</td><td><code>0101</code></td></tr>
+            <tr><td>第 2 份</td><td><code>0101</code></td><td><code>[1,2]</code></td><td><code>01</code> 已经升序</td><td><code>0101</code></td></tr>
+            <tr><td>第 3 份</td><td><code>0101</code></td><td><code>[2,3]</code></td><td><code>10</code> 排序成 <code>01</code></td><td><code>0011</code></td></tr>
+            <tr><td>第 4 份</td><td><code>0101</code></td><td><code>[1,4]</code></td><td><code>0101</code> 排序成 <code>0011</code></td><td><code>0011</code></td></tr>
+          </tbody>
+        </table>
+        <p>最终得到 <code>0101、0101、0011、0011</code>。去重后只剩 <code>0101</code> 和 <code>0011</code>，所以这一组测试的正确输出是 <code>2</code>。</p>
+        <div class="callout warning">
+          <strong>最容易理解错的地方：</strong>第 2 条查询不会接着第 1 条的结果运行。每条查询都有自己的一份原字符串副本。
         </div>
 
-        <h3>2.4 最终究竟提交什么</h3>
-        <p>最终只提交一个文件：</p>
-        <span class="path">default/output/gen.cpp</span>
-        <p>它本身不输出“答案数量”。它输出原 Binary String Copying 题目的完整输入，例如：</p>
+        <h3>2.4 从一份完整输入走到一份完整输出</h3>
         <div class="code-card">
-          <header><span>generator output example</span><span>original problem input format</span></header>
-          <pre>2
-5 4
-01010
-1 1
+          <header><span>算法题输入</span><span>1 组测试，3 份副本</span></header>
+          <pre>1
+5 3
+11001
 1 5
 2 4
-3 3
-6 3
-000111
-1 6
-2 5
-4 4</pre>
+3 3</pre>
         </div>
-        <p>官方拿这份输入去运行隐藏的 a.cpp 到 j.cpp，再比较它们与正确程序的输出。</p>
+        <table>
+          <thead><tr><th>查询</th><th>原区间</th><th>排序后完整字符串</th></tr></thead>
+          <tbody>
+            <tr><td><code>[1,5]</code></td><td><code>11001</code></td><td><code>00111</code></td></tr>
+            <tr><td><code>[2,4]</code></td><td><code>100</code> 排序成 <code>001</code></td><td><code>10011</code></td></tr>
+            <tr><td><code>[3,3]</code></td><td>单个 <code>0</code></td><td><code>11001</code></td></tr>
+          </tbody>
+        </table>
+        <p>三个结果都不同，因此负责解算法题的程序应该输出：</p>
+        <div class="code-card"><header><span>算法题输出</span><span>去重后的数量</span></header><pre>3</pre></div>
+
+        <h3>2.5 正确程序怎样判断两条查询是否产生同一个字符串</h3>
+        <p>对查询 <code>[l,r]</code>，真正会发生位置交换的区域，从区间里的第一个 <code>1</code> 开始，到区间里的最后一个 <code>0</code> 结束：</p>
+        <ol>
+          <li>从 <code>l</code> 向右找第一个 <code>1</code>，记为 <code>x</code>；</li>
+          <li>从 <code>r</code> 向左找最后一个 <code>0</code>，记为 <code>y</code>；</li>
+          <li>如果找不到，或者 <code>x &gt; y</code>，区间本来已经有序，结果仍是原字符串；</li>
+          <li>否则，排序结果可以用有效边界对 <code>(x,y)</code> 表示。</li>
+        </ol>
+        <p>例如在 <code>0101</code> 中，查询 <code>[2,3]</code> 和 <code>[1,4]</code> 的表面区间不同，但它们真正需要调整的部分都是从第 2 位的 1 到第 3 位的 0，因此得到同一个结果 <code>0011</code>。大量错误程序会在这里发生重复计数、哈希碰撞或边界错误。</p>
+
+        <h3>2.6 外层 ALE 任务要求 CodeDesk 输出什么</h3>
+        <p>CodeDesk 要创建：</p>
+        <span class="path">default/output/gen.cpp</span>
+        <p>它编译后叫 <code>gen</code>，接收一个 seed：</p>
+        <div class="code-card"><header><span>调用方式</span><span>外层 seed</span></header><pre>./gen 1
+./gen 2
+...
+./gen 50</pre></div>
+        <p>每次调用都要打印一份符合 PDF Input 格式的完整输入：</p>
+        <ol>
+          <li>先打印内部测试组数 <code>t</code>；</li>
+          <li>每组打印 <code>n m</code>；</li>
+          <li>打印长度为 n 的二进制字符串；</li>
+          <li>再打印 m 行合法查询。</li>
+        </ol>
+        <p><code>gen.cpp</code> 只产生题目输入。数字答案由隐藏程序 a–j 计算，参考答案由 j.cpp 计算。</p>
+
+        <h3>2.7 从任务发出到最终得分的完整闭环</h3>
+        <div class="flow" aria-label="完整任务闭环">
+          <div class="flow-step"><b>ALE 发题</b><span>提供 task prompt、PDF 和编号 Excel。</span></div>
+          <div class="flow-step"><b>CodeDesk 答题</b><span>分析题目，编写并保存 gen.cpp。</span></div>
+          <div class="flow-step"><b>生成测试</b><span>用 1–50 的 seed 得到 50 份算法题输入。</span></div>
+          <div class="flow-step"><b>隐藏程序作答</b><span>a–j 分别读取每份输入并输出数字。</span></div>
+          <div class="flow-step"><b>Verifier 打分</b><span>与 j 比较，聚合 AC/WA/TLE，再计算 0–1 分数。</span></div>
+        </div>
+        <table>
+          <thead><tr><th>最终确认问题</th><th>答案</th></tr></thead>
+          <tbody>
+            <tr><td>CodeDesk 在解什么？</td><td>它在完成“设计测试生成器”的 ALE 外层任务。</td></tr>
+            <tr><td>谁真正解 Binary String Copying？</td><td>隐藏程序 a.cpp 到 j.cpp。</td></tr>
+            <tr><td>CodeDesk 最终提交什么？</td><td>一个 C++ 文件 <code>gen.cpp</code>。</td></tr>
+            <tr><td>官方怎样知道隐藏程序答错了？</td><td>用参考程序 j.cpp 对同一份输入产生标准输出，然后逐字比较。</td></tr>
+            <tr><td>CodeDesk 的分数代表什么？</td><td>它生成的数据能否保住正确程序，并暴露官方指定的错误或低效程序。</td></tr>
+          </tbody>
+        </table>
       </section>
 
       <section id="codesmith">
         <div class="section-label">Chapter 03</div>
-        <h2>本次 CodeSmith 实际怎么解、怎么跑</h2>
-        <p>本次运行使用编码智能体生成了候选 <code>gen.cpp</code>。下面记录的是实际产物和实际验证，不是原题说明。</p>
+        <h2>CodeDesk 实际怎么分析、写代码和生成测试</h2>
+        <p>这里的 CodeDesk 指本次实际运行的 Codex 编码 Agent。运行通过 Codex harness 调用 <code>gpt-5.6-sol</code>，reasoning 设置为 <code>high</code>。本章按照真实 <code>gen.cpp</code> 还原它的解题过程，不使用事后才得到的隐藏程序源码。</p>
 
-        <h3>3.1 实际产物在哪里</h3>
+        <h3>3.1 它开始时拥有的信息</h3>
+        <table>
+          <thead><tr><th>它能看到</th><th>它看不到</th></tr></thead>
+          <tbody>
+            <tr><td>ALE task prompt、算法题 PDF、只列 a–j 编号的 Inputs.xlsx</td><td>a.cpp 到 j.cpp 的源码</td></tr>
+            <tr><td>n、m 总和上限均为 200000，50 个 seed，2 秒限制</td><td>每个隐藏程序具体错在哪一行</td></tr>
+            <tr><td>题面给出的攻击方向：单点、全零全一、已排序区间、宽区间、大小数据混合</td><td>GT Excel 中 a–j 的期望 verdict 和 10 分拆分</td></tr>
+          </tbody>
+        </table>
+
+        <h3>3.2 它采用的完整解题路线</h3>
+        <ol>
+          <li><strong>确认输出形式：</strong>最终只需创建一个能编译的 <code>gen.cpp</code>，每次根据 seed 打印完整输入。</li>
+          <li><strong>理解正确答案结构：</strong>查询结果由区间内第一个 1 和最后一个 0 形成的有效边界决定。</li>
+          <li><strong>覆盖小型边界：</strong>对多个短字符串枚举全部区间，保证单点、空变化、相同结果和边界位置都会出现。</li>
+          <li><strong>构造最大规模测试：</strong>把剩余的 n、m 预算全部交给第 10 个测试，给慢算法和哈希算法足够压力。</li>
+          <li><strong>让 50 个 seed 有差异：</strong>轮换十类长字符串，每类在 50 个 seed 中出现五次，同时改变内部参数和查询顺序。</li>
+          <li><strong>混合查询策略：</strong>加入整段、单点、连续字符段、同一有效边界的多种外扩区间、宽区间和随机区间。</li>
+          <li><strong>本地检查：</strong>编译，运行 1–50 的 seed，验证格式、边界与总规模。</li>
+        </ol>
+
+        <h3>3.3 最终代码和可复现标识</h3>
         <span class="path">本地：/home/wanyi.chen/workspace/cwy/TODO/gradient/ale_remote_setup/manual_cp_test/output/gen.cpp</span>
         <span class="path">远程：/data/cwy/manual-cp-test/output/gen.cpp</span>
         <span class="path">SHA256：600ff44fa75b67d6a6e70e979f04aaae0fbe11789c68854d4a01a0ad20d0f447</span>
 
-        <h3>3.2 它生成了哪些测试</h3>
-        <p>每个 seed 会输出 10 个子测试。前 9 个是针对边界条件的小规模结构，第 10 个使用剩余预算构造大型测试。</p>
+        <h3>3.4 代码由哪些部分组成</h3>
         <table>
           <thead><tr><th>代码位置</th><th>实现内容</th><th>目的</th></tr></thead>
           <tbody>
+            <tr><td><code>main()</code></td><td>读取 <code>argv[1]</code> 中的 seed，调用生成器并打印标准输入格式</td><td>让官方能执行 <code>./gen 1</code> 到 <code>./gen 50</code></td></tr>
             <tr><td><code>build()</code></td><td>组合小测试与一个大型测试，并计算已使用的 n、m</td><td>控制一次输出的总体规模</td></tr>
             <tr><td><code>addExhaustive()</code></td><td>对小字符串枚举全部合法区间</td><td>覆盖单点、边界、无变化和等价区间</td></tr>
             <tr><td><code>makeLargeString()</code></td><td>按照 seed 轮换 10 类字符串结构</td><td>覆盖交替串、全零、全一、有序、逆序、周期和随机结构</td></tr>
@@ -680,6 +880,43 @@ Your generator will be called as `./gen $seed` for seeds 1 through 50 to produce
           </tbody>
         </table>
 
+        <h3>3.5 关键代码一：seed 真正控制生成内容</h3>
+        <div class="code-card">
+          <header><span>gen.cpp · main()</span><span>读取外层 seed</span></header>
+          <pre>uint64_t seed = 1;
+if (argc &gt;= 2) {
+    seed = strtoull(argv[1], nullptr, 10);
+}
+if (seed == 0) seed = 1;
+
+TestGenerator generator(seed);
+vector&lt;TestCase&gt; tests = generator.build();</pre>
+        </div>
+        <p>因此 <code>./gen 1</code> 与 <code>./gen 2</code> 会产生不同内容；相同 seed 再次运行时仍得到相同结构，便于复现。</p>
+
+        <h3>3.6 关键代码二：小字符串枚举所有查询</h3>
+        <div class="code-card">
+          <header><span>gen.cpp · addExhaustive()</span><span>完整覆盖短串区间</span></header>
+          <pre>for (int length = 1; length &lt;= n; ++length) {
+    for (int left = 1; left + length - 1 &lt;= n; ++left) {
+        test.queries.emplace_back(left, left + length - 1);
+    }
+}</pre>
+        </div>
+        <p>长度为 n 的字符串共有 <code>n(n+1)/2</code> 个合法区间。全部枚举后，单字符、整段、已经有序、跨越 1/0 边界等情况都会进入测试。</p>
+
+        <h3>3.7 关键代码三：围绕同一有效变化区域制造等价查询</h3>
+        <div class="code-card">
+          <header><span>gen.cpp · collectAnchors()</span><span>定位有效边界</span></header>
+          <pre>int first_one = one_starts[...];
+int last_zero = zero_ends[...];
+int left_low = previous_one[first_one] + 1;
+int right_high = next_zero[last_zero] - 1;
+anchors.push_back({left_low, first_one, last_zero, right_high});</pre>
+        </div>
+        <p>对于同一个 <code>first_one</code> 和 <code>last_zero</code>，左端点可以在 <code>left_low..first_one</code> 中变化，右端点可以在 <code>last_zero..right_high</code> 中变化。这些查询写法不同，却可能产生同一个排序结果，正好检验程序有没有正确去重。</p>
+
+        <h3>3.8 关键代码四：小测试用掉一部分预算，大测试填满剩余预算</h3>
         <div class="code-card">
           <header><span>gen.cpp · build()</span><span>核心规模控制</span></header>
           <pre>const int large_n = 200000 - used_n;
@@ -692,114 +929,190 @@ large.queries = makeLargeQueries(
 );
 tests.push_back(move(large));</pre>
         </div>
+        <p>这种写法保证每次调用都满足限制，同时把 <code>sum(n)</code> 和 <code>sum(m)</code> 精确推到 200000。慢程序需要面对接近题目上限的真实工作量。</p>
 
-        <h3>3.3 十类大型字符串</h3>
+        <h3>3.9 十类大型字符串分别测试什么</h3>
         <ol>
-          <li>完全交替的 <code>010101...</code>；</li>
-          <li>长短不一的连续 0/1 段；</li>
-          <li>全 0；</li>
-          <li>全 1；</li>
-          <li><code>000...111...</code> 的正向有序串；</li>
-          <li><code>111...000...</code> 的反向结构；</li>
-          <li>以 0 为主，夹杂少量孤立或块状的 1；</li>
-          <li>确定性伪随机二进制串；</li>
-          <li>重复 motif 的周期串；</li>
-          <li>由不规则权重生成的长连续段。</li>
+          <li><strong>完全交替：</strong><code>010101...</code>，包含大量 1/0 逆序边界和宽区间变化。</li>
+          <li><strong>长短不一的连续段：</strong>检验连续块边缘和跨块查询。</li>
+          <li><strong>全 0：</strong>所有查询都不改变字符串，正确答案只能是 1。</li>
+          <li><strong>全 1：</strong>同样检验所有操作都是 no-op 的去重。</li>
+          <li><strong>正向有序：</strong><code>000...111...</code>，大量区间本身已经有序。</li>
+          <li><strong>反向结构：</strong><code>111...000...</code>，宽区间排序会移动大量字符。</li>
+          <li><strong>稀疏 1 块：</strong>检验孤立位置、很短有效变化区和很长无关前后缀。</li>
+          <li><strong>确定性伪随机串：</strong>提供不规则边界，减少只适配规则字符串的风险。</li>
+          <li><strong>周期串：</strong>制造大量相似局部结构，给哈希和去重增加压力。</li>
+          <li><strong>不规则长段：</strong>组合多种长度的 0/1 run，检验边界扫描和长区间。</li>
         </ol>
         <p><code>(seed - 1) % 10</code> 决定使用哪一类。seed 1 到 50 会让十类结构各出现五次，同时每次内部参数不同。</p>
 
-        <h3>3.4 已经完成的本地验证</h3>
-        <div class="status">
-          <div class="done">
-            <strong>已完成</strong>
-            <ul>
-              <li><code>g++ -O2 -std=c++17</code> 编译成功；</li>
-              <li>seed 1 到 50 全部能够生成输入；</li>
-              <li>每个查询都满足 <code>1 &lt;= l &lt;= r &lt;= n</code>；</li>
-              <li>每次运行的 <code>sum(n)=200000</code>；</li>
-              <li>每次运行的 <code>sum(m)=200000</code>。</li>
-            </ul>
-          </div>
-          <div class="pending">
-            <strong>尚未完成</strong>
-            <ul>
-              <li>还没有拿到隐藏的 a.cpp 到 j.cpp；</li>
-              <li>还没有运行官方 <code>judge.sh</code>；</li>
-              <li>因此官方 0 到 1 分数目前未知；</li>
-              <li>当前服务器仍在下载官方完整数据归档。</li>
-            </ul>
-          </div>
-        </div>
+        <h3>3.10 seed 1 实际生成的 10 个内部测试</h3>
+        <table>
+          <thead><tr><th>内部测试</th><th>n</th><th>m</th><th>字符串结构</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>1</td><td>1</td><td><code>0</code></td></tr>
+            <tr><td>2</td><td>1</td><td>1</td><td><code>1</code></td></tr>
+            <tr><td>3</td><td>2</td><td>3</td><td><code>10</code>，枚举全部区间</td></tr>
+            <tr><td>4</td><td>17</td><td>153</td><td>全 0</td></tr>
+            <tr><td>5</td><td>19</td><td>190</td><td>全 1</td></tr>
+            <tr><td>6</td><td>35</td><td>630</td><td>正向有序串</td></tr>
+            <tr><td>7</td><td>40</td><td>820</td><td>交替串</td></tr>
+            <tr><td>8</td><td>48</td><td>1176</td><td>周期串</td></tr>
+            <tr><td>9</td><td>55</td><td>1540</td><td>不规则边界小串</td></tr>
+            <tr><td>10</td><td>199782</td><td>195486</td><td>大型交替串与混合查询</td></tr>
+          </tbody>
+        </table>
+        <p>这一份 seed 的 <code>sum(n)=200000</code>、<code>sum(m)=200000</code>，文本大小约 2.74 MB。其他 seed 保持相同总预算，但会更换第 10 个测试的字符串家族和内部参数。</p>
 
-        <div class="callout warning">
-          <strong>准确表述：</strong>候选答案 <code>gen.cpp</code> 已经存在。现在未知的不是“有没有答案”，而是这个答案面对隐藏程序时究竟能得多少分。
+        <h3>3.11 CodeDesk 自己完成了哪些验证</h3>
+        <div class="callout">
+          <ul>
+            <li><code>g++ -O2 -std=c++17</code> 编译成功；</li>
+            <li>seed 1–50 全部可以正常输出；</li>
+            <li>每份输出的格式可被标准输入解析；</li>
+            <li>每个查询均满足 <code>1 &lt;= l &lt;= r &lt;= n</code>；</li>
+            <li>每个 seed 的 n 总和与 m 总和均精确为 200000；</li>
+            <li>最终文件保存在任务要求的 output 路径。</li>
+          </ul>
         </div>
       </section>
 
       <section id="verifier">
         <div class="section-label">Chapter 04</div>
-        <h2>官方 verifier 到底做什么</h2>
-        <p>Agent 运行时只能看到 <code>input/</code>。Agent 结束以后，ALE 才把隐藏的 <code>reference/</code> 注入容器，然后开始评测。</p>
-        <div class="flow" aria-label="官方评测流程">
-          <div class="flow-step"><b>Agent 生成</b><span>输出 <code>output/gen.cpp</code>。</span></div>
-          <div class="flow-step"><b>注入 reference</b><span>加入 a.cpp 到 j.cpp 与 judge.sh。</span></div>
-          <div class="flow-step"><b>编译</b><span>编译生成器和 10 个隐藏提交。</span></div>
-          <div class="flow-step"><b>运行 50 seeds</b><span>每个隐藏程序运行生成的全部数据。</span></div>
-          <div class="flow-step"><b>算分</b><span>聚合 AC、WA、TLE、RE 并匹配预期。</span></div>
-        </div>
+        <h2>官方怎样评测每一个 Case，并算出最终 0.5</h2>
+        <p>CodeDesk 结束后，ALE 把隐藏 reference 目录注入评测环境。此时才出现隐藏程序、正确标签和判题脚本。</p>
 
+        <h3>4.1 评测阶段新增了哪些文件</h3>
         <table>
-          <thead><tr><th>隐藏提交</th><th>评分器希望看到的 verdict</th><th>分值</th></tr></thead>
+          <thead><tr><th>文件</th><th>内容</th><th>作用</th></tr></thead>
           <tbody>
-            <tr><td>j</td><td>必须严格为 AC，否则整题 0 分</td><td>门控</td></tr>
-            <tr><td>i</td><td>严格为 AC</td><td>1</td></tr>
-            <tr><td>a、c、e、f、h</td><td>出现 WA 或 TLE</td><td>5</td></tr>
-            <tr><td>b、d</td><td>出现 TLE 或 WA</td><td>2</td></tr>
-            <tr><td>g</td><td>出现 WA</td><td>1</td></tr>
-            <tr><td>g</td><td>在其他 seed 上也出现 AC</td><td>1</td></tr>
+            <tr><td><code>reference/a.cpp</code> 到 <code>j.cpp</code></td><td>10 个真实的 Binary String Copying 解题程序</td><td>被我们的测试数据逐一检验</td></tr>
+            <tr><td><code>reference/j.cpp</code></td><td>官方选定的参考正确实现</td><td>为每份生成输入计算标准答案</td></tr>
+            <tr><td><code>reference/judge.sh</code></td><td>编译、生成测试、执行程序、比较输出的 Bash 脚本</td><td>产生每个隐藏程序的复合 verdict</td></tr>
+            <tr><td><code>Binary String Copying GT.xlsx</code></td><td>a–j 的期望标签：WA、TLE、AC/WA 或 AC</td><td>说明官方希望测试生成器识别出哪些程序行为</td></tr>
+            <tr><td><code>main.py</code> 中的 <code>_compute_score()</code></td><td>具体的 10 分评分逻辑和 j 门控</td><td>把 verdicts 转成 0–1 分数</td></tr>
+            <tr><td><code>verdicts.txt</code> / <code>official-eval.log</code></td><td>本次真实运行记录</td><td>证明最终结果为 0.5</td></tr>
           </tbody>
         </table>
-        <p>总分为命中的点数除以 10。任务卡给出的通过阈值是 0.9。</p>
-      </section>
 
-      <section id="assessment">
-        <div class="section-label">Chapter 05</div>
-        <h2>这道任务真正测什么，哪里可能不够好</h2>
-        <h3>它想测的能力</h3>
-        <ul>
-          <li>阅读并理解算法规格；</li>
-          <li>推导正确程序的关键不变量；</li>
-          <li>预测常见错误实现与复杂度问题；</li>
-          <li>设计边界、极限、等价类和对抗测试；</li>
-          <li>把测试策略写成可重复执行的生成器；</li>
-          <li>自行编译和检查产物。</li>
-        </ul>
-        <p>因此，它模拟的是人类竞赛出题人、Hack 数据设计者或软件测试工程师，而不是普通参赛者。</p>
+        <h3>4.2 “50 个 Case”到底指什么</h3>
+        <p>这里同时存在三层数量，必须分开理解：</p>
+        <table>
+          <thead><tr><th>层次</th><th>数量</th><th>具体含义</th></tr></thead>
+          <tbody>
+            <tr><td>外层生成运行</td><td>50</td><td>官方调用 <code>./gen 1</code> 到 <code>./gen 50</code>，得到 50 个文件</td></tr>
+            <tr><td>每个文件里的内部测试</td><td>10</td><td>本次 gen.cpp 每次都打印 <code>t=10</code>，因此每个文件含 10 组 Binary String Copying 测试</td></tr>
+            <tr><td>隐藏解题程序</td><td>10</td><td>a.cpp、b.cpp、...、j.cpp</td></tr>
+          </tbody>
+        </table>
+        <p>所以，一个隐藏程序会被启动 50 次，每次读取一个含 10 组内部测试的文件。10 个隐藏程序共有 <code>10*50=500</code> 次正式判题进程；参考程序 j 还会额外运行 50 次生成标准答案。再加上生成器本身运行 50 次，完整脚本共启动 600 次主要程序进程。</p>
 
-        <h3>verifier 的优点</h3>
-        <ul>
-          <li>直接编译、执行隐藏程序，不依赖 LLM judge；</li>
-          <li>AC、WA、TLE、RE 都是可复现的程序行为；</li>
-          <li>正确程序 j 是硬门控，可以阻止非法或误伤正确解的数据拿分；</li>
-          <li>包含不同错误实现，也包含要求 AC/WA 混合结果的不稳定实现。</li>
-        </ul>
-
-        <h3>需要警惕的局限</h3>
-        <ul>
-          <li><strong>固定隐藏程序依赖：</strong>高分只说明抓住了这 10 个实现，不代表覆盖所有潜在 bug；</li>
-          <li><strong>题面提示较多：</strong>原题已经明确告诉 Agent 应构造哪些边界与极限数据，降低了自主发现测试策略的难度；</li>
-          <li><strong>可能过拟合：</strong>一旦知道隐藏程序类型，生成器可以专门攻击这些程序，而不具备一般化测试能力；</li>
-          <li><strong>分数解释有限：</strong>0.9 与 1.0 表示匹配固定 verdict 目标，不直接等价于真实软件测试覆盖率；</li>
-          <li><strong>数据分发成本高：</strong>单题 reference 很小，但官方本地 Docker 数据被打入约 44.4 GB 的单一归档，增加复现成本。</li>
-        </ul>
-
-        <div class="callout">
-          <strong>如果你要设计新题：</strong>保留“隐藏正确解 + 多类错误解 + 投机解 + 确定性 verifier”的结构，同时减少题面对攻击方法的直接提示，并使用更多独立错误实现检验泛化能力。
+        <h3>4.3 judge.sh 从头到尾执行什么</h3>
+        <div class="flow" aria-label="官方评测流程">
+          <div class="flow-step"><b>编译</b><span>编译 gen.cpp、参考 j 和 a–j 全部程序。</span></div>
+          <div class="flow-step"><b>生成 50 份输入</b><span>保存为 test_1.txt 到 test_50.txt。</span></div>
+          <div class="flow-step"><b>生成标准答案</b><span>j 读取每份输入，输出 ref_1.txt 到 ref_50.txt。</span></div>
+          <div class="flow-step"><b>逐程序运行</b><span>a–j 各自运行 50 份输入，每次限制 2 秒、256 MB。</span></div>
+          <div class="flow-step"><b>聚合并算分</b><span>记录 AC/WA/TLE/RE，再匹配 10 个得分点。</span></div>
         </div>
+        <ol>
+          <li><code>g++ -O2 -std=c++17 -o gen_bin gen.cpp</code> 编译生成器。</li>
+          <li>用同样参数编译 j.cpp，得到参考程序 <code>reference</code>。</li>
+          <li>循环 seed 1–50：<code>./gen_bin $seed &gt; tests/test_$seed.txt</code>。</li>
+          <li>循环 seed 1–50：让 j 读取测试文件，把十行标准答案写入对应的 <code>ref_$seed.txt</code>。</li>
+          <li>对 a–j 中的每个程序，再循环 50 个 seed，并用 <code>timeout 2</code> 和 256 MB 虚拟内存限制启动它。</li>
+          <li>程序正常结束时，脚本把它的完整 stdout 与参考文件逐字比较。</li>
+          <li>50 次结束后，将该程序出现过的全部状态按照 AC/TLE/WA/RE 顺序合并。</li>
+        </ol>
+
+        <h3>4.4 单个 seed 怎样判定 AC、WA、TLE 或 RE</h3>
+        <table>
+          <thead><tr><th>单次运行发生什么</th><th>该 seed 的状态</th></tr></thead>
+          <tbody>
+            <tr><td>进程在 2 秒内正常结束，10 行输出与 j 完全相同</td><td>AC</td></tr>
+            <tr><td>进程正常结束，但任意一行数字不同、少行或多行</td><td>WA</td></tr>
+            <tr><td><code>timeout</code> 返回 124，说明超过 2 秒</td><td>TLE</td></tr>
+            <tr><td>进程异常退出，返回其他非零状态</td><td>RE</td></tr>
+          </tbody>
+        </table>
+        <p>例如 seed 22 的输入包含 10 个内部测试。参考程序最后一行输出 <code>106429</code>，一次复跑中 a.cpp 最后一行输出 <code>106428</code>。前九行即使都相同，这个 seed 对 a 仍然记为 WA。</p>
+
+        <h3>4.5 为什么最终会出现 AC/WA 这种组合</h3>
+        <p>Verifier 不统计“通过了多少个 seed”，只记录某种状态有没有出现过：</p>
+        <ul>
+          <li>50 个 seed 全部正确：最终是 <code>AC</code>；</li>
+          <li>49 个正确、1 个错误：最终是 <code>AC/WA</code>；</li>
+          <li>有 AC、有 TLE、也有 WA：最终是 <code>AC/TLE/WA</code>；</li>
+          <li>只要 j 的最终集合不严格等于 <code>{AC}</code>，整题直接得到 0 分。</li>
+        </ul>
+
+        <h3>4.6 GT Excel 希望每个程序表现成什么</h3>
+        <table>
+          <thead><tr><th>程序</th><th>GT Excel 标签</th><th>评分代码实际检查</th><th>最多得分</th></tr></thead>
+          <tbody>
+            <tr><td>a</td><td>WA</td><td>最终集合里出现 WA 或 TLE</td><td>1</td></tr>
+            <tr><td>b</td><td>TLE</td><td>最终集合里出现 TLE 或 WA</td><td>1</td></tr>
+            <tr><td>c</td><td>WA</td><td>最终集合里出现 WA 或 TLE</td><td>1</td></tr>
+            <tr><td>d</td><td>TLE</td><td>最终集合里出现 TLE 或 WA</td><td>1</td></tr>
+            <tr><td>e</td><td>WA</td><td>最终集合里出现 WA 或 TLE</td><td>1</td></tr>
+            <tr><td>f</td><td>WA</td><td>最终集合里出现 WA 或 TLE</td><td>1</td></tr>
+            <tr><td>g</td><td>AC/WA</td><td>出现 WA 得 1 分，同时也出现 AC 再得 1 分</td><td>2</td></tr>
+            <tr><td>h</td><td>WA</td><td>最终集合里出现 WA 或 TLE</td><td>1</td></tr>
+            <tr><td>i</td><td>AC</td><td>最终集合必须严格等于 AC</td><td>1</td></tr>
+            <tr><td>j</td><td>AC</td><td>必须严格等于 AC</td><td>门控</td></tr>
+          </tbody>
+        </table>
+        <p>总共有 10 个得分点：a、b、c、d、e、f、h、i 各 1 分，g 占 2 分。j 负责门控，不占这 10 分。</p>
+
+        <h3>4.7 本次真实 verdict 和逐项得分</h3>
+        <table>
+          <thead><tr><th>程序</th><th>实际 verdict</th><th>是否得分</th><th>具体解释</th></tr></thead>
+          <tbody>
+            <tr><td>a</td><td>AC/WA</td><td>+1</td><td>成功出现 WA；它使用随机位置权重表示结果，大规模情况下发生错误合并。复跑 seed 22、36 时大型测试均少计 1。</td></tr>
+            <tr><td>b</td><td>AC</td><td>0</td><td>它含向左右扫描的慢循环，但当前查询没有让昂贵扫描在足够多的查询上持续发生，因此没有超过 2 秒。</td></tr>
+            <tr><td>c</td><td>AC/WA</td><td>+1</td><td>它用 <code>l*104729+r*3</code> 编码两个边界，映射不唯一。seed 16、18 的大型测试均少计 1。</td></tr>
+            <tr><td>d</td><td>AC</td><td>0</td><td>GT 希望得到 TLE；本次 50 份输入上既没有超时也没有错误输出。</td></tr>
+            <tr><td>e</td><td>AC/WA</td><td>+1</td><td>它使用固定 64 位滚动哈希表示结果。seed 1 的大型测试产生错误合并，参考为 90589，它输出 90588。</td></tr>
+            <tr><td>f</td><td>AC/WA</td><td>+1</td><td>它用 <code>n*l+(n-1)*r</code> 编码边界，这个表达式存在碰撞。seed 19 的大型测试少计 1。</td></tr>
+            <tr><td>g</td><td>AC</td><td>0/2</td><td>官方需要它至少在一个 seed 上 WA，同时保留其他 AC；本次没有任何 WA，因此两个点都丢失。</td></tr>
+            <tr><td>h</td><td>AC</td><td>0</td><td>它依赖随机指纹，本次运行没有出现能改变最终计数的碰撞。</td></tr>
+            <tr><td>i</td><td>AC</td><td>+1</td><td>保护程序保持正确，严格 AC。</td></tr>
+            <tr><td>j</td><td>AC</td><td>门控通过</td><td>参考程序在所有生成输入上正常完成，已有 5 分可以生效。</td></tr>
+          </tbody>
+        </table>
+
+        <h3>4.8 为什么最后正好是 0.5</h3>
+        <div class="code-card">
+          <header><span>得分计算</span><span>官方真实结果</span></header>
+          <pre>a  = 1
+b  = 0
+c  = 1
+d  = 0
+e  = 1
+f  = 1
+g  = 0 + 0
+h  = 0
+i  = 1
+j  = gate passed
+
+total = 5 / 10 = 0.5</pre>
+        </div>
+        <p>已经抓住的是 a、c、e、f 四个错误实现，并保护住 i 和 j。失败集中在两类：</p>
+        <ul>
+          <li><strong>性能攻击不够准确：</strong>b、d 没有被压到 TLE；仅仅把 n、m 填满，并不能保证目标代码执行最坏路径。</li>
+          <li><strong>概率性错误没有稳定触发：</strong>g、h 使用随机指纹或随机哈希，本次数据没有让它们产生官方需要的错误行为。</li>
+        </ul>
+        <div class="callout warning">
+          <strong>最终结论：</strong>这份 gen.cpp 能生成合法、规模充分、覆盖多种边界的测试，也确实抓住四个隐藏错误程序；它尚未构造出针对 b、d 的精确最坏路径，也没有稳定控制 g、h 的随机失败，因此只得到一半分数。
+        </div>
+
+        <h3>4.9 这个 verifier 实际在测什么</h3>
+        <p>它主要测 Agent 能否像竞赛 Hack 数据设计者或测试工程师一样，读懂规格、推导正确不变量、猜测常见错误、生成极端与等价类测试，并把策略实现成可重复执行的程序。AC、WA、TLE、RE 都来自真实编译执行，不需要 LLM judge。</p>
+        <p>分数也有明确边界：0.5 表示命中了固定隐藏程序中的 5 个得分点，不能直接解释为“覆盖了现实世界 50% 的程序错误”。</p>
       </section>
 
       <footer>
-        <p>页面文件：<code>cwy/index.html</code>。任务原始来源：<code>tasks/computing_math/cp_test_gen_1/main.py</code> 与 <code>task_card.json</code>。候选答案来源：本次 CodeSmith 运行生成的 <code>gen.cpp</code>。</p>
+        <p>页面文件：<code>cwy/index.html</code>。任务原始来源：<code>tasks/computing_math/cp_test_gen_1/main.py</code> 与 <code>task_card.json</code>。真实评测依据：官方 <code>judge.sh</code>、a.cpp 到 j.cpp、<code>verdicts.txt</code> 与 <code>official-eval.log</code>。</p>
       </footer>
     </main>
   </div>
