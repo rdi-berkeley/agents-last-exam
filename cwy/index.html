@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="从人的角度理解 ALE 任务 computing_math/cp_test_gen_1：原始题面、中文翻译、解题思路和 CodeSmith 实际运行记录。">
+  <title>ALE 任务解读：Binary String Copying 测试生成器</title>
+  <style>
+    :root {
+      --paper: #f6f2e8;
+      --paper-deep: #eee7d7;
+      --ink: #17201f;
+      --muted: #5c6864;
+      --line: #d2c9b8;
+      --green: #0e6855;
+      --green-dark: #08483d;
+      --green-soft: #dcebe5;
+      --gold: #a86413;
+      --gold-soft: #f4e6ca;
+      --red: #9a3f36;
+      --white: #fffdf8;
+      --shadow: 0 18px 48px rgba(49, 47, 39, 0.09);
+      --mono: "SFMono-Regular", "Cascadia Code", "Liberation Mono", Menlo, monospace;
+      --serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif;
+      --sans: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 9% 2%, rgba(168, 100, 19, 0.11), transparent 31rem),
+        radial-gradient(circle at 92% 20%, rgba(14, 104, 85, 0.10), transparent 34rem),
+        var(--paper);
+      font-family: var(--sans);
+      line-height: 1.76;
+    }
+
+    a { color: var(--green); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    code, pre { font-family: var(--mono); }
+    code { font-size: 0.92em; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 270px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 34px 28px;
+      color: #eaf3ef;
+      background: linear-gradient(168deg, #102b26 0%, #0b463b 58%, #12392f 100%);
+      overflow-y: auto;
+    }
+
+    .brand {
+      margin-bottom: 36px;
+      padding-bottom: 28px;
+      border-bottom: 1px solid rgba(255,255,255,0.16);
+    }
+
+    .brand .eyebrow {
+      color: #b8d8ce;
+      font-size: 0.73rem;
+      font-weight: 750;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .brand h1 {
+      margin: 10px 0 9px;
+      font-family: var(--serif);
+      font-size: 1.42rem;
+      line-height: 1.35;
+      letter-spacing: 0.01em;
+    }
+
+    .brand p {
+      margin: 0;
+      color: #c9ddd7;
+      font-size: 0.86rem;
+      line-height: 1.65;
+    }
+
+    nav h2 {
+      margin: 0 0 12px;
+      color: #99c4b8;
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    nav a {
+      display: block;
+      margin: 4px 0;
+      padding: 8px 10px;
+      border-left: 2px solid transparent;
+      border-radius: 0 7px 7px 0;
+      color: #e7f0ed;
+      font-size: 0.91rem;
+      text-decoration: none;
+      transition: 160ms ease;
+    }
+
+    nav a:hover {
+      border-left-color: #d4a85f;
+      background: rgba(255,255,255,0.08);
+      transform: translateX(2px);
+    }
+
+    .side-note {
+      margin-top: 34px;
+      padding: 14px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.06);
+      color: #c9ddd7;
+      font-size: 0.78rem;
+      line-height: 1.55;
+    }
+
+    main {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      padding: 64px 52px 100px;
+    }
+
+    .hero {
+      position: relative;
+      margin-bottom: 34px;
+      padding: 46px 48px 42px;
+      border: 1px solid rgba(14, 104, 85, 0.23);
+      border-radius: 22px;
+      background: rgba(255,253,248,0.84);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "01";
+      position: absolute;
+      right: -12px;
+      bottom: -52px;
+      color: rgba(14, 104, 85, 0.055);
+      font-family: var(--mono);
+      font-size: 12rem;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.12em;
+      pointer-events: none;
+    }
+
+    .kicker {
+      color: var(--gold);
+      font-size: 0.77rem;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .hero h2 {
+      position: relative;
+      z-index: 1;
+      max-width: 820px;
+      margin: 12px 0 16px;
+      font-family: var(--serif);
+      font-size: clamp(2.1rem, 4.5vw, 4.1rem);
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+    }
+
+    .hero .lead {
+      position: relative;
+      z-index: 1;
+      max-width: 820px;
+      margin: 0;
+      color: #3f4e49;
+      font-size: 1.08rem;
+    }
+
+    .meta-row {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 24px;
+    }
+
+    .tag {
+      padding: 5px 10px;
+      border: 1px solid #c7d8d2;
+      border-radius: 999px;
+      background: #edf5f1;
+      color: var(--green-dark);
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 13px;
+      margin: 20px 0 44px;
+    }
+
+    .summary-card {
+      padding: 18px 18px 16px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: rgba(255,253,248,0.72);
+    }
+
+    .summary-card strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--green-dark);
+      font-family: var(--serif);
+      font-size: 1.04rem;
+    }
+
+    .summary-card span { color: var(--muted); font-size: 0.83rem; line-height: 1.5; }
+
+    section {
+      scroll-margin-top: 24px;
+      margin: 48px 0;
+      padding: 34px 38px 38px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,253,248,0.78);
+      box-shadow: 0 8px 26px rgba(49,47,39,0.05);
+    }
+
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--green);
+      font-size: 0.74rem;
+      font-weight: 850;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    .section-label::before {
+      content: "";
+      width: 26px;
+      height: 2px;
+      background: var(--gold);
+    }
+
+    section h2 {
+      margin: 8px 0 8px;
+      font-family: var(--serif);
+      font-size: clamp(1.65rem, 3vw, 2.45rem);
+      line-height: 1.25;
+    }
+
+    section h3 {
+      margin: 31px 0 10px;
+      color: var(--green-dark);
+      font-family: var(--serif);
+      font-size: 1.25rem;
+    }
+
+    section h4 { margin: 22px 0 8px; font-size: 1rem; }
+    section p { margin: 9px 0 15px; }
+    section li { margin: 5px 0; }
+
+    .callout {
+      margin: 22px 0;
+      padding: 18px 20px;
+      border-left: 4px solid var(--green);
+      border-radius: 0 11px 11px 0;
+      background: var(--green-soft);
+    }
+
+    .callout.warning {
+      border-left-color: var(--gold);
+      background: var(--gold-soft);
+    }
+
+    .callout strong { color: var(--green-dark); }
+
+    .source-block {
+      margin-top: 20px;
+      padding: 26px 28px;
+      border: 1px solid #bfc8c4;
+      border-radius: 12px;
+      background: #17201f;
+      color: #e8efec;
+      box-shadow: inset 0 1px rgba(255,255,255,0.06);
+    }
+
+    .source-block .source-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.14);
+      color: #9ec9bd;
+      font-size: 0.76rem;
+      font-weight: 750;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .source-block pre {
+      margin: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: #f3f5f4;
+      font-size: 0.86rem;
+      line-height: 1.72;
+    }
+
+    .translation {
+      margin-top: 20px;
+      padding: 27px 29px;
+      border: 1px solid #e2cfab;
+      border-radius: 12px;
+      background: #fff8e9;
+    }
+
+    .translation > h3 { margin-top: 0; color: #7a4b0e; }
+    .translation h4 { color: #71460f; }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      position: relative;
+      min-height: 118px;
+      padding: 16px 14px;
+      border: 1px solid #c6d7d1;
+      border-radius: 11px;
+      background: #edf5f1;
+    }
+
+    .flow-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      z-index: 2;
+      top: 43px;
+      right: -18px;
+      color: var(--gold);
+      font-size: 1.25rem;
+      font-weight: 900;
+    }
+
+    .flow-step b { display: block; color: var(--green-dark); font-size: 0.9rem; }
+    .flow-step span { display: block; margin-top: 5px; color: var(--muted); font-size: 0.77rem; line-height: 1.5; }
+
+    table {
+      width: 100%;
+      margin: 18px 0;
+      border-collapse: collapse;
+      background: var(--white);
+      font-size: 0.88rem;
+    }
+
+    th, td {
+      padding: 11px 13px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #e7efeaa8; color: var(--green-dark); }
+
+    .code-card {
+      margin: 18px 0;
+      border: 1px solid #bfc8c4;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #182320;
+    }
+
+    .code-card header {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      background: #22332e;
+      color: #b9d3cb;
+      font-family: var(--mono);
+      font-size: 0.76rem;
+    }
+
+    .code-card pre {
+      margin: 0;
+      padding: 18px;
+      overflow-x: auto;
+      color: #edf4f1;
+      font-size: 0.82rem;
+      line-height: 1.65;
+    }
+
+    .status {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 20px;
+    }
+
+    .status > div {
+      padding: 17px 18px;
+      border-radius: 11px;
+      border: 1px solid var(--line);
+    }
+
+    .status .done { background: #e5f1eb; }
+    .status .pending { background: #fbedd7; }
+    .status strong { display: block; margin-bottom: 7px; }
+
+    .path {
+      display: block;
+      margin: 7px 0;
+      padding: 9px 11px;
+      border: 1px solid #d0d8d4;
+      border-radius: 7px;
+      background: #f0f3f1;
+      color: #263a34;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      overflow-wrap: anywhere;
+    }
+
+    footer {
+      padding: 14px 4px 0;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.79rem;
+    }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      aside { position: relative; width: 100%; height: auto; padding: 24px; }
+      nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      nav h2 { grid-column: 1 / -1; }
+      .side-note { display: none; }
+      main { padding: 32px 22px 72px; }
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+      .flow { grid-template-columns: 1fr; }
+      .flow-step { min-height: auto; }
+      .flow-step:not(:last-child)::after { content: "↓"; top: auto; right: 50%; bottom: -19px; }
+    }
+
+    @media (max-width: 640px) {
+      nav { display: block; }
+      .hero { padding: 31px 25px; }
+      section { padding: 27px 21px; }
+      .summary-grid, .status { grid-template-columns: 1fr; }
+      .source-block, .translation { padding: 20px 18px; }
+      th, td { padding: 9px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside>
+      <div class="brand">
+        <div class="eyebrow">Agents' Last Exam</div>
+        <h1>Binary String Copying 测试生成器</h1>
+        <p>从题面原文到实际 CodeSmith 运行的完整人类视角解读。</p>
+      </div>
+      <nav aria-label="页面目录">
+        <h2>目录</h2>
+        <a href="#overview">0. 一句话理解</a>
+        <a href="#problem">1. 题目原文与翻译</a>
+        <a href="#solution">2. 人类解题思路</a>
+        <a href="#codesmith">3. CodeSmith 怎么解</a>
+        <a href="#verifier">4. 官方怎么评分</a>
+        <a href="#assessment">5. 它真正测什么</a>
+      </nav>
+      <div class="side-note">
+        原始题面取自仓库中的 <code>task_card.json</code> 与 <code>main.py</code>。英文题面保持原文，中文内容为逐段翻译和解释。
+      </div>
+    </aside>
+
+    <main>
+      <header class="hero" id="overview">
+        <div class="kicker">Task ID · computing_math/cp_test_gen_1</div>
+        <h2>让 AI 代替竞赛测试工程师，设计能抓住错误程序的数据</h2>
+        <p class="lead">这道任务不是让 AI 解 Binary String Copying，也不是让它输出一个数字。AI 要提交一个 <code>gen.cpp</code>。这个程序根据 seed 自动生成测试数据，目标是在不查看隐藏程序源码的情况下，让正确程序保持 AC，并让错误或低效程序暴露为 WA、TLE 或不稳定的 AC/WA。</p>
+        <div class="meta-row">
+          <span class="tag">输出：gen.cpp</span>
+          <span class="tag">运行：50 seeds</span>
+          <span class="tag">隐藏程序：a.cpp 到 j.cpp</span>
+          <span class="tag">评分：确定性执行</span>
+        </div>
+      </header>
+
+      <div class="summary-grid" aria-label="任务摘要">
+        <div class="summary-card"><strong>人的角色</strong><span>算法竞赛出题人、Hack 数据设计者、测试工程师</span></div>
+        <div class="summary-card"><strong>输入材料</strong><span>算法题 PDF，以及只列出 a 到 j 编号的 Excel</span></div>
+        <div class="summary-card"><strong>提交产物</strong><span>一个可编译、接收 seed、输出合法测试的 C++ 程序</span></div>
+        <div class="summary-card"><strong>当前状态</strong><span>候选 gen.cpp 已完成；隐藏 reference 尚未下载完，因此官方分数未知</span></div>
+      </div>
+
+      <section id="problem">
+        <div class="section-label">Chapter 01</div>
+        <h2>题目原文与完整中文翻译</h2>
+        <p>下面英文内容是任务对 Agent 展示的原始题面。这里不改写、不总结。路径使用任务卡中的公开形式 <code>default/input</code> 和 <code>default/output</code>。</p>
+
+        <div class="source-block">
+          <div class="source-title"><span>Original task prompt</span><span>Verbatim</span></div>
+          <pre>You are tasked with writing gen.cpp, a C++ program that prints one complete valid test case to stdout per invocation and accepts a single integer seed as argv[1] (e.g. ./gen 1, ./gen 2, ./gen 50) to vary output across invocations.
+
+The problem statement is provided in Binary String Copying Problem Statement.pdf. The 10 submission IDs are listed in Binary String Copying Inputs.xlsx: they are each a single letter, proceeding alphabetically from top to bottom (row 2 is a, row 3 is b, etc). Without knowledge of the submission implementations, the generator must be designed by reasoning purely from the problem structure about what kinds of inputs stress different algorithmic approaches:
+
+To trigger TLE on slow solutions, generate worst-case inputs where the sums of n and m hit their limits (sum of n = sum of m = 200000) using a single large test case with m operations whose [l, r] ranges cover wide spans of a string with many alternating 0/1 segments, forcing per-query string reconstruction or hashing of long substrings.
+
+To trigger WA on incorrect solutions, generate inputs that exercise boundary conditions: operations with l = r (a no-op sort that produces the original string and must be deduplicated against any other no-op operation), strings that are already sorted everywhere except at narrow boundary windows so distinct (l, r) pairs collapse to the same sorted result, all-0 and all-1 strings where every operation is a no-op, and ranges whose sorted result equals the original because the substring is already sorted — all cases where naive comparison or careless hashing diverges from the correct deduplicated count.
+
+To produce both AC and WA verdicts from the same submission across 50 seeds, the 50 generated test cases must include a mix of small inputs (n, m &lt;= 100) and maximum-size inputs so that a randomized or hash-based solution coincidentally agrees on small inputs but collides on large adversarial ones.
+
+gen.cpp must be compiled and verified locally with g++ before submission.
+
+## Input Files
+Located at: `default/input`
+- `Binary String Copying Problem Statement.pdf` — full problem statement
+- `Binary String Copying Inputs.xlsx` — submission IDs
+
+## Output
+Save your final generator as: `default/output/gen.cpp`
+
+## Compilation
+Use: `g++ -O2 -std=c++17 gen.cpp -o gen`
+
+## Constraints
+- Each test case must be valid input for the Binary String Copying problem
+- Sum of n across all test cases in one invocation must not exceed 200000
+- Sum of m across all test cases in one invocation must not exceed 200000
+- Each query must satisfy 1 &lt;= l &lt;= r &lt;= n
+
+## Evaluation
+Your generator will be called as `./gen $seed` for seeds 1 through 50 to produce 50 test cases. Submission j serves as the reference solution. Each of the remaining 9 submissions will be run against all 50 test cases with a 2-second time limit and 256MB memory limit per execution. The verdict for each submission is the union of all outcomes (AC, TLE, WA, RE) across the 50 test cases, joined by "/" in the order AC/TLE/WA/RE.
+</pre>
+        </div>
+
+        <div class="translation">
+          <h3>完整中文翻译</h3>
+          <p>你的任务是编写 <code>gen.cpp</code>。它是一个 C++ 程序，每次运行时向标准输出打印一份完整且合法的测试用例，并通过 <code>argv[1]</code> 接收一个整数 seed，例如 <code>./gen 1</code>、<code>./gen 2</code>、<code>./gen 50</code>，从而让不同运行产生不同输出。</p>
+
+          <p>题目说明位于 <code>Binary String Copying Problem Statement.pdf</code>。10 个提交的编号列在 <code>Binary String Copying Inputs.xlsx</code> 中。每个编号都是一个字母，按照表格从上到下依次排列，第 2 行是 a，第 3 行是 b，以此类推。你无法看到这些提交的具体实现，因此只能从题目本身的结构出发，推理哪些输入会对不同算法形成压力，并据此设计生成器。</p>
+
+          <p>为了让低效程序触发 TLE，应生成最坏情况输入：让 n 的总和与 m 的总和都达到上限 200000。可以使用一个大型测试用例，其中包含 m 次操作，各个 <code>[l,r]</code> 区间覆盖具有大量 0/1 交替段的字符串中的较宽范围。这样可以迫使某些程序在每次查询时重新构造字符串，或对很长的子串进行哈希，从而超时。</p>
+
+          <p>为了让错误程序触发 WA，应生成覆盖边界情况的输入，包括：</p>
+          <ul>
+            <li><code>l = r</code> 的操作。这种排序不会改变原字符串，必须与其他不改变字符串的操作去重；</li>
+            <li>字符串几乎已经排好序，只有狭窄边界窗口未排序。不同的 <code>(l,r)</code> 可能得到完全相同的排序结果；</li>
+            <li>全 0 字符串与全 1 字符串。所有操作都不会改变字符串；</li>
+            <li>被选择的子串本身已经有序，因此排序结果仍等于原字符串。</li>
+          </ul>
+          <p>这些情况会使简单粗暴的比较方式或不谨慎的哈希实现，与正确的去重计数产生差异。</p>
+
+          <p>为了让同一个提交在 50 个 seed 的运行中同时产生 AC 和 WA，生成的 50 份测试数据必须混合小规模输入与最大规模输入。小规模输入要求 <code>n,m &lt;= 100</code>。这样，随机化算法或依赖哈希的算法可能在小数据上偶然正确，却在大型对抗数据上发生碰撞或错误。</p>
+
+          <p>提交前，必须使用 <code>g++</code> 在本地编译并验证 <code>gen.cpp</code>。</p>
+
+          <h4>输入文件</h4>
+          <p>文件位于 <code>default/input</code>：</p>
+          <ul>
+            <li><code>Binary String Copying Problem Statement.pdf</code>：完整题目说明；</li>
+            <li><code>Binary String Copying Inputs.xlsx</code>：提交编号。</li>
+          </ul>
+
+          <h4>输出</h4>
+          <p>将最终生成器保存为 <code>default/output/gen.cpp</code>。</p>
+
+          <h4>编译</h4>
+          <p>使用命令：<code>g++ -O2 -std=c++17 gen.cpp -o gen</code>。</p>
+
+          <h4>约束</h4>
+          <ul>
+            <li>每次生成的测试必须是 Binary String Copying 问题的合法输入；</li>
+            <li>一次运行输出的所有测试中，n 的总和不能超过 200000；</li>
+            <li>一次运行输出的所有测试中，m 的总和不能超过 200000；</li>
+            <li>每次查询都必须满足 <code>1 &lt;= l &lt;= r &lt;= n</code>。</li>
+          </ul>
+
+          <h4>评测方式</h4>
+          <p>评测器会使用 seed 1 到 50 调用生成器，即执行 <code>./gen $seed</code>，从而得到 50 份测试数据。提交 j 作为参考正确程序。其余 9 个提交会在全部 50 份测试上运行，每次执行的时间限制为 2 秒，内存限制为 256 MB。每个提交的最终 verdict 是它在 50 份测试中出现过的全部结果的并集，可能包括 AC、TLE、WA、RE，并按照 AC/TLE/WA/RE 的顺序使用斜杠连接。</p>
+        </div>
+      </section>
+
+      <section id="solution">
+        <div class="section-label">Chapter 02</div>
+        <h2>如果你是人，这道题应该怎么解</h2>
+        <div class="callout">
+          <strong>先分清两层题目：</strong>内层是 Binary String Copying 算法题；外层才是 ALE 任务。你不提交内层题目的解法，而是提交一个能生成内层题目测试数据的程序。
+        </div>
+
+        <h3>2.1 先理解内层算法题</h3>
+        <p>对二进制字符串的区间 <code>[l,r]</code> 排序，等价于把区间内的 0 全部移到前面、1 全部移到后面。判断两次操作是否产生同一结果时，关键不是原始的 <code>l,r</code>，而是：</p>
+        <ol>
+          <li>区间内第一个 1 的位置，记作 <code>L</code>；</li>
+          <li>区间内最后一个 0 的位置，记作 <code>R</code>；</li>
+          <li>如果 <code>L &gt; R</code>，区间本来已经有序，排序不会改变字符串；</li>
+          <li>否则，真正发生变化的核心范围由 <code>(L,R)</code> 决定。多个不同的 <code>[l,r]</code> 可能归一化到同一个 <code>(L,R)</code>。</li>
+        </ol>
+
+        <h3>2.2 再猜隐藏错误程序会错在哪里</h3>
+        <table>
+          <thead><tr><th>可能的错误实现</th><th>对应攻击数据</th><th>预期结果</th></tr></thead>
+          <tbody>
+            <tr><td>直接把不同的 <code>[l,r]</code> 当成不同答案</td><td>设计大量不同区间，但它们归一化到相同 <code>(L,R)</code></td><td>WA</td></tr>
+            <tr><td>没有合并所有“不改变原串”的查询</td><td>全 0、全 1、单点区间、已经有序的子串</td><td>WA</td></tr>
+            <tr><td>第一个 1 或最后一个 0 的边界处理错误</td><td>变化只发生在开头、结尾或很窄的边界窗口</td><td>WA</td></tr>
+            <tr><td>每次查询复制、排序或哈希长子串</td><td><code>sum(n)=sum(m)=200000</code>，大量宽区间</td><td>TLE</td></tr>
+            <tr><td>随机化或哈希实现不稳定</td><td>部分 seed 使用温和小数据，部分 seed 使用大型对抗结构</td><td>AC/WA</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2.3 设计一个 seed 驱动的生成器</h3>
+        <div class="flow" aria-label="人类解题流程">
+          <div class="flow-step"><b>读题</b><span>确定正确结果的归一化规律与完整输入格式。</span></div>
+          <div class="flow-step"><b>列错误模式</b><span>边界、去重、复杂度、随机化和哈希。</span></div>
+          <div class="flow-step"><b>造测试族</b><span>小规模穷举、结构化大串、随机串和极限查询。</span></div>
+          <div class="flow-step"><b>写 gen.cpp</b><span>接收 seed，输出合法输入，严格控制总 n 与总 m。</span></div>
+          <div class="flow-step"><b>本地验证</b><span>编译，运行 1 到 50，检查格式、边界和资源规模。</span></div>
+        </div>
+
+        <h3>2.4 最终究竟提交什么</h3>
+        <p>最终只提交一个文件：</p>
+        <span class="path">default/output/gen.cpp</span>
+        <p>它本身不输出“答案数量”。它输出原 Binary String Copying 题目的完整输入，例如：</p>
+        <div class="code-card">
+          <header><span>generator output example</span><span>original problem input format</span></header>
+          <pre>2
+5 4
+01010
+1 1
+1 5
+2 4
+3 3
+6 3
+000111
+1 6
+2 5
+4 4</pre>
+        </div>
+        <p>官方拿这份输入去运行隐藏的 a.cpp 到 j.cpp，再比较它们与正确程序的输出。</p>
+      </section>
+
+      <section id="codesmith">
+        <div class="section-label">Chapter 03</div>
+        <h2>本次 CodeSmith 实际怎么解、怎么跑</h2>
+        <p>本次运行使用编码智能体生成了候选 <code>gen.cpp</code>。下面记录的是实际产物和实际验证，不是原题说明。</p>
+
+        <h3>3.1 实际产物在哪里</h3>
+        <span class="path">本地：/home/wanyi.chen/workspace/cwy/TODO/gradient/ale_remote_setup/manual_cp_test/output/gen.cpp</span>
+        <span class="path">远程：/data/cwy/manual-cp-test/output/gen.cpp</span>
+        <span class="path">SHA256：600ff44fa75b67d6a6e70e979f04aaae0fbe11789c68854d4a01a0ad20d0f447</span>
+
+        <h3>3.2 它生成了哪些测试</h3>
+        <p>每个 seed 会输出 10 个子测试。前 9 个是针对边界条件的小规模结构，第 10 个使用剩余预算构造大型测试。</p>
+        <table>
+          <thead><tr><th>代码位置</th><th>实现内容</th><th>目的</th></tr></thead>
+          <tbody>
+            <tr><td><code>build()</code></td><td>组合小测试与一个大型测试，并计算已使用的 n、m</td><td>控制一次输出的总体规模</td></tr>
+            <tr><td><code>addExhaustive()</code></td><td>对小字符串枚举全部合法区间</td><td>覆盖单点、边界、无变化和等价区间</td></tr>
+            <tr><td><code>makeLargeString()</code></td><td>按照 seed 轮换 10 类字符串结构</td><td>覆盖交替串、全零、全一、有序、逆序、周期和随机结构</td></tr>
+            <tr><td><code>collectAnchors()</code></td><td>寻找第一个 1 与最后一个 0 的有效边界</td><td>批量构造不同 <code>[l,r]</code> 对应同一实际变化范围的查询</td></tr>
+            <tr><td><code>makeLargeQueries()</code></td><td>混合整段、单点、连续段、宽区间和随机区间</td><td>同时攻击正确性和时间复杂度</td></tr>
+          </tbody>
+        </table>
+
+        <div class="code-card">
+          <header><span>gen.cpp · build()</span><span>核心规模控制</span></header>
+          <pre>const int large_n = 200000 - used_n;
+const int large_m = 200000 - used_m;
+
+TestCase large;
+large.s = makeLargeString(large_n, static_cast&lt;int&gt;((seed - 1) % 10));
+large.queries = makeLargeQueries(
+    large.s, large_m, static_cast&lt;int&gt;((seed - 1) % 10)
+);
+tests.push_back(move(large));</pre>
+        </div>
+
+        <h3>3.3 十类大型字符串</h3>
+        <ol>
+          <li>完全交替的 <code>010101...</code>；</li>
+          <li>长短不一的连续 0/1 段；</li>
+          <li>全 0；</li>
+          <li>全 1；</li>
+          <li><code>000...111...</code> 的正向有序串；</li>
+          <li><code>111...000...</code> 的反向结构；</li>
+          <li>以 0 为主，夹杂少量孤立或块状的 1；</li>
+          <li>确定性伪随机二进制串；</li>
+          <li>重复 motif 的周期串；</li>
+          <li>由不规则权重生成的长连续段。</li>
+        </ol>
+        <p><code>(seed - 1) % 10</code> 决定使用哪一类。seed 1 到 50 会让十类结构各出现五次，同时每次内部参数不同。</p>
+
+        <h3>3.4 已经完成的本地验证</h3>
+        <div class="status">
+          <div class="done">
+            <strong>已完成</strong>
+            <ul>
+              <li><code>g++ -O2 -std=c++17</code> 编译成功；</li>
+              <li>seed 1 到 50 全部能够生成输入；</li>
+              <li>每个查询都满足 <code>1 &lt;= l &lt;= r &lt;= n</code>；</li>
+              <li>每次运行的 <code>sum(n)=200000</code>；</li>
+              <li>每次运行的 <code>sum(m)=200000</code>。</li>
+            </ul>
+          </div>
+          <div class="pending">
+            <strong>尚未完成</strong>
+            <ul>
+              <li>还没有拿到隐藏的 a.cpp 到 j.cpp；</li>
+              <li>还没有运行官方 <code>judge.sh</code>；</li>
+              <li>因此官方 0 到 1 分数目前未知；</li>
+              <li>当前服务器仍在下载官方完整数据归档。</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout warning">
+          <strong>准确表述：</strong>候选答案 <code>gen.cpp</code> 已经存在。现在未知的不是“有没有答案”，而是这个答案面对隐藏程序时究竟能得多少分。
+        </div>
+      </section>
+
+      <section id="verifier">
+        <div class="section-label">Chapter 04</div>
+        <h2>官方 verifier 到底做什么</h2>
+        <p>Agent 运行时只能看到 <code>input/</code>。Agent 结束以后，ALE 才把隐藏的 <code>reference/</code> 注入容器，然后开始评测。</p>
+        <div class="flow" aria-label="官方评测流程">
+          <div class="flow-step"><b>Agent 生成</b><span>输出 <code>output/gen.cpp</code>。</span></div>
+          <div class="flow-step"><b>注入 reference</b><span>加入 a.cpp 到 j.cpp 与 judge.sh。</span></div>
+          <div class="flow-step"><b>编译</b><span>编译生成器和 10 个隐藏提交。</span></div>
+          <div class="flow-step"><b>运行 50 seeds</b><span>每个隐藏程序运行生成的全部数据。</span></div>
+          <div class="flow-step"><b>算分</b><span>聚合 AC、WA、TLE、RE 并匹配预期。</span></div>
+        </div>
+
+        <table>
+          <thead><tr><th>隐藏提交</th><th>评分器希望看到的 verdict</th><th>分值</th></tr></thead>
+          <tbody>
+            <tr><td>j</td><td>必须严格为 AC，否则整题 0 分</td><td>门控</td></tr>
+            <tr><td>i</td><td>严格为 AC</td><td>1</td></tr>
+            <tr><td>a、c、e、f、h</td><td>出现 WA 或 TLE</td><td>5</td></tr>
+            <tr><td>b、d</td><td>出现 TLE 或 WA</td><td>2</td></tr>
+            <tr><td>g</td><td>出现 WA</td><td>1</td></tr>
+            <tr><td>g</td><td>在其他 seed 上也出现 AC</td><td>1</td></tr>
+          </tbody>
+        </table>
+        <p>总分为命中的点数除以 10。任务卡给出的通过阈值是 0.9。</p>
+      </section>
+
+      <section id="assessment">
+        <div class="section-label">Chapter 05</div>
+        <h2>这道任务真正测什么，哪里可能不够好</h2>
+        <h3>它想测的能力</h3>
+        <ul>
+          <li>阅读并理解算法规格；</li>
+          <li>推导正确程序的关键不变量；</li>
+          <li>预测常见错误实现与复杂度问题；</li>
+          <li>设计边界、极限、等价类和对抗测试；</li>
+          <li>把测试策略写成可重复执行的生成器；</li>
+          <li>自行编译和检查产物。</li>
+        </ul>
+        <p>因此，它模拟的是人类竞赛出题人、Hack 数据设计者或软件测试工程师，而不是普通参赛者。</p>
+
+        <h3>verifier 的优点</h3>
+        <ul>
+          <li>直接编译、执行隐藏程序，不依赖 LLM judge；</li>
+          <li>AC、WA、TLE、RE 都是可复现的程序行为；</li>
+          <li>正确程序 j 是硬门控，可以阻止非法或误伤正确解的数据拿分；</li>
+          <li>包含不同错误实现，也包含要求 AC/WA 混合结果的不稳定实现。</li>
+        </ul>
+
+        <h3>需要警惕的局限</h3>
+        <ul>
+          <li><strong>固定隐藏程序依赖：</strong>高分只说明抓住了这 10 个实现，不代表覆盖所有潜在 bug；</li>
+          <li><strong>题面提示较多：</strong>原题已经明确告诉 Agent 应构造哪些边界与极限数据，降低了自主发现测试策略的难度；</li>
+          <li><strong>可能过拟合：</strong>一旦知道隐藏程序类型，生成器可以专门攻击这些程序，而不具备一般化测试能力；</li>
+          <li><strong>分数解释有限：</strong>0.9 与 1.0 表示匹配固定 verdict 目标，不直接等价于真实软件测试覆盖率；</li>
+          <li><strong>数据分发成本高：</strong>单题 reference 很小，但官方本地 Docker 数据被打入约 44.4 GB 的单一归档，增加复现成本。</li>
+        </ul>
+
+        <div class="callout">
+          <strong>如果你要设计新题：</strong>保留“隐藏正确解 + 多类错误解 + 投机解 + 确定性 verifier”的结构，同时减少题面对攻击方法的直接提示，并使用更多独立错误实现检验泛化能力。
+        </div>
+      </section>
+
+      <footer>
+        <p>页面文件：<code>cwy/index.html</code>。任务原始来源：<code>tasks/computing_math/cp_test_gen_1/main.py</code> 与 <code>task_card.json</code>。候选答案来源：本次 CodeSmith 运行生成的 <code>gen.cpp</code>。</p>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
