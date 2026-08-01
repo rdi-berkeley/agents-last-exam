@@ -12,8 +12,7 @@ import cua_bench as cb
 
 from tasks.common_config import GeneralTaskConfig
 from tasks.common_setup import BaseTaskSetup
-from tasks.utils.evaluation import (llm_vision_binary_questions_sync,
-                              resolve_llm_judge_model)
+from tasks.utils.evaluation import llm_vision_binary_questions_sync, resolve_llm_judge_model
 
 _setup = BaseTaskSetup()
 
@@ -234,10 +233,10 @@ async def _wait_for_file(
     deadline = asyncio.get_event_loop().time() + timeout_sec
     while asyncio.get_event_loop().time() < deadline:
         try:
-            if (await session.file_exists(path) or await session.directory_exists(path)):
+            if await session.file_exists(path) or await session.directory_exists(path):
                 return True
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to poll for remote evaluation file %s", path, exc_info=exc)
         await asyncio.sleep(poll_sec)
     return False
 
@@ -258,7 +257,8 @@ def _run_local_soft_eval(
             "distance_score": metrics.get("distance_score"),
             "silhouette_score": metrics.get("silhouette_score"),
             "alignment_score": metrics.get("alignment_score"),
-            "mesh_health_score": metrics.get("mesh_health_score"),
+            "topology_score": metrics.get("topology_score"),
+            "reduction_score": metrics.get("reduction_score"),
             "geometry_score": metrics.get("geometry_score"),
         },
         ensure_ascii=False,
@@ -299,7 +299,10 @@ def _run_local_soft_eval(
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    if not (await session.file_exists(meta["output_obj"]) or await session.directory_exists(meta["output_obj"])):
+    if not (
+        await session.file_exists(meta["output_obj"])
+        or await session.directory_exists(meta["output_obj"])
+    ):
         return [0.0]
 
     task_tag = meta["variant_name"]
@@ -308,7 +311,9 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     remote_results_dir = _remote_child(remote_eval_dir, "results")
     remote_report = _remote_child(remote_results_dir, "final_report.json")
     await session.interface.create_dir(remote_eval_dir)
-    if (await session.file_exists(remote_results_dir) or await session.directory_exists(remote_results_dir)):
+    if await session.file_exists(remote_results_dir) or await session.directory_exists(
+        remote_results_dir
+    ):
         await session.interface.delete_dir(remote_results_dir)
     await session.interface.create_dir(remote_results_dir)
     await _upload_scripts(session, remote_scripts_dir)
@@ -331,13 +336,16 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         return [0.0]
 
     report = json.loads(await session.read_file(remote_report))
+    if not bool(report.get("gate_passed", False)):
+        logger.info("high_to_low eval rejected invalid submission")
+        return [0.0]
     hard_score = float(report.get("geometry_score", 0.0))
     judge_weight = 0.25
     try:
         cfg = json.loads(await session.read_file(meta["evaluation_config"]))
         judge_weight = float(cfg.get("score_weights", {}).get("judge_score", judge_weight))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to load high_to_low evaluation config; using defaults", exc_info=exc)
 
     local_tmp = TASK_DIR / ".tmp_soft_eval" / task_tag
     local_tmp.mkdir(parents=True, exist_ok=True)
