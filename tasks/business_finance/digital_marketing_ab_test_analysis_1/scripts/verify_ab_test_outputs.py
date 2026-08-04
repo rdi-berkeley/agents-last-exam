@@ -8,7 +8,6 @@ import re
 from pathlib import Path
 from statistics import NormalDist
 
-
 PRIMARY_METRIC = "opened_rate"
 SECONDARY_METRICS = ["clicked_rate", "converted_rate", "unsubscribed_rate"]
 METRIC_COLUMN_MAP = {
@@ -19,6 +18,17 @@ METRIC_COLUMN_MAP = {
 }
 Z_975 = NormalDist().inv_cdf(0.975)
 POWER_SAMPLE_SIZE_LOWER_TOLERANCE = 2
+RECOMMENDATION_HEADING_RE = re.compile(
+    r"^\s{0,3}(?:#{1,6}\s*)?(?:\*\*|__)?recommendation\s*:?(?:\*\*|__)?\s*(.*)$",
+    re.IGNORECASE,
+)
+MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+\S")
+RECOMMENDATION_TOKEN_RE = re.compile(r"\b(ship|hold)\b", re.IGNORECASE)
+NEGATED_TOKEN_RE = re.compile(
+    r"(?:\b(?:not|never|avoid|without)\b|\brather\s+than\b|\binstead\s+of\b)"
+    r"(?:\s+\w+){0,3}\s*$",
+    re.IGNORECASE,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -122,6 +132,38 @@ def report_has_acceptable_sample_size(text: str, required_n: int) -> bool:
     )
 
 
+def extract_recommendation(text: str) -> str | None:
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        heading = RECOMMENDATION_HEADING_RE.match(line)
+        if heading is None:
+            continue
+
+        section_lines = []
+        inline_text = heading.group(1).strip()
+        if inline_text:
+            section_lines.append(inline_text)
+        for following in lines[index + 1 :]:
+            if MARKDOWN_HEADING_RE.match(following):
+                break
+            if not following.strip():
+                if section_lines:
+                    break
+                continue
+            section_lines.append(following.strip())
+
+        section = " ".join(section_lines)
+        decisions = set()
+        for token in RECOMMENDATION_TOKEN_RE.finditer(section):
+            decision = token.group(1).lower()
+            prefix = section[max(0, token.start() - 48) : token.start()]
+            if NEGATED_TOKEN_RE.search(prefix):
+                decision = "hold" if decision == "ship" else "ship"
+            decisions.add(decision)
+        return decisions.pop() if len(decisions) == 1 else None
+    return None
+
+
 def validate_results_tsv(output_path: Path, expected_stats: dict[str, dict[str, float | bool]]) -> bool:
     rows = read_csv_rows(output_path, delimiter="\t")
     if len(rows) != 4:
@@ -184,20 +226,15 @@ def validate_assignment_csv(output_path: Path) -> bool:
 
 def validate_report_md(output_path: Path, expected_stats: dict[str, dict[str, float | bool]], required_n: int) -> bool:
     text = output_path.read_text(encoding="utf-8", errors="replace")
-    lower = text.lower()
-    if "recommendation" not in lower or ("ship" not in lower and "hold" not in lower):
-        return False
     guardrail_lift_pp = expected_stats["unsubscribed_rate"]["absolute_lift"] * 100
     guardrail_pass = guardrail_lift_pp < 0.5
     primary_sig = bool(expected_stats[PRIMARY_METRIC]["significant_at_05"])
     expected_recommendation = "ship" if primary_sig and guardrail_pass else "hold"
-    if expected_recommendation not in lower:
+    if extract_recommendation(text) != expected_recommendation:
         return False
     if not report_has_acceptable_sample_size(text, required_n):
         return False
-    if "3.4" not in text and "3.40" not in text:
-        return False
-    return True
+    return "3.4" in text or "3.40" in text
 
 
 def compare_to_reference(output_path: Path, reference_path: Path) -> bool:
