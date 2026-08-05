@@ -18,6 +18,10 @@ METRIC_COLUMN_MAP = {
 }
 Z_975 = NormalDist().inv_cdf(0.975)
 POWER_SAMPLE_SIZE_LOWER_TOLERANCE = 2
+ASSIGNMENT_WEIGHT = 0.2
+RESULT_METRIC_WEIGHT = 0.15
+REPORT_WEIGHT = 0.2
+UNDEFINED_NUMERIC_VALUES = {"", "na", "n/a", "nan", "none", "null", "undefined"}
 RECOMMENDATION_HEADING_RE = re.compile(
     r"^\s{0,3}(?:#{1,6}\s*)?(?:\*\*|__)?recommendation\s*:?(?:\*\*|__)?\s*(.*)$",
     re.IGNORECASE,
@@ -73,8 +77,14 @@ def metric_stats(results_raw: Path) -> dict[str, dict[str, float | bool]]:
     rows = read_csv_rows(results_raw)
     stats: dict[str, dict[str, float | bool]] = {}
     for metric_name, column_name in METRIC_COLUMN_MAP.items():
-        control = [int(r[column_name]) for r in rows if r["variant"] == "control" and r["delivered"] == "1"]
-        treatment = [int(r[column_name]) for r in rows if r["variant"] == "treatment" and r["delivered"] == "1"]
+        control = [
+            int(r[column_name]) for r in rows if r["variant"] == "control" and r["delivered"] == "1"
+        ]
+        treatment = [
+            int(r[column_name])
+            for r in rows
+            if r["variant"] == "treatment" and r["delivered"] == "1"
+        ]
         n_c = len(control)
         n_t = len(treatment)
         x_c = sum(control)
@@ -87,7 +97,11 @@ def metric_stats(results_raw: Path) -> dict[str, dict[str, float | bool]]:
         ci_lower = diff - Z_975 * se_unpooled
         ci_upper = diff + Z_975 * se_unpooled
         pooled = (x_c + x_t) / (n_c + n_t)
-        se_pooled = math.sqrt(pooled * (1 - pooled) * ((1 / n_c) + (1 / n_t))) if pooled not in {0.0, 1.0} else 0.0
+        se_pooled = (
+            math.sqrt(pooled * (1 - pooled) * ((1 / n_c) + (1 / n_t)))
+            if pooled not in {0.0, 1.0}
+            else 0.0
+        )
         z_stat = diff / se_pooled if se_pooled else 0.0
         p_val = 2 * (1 - NormalDist().cdf(abs(z_stat)))
         stats[metric_name] = {
@@ -121,6 +135,22 @@ def bh_correct(p_values: dict[str, float]) -> dict[str, dict[str, float | bool]]
 
 def floats_close(a: float, b: float, tol: float = 0.001) -> bool:
     return abs(a - b) <= tol
+
+
+def numeric_value_matches(
+    value: str | None,
+    expected: float,
+    *,
+    tol: float = 0.001,
+    allow_undefined: bool = False,
+) -> bool:
+    text = str(value or "").strip().lower()
+    if text in UNDEFINED_NUMERIC_VALUES:
+        return allow_undefined
+    try:
+        return floats_close(float(text), expected, tol=tol)
+    except ValueError:
+        return False
 
 
 def report_has_acceptable_sample_size(text: str, required_n: int) -> bool:
@@ -164,68 +194,119 @@ def extract_recommendation(text: str) -> str | None:
     return None
 
 
-def validate_results_tsv(output_path: Path, expected_stats: dict[str, dict[str, float | bool]]) -> bool:
-    rows = read_csv_rows(output_path, delimiter="\t")
-    if len(rows) != 4:
-        return False
-    by_metric = {row["metric"]: row for row in rows}
-    if set(by_metric) != set(METRIC_COLUMN_MAP):
-        return False
-
-    bh_expected = bh_correct({metric: expected_stats[metric]["p_value_raw"] for metric in SECONDARY_METRICS})
-    for metric, expected in expected_stats.items():
-        row = by_metric[metric]
+def validate_metric_row(
+    metric: str,
+    row: dict[str, str],
+    expected: dict[str, float | bool],
+    bh_expected: dict[str, dict[str, float | bool]],
+) -> bool:
+    try:
         if to_bool(row["is_primary"]) != bool(expected["is_primary"]):
             return False
-        if not floats_close(float(row["control_rate"]), float(expected["control_rate"])):
+        for key in (
+            "control_rate",
+            "treatment_rate",
+            "absolute_lift",
+            "ci_lower_95",
+            "ci_upper_95",
+        ):
+            if not numeric_value_matches(row[key], float(expected[key])):
+                return False
+
+        control_rate = float(expected["control_rate"])
+        treatment_rate = float(expected["treatment_rate"])
+        degenerate = control_rate == treatment_rate and control_rate in {0.0, 1.0}
+        if not numeric_value_matches(
+            row["z_statistic"],
+            float(expected["z_statistic"]),
+            tol=0.01,
+            allow_undefined=degenerate,
+        ):
             return False
-        if not floats_close(float(row["treatment_rate"]), float(expected["treatment_rate"])):
-            return False
-        if not floats_close(float(row["absolute_lift"]), float(expected["absolute_lift"])):
-            return False
-        if not floats_close(float(row["ci_lower_95"]), float(expected["ci_lower_95"])):
-            return False
-        if not floats_close(float(row["ci_upper_95"]), float(expected["ci_upper_95"])):
-            return False
-        if not floats_close(float(row["z_statistic"]), float(expected["z_statistic"]), tol=0.01):
-            return False
-        if not floats_close(float(row["p_value_raw"]), float(expected["p_value_raw"]), tol=0.001):
+        if not numeric_value_matches(
+            row["p_value_raw"],
+            float(expected["p_value_raw"]),
+            allow_undefined=degenerate,
+        ):
             return False
         if to_bool(row["significant_at_05"]) != bool(expected["significant_at_05"]):
             return False
         if metric == PRIMARY_METRIC:
-            if any(str(row[key]).strip() for key in ["bh_rank", "bh_threshold", "bh_significant"]):
-                return False
-        else:
-            bh = bh_expected[metric]
-            if not floats_close(float(row["bh_rank"]), float(bh["bh_rank"]), tol=0.001):
-                return False
-            if not floats_close(float(row["bh_threshold"]), float(bh["bh_threshold"]), tol=0.001):
-                return False
-            if to_bool(row["bh_significant"]) != bool(bh["bh_significant"]):
-                return False
-    return True
+            return not any(
+                str(row[key]).strip() for key in ["bh_rank", "bh_threshold", "bh_significant"]
+            )
+
+        bh = bh_expected[metric]
+        if not numeric_value_matches(row["bh_rank"], float(bh["bh_rank"])):
+            return False
+        if not numeric_value_matches(row["bh_threshold"], float(bh["bh_threshold"])):
+            return False
+        return to_bool(row["bh_significant"]) == bool(bh["bh_significant"])
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def validate_result_rows(
+    output_path: Path, expected_stats: dict[str, dict[str, float | bool]]
+) -> dict[str, bool]:
+    checks = dict.fromkeys(METRIC_COLUMN_MAP, False)
+    try:
+        rows = read_csv_rows(output_path, delimiter="\t")
+    except (OSError, csv.Error):
+        return checks
+    if len(rows) != 4:
+        return checks
+    by_metric = {row.get("metric"): row for row in rows}
+    if set(by_metric) != set(METRIC_COLUMN_MAP):
+        return checks
+
+    bh_expected = bh_correct(
+        {metric: expected_stats[metric]["p_value_raw"] for metric in SECONDARY_METRICS}
+    )
+    for metric, expected in expected_stats.items():
+        checks[metric] = validate_metric_row(metric, by_metric[metric], expected, bh_expected)
+    return checks
+
+
+def validate_results_tsv(
+    output_path: Path, expected_stats: dict[str, dict[str, float | bool]]
+) -> bool:
+    return all(validate_result_rows(output_path, expected_stats).values())
 
 
 def validate_assignment_csv(output_path: Path) -> bool:
-    rows = read_csv_rows(output_path)
+    try:
+        rows = read_csv_rows(output_path)
+    except (OSError, csv.Error):
+        return False
     if not rows:
         return False
-    values = {row["metric"]: row["value"] for row in rows}
+    try:
+        values = {row["metric"]: row["value"] for row in rows}
+    except (KeyError, TypeError):
+        return False
     required = {"n_control", "n_treatment", "ratio", "srm_chi2", "srm_pvalue", "srm_pass"}
     if set(values) != required:
         return False
-    if int(float(values["n_control"])) <= 0 or int(float(values["n_treatment"])) <= 0:
-        return False
-    if not floats_close(float(values["ratio"]), 1.0):
-        return False
-    if float(values["srm_pvalue"]) <= 0.01:
+    try:
+        if int(float(values["n_control"])) <= 0 or int(float(values["n_treatment"])) <= 0:
+            return False
+        if not floats_close(float(values["ratio"]), 1.0):
+            return False
+        if float(values["srm_pvalue"]) <= 0.01:
+            return False
+    except (TypeError, ValueError):
         return False
     return to_bool(values["srm_pass"])
 
 
-def validate_report_md(output_path: Path, expected_stats: dict[str, dict[str, float | bool]], required_n: int) -> bool:
-    text = output_path.read_text(encoding="utf-8", errors="replace")
+def validate_report_md(
+    output_path: Path, expected_stats: dict[str, dict[str, float | bool]], required_n: int
+) -> bool:
+    try:
+        text = output_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
     guardrail_lift_pp = expected_stats["unsubscribed_rate"]["absolute_lift"] * 100
     guardrail_pass = guardrail_lift_pp < 0.5
     primary_sig = bool(expected_stats[PRIMARY_METRIC]["significant_at_05"])
@@ -237,10 +318,25 @@ def validate_report_md(output_path: Path, expected_stats: dict[str, dict[str, fl
     return "3.4" in text or "3.40" in text
 
 
+def component_scores(
+    assignment_ok: bool, result_checks: dict[str, bool], report_ok: bool
+) -> dict[str, float]:
+    scores = {"assignment": ASSIGNMENT_WEIGHT if assignment_ok else 0.0}
+    scores.update(
+        {
+            f"results_{metric}": RESULT_METRIC_WEIGHT if ok else 0.0
+            for metric, ok in result_checks.items()
+        }
+    )
+    scores["report"] = REPORT_WEIGHT if report_ok else 0.0
+    return scores
+
+
 def compare_to_reference(output_path: Path, reference_path: Path) -> bool:
-    return output_path.read_text(encoding="utf-8", errors="replace").strip() == reference_path.read_text(
-        encoding="utf-8", errors="replace"
-    ).strip()
+    return (
+        output_path.read_text(encoding="utf-8", errors="replace").strip()
+        == reference_path.read_text(encoding="utf-8", errors="replace").strip()
+    )
 
 
 def main() -> int:
@@ -256,33 +352,42 @@ def main() -> int:
         "report": output_dir / "experiment_report.md",
     }
     payload["missing_files"] = [name for name, path in required_files.items() if not path.exists()]
-    if payload["missing_files"]:
-        print(json.dumps(payload, indent=2))
-        return 0
 
     expected_stats = metric_stats(input_dir / "experiment_results_raw.csv")
     required_n = sample_size_required(input_dir / "historical_metrics.csv")
-    assignment_ok = validate_assignment_csv(required_files["assignment"])
-    results_ok = validate_results_tsv(required_files["results"], expected_stats)
-    report_ok = validate_report_md(required_files["report"], expected_stats, required_n)
-    reference_match = all(
+    assignment_ok = required_files["assignment"].exists() and validate_assignment_csv(
+        required_files["assignment"]
+    )
+    if required_files["results"].exists():
+        result_checks = validate_result_rows(required_files["results"], expected_stats)
+    else:
+        result_checks = dict.fromkeys(METRIC_COLUMN_MAP, False)
+    results_ok = all(result_checks.values())
+    report_ok = required_files["report"].exists() and validate_report_md(
+        required_files["report"], expected_stats, required_n
+    )
+    reference_match = not payload["missing_files"] and all(
         compare_to_reference(required_files[key], reference_dir / required_files[key].name)
         for key in required_files
     )
+    scores = component_scores(assignment_ok, result_checks, report_ok)
 
     payload.update(
         {
             "assignment_ok": assignment_ok,
             "results_ok": results_ok,
+            "result_checks": result_checks,
             "report_ok": report_ok,
             "reference_match": reference_match,
+            "component_scores": scores,
             "required_n": required_n,
             "open_rate_lift_pp": round(expected_stats[PRIMARY_METRIC]["absolute_lift"] * 100, 3),
-            "unsubscribe_lift_pp": round(expected_stats["unsubscribed_rate"]["absolute_lift"] * 100, 3),
+            "unsubscribe_lift_pp": round(
+                expected_stats["unsubscribed_rate"]["absolute_lift"] * 100, 3
+            ),
         }
     )
-    if assignment_ok and results_ok and report_ok:
-        payload["score"] = 1.0
+    payload["score"] = round(sum(scores.values()), 10)
     print(json.dumps(payload, indent=2))
     return 0
 

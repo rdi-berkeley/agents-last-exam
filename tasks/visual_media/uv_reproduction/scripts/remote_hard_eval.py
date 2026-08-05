@@ -12,7 +12,7 @@ import numpy as np
 
 try:
     from PIL import Image
-except Exception:
+except ImportError:
     Image = None
 
 VIEW_NAMES = ['front', 'back', 'left', 'right', 'top_front', 'bottom_front']
@@ -30,7 +30,7 @@ def _discover_blender() -> str:
                 r'C:\Softwares\Blender-*\blender.exe'):
         cands.extend(glob.glob(pat))
     if cands:
-        return sorted(cands)[-1]
+        return max(cands)
     return env or r'C:\Program Files\Blender Foundation\Blender 5.0\blender.exe'
 
 
@@ -149,7 +149,7 @@ def _load_rgb(path: Path) -> np.ndarray:
         return np.asarray(Image.open(path).convert('RGB'), dtype=np.float32) / 255.0
     try:
         import cv2  # type: ignore
-    except Exception:
+    except ImportError:
         cv2 = None
     if cv2 is not None:
         img = cv2.imread(str(path), cv2.IMREAD_COLOR)
