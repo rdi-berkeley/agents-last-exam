@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 
 TOL = 1e-6
+STAT_KEYS = ('mean', 'max', 'voxel_count')
 NIFTI_DTYPES = {
     2: np.uint8,
     4: np.int16,
@@ -25,7 +26,26 @@ NIFTI_DTYPES = {
 def read_stats(path: Path):
     with path.open('r', encoding='utf-8', newline='') as handle:
         row = next(csv.DictReader(handle))
-    return {key: float(value) for key, value in row.items()}
+    return {key: float(row[key]) for key in STAT_KEYS}
+
+
+def score_stats(derived, reference, agent_csv):
+    reasons = []
+    derived_ok = True
+    csv_ok = agent_csv is not None
+    if not csv_ok:
+        reasons.append('unreadable_stats_csv')
+
+    for key in STAT_KEYS:
+        if abs(derived[key] - reference[key]) > TOL:
+            derived_ok = False
+            reasons.append(f'derived_{key}_mismatch')
+        if csv_ok and abs(agent_csv[key] - reference[key]) > TOL:
+            csv_ok = False
+            reasons.append(f'csv_{key}_mismatch')
+
+    score = (0.7 if derived_ok else 0.0) + (0.3 if csv_ok else 0.0)
+    return {'score': score, 'passed': score == 1.0, 'reasons': reasons or ['ok']}
 
 
 def _unpack(endian: str, fmt: str, header: bytes, start: int):
@@ -55,7 +75,7 @@ def load_nifti(path: Path):
     if dtype is None:
         raise ValueError(f'unsupported_datatype:{datatype}')
 
-    vox_offset = int(round(_unpack(endian, 'f', header, 108)[0]))
+    vox_offset = round(_unpack(endian, 'f', header, 108)[0])
     slope = float(_unpack(endian, 'f', header, 112)[0])
     inter = float(_unpack(endian, 'f', header, 116)[0])
     sform_code = int(_unpack(endian, 'h', header, 254)[0])
@@ -112,14 +132,14 @@ def main():
     try:
         with Image.open(out_dir / 'resample_settings.png') as image:
             image.verify()
-    except Exception:
+    except (OSError, SyntaxError):
         print(json.dumps({'score': 0.0, 'reasons': ['unreadable_resample_settings_png']}))
         return
 
     try:
         stat_data, stat_affine = load_nifti(input_dir / 'statmap_z_2mm.nii.gz')
         mask_data, mask_affine = load_nifti(out_dir / 'roi_mask_2mm_nn.nii.gz')
-    except Exception as exc:
+    except (OSError, EOFError, ValueError, struct.error) as exc:
         print(json.dumps({'score': 0.0, 'reasons': [f'unreadable_nifti:{exc}']}))
         return
 
@@ -142,24 +162,11 @@ def main():
         'voxel_count': float(mask.sum()),
     }
     reference = read_stats(ref_dir / 'scene2_stats.csv')
-    agent_csv = read_stats(out_dir / 'scene2_stats.csv')
-
-    reasons = []
-    score = 0.0
-    derived_ok = True
-    csv_ok = True
-    for key in ('mean', 'max', 'voxel_count'):
-        if abs(derived[key] - reference[key]) > TOL:
-            derived_ok = False
-            reasons.append(f'derived_{key}_mismatch')
-        if abs(agent_csv[key] - reference[key]) > TOL:
-            csv_ok = False
-            reasons.append(f'csv_{key}_mismatch')
-    if derived_ok:
-        score += 0.7
-    if csv_ok:
-        score += 0.3
-    print(json.dumps({'score': score, 'passed': score == 1.0, 'reasons': reasons or ['ok']}))
+    try:
+        agent_csv = read_stats(out_dir / 'scene2_stats.csv')
+    except (OSError, StopIteration, KeyError, TypeError, ValueError, csv.Error):
+        agent_csv = None
+    print(json.dumps(score_stats(derived, reference, agent_csv)))
 
 
 if __name__ == '__main__':

@@ -12,7 +12,7 @@ import numpy as np
 
 try:
     from PIL import Image
-except Exception:
+except ImportError:
     Image = None
 
 VIEW_NAMES = ['front', 'back', 'left', 'right', 'top_front', 'bottom_front']
@@ -30,7 +30,7 @@ def _discover_blender() -> str:
                 r'C:\Softwares\Blender-*\blender.exe'):
         cands.extend(glob.glob(pat))
     if cands:
-        return sorted(cands)[-1]
+        return max(cands)
     return env or r'C:\Program Files\Blender Foundation\Blender 5.0\blender.exe'
 
 
@@ -149,7 +149,7 @@ def _load_rgb(path: Path) -> np.ndarray:
         return np.asarray(Image.open(path).convert('RGB'), dtype=np.float32) / 255.0
     try:
         import cv2  # type: ignore
-    except Exception:
+    except ImportError:
         cv2 = None
     if cv2 is not None:
         img = cv2.imread(str(path), cv2.IMREAD_COLOR)
@@ -295,7 +295,6 @@ def _stable_sample_parts(parts: list[dict[str, Any]], sample_count: int, *, seed
 
 def _eval_single(args: argparse.Namespace, report_path: Path) -> dict[str, Any]:
     ref_obj = Path(args.reference_obj).resolve()
-    ref_mtl = Path(args.reference_mtl).resolve()
     cand_obj = Path(args.candidate_obj).resolve()
     cand_mtl = Path(args.candidate_mtl).resolve()
     cand_tex = Path(args.candidate_texture_dir).resolve()
@@ -380,7 +379,6 @@ def _eval_multi(args: argparse.Namespace, report_path: Path) -> dict[str, Any]:
     candidate_scene = Path(args.candidate_scene).resolve()
     reference_manifest = Path(args.reference_manifest).resolve()
     input_manifest = Path(args.input_manifest).resolve()
-    reference_dir = Path(args.reference_dir).resolve()
     renderer_script = Path(args.renderer_script).resolve()
     out_dir = report_path.parent
     requires_uv = _flag(args.requires_uv)

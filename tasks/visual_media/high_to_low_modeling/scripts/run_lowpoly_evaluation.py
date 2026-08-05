@@ -16,10 +16,10 @@ import os
 import random
 import subprocess
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
-
+from typing import Any, ClassVar
 
 THIS_DIR = Path(__file__).resolve().parent
 ROOT_DIR = THIS_DIR.parent
@@ -40,8 +40,10 @@ class LowpolyPaths:
 
 
 class LowpolyBenchmark:
-    DEFAULT_BLENDER = os.environ.get("BLENDER_BINARY", "/Applications/Blender.app/Contents/MacOS/Blender")
-    DEFAULT_CONFIG: dict[str, Any] = {
+    DEFAULT_BLENDER = os.environ.get(
+        "BLENDER_BINARY", "/Applications/Blender.app/Contents/MacOS/Blender"
+    )
+    DEFAULT_CONFIG: ClassVar[dict[str, Any]] = {
         "triangle_ratio_cap": 0.05,
         "sample_count_per_mesh": 20_000,
         "judge_model": "gpt-5.2",
@@ -50,8 +52,8 @@ class LowpolyBenchmark:
         "normalize_distances_by": "high_bbox_diagonal",
         "temperature": 0,
     }
-    VIEW_ORDER = ["front", "back", "left", "right", "top", "perspective"]
-    VIEW_LABELS = {
+    VIEW_ORDER: ClassVar[list[str]] = ["front", "back", "left", "right", "top", "perspective"]
+    VIEW_LABELS: ClassVar[dict[str, str]] = {
         "front": "Front",
         "back": "Back",
         "left": "Left",
@@ -59,7 +61,7 @@ class LowpolyBenchmark:
         "top": "Top",
         "perspective": "Perspective",
     }
-    VIEW_SPECS = {
+    VIEW_SPECS: ClassVar[dict[str, dict[str, int]]] = {
         "front": {"azimuth_deg": 0, "elevation_deg": 0},
         "back": {"azimuth_deg": 180, "elevation_deg": 0},
         "left": {"azimuth_deg": 90, "elevation_deg": 0},
@@ -120,8 +122,31 @@ class LowpolyBenchmark:
         return float(sum(vals) / len(vals))
 
     @staticmethod
-    def score_from_error(value: float, tolerance: float) -> float:
-        return max(0.0, 1.0 - min(1.0, float(value) / float(tolerance)))
+    def score_from_thresholds(
+        value: float,
+        *,
+        good: float,
+        ok: float,
+        bad: float,
+        higher_is_better: bool = False,
+    ) -> float:
+        value = float(value)
+        good = float(good)
+        ok = float(ok)
+        bad = float(bad)
+        if higher_is_better:
+            value, good, ok, bad = -value, -good, -ok, -bad
+        if not good < ok < bad:
+            raise ValueError(f"Expected ordered thresholds, got good={good}, ok={ok}, bad={bad}")
+        if not math.isfinite(value):
+            return 0.0
+        if value <= good:
+            return 1.0
+        if value <= ok:
+            return 1.0 - 0.5 * (value - good) / (ok - good)
+        if value < bad:
+            return 0.5 * (bad - value) / (bad - ok)
+        return 0.0
 
     @staticmethod
     def image_to_data_url(path: Path) -> str:
@@ -153,7 +178,9 @@ class LowpolyBenchmark:
         if high_path is None or low_path is None:
             raise RuntimeError("Need either --asset-root or both --high-obj and --low-obj")
         if config_path is None:
-            parent = high_path.parent.parent if high_path.parent.name == "input" else high_path.parent
+            parent = (
+                high_path.parent.parent if high_path.parent.name == "input" else high_path.parent
+            )
             config_path = parent / "evaluation_config.json"
 
         return LowpolyPaths(
@@ -178,9 +205,15 @@ class LowpolyBenchmark:
         config["sample_count_per_mesh"] = int(config["sample_count_per_mesh"])
         config["temperature"] = float(config.get("temperature", 0))
         config["judge_model"] = str(config["judge_model"])
-        config["views_metric"] = [str(v) for v in config.get("views_metric", cls.DEFAULT_CONFIG["views_metric"])]
-        config["views_evidence"] = [str(v) for v in config.get("views_evidence", cls.DEFAULT_CONFIG["views_evidence"])]
-        config["normalize_distances_by"] = str(config.get("normalize_distances_by", "high_bbox_diagonal"))
+        config["views_metric"] = [
+            str(v) for v in config.get("views_metric", cls.DEFAULT_CONFIG["views_metric"])
+        ]
+        config["views_evidence"] = [
+            str(v) for v in config.get("views_evidence", cls.DEFAULT_CONFIG["views_evidence"])
+        ]
+        config["normalize_distances_by"] = str(
+            config.get("normalize_distances_by", "high_bbox_diagonal")
+        )
         return config
 
     @classmethod
@@ -188,54 +221,177 @@ class LowpolyBenchmark:
         return cls.load_config_from_path(paths.config_path if paths.config_exists_on_disk else None)
 
     @classmethod
-    def compute_scores(cls, raw_metrics: dict[str, Any], config: dict[str, Any]) -> dict[str, float]:
+    def compute_scores(
+        cls, raw_metrics: dict[str, Any], config: dict[str, Any]
+    ) -> dict[str, float]:
         distance_cfg = dict(config.get("distance_thresholds", {}))
         silhouette_cfg = dict(config.get("silhouette_thresholds", {}))
         alignment_cfg = dict(config.get("alignment_thresholds", {}))
-        mesh_cfg = dict(config.get("mesh_health_thresholds", {}))
+        topology_cfg = dict(
+            config.get("topology_thresholds", config.get("mesh_health_thresholds", {}))
+        )
 
-        distance_pass = (
-            float(raw_metrics["chamfer_low_to_high_norm"]) <= float(distance_cfg.get("good", 0.01))
-            and float(raw_metrics["chamfer_high_to_low_norm"]) <= float(distance_cfg.get("ok", distance_cfg.get("good", 0.03)))
-            and float(raw_metrics["p95_distance_norm"]) <= float(distance_cfg.get("bad", distance_cfg.get("ok", 0.08)))
-            and float(raw_metrics["within_tolerance_ratio"]) >= 0.95
-        )
-        silhouette_pass = float(raw_metrics["silhouette_iou_mean"]) >= float(silhouette_cfg.get("good", 0.95))
-        alignment_pass = (
-            float(raw_metrics["center_offset_norm"]) <= float(alignment_cfg.get("center_good", 0.02))
-            and float(raw_metrics["max_bbox_axis_diff_ratio"]) <= float(alignment_cfg.get("scale_good", 0.05))
-        )
-        nonmanifold_score = 1.0 if int(raw_metrics["nonmanifold_edge_count"]) == 0 else 0.0
-        mesh_health_raw = cls.mean(
+        distance_good = float(distance_cfg.get("good", 0.01))
+        distance_ok = float(distance_cfg.get("ok", 0.03))
+        distance_bad = float(distance_cfg.get("bad", 0.08))
+        distance_score = cls.mean(
             [
-                nonmanifold_score,
-                cls.score_from_error(float(raw_metrics["degenerate_face_ratio"]), 0.002),
-                cls.score_from_error(float(raw_metrics["loose_vert_ratio"]), 0.001),
+                cls.score_from_thresholds(
+                    raw_metrics["chamfer_low_to_high_norm"],
+                    good=distance_good,
+                    ok=distance_ok,
+                    bad=distance_bad,
+                ),
+                cls.score_from_thresholds(
+                    raw_metrics["chamfer_high_to_low_norm"],
+                    good=distance_good,
+                    ok=distance_ok,
+                    bad=distance_bad,
+                ),
+                cls.score_from_thresholds(
+                    raw_metrics["p95_distance_norm"],
+                    good=distance_good,
+                    ok=distance_ok,
+                    bad=distance_bad,
+                ),
+                cls.score_from_thresholds(
+                    raw_metrics["within_tolerance_ratio"],
+                    good=float(distance_cfg.get("within_good", 0.95)),
+                    ok=float(distance_cfg.get("within_ok", 0.85)),
+                    bad=float(distance_cfg.get("within_bad", 0.65)),
+                    higher_is_better=True,
+                ),
             ]
         )
-        mesh_health_pass = mesh_health_raw >= float(mesh_cfg.get("min_health_score", 0.5))
-
-        distance_score = 1.0 if distance_pass else 0.0
-        silhouette_score = 1.0 if silhouette_pass else 0.0
-        alignment_score = 1.0 if alignment_pass else 0.0
-        mesh_health_score = 1.0 if mesh_health_pass else 0.0
-        geometry_score = (
-            0.45 * distance_score
-            + 0.20 * silhouette_score
-            + 0.20 * alignment_score
-            + 0.15 * mesh_health_score
+        silhouette_score = cls.score_from_thresholds(
+            raw_metrics["silhouette_iou_mean"],
+            good=float(silhouette_cfg.get("good", 0.95)),
+            ok=float(silhouette_cfg.get("ok", 0.85)),
+            bad=float(silhouette_cfg.get("bad", 0.65)),
+            higher_is_better=True,
         )
+        center_good = float(alignment_cfg.get("center_good", 0.02))
+        center_bad = float(alignment_cfg.get("center_bad", 0.1))
+        scale_good = float(alignment_cfg.get("scale_good", 0.05))
+        scale_bad = float(alignment_cfg.get("scale_bad", 0.25))
+        alignment_score = cls.mean(
+            [
+                cls.score_from_thresholds(
+                    raw_metrics["center_offset_norm"],
+                    good=center_good,
+                    ok=float(alignment_cfg.get("center_ok", (center_good + center_bad) / 2.0)),
+                    bad=center_bad,
+                ),
+                cls.score_from_thresholds(
+                    raw_metrics["max_bbox_axis_diff_ratio"],
+                    good=scale_good,
+                    ok=float(alignment_cfg.get("scale_ok", (scale_good + scale_bad) / 2.0)),
+                    bad=scale_bad,
+                ),
+            ]
+        )
+        nonmanifold_score = cls.score_from_thresholds(
+            raw_metrics["true_nonmanifold_edge_ratio"],
+            good=float(topology_cfg.get("nonmanifold_good", 0.0)),
+            ok=float(topology_cfg.get("nonmanifold_ok", 0.0001)),
+            bad=float(topology_cfg.get("nonmanifold_bad", 0.005)),
+        )
+        boundary_score = cls.score_from_thresholds(
+            raw_metrics["boundary_edge_ratio_delta"],
+            good=float(topology_cfg.get("boundary_delta_good", 0.005)),
+            ok=float(topology_cfg.get("boundary_delta_ok", 0.02)),
+            bad=float(topology_cfg.get("boundary_delta_bad", 0.1)),
+        )
+        degenerate_score = cls.score_from_thresholds(
+            raw_metrics["degenerate_face_ratio"],
+            good=float(topology_cfg.get("degenerate_good", 0.0)),
+            ok=float(topology_cfg.get("degenerate_ok", 0.0005)),
+            bad=float(topology_cfg.get("degenerate_bad", 0.002)),
+        )
+        loose_score = cls.mean(
+            [
+                cls.score_from_thresholds(
+                    raw_metrics["loose_vert_ratio"],
+                    good=float(topology_cfg.get("loose_good", 0.0)),
+                    ok=float(topology_cfg.get("loose_ok", 0.00025)),
+                    bad=float(topology_cfg.get("loose_bad", 0.001)),
+                ),
+                cls.score_from_thresholds(
+                    raw_metrics["loose_edge_ratio"],
+                    good=float(topology_cfg.get("loose_good", 0.0)),
+                    ok=float(topology_cfg.get("loose_ok", 0.00025)),
+                    bad=float(topology_cfg.get("loose_bad", 0.001)),
+                ),
+            ]
+        )
+        skinny_triangle_score = cls.score_from_thresholds(
+            raw_metrics["skinny_face_ratio"],
+            good=float(topology_cfg.get("skinny_good", 0.01)),
+            ok=float(topology_cfg.get("skinny_ok", 0.05)),
+            bad=float(topology_cfg.get("skinny_bad", 0.2)),
+        )
+        edge_outlier_score = cls.score_from_thresholds(
+            raw_metrics["edge_length_outlier_ratio"],
+            good=float(topology_cfg.get("edge_outlier_good", 0.001)),
+            ok=float(topology_cfg.get("edge_outlier_ok", 0.01)),
+            bad=float(topology_cfg.get("edge_outlier_bad", 0.05)),
+        )
+        component_score = cls.score_from_thresholds(
+            raw_metrics["significant_component_count_delta_ratio"],
+            good=float(topology_cfg.get("component_delta_good", 0.0)),
+            ok=float(topology_cfg.get("component_delta_ok", 0.1)),
+            bad=float(topology_cfg.get("component_delta_bad", 0.5)),
+        )
+        normal_score = cls.score_from_thresholds(
+            raw_metrics["normal_agreement_mean"],
+            good=float(topology_cfg.get("normal_good", 0.95)),
+            ok=float(topology_cfg.get("normal_ok", 0.85)),
+            bad=float(topology_cfg.get("normal_bad", 0.65)),
+            higher_is_better=True,
+        )
+        topology_score = (
+            0.15 * nonmanifold_score
+            + 0.10 * boundary_score
+            + 0.10 * degenerate_score
+            + 0.10 * loose_score
+            + 0.15 * skinny_triangle_score
+            + 0.15 * edge_outlier_score
+            + 0.10 * component_score
+            + 0.15 * normal_score
+        )
+        triangle_ratio_target = float(config.get("triangle_ratio_cap", 0.05))
+        reduction_cfg = dict(config.get("reduction_thresholds", {}))
+        reduction_score = cls.score_from_thresholds(
+            raw_metrics["triangle_ratio"],
+            good=triangle_ratio_target,
+            ok=float(reduction_cfg.get("ok", max(0.2, triangle_ratio_target * 2.0))),
+            bad=float(reduction_cfg.get("bad", 1.0)),
+        )
+        uncapped_geometry_score = (
+            0.30 * distance_score
+            + 0.20 * silhouette_score
+            + 0.20 * reduction_score
+            + 0.10 * alignment_score
+            + 0.20 * topology_score
+        )
+        efficiency_ceiling = 0.25 + 0.75 * reduction_score
+        geometry_score = min(uncapped_geometry_score, efficiency_ceiling)
         return {
             "distance_score": float(distance_score),
             "silhouette_score": float(silhouette_score),
             "alignment_score": float(alignment_score),
-            "mesh_health_score": float(mesh_health_score),
+            "topology_score": float(topology_score),
+            "reduction_score": float(reduction_score),
             "nonmanifold_score": float(nonmanifold_score),
-            "distance_pass": float(distance_pass),
-            "silhouette_pass": float(silhouette_pass),
-            "alignment_pass": float(alignment_pass),
-            "mesh_health_pass": float(mesh_health_pass),
-            "mesh_health_raw": float(mesh_health_raw),
+            "boundary_score": float(boundary_score),
+            "degenerate_score": float(degenerate_score),
+            "loose_score": float(loose_score),
+            "skinny_triangle_score": float(skinny_triangle_score),
+            "edge_outlier_score": float(edge_outlier_score),
+            "component_score": float(component_score),
+            "normal_score": float(normal_score),
+            "uncapped_geometry_score": float(uncapped_geometry_score),
+            "efficiency_ceiling": float(efficiency_ceiling),
             "geometry_score": float(geometry_score),
         }
 
@@ -261,7 +417,9 @@ class LowpolyBenchmark:
         return out
 
     @classmethod
-    def compose_contact_sheet(cls, image_map: dict[str, str], output_path: Path, *, columns: int = 3) -> str:
+    def compose_contact_sheet(
+        cls, image_map: dict[str, str], output_path: Path, *, columns: int = 3
+    ) -> str:
         image_mod, _, _, _ = cls._pil_modules()
         ordered = [view for view in cls.VIEW_ORDER if view in image_map]
         if not ordered:
@@ -311,20 +469,26 @@ class LowpolyBenchmark:
     @classmethod
     def _mask_from_image(cls, path: Path) -> Any:
         image_mod, _, _, _ = cls._pil_modules()
-        image = image_mod.open(path).convert("L")
-        return image.point(lambda value: 0 if value > 240 else 255, mode="1")
+        image = image_mod.open(path)
+        if "A" not in image.getbands():
+            raise RuntimeError(f"Silhouette render does not contain an alpha channel: {path}")
+        return image.getchannel("A").point(lambda value: 255 if value >= 128 else 0, mode="1")
+
+    @staticmethod
+    def _mask_iou(high_mask: Any, low_mask: Any) -> float:
+        if high_mask.size != low_mask.size:
+            low_mask = low_mask.resize(high_mask.size)
+        high_data = high_mask.convert("L").tobytes()
+        low_data = low_mask.convert("L").tobytes()
+        inter = sum(1 for left, right in zip(high_data, low_data) if left and right)
+        union = sum(1 for left, right in zip(high_data, low_data) if left or right)
+        return 1.0 if union == 0 else float(inter / union)
 
     @classmethod
     def silhouette_iou(cls, high_path: Path, low_path: Path) -> float:
         high_mask = cls._mask_from_image(high_path)
         low_mask = cls._mask_from_image(low_path)
-        if high_mask.size != low_mask.size:
-            low_mask = low_mask.resize(high_mask.size)
-        high_data = list(high_mask.getdata())
-        low_data = list(low_mask.getdata())
-        inter = sum(1 for left, right in zip(high_data, low_data) if left and right)
-        union = sum(1 for left, right in zip(high_data, low_data) if left or right)
-        return 1.0 if union == 0 else float(inter / union)
+        return cls._mask_iou(high_mask, low_mask)
 
     @classmethod
     def compose_silhouette_sheet(
@@ -341,18 +505,22 @@ class LowpolyBenchmark:
         rows: list[Any] = []
         ious: list[float] = []
         for view in ordered:
-            high = image_mod.open(high_map[view]).convert("RGBA")
-            low = image_mod.open(low_map[view]).convert("RGBA")
-            if high.size != low.size:
-                low = low.resize(high.size)
-            iou = cls.silhouette_iou(Path(high_map[view]), Path(low_map[view]))
+            high_mask = cls._mask_from_image(Path(high_map[view]))
+            low_mask = cls._mask_from_image(Path(low_map[view]))
+            if high_mask.size != low_mask.size:
+                low_mask = low_mask.resize(high_mask.size)
+            iou = cls._mask_iou(high_mask, low_mask)
             ious.append(iou)
 
-            diff = image_chops.difference(high.convert("RGB"), low.convert("RGB")).convert("RGBA")
+            high = image_mod.new("L", high_mask.size, 255)
+            low = image_mod.new("L", low_mask.size, 255)
+            high.paste(0, mask=high_mask.convert("L"))
+            low.paste(0, mask=low_mask.convert("L"))
+            diff = image_chops.difference(high, low)
             row = image_mod.new("RGBA", (high.width * 3, high.height + 32), (255, 255, 255, 255))
-            row.paste(high, (0, 32))
-            row.paste(low, (high.width, 32))
-            row.paste(diff, (high.width * 2, 32))
+            row.paste(high.convert("RGBA"), (0, 32))
+            row.paste(low.convert("RGBA"), (high.width, 32))
+            row.paste(diff.convert("RGBA"), (high.width * 2, 32))
             draw = image_draw.Draw(row)
             draw.text(
                 (12, 8),
@@ -374,7 +542,9 @@ class LowpolyBenchmark:
         return str(output_path), cls.mean(ious)
 
     @classmethod
-    def render_heatmap_view(cls, base_image_path: Path, points: list[dict[str, float]], output_path: Path) -> str:
+    def render_heatmap_view(
+        cls, base_image_path: Path, points: list[dict[str, float]], output_path: Path
+    ) -> str:
         image_mod, _, image_draw, _ = cls._pil_modules()
         base = image_mod.open(base_image_path).convert("RGBA")
         draw = image_draw.Draw(base, "RGBA")
@@ -415,15 +585,27 @@ class LowpolyBenchmark:
             f"Center offset norm: {float(metrics['center_offset_norm']):.6f}",
             f"Max bbox axis diff ratio: {float(metrics['max_bbox_axis_diff_ratio']):.6f}",
             "",
-            "Mesh health:",
-            f"non-manifold edges: {int(metrics['nonmanifold_edge_count'])}",
+            "Topology:",
+            f"true non-manifold edges: {int(metrics['true_nonmanifold_edge_count'])}",
+            f"boundary edge ratio delta: {float(metrics['boundary_edge_ratio_delta']):.6f}",
             f"degenerate face ratio: {float(metrics['degenerate_face_ratio']):.6f}",
             f"loose vert ratio: {float(metrics['loose_vert_ratio']):.6f}",
+            f"loose edge ratio: {float(metrics['loose_edge_ratio']):.6f}",
+            f"skinny face ratio: {float(metrics['skinny_face_ratio']):.6f}",
+            f"edge length outlier ratio: {float(metrics['edge_length_outlier_ratio']):.6f}",
+            (
+                "significant components high/low: "
+                f"{int(metrics['significant_component_count_high'])}/"
+                f"{int(metrics['significant_component_count_low'])}"
+            ),
+            f"normal agreement: {float(metrics['normal_agreement_mean']):.6f}",
             "",
             f"Distance score: {float(metrics['distance_score']):.4f}",
             f"Silhouette score: {float(metrics['silhouette_score']):.4f}",
             f"Alignment score: {float(metrics['alignment_score']):.4f}",
-            f"Mesh health score: {float(metrics['mesh_health_score']):.4f}",
+            f"Topology score: {float(metrics['topology_score']):.4f}",
+            f"Reduction score: {float(metrics['reduction_score']):.4f}",
+            f"Efficiency ceiling: {float(metrics['efficiency_ceiling']):.4f}",
             f"Geometry score: {float(metrics['geometry_score']):.4f}",
         ]
         return "\n".join(lines)
@@ -454,11 +636,26 @@ class LowpolyBenchmark:
                 "text": f"{bundle['summary_text']}",
             },
             {"type": "text", "text": "Overlay sheet"},
-            {"type": "image_url", "image_url": {"url": cls.image_to_data_url(Path(bundle["images"]["overlay_sheet"]))}},
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": cls.image_to_data_url(Path(bundle["images"]["overlay_sheet"]))
+                },
+            },
             {"type": "text", "text": "Error heatmap sheet"},
-            {"type": "image_url", "image_url": {"url": cls.image_to_data_url(Path(bundle["images"]["heatmap_sheet"]))}},
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": cls.image_to_data_url(Path(bundle["images"]["heatmap_sheet"]))
+                },
+            },
             {"type": "text", "text": "Silhouette comparison sheet"},
-            {"type": "image_url", "image_url": {"url": cls.image_to_data_url(Path(bundle["images"]["silhouette_sheet"]))}},
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": cls.image_to_data_url(Path(bundle["images"]["silhouette_sheet"]))
+                },
+            },
         ]
 
     @staticmethod
@@ -550,18 +747,23 @@ class LowpolyBenchmark:
     @classmethod
     def heuristic_judge(cls, bundle: dict[str, Any]) -> dict[str, Any]:
         metrics = bundle["metrics"]
-        triangle_ratio = float(metrics["triangle_ratio"])
         distance_score = float(metrics["distance_score"])
         silhouette_score = float(metrics["silhouette_score"])
-        mesh_health_score = float(metrics["mesh_health_score"])
+        topology_score = float(metrics["topology_score"])
         alignment_score = float(metrics["alignment_score"])
+        reduction_score = float(metrics["reduction_score"])
 
         question_scores = [
             1.0 if (0.65 * distance_score + 0.35 * alignment_score) >= 0.60 else 0.0,
             1.0 if silhouette_score >= 0.60 else 0.0,
-            1.0 if triangle_ratio <= 0.05 else 0.0,
+            1.0 if reduction_score >= 0.50 else 0.0,
             1.0
-            if (0.45 * distance_score + 0.25 * silhouette_score + 0.15 * mesh_health_score + 0.15 * alignment_score)
+            if (
+                0.45 * distance_score
+                + 0.25 * silhouette_score
+                + 0.15 * topology_score
+                + 0.15 * alignment_score
+            )
             >= 0.60
             else 0.0,
         ]
@@ -576,12 +778,14 @@ class LowpolyBenchmark:
         ]
         return cls._result_from_question_scores(
             scores=question_scores,
-            reason="Heuristic judge based on geometry, silhouette, alignment, mesh health, and triangle ratio.",
+            reason="Heuristic judge based on geometry, silhouette, alignment, topology, and triangle ratio.",
             question_results=question_results,
         )
 
     @classmethod
-    def openai_judge(cls, bundle: dict[str, Any], *, model: str, temperature: float) -> dict[str, Any]:
+    def openai_judge(
+        cls, bundle: dict[str, Any], *, model: str, temperature: float
+    ) -> dict[str, Any]:
         from tasks.utils.evaluation import llm_multimodal_binary_questions_sync
 
         prompt_context = (
@@ -619,7 +823,7 @@ class LowpolyBenchmark:
         output_dir.mkdir(parents=True, exist_ok=True)
         bundle = cls.load_json(judge_bundle_path)
         if not isinstance(bundle, dict):
-            raise RuntimeError(f"Judge bundle must be an object: {judge_bundle_path}")
+            raise TypeError(f"Judge bundle must be an object: {judge_bundle_path}")
         if backend == "heuristic":
             judged = cls.heuristic_judge(bundle)
         else:
@@ -662,10 +866,14 @@ class LowpolyBenchmark:
         return str(out_path)
 
     @classmethod
-    def determine_run_status(cls, *, gate_passed: bool, gate_fail_reasons: list[str], low_obj_exists: bool) -> str:
+    def determine_run_status(
+        cls, *, gate_passed: bool, gate_fail_reasons: list[str], low_obj_exists: bool
+    ) -> str:
         if gate_passed:
             return "ok"
-        if not low_obj_exists or any(reason in {"low_mesh_empty", "surface_sampling_failed"} for reason in gate_fail_reasons):
+        if not low_obj_exists or any(
+            reason in {"low_mesh_empty", "surface_sampling_failed"} for reason in gate_fail_reasons
+        ):
             return "invalid_submission"
         if any("No mesh objects imported" in reason for reason in gate_fail_reasons):
             return "invalid_submission"
@@ -677,13 +885,18 @@ class LowpolyBenchmark:
             "distance_score": 0.0,
             "silhouette_score": 0.0,
             "alignment_score": 0.0,
-            "mesh_health_score": 0.0,
+            "topology_score": 0.0,
+            "reduction_score": 0.0,
             "nonmanifold_score": 0.0,
-            "distance_pass": 0.0,
-            "silhouette_pass": 0.0,
-            "alignment_pass": 0.0,
-            "mesh_health_pass": 0.0,
-            "mesh_health_raw": 0.0,
+            "boundary_score": 0.0,
+            "degenerate_score": 0.0,
+            "loose_score": 0.0,
+            "skinny_triangle_score": 0.0,
+            "edge_outlier_score": 0.0,
+            "component_score": 0.0,
+            "normal_score": 0.0,
+            "uncapped_geometry_score": 0.0,
+            "efficiency_ceiling": 0.0,
             "geometry_score": 0.0,
         }
 
@@ -692,6 +905,8 @@ class LowpolyBenchmark:
             self.blender_binary,
             "-b",
             "--factory-startup",
+            "--python-exit-code",
+            "1",
             "--python",
             str(Path(__file__).resolve()),
             "--",
@@ -718,7 +933,7 @@ class LowpolyBenchmark:
     def load_blender_eval(cls, report_path: Path) -> dict[str, Any]:
         data = cls.load_json(report_path)
         if not isinstance(data, dict):
-            raise RuntimeError(f"Blender evaluation report must be an object: {report_path}")
+            raise TypeError(f"Blender evaluation report must be an object: {report_path}")
         return data
 
     @classmethod
@@ -726,7 +941,7 @@ class LowpolyBenchmark:
         points_path = Path(raw_eval["raw_evidence"]["heatmap_points"])
         payload = cls.load_json(points_path)
         if not isinstance(payload, dict):
-            raise RuntimeError(f"Heatmap projection payload must be an object: {points_path}")
+            raise TypeError(f"Heatmap projection payload must be an object: {points_path}")
         views_payload = payload.get("views", {})
         rendered: dict[str, str] = {}
         for view, base_path in raw_eval["raw_evidence"]["heatmap_base"].items():
@@ -813,7 +1028,10 @@ class LowpolyBenchmark:
                     "Judge skipped because Blender stage failed.",
                 ),
                 config=self.config,
-                input_paths={"high_obj": str(self.paths.high_obj), "low_obj": str(self.paths.low_obj)},
+                input_paths={
+                    "high_obj": str(self.paths.high_obj),
+                    "low_obj": str(self.paths.low_obj),
+                },
             )
         self.dump_json(self.output_dir / "final_report.json", report)
         self.write_markdown_summary(report, self.output_dir / "final_report.md")
@@ -838,24 +1056,41 @@ class LowpolyBenchmark:
             return report
 
         raw_eval = self.load_blender_eval(blender_report_path)
+        if not bool(raw_eval.get("gate_passed", False)):
+            report = self.build_failed_stage_report(
+                raw_eval=raw_eval,
+                fallback_reason="blender_stage_validation_failed",
+            )
+            print(json.dumps(report, indent=2))
+            return report
 
         overlay_views = self.compose_overlay_views(
             raw_eval["raw_evidence"]["overlay_high"],
             raw_eval["raw_evidence"]["overlay_low"],
             self.output_dir / "evidence" / "overlay_views",
         )
-        heatmap_views = self.build_heatmap_views(raw_eval, self.output_dir / "evidence" / "heatmap_views")
+        heatmap_views = self.build_heatmap_views(
+            raw_eval, self.output_dir / "evidence" / "heatmap_views"
+        )
         silhouette_sheet_path, silhouette_iou_mean = self.compose_silhouette_sheet(
             raw_eval["raw_evidence"]["silhouette_high"],
             raw_eval["raw_evidence"]["silhouette_low"],
             self.output_dir / "evidence" / "silhouette_sheet.png",
         )
-        overlay_sheet_path = self.compose_contact_sheet(overlay_views, self.output_dir / "evidence" / "overlay_sheet.png")
-        heatmap_sheet_path = self.compose_contact_sheet(heatmap_views, self.output_dir / "evidence" / "heatmap_sheet.png")
+        overlay_sheet_path = self.compose_contact_sheet(
+            overlay_views, self.output_dir / "evidence" / "overlay_sheet.png"
+        )
+        heatmap_sheet_path = self.compose_contact_sheet(
+            heatmap_views, self.output_dir / "evidence" / "heatmap_sheet.png"
+        )
 
         metrics = dict(raw_eval)
         metrics["silhouette_iou_mean"] = float(silhouette_iou_mean)
-        metrics.update(self.compute_scores(metrics, self.config) if raw_eval.get("triangle_count_high") else self.zero_scores())
+        metrics.update(
+            self.compute_scores(metrics, self.config)
+            if raw_eval.get("triangle_count_high")
+            else self.zero_scores()
+        )
         metrics_path = self.dump_json(self.output_dir / "metrics.json", metrics)
 
         evidence_paths = {
@@ -863,7 +1098,9 @@ class LowpolyBenchmark:
             "heatmap_sheet": heatmap_sheet_path,
             "silhouette_sheet": silhouette_sheet_path,
         }
-        judge_bundle = self.build_judge_bundle(metrics, overlay_sheet_path, heatmap_sheet_path, silhouette_sheet_path)
+        judge_bundle = self.build_judge_bundle(
+            metrics, overlay_sheet_path, heatmap_sheet_path, silhouette_sheet_path
+        )
         judge_bundle_path = self.dump_json(self.output_dir / "judge_bundle.json", judge_bundle)
 
         gate_passed = bool(raw_eval.get("gate_passed", False))
@@ -879,7 +1116,9 @@ class LowpolyBenchmark:
         if self.skip_judge or not gate_passed:
             judge_report_path = self.write_stub_judge_report(
                 self.output_dir / "judge_eval",
-                "Judge skipped because gate failed." if not gate_passed else "Judge skipped by request.",
+                "Judge skipped because gate failed."
+                if not gate_passed
+                else "Judge skipped by request.",
             )
             vlm_score = 0.0
         else:
@@ -890,7 +1129,9 @@ class LowpolyBenchmark:
                 model=judge_model,
                 temperature=float(self.config.get("temperature", 0.0)),
             )
-            judge_report_path = str((self.output_dir / "judge_eval" / "judge_report.json").resolve())
+            judge_report_path = str(
+                (self.output_dir / "judge_eval" / "judge_report.json").resolve()
+            )
             vlm_score = float(judge_report["summary"]["judge_score"])
 
         geometry_score = float(metrics.get("geometry_score", 0.0)) if gate_passed else 0.0
@@ -950,17 +1191,23 @@ class LowpolyBenchmark:
             setup_workbench,
         )
 
-        def set_pose(rig: Any, cam: Any, center: Any, azimuth_deg: int, elevation_deg: float, distance: float) -> None:
+        def set_pose(
+            rig: Any, cam: Any, center: Any, azimuth_deg: int, elevation_deg: float, distance: float
+        ) -> None:
             rig.location = center
             rig.rotation_euler = (0.0, 0.0, math.radians(azimuth_deg))
             elev_rad = math.radians(elevation_deg)
-            cam.location = mathutils.Vector((0.0, -distance * math.cos(elev_rad), distance * math.sin(elev_rad)))
+            cam.location = mathutils.Vector(
+                (0.0, -distance * math.cos(elev_rad), distance * math.sin(elev_rad))
+            )
             bpy.context.view_layer.update()
 
         def import_obj_group(filepath: Path, object_name: str) -> Any:
             before = {obj.name for obj in bpy.data.objects}
             import_obj(filepath)
-            imported = [obj for obj in bpy.data.objects if obj.name not in before and obj.type == "MESH"]
+            imported = [
+                obj for obj in bpy.data.objects if obj.name not in before and obj.type == "MESH"
+            ]
             if not imported:
                 raise RuntimeError(f"No mesh objects imported from {filepath}")
             if len(imported) == 1:
@@ -1003,12 +1250,16 @@ class LowpolyBenchmark:
             modifier.use_replace = True
             return dup
 
-        def triangulated_mesh_data(obj: Any, mesh_name: str) -> dict[str, Any]:
+        def triangulated_mesh_data(
+            obj: Any, mesh_name: str, *, analyze_candidate: bool
+        ) -> dict[str, Any]:
             raw_mesh = obj.to_mesh()
             bm = bmesh.new()
             bm.from_mesh(raw_mesh)
             bm.transform(obj.matrix_world)
             bmesh.ops.triangulate(bm, faces=bm.faces[:])
+            bm.faces.ensure_lookup_table()
+            bm.faces.index_update()
 
             tri_mesh = bpy.data.meshes.new(mesh_name)
             bm.to_mesh(tri_mesh)
@@ -1040,10 +1291,69 @@ class LowpolyBenchmark:
                     )
                 )
 
+            bbox_diagonal = max((bbox_max - bbox_min).length, 1e-8)
+            face_areas = [face.calc_area() for face in bm.faces]
+            component_areas: list[float] = []
+            for face in bm.faces:
+                face.tag = False
+            for face in bm.faces:
+                if face.tag:
+                    continue
+                face.tag = True
+                stack = [face]
+                component_area = 0.0
+                while stack:
+                    current = stack.pop()
+                    component_area += face_areas[current.index]
+                    for edge in current.edges:
+                        for linked_face in edge.link_faces:
+                            if not linked_face.tag:
+                                linked_face.tag = True
+                                stack.append(linked_face)
+                component_areas.append(component_area)
+
             triangle_count = len(tri_mesh.loop_triangles)
-            nonmanifold_edge_count = sum(1 for edge in bm.edges if not edge.is_manifold)
-            loose_vert_count = sum(1 for vert in bm.verts if len(vert.link_faces) == 0)
-            degenerate_face_count = sum(1 for face in bm.faces if face.calc_area() <= 1e-12)
+            edge_count = len(bm.edges)
+            boundary_edge_count = sum(1 for edge in bm.edges if len(edge.link_faces) == 1)
+            true_nonmanifold_edge_count = 0
+            loose_edge_count = 0
+            loose_vert_count = 0
+            degenerate_face_count = 0
+            skinny_face_count = 0
+            edge_length_outlier_count = 0
+            if analyze_candidate:
+                true_nonmanifold_edge_count = sum(
+                    1 for edge in bm.edges if len(edge.link_faces) > 2
+                )
+                loose_edge_count = sum(1 for edge in bm.edges if not edge.link_faces)
+                loose_vert_count = sum(1 for vert in bm.verts if len(vert.link_faces) == 0)
+                degenerate_face_count = sum(1 for area in face_areas if area <= 1e-12)
+                for face, area in zip(bm.faces, face_areas):
+                    edge_length_squares = [edge.calc_length() ** 2 for edge in face.edges]
+                    quality_denominator = sum(edge_length_squares)
+                    quality = (
+                        4.0 * math.sqrt(3.0) * area / quality_denominator
+                        if quality_denominator > 1e-20
+                        else 0.0
+                    )
+                    if quality < 0.01:
+                        skinny_face_count += 1
+
+                edge_sample_stride = max(1, edge_count // 50_000)
+                sampled_edge_lengths = sorted(
+                    edge.calc_length()
+                    for index, edge in enumerate(bm.edges)
+                    if index % edge_sample_stride == 0
+                )
+                median_edge_length = (
+                    sampled_edge_lengths[len(sampled_edge_lengths) // 2]
+                    if sampled_edge_lengths
+                    else 0.0
+                )
+                edge_outlier_threshold = max(0.05 * bbox_diagonal, 20.0 * median_edge_length)
+                edge_length_outlier_count = sum(
+                    1 for edge in bm.edges if edge.calc_length() > edge_outlier_threshold
+                )
 
             return {
                 "mesh": tri_mesh,
@@ -1055,9 +1365,15 @@ class LowpolyBenchmark:
                 "bbox_center": (bbox_min + bbox_max) * 0.5,
                 "bbox_size": bbox_max - bbox_min,
                 "triangle_count": triangle_count,
-                "nonmanifold_edge_count": nonmanifold_edge_count,
+                "edge_count": edge_count,
+                "boundary_edge_count": boundary_edge_count,
+                "true_nonmanifold_edge_count": true_nonmanifold_edge_count,
+                "loose_edge_count": loose_edge_count,
                 "loose_vert_count": loose_vert_count,
                 "degenerate_face_count": degenerate_face_count,
+                "skinny_face_count": skinny_face_count,
+                "edge_length_outlier_count": edge_length_outlier_count,
+                "component_areas": component_areas,
             }
 
         def cleanup_mesh_data(mesh_data: dict[str, Any] | None, owner: Any | None) -> None:
@@ -1073,7 +1389,9 @@ class LowpolyBenchmark:
             if raw_mesh is not None:
                 owner.to_mesh_clear()
 
-        def sample_surface_points(mesh: Any, sample_count: int, rng: random.Random) -> list[dict[str, Any]]:
+        def sample_surface_points(
+            mesh: Any, sample_count: int, rng: random.Random
+        ) -> list[dict[str, Any]]:
             triangles = mesh.loop_triangles
             if not triangles:
                 return []
@@ -1105,22 +1423,38 @@ class LowpolyBenchmark:
                 samples.append({"point": point, "normal": normal})
             return samples
 
-        def distances_to_bvh(samples: list[dict[str, Any]], bvh: Any) -> list[float]:
+        def comparisons_to_bvh(
+            samples: list[dict[str, Any]], bvh: Any
+        ) -> tuple[list[float], list[float]]:
             distances: list[float] = []
+            normal_agreements: list[float] = []
             for sample in samples:
                 hit = bvh.find_nearest(sample["point"])
                 nearest = hit[0]
                 if nearest is None:
                     distances.append(1e9)
+                    normal_agreements.append(0.0)
                     continue
                 distances.append((sample["point"] - nearest).length)
-            return distances
+                nearest_normal = hit[1]
+                sample_normal = sample["normal"]
+                if (
+                    nearest_normal is None
+                    or nearest_normal.length <= 1e-12
+                    or sample_normal.length <= 1e-12
+                ):
+                    normal_agreements.append(0.0)
+                    continue
+                normal_agreements.append(
+                    max(0.0, min(1.0, abs(float(sample_normal.dot(nearest_normal)))))
+                )
+            return distances, normal_agreements
 
         def percentile(values: list[float], pct: float) -> float:
             if not values:
                 return 0.0
             ordered = sorted(values)
-            idx = min(len(ordered) - 1, max(0, int(round((len(ordered) - 1) * pct))))
+            idx = min(len(ordered) - 1, max(0, round((len(ordered) - 1) * pct)))
             return float(ordered[idx])
 
         def mean_value(values: list[float]) -> float:
@@ -1138,7 +1472,10 @@ class LowpolyBenchmark:
             color_map: dict[str, tuple[float, float, float, float]],
         ) -> None:
             scene = bpy.context.scene
-            setup_workbench(background, "OBJECT", transparent=transparent, show_cavity=False, show_shadows=False)
+            setup_workbench(
+                background, "OBJECT", transparent=transparent, show_cavity=False, show_shadows=False
+            )
+            scene.render.image_settings.color_mode = "RGBA" if transparent else "RGB"
             scene.render.resolution_x = resolution
             scene.render.resolution_y = resolution
             set_visibility(visible)
@@ -1146,7 +1483,9 @@ class LowpolyBenchmark:
             scene.render.filepath = str(filepath)
             bpy.ops.render.render(write_still=True)
 
-        def project_points_for_view(*, scene: Any, cam: Any, samples: list[dict[str, Any]]) -> list[dict[str, float]]:
+        def project_points_for_view(
+            *, scene: Any, cam: Any, samples: list[dict[str, Any]]
+        ) -> list[dict[str, float]]:
             cam_pos = cam.matrix_world.translation.copy()
             points: list[dict[str, float]] = []
             for sample in samples:
@@ -1212,8 +1551,8 @@ class LowpolyBenchmark:
             clear_scene()
             high_obj = import_obj_group(high_obj_path, "HighPoly")
             low_obj = import_obj_group(low_obj_path, "LowPoly")
-            high_data = triangulated_mesh_data(high_obj, "HighPolyEval")
-            low_data = triangulated_mesh_data(low_obj, "LowPolyEval")
+            high_data = triangulated_mesh_data(high_obj, "HighPolyEval", analyze_candidate=False)
+            low_data = triangulated_mesh_data(low_obj, "LowPolyEval", analyze_candidate=True)
 
             diag = max((high_data["bbox_size"]).length, 1e-8)
             triangle_ratio = low_data["triangle_count"] / max(high_data["triangle_count"], 1)
@@ -1228,12 +1567,6 @@ class LowpolyBenchmark:
 
             if low_data["triangle_count"] <= 0:
                 result["gate_fail_reasons"].append("low_mesh_empty")
-            if triangle_ratio > float(config["triangle_ratio_cap"]):
-                result["gate_fail_reasons"].append("triangle_ratio_cap_exceeded")
-            if center_offset_norm > 0.02:
-                result["gate_fail_reasons"].append("center_offset_too_large")
-            if max_bbox_axis_diff_ratio > 0.05:
-                result["gate_fail_reasons"].append("bbox_scale_diff_too_large")
 
             rng = random.Random(seed)
             sample_count = int(config["sample_count_per_mesh"])
@@ -1242,11 +1575,48 @@ class LowpolyBenchmark:
             if not low_samples or not high_samples:
                 result["gate_fail_reasons"].append("surface_sampling_failed")
 
-            low_to_high = distances_to_bvh(low_samples, high_data["bvh"]) if low_samples else []
-            high_to_low = distances_to_bvh(high_samples, low_data["bvh"]) if high_samples else []
+            low_to_high, low_to_high_normals = (
+                comparisons_to_bvh(low_samples, high_data["bvh"]) if low_samples else ([], [])
+            )
+            high_to_low, high_to_low_normals = (
+                comparisons_to_bvh(high_samples, low_data["bvh"]) if high_samples else ([], [])
+            )
             low_to_high_norm = [dist / diag for dist in low_to_high]
             high_to_low_norm = [dist / diag for dist in high_to_low]
-            within_tolerance_ratio = mean_value([1.0 if dist <= 0.005 else 0.0 for dist in low_to_high_norm])
+            within_tolerance_ratio = mean_value(
+                [1.0 if dist <= 0.005 else 0.0 for dist in low_to_high_norm]
+            )
+            normal_agreement_mean = mean_value(low_to_high_normals + high_to_low_normals)
+
+            topology_cfg = dict(
+                config.get("topology_thresholds", config.get("mesh_health_thresholds", {}))
+            )
+            component_area_fraction_min = float(
+                topology_cfg.get("component_area_fraction_min", 0.001)
+            )
+
+            def significant_component_count(mesh_data: dict[str, Any]) -> int:
+                component_areas = mesh_data["component_areas"]
+                total_area = sum(component_areas)
+                if total_area <= 1e-20:
+                    return 0
+                return sum(
+                    1
+                    for area in component_areas
+                    if area / total_area >= component_area_fraction_min
+                )
+
+            significant_component_count_high = significant_component_count(high_data)
+            significant_component_count_low = significant_component_count(low_data)
+            significant_component_count_delta_ratio = abs(
+                significant_component_count_low - significant_component_count_high
+            ) / max(significant_component_count_high, 1)
+            boundary_edge_ratio_high = high_data["boundary_edge_count"] / max(
+                high_data["edge_count"], 1
+            )
+            boundary_edge_ratio_low = low_data["boundary_edge_count"] / max(
+                low_data["edge_count"], 1
+            )
 
             for sample, dist_norm in zip(low_samples, low_to_high_norm):
                 sample["distance_norm"] = dist_norm
@@ -1264,11 +1634,62 @@ class LowpolyBenchmark:
                     "bbox_scale_diff": float(mean_value(axis_scale_diffs)),
                     "max_bbox_axis_diff_ratio": float(max_bbox_axis_diff_ratio),
                     "center_offset_norm": float(center_offset_norm),
-                    "nonmanifold_edge_count": int(low_data["nonmanifold_edge_count"]),
-                    "degenerate_face_ratio": float(low_data["degenerate_face_count"] / max(low_data["triangle_count"], 1)),
-                    "loose_vert_ratio": float(low_data["loose_vert_count"] / max(len(low_data["mesh"].vertices), 1)),
+                    "edge_count_low": int(low_data["edge_count"]),
+                    "boundary_edge_count_high": int(high_data["boundary_edge_count"]),
+                    "boundary_edge_count_low": int(low_data["boundary_edge_count"]),
+                    "boundary_edge_ratio_high": float(boundary_edge_ratio_high),
+                    "boundary_edge_ratio_low": float(boundary_edge_ratio_low),
+                    "boundary_edge_ratio_delta": float(
+                        abs(boundary_edge_ratio_low - boundary_edge_ratio_high)
+                    ),
+                    "true_nonmanifold_edge_count": int(low_data["true_nonmanifold_edge_count"]),
+                    "true_nonmanifold_edge_ratio": float(
+                        low_data["true_nonmanifold_edge_count"] / max(low_data["edge_count"], 1)
+                    ),
+                    "degenerate_face_ratio": float(
+                        low_data["degenerate_face_count"] / max(low_data["triangle_count"], 1)
+                    ),
+                    "loose_vert_ratio": float(
+                        low_data["loose_vert_count"] / max(len(low_data["mesh"].vertices), 1)
+                    ),
+                    "loose_edge_ratio": float(
+                        low_data["loose_edge_count"] / max(low_data["edge_count"], 1)
+                    ),
+                    "skinny_face_ratio": float(
+                        low_data["skinny_face_count"] / max(low_data["triangle_count"], 1)
+                    ),
+                    "edge_length_outlier_ratio": float(
+                        low_data["edge_length_outlier_count"] / max(low_data["edge_count"], 1)
+                    ),
+                    "significant_component_count_high": int(significant_component_count_high),
+                    "significant_component_count_low": int(significant_component_count_low),
+                    "significant_component_count_delta_ratio": float(
+                        significant_component_count_delta_ratio
+                    ),
+                    "normal_agreement_mean": float(normal_agreement_mean),
                 }
             )
+            numeric_metrics = [
+                result["triangle_ratio"],
+                result["high_bbox_diagonal"],
+                result["chamfer_low_to_high_norm"],
+                result["chamfer_high_to_low_norm"],
+                result["p95_distance_norm"],
+                result["within_tolerance_ratio"],
+                result["max_bbox_axis_diff_ratio"],
+                result["center_offset_norm"],
+                result["boundary_edge_ratio_delta"],
+                result["true_nonmanifold_edge_ratio"],
+                result["degenerate_face_ratio"],
+                result["loose_vert_ratio"],
+                result["loose_edge_ratio"],
+                result["skinny_face_ratio"],
+                result["edge_length_outlier_ratio"],
+                result["significant_component_count_delta_ratio"],
+                result["normal_agreement_mean"],
+            ]
+            if not all(math.isfinite(float(value)) for value in numeric_metrics):
+                result["gate_fail_reasons"].append("invalid_numeric_geometry")
 
             scene = bpy.context.scene
             rig, cam = get_or_create_camera_rig()
@@ -1278,7 +1699,9 @@ class LowpolyBenchmark:
             cam.data.clip_end = 10000.0
             set_viewports_to_camera()
 
-            high_points = [high_obj.matrix_world @ mathutils.Vector(corner) for corner in high_obj.bound_box]
+            high_points = [
+                high_obj.matrix_world @ mathutils.Vector(corner) for corner in high_obj.bound_box
+            ]
             target_center = high_data["bbox_center"]
             wire_thickness = max(diag * 0.0015, 1e-4)
             low_wire = duplicate_wireframe(low_obj, name="LowPolyWire", thickness=wire_thickness)
@@ -1297,7 +1720,14 @@ class LowpolyBenchmark:
                     math.radians(float(spec["elevation_deg"])),
                     0.80,
                 )
-                set_pose(rig, cam, target_center, int(spec["azimuth_deg"]), float(spec["elevation_deg"]), distance)
+                set_pose(
+                    rig,
+                    cam,
+                    target_center,
+                    int(spec["azimuth_deg"]),
+                    float(spec["elevation_deg"]),
+                    distance,
+                )
 
                 overlay_high_path = dirs["overlay_high"] / f"{view_name}.png"
                 overlay_low_path = dirs["overlay_low"] / f"{view_name}.png"
@@ -1330,7 +1760,9 @@ class LowpolyBenchmark:
                     visible=[low_obj],
                     color_map={low_obj.name: (0.82, 0.82, 0.82, 1.0)},
                 )
-                heatmap_projection_payload[view_name] = project_points_for_view(scene=scene, cam=cam, samples=heatmap_samples)
+                heatmap_projection_payload[view_name] = project_points_for_view(
+                    scene=scene, cam=cam, samples=heatmap_samples
+                )
 
             for view_name in config["views_metric"]:
                 spec = cls.VIEW_SPECS[view_name]
@@ -1344,7 +1776,14 @@ class LowpolyBenchmark:
                     math.radians(float(spec["elevation_deg"])),
                     0.80,
                 )
-                set_pose(rig, cam, target_center, int(spec["azimuth_deg"]), float(spec["elevation_deg"]), distance)
+                set_pose(
+                    rig,
+                    cam,
+                    target_center,
+                    int(spec["azimuth_deg"]),
+                    float(spec["elevation_deg"]),
+                    distance,
+                )
 
                 high_path = dirs["sil_high"] / f"{view_name}.png"
                 low_path = dirs["sil_low"] / f"{view_name}.png"
@@ -1355,7 +1794,7 @@ class LowpolyBenchmark:
                     filepath=high_path,
                     resolution=1024,
                     background=(1.0, 1.0, 1.0),
-                    transparent=False,
+                    transparent=True,
                     visible=[high_obj],
                     color_map={high_obj.name: (0.0, 0.0, 0.0, 1.0)},
                 )
@@ -1363,7 +1802,7 @@ class LowpolyBenchmark:
                     filepath=low_path,
                     resolution=1024,
                     background=(1.0, 1.0, 1.0),
-                    transparent=False,
+                    transparent=True,
                     visible=[low_obj],
                     color_map={low_obj.name: (0.0, 0.0, 0.0, 1.0)},
                 )
@@ -1373,11 +1812,15 @@ class LowpolyBenchmark:
                 encoding="utf-8",
             )
             result["gate_passed"] = not result["gate_fail_reasons"]
-            Path(output_dir / "blender_eval.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+            Path(output_dir / "blender_eval.json").write_text(
+                json.dumps(result, indent=2), encoding="utf-8"
+            )
         except Exception as exc:
             result["gate_passed"] = False
             result["gate_fail_reasons"].append(str(exc))
-            Path(output_dir / "blender_eval.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+            Path(output_dir / "blender_eval.json").write_text(
+                json.dumps(result, indent=2), encoding="utf-8"
+            )
             raise
         finally:
             cleanup_mesh_data(high_data, high_obj)
@@ -1391,16 +1834,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     if cli_argv is None:
         cli_argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else sys.argv[1:]
     parser = argparse.ArgumentParser(description="Run the lowpoly benchmark")
-    parser.add_argument("--mode", default="run", choices=["run", "blender-stage"], help="Execution mode")
-    parser.add_argument("--asset-root", default="", help="Asset root with input/high.obj and output/low.obj")
+    parser.add_argument(
+        "--mode", default="run", choices=["run", "blender-stage"], help="Execution mode"
+    )
+    parser.add_argument(
+        "--asset-root", default="", help="Asset root with input/high.obj and output/low.obj"
+    )
     parser.add_argument("--high-obj", default="", help="Optional explicit high.obj path")
     parser.add_argument("--low-obj", default="", help="Optional explicit low.obj path")
     parser.add_argument("--output-dir", required=True, help="Evaluation output directory")
     parser.add_argument("--evaluation-config", default="", help="Optional evaluation_config.json")
-    parser.add_argument("--blender-binary", default=LowpolyBenchmark.DEFAULT_BLENDER, help="Path to Blender binary")
-    parser.add_argument("--judge-backend", default="openai", choices=["heuristic", "openai"], help="Judge backend")
+    parser.add_argument(
+        "--blender-binary", default=LowpolyBenchmark.DEFAULT_BLENDER, help="Path to Blender binary"
+    )
+    parser.add_argument(
+        "--judge-backend", default="openai", choices=["heuristic", "openai"], help="Judge backend"
+    )
     parser.add_argument("--judge-model", default="", help="Optional judge model override")
-    parser.add_argument("--skip-judge", action="store_true", help="Skip judge and leave vlm_score at zero")
+    parser.add_argument(
+        "--skip-judge", action="store_true", help="Skip judge and leave vlm_score at zero"
+    )
     parser.add_argument("--seed", type=int, default=1337, help="Sampling seed")
     return parser.parse_args(cli_argv)
 

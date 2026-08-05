@@ -135,7 +135,10 @@ Write exactly these outputs under `{self.remote_output_dir}`:
    Benjamini-Hochberg columns apply only to secondary metrics; leave
    them blank for the primary metric. Rates are computed over delivered
    emails from the **full** `experiment_results_raw.csv` (do NOT apply
-   exclusion rules).
+   exclusion rules). If both arms have the same boundary rate (both 0%
+   or both 100%), `z_statistic` and `p_value_raw` may be left blank as
+   undefined, or reported as the conventional `0.0` and `1.0`. Use
+   `p_value_raw=1.0` when ranking that metric for BH correction.
 
 3. `experiment_report.md` — Markdown report that includes:
    the required per-arm sample size (from a power analysis on
