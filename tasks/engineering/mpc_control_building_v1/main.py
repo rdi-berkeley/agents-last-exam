@@ -155,11 +155,12 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         _read_script("verify_outputs.py"),
     )
     result = await session.run_command(
-        f'UV_CACHE_DIR=/tmp/uv-cache uv run --with pandas --with numpy '
+        f"UV_CACHE_DIR=/tmp/uv-cache uv run --with pandas --with numpy "
         f'python "{EVAL_TMP_DIR}/verify_outputs.py" '
         f'--output-dir "{meta["remote_output_dir"]}" '
         f'--input-dir "{meta["input_dir"]}" '
-        f'--reference-dir "{meta["reference_dir"]}"'
+        f'--reference-dir "{meta["reference_dir"]}"',
+        check=False,
     )
     stdout = result.get("output", result.get("stdout", ""))
     try:
