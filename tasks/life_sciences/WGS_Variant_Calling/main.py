@@ -5,6 +5,7 @@ import os
 import posixpath
 import re
 import shlex
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -250,31 +251,56 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     except Exception as exc:
         logger.info("Checkpoint 3 FAILED: %s", exc)
 
-    try:
-        if not vcf_bytes:
-            raise ValueError("submitted VCF is missing")
-        evaluator_data_dir = Path(
-            os.environ.get(
-                "WGS_VARIANT_CALLING_EVAL_DATA_DIR",
-                Path(__file__).resolve().parents[3]
-                / "secret"
-                / "eval_data"
-                / "WGS_Variant_Calling",
-            )
+    if not vcf_bytes:
+        logger.info("Checkpoint 4 FAILED: submitted VCF is missing")
+        return [score]
+
+    evaluator_data_dir = Path(
+        os.environ.get(
+            "WGS_VARIANT_CALLING_EVAL_DATA_DIR",
+            Path(__file__).resolve().parents[3]
+            / "secret"
+            / "eval_data"
+            / "WGS_Variant_Calling",
         )
+    )
+    required_evaluator_files = (
+        "chr17.fa",
+        "truth_chr17.vcf.gz",
+        "truth_chr17.vcf.gz.tbi",
+        "eval_region_confident.bed",
+    )
+
+    if all((evaluator_data_dir / name).is_file() for name in required_evaluator_files):
         report = score_vcf_bytes(vcf_bytes, evaluator_data_dir)
-        for value, threshold in [
-            (report.snp.f1, task_cfg.metadata["min_snp_f1"]),
-            (report.snp.precision, task_cfg.metadata["min_snp_precision"]),
-            (report.snp.recall, task_cfg.metadata["min_snp_recall"]),
-            (report.indel.f1, task_cfg.metadata["min_indel_f1"]),
-            (report.indel.precision, task_cfg.metadata["min_indel_precision"]),
-            (report.indel.recall, task_cfg.metadata["min_indel_recall"]),
-        ]:
-            if value >= threshold:
-                score += 0.10
-        logger.info("Checkpoint 4 independently recomputed metrics=%s", report)
-    except Exception as exc:
-        logger.info("Checkpoint 4 FAILED: %s", exc)
+    else:
+        reference_dir = task_cfg.metadata["reference_dir"]
+        try:
+            with tempfile.TemporaryDirectory(prefix="wgs-evaluator-") as temp_dir:
+                staged_evaluator_dir = Path(temp_dir)
+                for name in required_evaluator_files:
+                    payload = await session.read_bytes(f"{reference_dir}/{name}")
+                    if not payload:
+                        raise FileNotFoundError(
+                            f"staged evaluator reference is missing or empty: {name}"
+                        )
+                    (staged_evaluator_dir / name).write_bytes(payload)
+                report = score_vcf_bytes(vcf_bytes, staged_evaluator_dir)
+        except Exception as exc:
+            raise RuntimeError(
+                "WGS evaluator data is unavailable both locally and in the staged reference"
+            ) from exc
+
+    for value, threshold in [
+        (report.snp.f1, task_cfg.metadata["min_snp_f1"]),
+        (report.snp.precision, task_cfg.metadata["min_snp_precision"]),
+        (report.snp.recall, task_cfg.metadata["min_snp_recall"]),
+        (report.indel.f1, task_cfg.metadata["min_indel_f1"]),
+        (report.indel.precision, task_cfg.metadata["min_indel_precision"]),
+        (report.indel.recall, task_cfg.metadata["min_indel_recall"]),
+    ]:
+        if value >= threshold:
+            score += 0.10
+    logger.info("Checkpoint 4 independently recomputed metrics=%s", report)
 
     return [score]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 from pathlib import Path
 
@@ -26,6 +27,33 @@ EVAL_TMP_DIR = f"/tmp/agenthle_eval/{TASK_NAME}"
 
 def _read_script(name: str) -> str:
     return (SCRIPTS_DIR / name).read_text(encoding="utf-8")
+
+
+def _parse_verifier_result(result: dict) -> float:
+    stdout = result.get("output", result.get("stdout", ""))
+    return_code = result.get("return_code", result.get("returncode"))
+    stderr = str(result.get("stderr", ""))
+    try:
+        data = json.loads(stdout)
+        if not isinstance(data, dict):
+            raise TypeError("verifier result must be a JSON object")
+        passed = data.get("passed")
+        if not isinstance(passed, bool):
+            raise TypeError("verifier result must contain a boolean passed field")
+        if return_code not in (0, 1) or passed != (return_code == 0):
+            raise ValueError(
+                f"verifier status mismatch: return_code={return_code!r}, passed={passed!r}"
+            )
+        score = float(data["score"])
+        if not math.isfinite(score) or not 0.0 <= score <= 1.0:
+            raise ValueError(f"verifier score is outside [0, 1]: {score!r}")
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            "MPC verifier failed to produce a valid result: "
+            f"return_code={return_code!r}, stderr={stderr[:1000]!r}"
+        ) from exc
+    logger.info("MPC control building eval result: %s", data)
+    return score
 
 
 class MPCControlBuildingConfig(LinuxTaskConfig):
@@ -155,17 +183,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         _read_script("verify_outputs.py"),
     )
     result = await session.run_command(
-        f'UV_CACHE_DIR=/tmp/uv-cache uv run --with pandas --with numpy '
+        f"UV_CACHE_DIR=/tmp/uv-cache uv run --with pandas --with numpy "
         f'python "{EVAL_TMP_DIR}/verify_outputs.py" '
         f'--output-dir "{meta["remote_output_dir"]}" '
         f'--input-dir "{meta["input_dir"]}" '
-        f'--reference-dir "{meta["reference_dir"]}"'
+        f'--reference-dir "{meta["reference_dir"]}"',
+        check=False,
     )
-    stdout = result.get("output", result.get("stdout", ""))
-    try:
-        data = json.loads(stdout)
-    except (TypeError, json.JSONDecodeError):
-        logger.error("verify_outputs.py did not produce JSON: %s", stdout)
-        return [0.0]
-    logger.info("MPC control building eval result: %s", data)
-    return [float(data.get("score", 0.0))]
+    return [_parse_verifier_result(result)]
