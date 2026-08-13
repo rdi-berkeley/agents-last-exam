@@ -147,7 +147,7 @@
     },
     "computing_math/os_log_permission_guard_v1": {
       "variants": [
-        "_package"
+        "base"
       ]
     },
     "computing_math/k8s_migration_1": {
@@ -537,7 +537,7 @@
     },
     "health_medicine/wsi_tumor_localization_1": {
       "variants": [
-        "bounding_box"
+        "center_point"
       ]
     },
     "health_medicine/healthcare_bias_audit_27a_public_replication_v1": {
