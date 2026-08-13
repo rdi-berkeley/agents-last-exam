@@ -26,7 +26,8 @@ Shape:
 Other behavior:
 
 * ``${env:VAR}`` substitution at parse time (KeyError if VAR unset) — applied
-  to the experiment yaml AND every referenced config file.
+  to the experiment yaml AND every referenced config file. Refs that appear
+  only in a comment are dropped by the parser and never required.
 * All relative paths resolve against the main yaml's directory.
 * Unknown / missing keys raise loudly.
 """
@@ -110,6 +111,7 @@ def load_experiment(path: str | Path) -> ExperimentSpec:
     raw = yaml.safe_load(_substitute_env(text)) or {}
     if not isinstance(raw, dict):
         raise TypeError(f"experiment yaml root must be a mapping, got {type(raw).__name__}")
+    _require_env_resolved(raw, main_path)
     return _build_experiment(raw, base_dir=base_dir)
 
 
@@ -161,19 +163,26 @@ def _load_dotenv(path: Path, *, override: bool = False) -> None:
 def _read_yaml(path: Path) -> Any:
     text = path.read_text()
     text = _substitute_env(text)
-    return yaml.safe_load(text) or {}
+    data = yaml.safe_load(text) or {}
+    _require_env_resolved(data, path)
+    return data
 
 
 def _substitute_env(text: str) -> str:
-    def repl(m: re.Match[str]) -> str:
+    """Expand ``${env:VAR}``; unset refs are left for :func:`_require_env_resolved`."""
+    return _ENV_RE.sub(lambda m: os.environ.get(m.group(1), m.group(0)), text)
+
+
+def _require_env_resolved(data: Any, path: Path) -> None:
+    """Raise if a ``${env:VAR}`` ref survived into the *parsed* document.
+
+    Substitution runs on raw text — it has to, so a substituted value keeps its
+    yaml type — which means it also sees comments. Checking after the parse is
+    what keeps a commented ``${env:...}`` example from becoming a requirement.
+    """
+    if (m := _ENV_RE.search(yaml.safe_dump(data))) is not None:
         var = m.group(1)
-        val = os.environ.get(var)
-        if val is None:
-            raise KeyError(
-                f"yaml references ${{env:{var}}} but {var} is not set"
-            )
-        return val
-    return _ENV_RE.sub(repl, text)
+        raise KeyError(f"yaml {path} references ${{env:{var}}} but {var} is not set")
 
 
 def _resolve_path(p: str | Path, base_dir: Path) -> Path:
