@@ -34,7 +34,10 @@
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free",
-    "timeout": 7200
+    "timeout": 7200,
+    "network": {
+      "mode": "off"
+    }
   },
   "taxonomy": {
     "domain_id": "2",
