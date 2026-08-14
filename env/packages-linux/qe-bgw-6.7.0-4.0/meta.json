@@ -1,1 +1,5 @@
-{"description": "Quantum ESPRESSO 6.7 (conda) + BerkeleyGW 4.0 (cplx, built from public source) at /opt/qe-bgw-6.7.0-4.0", "os": "linux", "verify": "/opt/qe-bgw-6.7.0-4.0/envs/qe-bgw/bin/pw.x </dev/null 2>&1 | grep -q PWSCF && test -x /opt/qe-bgw-6.7.0-4.0/src/BerkeleyGW-4.0/bin/epsilon.cplx.x"}
+{
+  "description": "Pinned QE 6.7MaX, Open MPI 4.1.6, Python 3.11.15, and BerkeleyGW 4.0 complex runtime",
+  "os": "linux",
+  "verify": "test \"$(cat /opt/qe-bgw-6.7.0-4.0/.ale-runtime-sha256)\" = d23a8b230214346b039ba9a12090136384c0c72d3fb459f505557ea82bfc0ea3 && test -x /opt/qe-bgw-6.7.0-4.0/envs/qe-bgw/bin/pw.x && test -x /opt/qe-bgw-6.7.0-4.0/src/BerkeleyGW-4.0/BSE/inteqp.cplx.x"
+}
