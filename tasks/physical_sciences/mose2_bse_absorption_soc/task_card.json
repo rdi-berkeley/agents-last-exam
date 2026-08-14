@@ -5,7 +5,10 @@
   "category": "physical_sciences",
   "software": [
     "NumPy",
-    "Python"
+    "Python",
+    "Quantum ESPRESSO 6.7MaX",
+    "Open MPI 4.1.6",
+    "BerkeleyGW 4.0"
   ],
   "taskPrompt": "You are a computational materials scientist working on a Linux VM.\n\n## Your Task\nCompute the SOC-enabled GW-BSE optical response of monolayer MoSe2 from the staged structure and pseudopotentials.\n\n## Input Files\n- MoSe2 structure: `base/input/MoSe2.vasp`\n- Mo pseudopotential: `base/input/Mo.soc.upf`\n- Se pseudopotential: `base/input/Se.soc.upf`\n\n## Software\nUse the task-local command-line tools staged here:\n- `base/software/bin/pw.x`\n- `base/software/bin/mpirun`\n- `base/software/bin/epsilon.cplx.x`\n- `base/software/bin/sigma.cplx.x`\n- `base/software/bin/kernel.cplx.x`\n- `base/software/bin/absorption.cplx.x`\n\n## What You Must Do\n1. Create the missing Quantum ESPRESSO and BerkeleyGW input decks from scratch.\n2. Run the monolayer MoSe2 QE workflow with explicit SOC / noncollinear settings.\n3. Run the BerkeleyGW workflow needed for the required BSE absorption output, including the 2D truncation treatment.\n4. Save the required outputs exactly under `base/output`.\n\n## Required Output Files\n- `base/output/MoSe2_bands.dat.gnu`\n- `base/output/MoSe2_bands.png`\n- `base/output/absorption_eh.dat`\n- `base/output/exciton_absorption_spectra_avg.png`\n\nDo not write outputs outside `base/output`.\n",
   "agentMustDo": [
@@ -48,7 +51,7 @@
   "vm": {
     "machineType": "c4-standard-16",
     "snapshot": "cpu-free-ubuntu",
-    "timeout": 7200
+    "timeout": 14400
   },
   "taxonomy": {
     "domain_id": "2",
@@ -72,5 +75,8 @@
       },
       "rationale": "The task involves computational materials science focusing on optical response in materials."
     }
-  }
+  },
+  "requiredSystemPackages": [
+    "qe-bgw-6.7.0-4.0"
+  ]
 }

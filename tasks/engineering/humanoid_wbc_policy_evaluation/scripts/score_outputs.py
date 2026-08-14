@@ -203,9 +203,9 @@ def _visual_demo_errors(report: dict[str, Any], output_dir: Path) -> list[str]:
 def score_report(report_path: Path, reference_path: Path, output_dir: Path | None = None) -> ScoreResult:
     reference, ref_errors = _load_json(reference_path)
     if ref_errors:
-        return ScoreResult(0.0, ref_errors)
+        raise RuntimeError("evaluator reference unavailable: " + "; ".join(ref_errors))
     if not isinstance(reference, dict) or not isinstance(reference.get("cases"), list):
-        return ScoreResult(0.0, ["reference expected_verdicts.json is malformed"])
+        raise RuntimeError("evaluator reference expected_verdicts.json is malformed")
 
     expected_verdicts = {
         item["case_id"]: item["expected_verdict"]
@@ -218,7 +218,7 @@ def score_report(report_path: Path, reference_path: Path, output_dir: Path | Non
         if isinstance(item, dict) and "case_id" in item
     }
     if len(expected_verdicts) != len(reference["cases"]):
-        return ScoreResult(0.0, ["reference contains malformed case records"])
+        raise RuntimeError("evaluator reference contains malformed case records")
 
     report, report_errors = _load_json(report_path)
     if report_errors:

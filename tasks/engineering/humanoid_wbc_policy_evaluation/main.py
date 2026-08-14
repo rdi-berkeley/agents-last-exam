@@ -98,10 +98,13 @@ You are evaluating whole-body-control policy rollouts for a Unitree G1 humanoid 
 - mjlab runtime archive and exported package list: `{self.input_runtime_env_dir}`
 - Offline motion and checkpoint archives: `{self.input_runtime_env_dir}/motions-1.zip`
   and `{self.input_runtime_env_dir}/policies.zip`
+- Offline installer inside `mjlab.zip`: `mjlab (Copy)/install_offline.sh`
 
 ## What You Must Do
 1. Inspect the 8 policy cases in `{self.input_policy_cases}`.
-2. Use mjlab and the listed `play_command` or `video_command` values to observe
+2. Extract `mjlab.zip`, run `bash install_offline.sh ./mjlab-runtime`, and use
+   `./mjlab-runtime/bin/play` with the remaining arguments from each listed
+   `play_command` or `video_command` to observe
    each policy against its reference motion. The runtime archive, motion files,
    and policy checkpoints are staged under `{self.input_runtime_env_dir}` if you
    need to install mjlab locally on the VM.
@@ -143,6 +146,9 @@ You are evaluating whole-body-control policy rollouts for a Unitree G1 humanoid 
                 "output_report": self.output_report,
                 "output_visual_demos_dir": self.output_visual_demos_dir,
                 "reference_expected_verdicts": self.reference_expected_verdicts,
+                "canonical_gcs_root": (
+                    f"gs://ale-data-all/{self.DOMAIN_NAME}/{self.TASK_NAME}/{self.VARIANT_NAME}/"
+                ),
             }
         )
         return metadata
@@ -177,8 +183,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     tag = meta["variant_name"]
 
     if not (await session.file_exists(meta["reference_expected_verdicts"]) or await session.directory_exists(meta["reference_expected_verdicts"])):
-        logger.error("[%s] Missing hidden reference: %s", tag, meta["reference_expected_verdicts"])
-        return [0.0]
+        raise RuntimeError(f"[{tag}] Missing evaluator-controlled reference: {meta['reference_expected_verdicts']}")
 
     if not (await session.file_exists(meta["remote_output_dir"]) or await session.directory_exists(meta["remote_output_dir"])):
         logger.error("[%s] Missing output directory: %s", tag, meta["remote_output_dir"])
@@ -206,27 +211,44 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         local_report = tmp / "policy_evaluation_report.json"
         local_reference = tmp / "expected_verdicts.json"
         local_report_in_output = local_output_dir / "policy_evaluation_report.json"
-        local_report.write_bytes(await session.read_bytes(meta["output_report"]))
+        try:
+            local_report.write_bytes(await session.read_bytes(meta["output_report"]))
+        except Exception as exc:
+            logger.info("[%s] Candidate report could not be read: %s", tag, exc)
+            return [0.0]
         local_report_in_output.write_bytes(local_report.read_bytes())
-        local_reference.write_bytes(await session.read_bytes(meta["reference_expected_verdicts"]))
+        try:
+            local_reference.write_bytes(await session.read_bytes(meta["reference_expected_verdicts"]))
+        except Exception as exc:
+            raise RuntimeError(
+                f"[{tag}] Failed to read evaluator-controlled reference: {exc}"
+            ) from exc
 
         try:
             import json
 
             report = json.loads(local_report.read_text(encoding="utf-8"))
-            for item in report.get("evaluations", []):
-                demo_path = item.get("evidence", {}).get("visual_demo_path")
-                if not isinstance(demo_path, str):
-                    continue
-                if not demo_path.startswith("visual_demos/") or ".." in demo_path:
-                    continue
-                remote_demo_path = f"{meta['remote_output_dir']}/{demo_path}"
-                local_demo_path = local_output_dir / demo_path
-                local_demo_path.parent.mkdir(parents=True, exist_ok=True)
-                local_demo_path.write_bytes(await session.read_bytes(remote_demo_path))
-        except Exception as exc:
-            logger.error("[%s] Failed to collect visual demo artifacts: %s", tag, exc)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            logger.info("[%s] Candidate report is not valid UTF-8 JSON: %s", tag, exc)
             return [0.0]
+
+        for item in report.get("evaluations", []) if isinstance(report, dict) else []:
+            demo_path = item.get("evidence", {}).get("visual_demo_path") if isinstance(item, dict) else None
+            if not isinstance(demo_path, str):
+                continue
+            if not demo_path.startswith("visual_demos/") or ".." in Path(demo_path).parts:
+                continue
+            remote_demo_path = f"{meta['remote_output_dir']}/{demo_path}"
+            local_demo_path = local_output_dir / demo_path
+            local_demo_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                local_demo_path.write_bytes(await session.read_bytes(remote_demo_path))
+            except FileNotFoundError:
+                continue
+            except Exception as exc:
+                raise RuntimeError(
+                    f"[{tag}] Failed to collect candidate visual demo {demo_path}: {exc}"
+                ) from exc
 
         result = score_report(local_report_in_output, local_reference, local_output_dir)
         for diagnostic in result.diagnostics:

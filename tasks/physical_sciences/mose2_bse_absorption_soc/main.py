@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shlex
 import sys
 from dataclasses import dataclass
 
@@ -108,6 +109,15 @@ _setup = BaseTaskSetup()
 @cb.setup_task(split="train")
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
+    install_script = f"{task_cfg.metadata['software_dir']}/install_software.sh"
+    result = await session.run_command(
+        "bash " + shlex.quote(install_script), timeout=600, check=False
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "QE/BerkeleyGW task runtime verification failed: "
+            f"{(result.stderr or result.stdout or '').strip()[-2000:]}"
+        )
 
 
 @cb.evaluate_task(split="train")
