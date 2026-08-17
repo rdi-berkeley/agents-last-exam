@@ -151,6 +151,130 @@ env/verify_task_env.sh path/to/task_card.json path/to/task_base_dir</code></pre>
       <code>evaluator_env</code> venv, most lean on the image Python.
     </div>
 
+    <h2 id="base">Build the base from a stock OS image</h2>
+    <p>
+      The five steps below start from the published <code>ale-ubuntu22</code> /
+      <code>ale-win10</code> base, which already runs the CUA server on boot and
+      exposes the paths each image module declares — most readers skip this
+      section. Build the base yourself only when starting from a stock cloud
+      image (Ubuntu&nbsp;22.04, or Windows Server&nbsp;2022 / Windows&nbsp;10 / 11)
+      — to move to a new OS version, or to reproduce the base offline. Unlike the
+      per-task packages, this substrate is <em>not</em> driven by
+      <code>env/</code>: it is a one-time setup that every later step assumes.
+      When you finish it you already have a running builder VM, so continue at
+      <a href="#software">step&nbsp;2</a> rather than step&nbsp;1.
+    </p>
+    <p>
+      A base carries four things: a desktop the CUA server can screenshot; the
+      CUA server itself, auto-started and self-healing on the declared port; the
+      node and Python runtimes the deployer discovers by path; and disabled OS
+      auto-updates so a pinned image never drifts. The CUA server is the pip
+      package <code>cua-computer-server</code> (module <code>computer_server</code>),
+      run as <code>python -m computer_server --port 5000</code> on both systems —
+      what differs is how each OS keeps it alive and gives it a desktop.
+    </p>
+
+    <h3>Ubuntu 22.04</h3>
+    <p>
+      Create the sandbox user <code>user</code> and give it a desktop that logs in
+      automatically, so a graphical session owns <code>DISPLAY=:0</code> for the
+      CUA server to capture — the published base uses <code>gdm3</code> +&nbsp;GNOME
+      with GDM autologin for <code>user</code> and
+      <code>systemctl set-default graphical.target</code>. Install the runtimes at
+      the exact paths <code>ale_run/environments/images/ale_ubuntu22.py</code>
+      declares:
+    </p>
+    <pre><code># node → /usr/local/bin/node   (the module's `node` field; base ships v24.12.0)
+#   unpack the official linux-x64 tarball into /usr/local, or use NodeSource:
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash - &amp;&amp; sudo apt-get install -y nodejs
+
+# image python → /opt/ale-run/.venv   (Python 3.12 + pydantic; hosts the agent,
+#   user-writable so install_agent_deps() can add packages at launch)
+uv venv --python 3.12 /opt/ale-run/.venv &amp;&amp; /opt/ale-run/.venv/bin/pip install pydantic
+
+# CUA server venv → /opt/cua-server/.venv, then install the server into it
+#   (env/packages-linux/cua-server-venv creates this venv with uv)
+uv venv /opt/cua-server/.venv &amp;&amp; /opt/cua-server/.venv/bin/pip install cua-computer-server</code></pre>
+    <p>
+      Auto-start and self-heal the server with a systemd unit. The published base
+      ships exactly this at
+      <code>/etc/systemd/system/cua-computer-server.service</code>:
+    </p>
+    <pre><code>[Unit]
+Description=Cua Computer Server
+After=graphical.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=user
+Environment=DISPLAY=:0
+Environment=HOME=/home/user
+Environment=XAUTHORITY=/home/user/.Xauthority
+ExecStart=/opt/cua-server/.venv/bin/python -m computer_server --port 5000
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/cua-server/server.log
+StandardError=append:/opt/cua-server/server.err.log
+
+[Install]
+WantedBy=graphical.target</code></pre>
+    <pre><code>sudo systemctl enable --now cua-computer-server.service</code></pre>
+    <p>
+      <code>Restart=always</code> covers crashes; the base adds a companion
+      <code>cua-computer-server-health.timer</code> that fires every 30&nbsp;s,
+      probes the server, and restarts it if it wedges without exiting. Finally,
+      freeze the image against package drift — write these lines to
+      <code>/etc/apt/apt.conf.d/20auto-upgrades</code> and mask the daily timers:
+    </p>
+    <pre><code># /etc/apt/apt.conf.d/20auto-upgrades — every periodic job off
+APT::Periodic::Enable "0";
+APT::Periodic::Update-Package-Lists "0";
+APT::Periodic::Download-Upgradeable-Packages "0";
+APT::Periodic::Unattended-Upgrade "0";</code></pre>
+    <pre><code>sudo systemctl mask apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service</code></pre>
+
+    <h3>Windows (Server 2022 / 10 / 11)</h3>
+    <p>
+      Create the sandbox user <code>User</code> and enable autologon, so an
+      interactive desktop session is live for the CUA server to capture. Unpack
+      node and stand up the Pythons at the paths
+      <code>ale_run/environments/images/ale_win10.py</code> declares:
+    </p>
+    <pre><code>:: node → C:\Users\User\node-v24.12.0-win-x64\node.exe
+::   unpacked off-PATH; the deployer globs %USERPROFILE%\node-v*-win-x64 for it.
+:: image python → C:\ale-run\.venv   (the module's `python` field; hosts the agent)
+py -3.12 -m venv C:\ale-run\.venv
+:: the CUA server runs on the machine-wide Python 3.12 — install the server there
+python -m pip install cua-computer-server</code></pre>
+    <p>
+      Windows has no systemd, so the base supervises the server with a scheduled
+      task plus a watchdog script. Register a task that runs at logon, elevated,
+      and auto-restarts:
+    </p>
+    <pre><code>schtasks /Create /TN CuaServer-agenthle /SC ONLOGON /RL HIGHEST /RU User ^
+  /TR "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\Users\User\scripts\cua_watchdog.ps1"
+:: the base sets the task to restart 999 times at 1-minute intervals</code></pre>
+    <p>
+      <code>cua_watchdog.ps1</code> is the <code>Restart=always</code> equivalent:
+      it launches <code>python -m computer_server --port 5000</code> hidden, then
+      loops every 60&nbsp;s — restarting the server if the process exits, or if a
+      <code>/status</code> then <code>/cmd</code> health probe fails five times in
+      a row. Disable Windows Update so the pinned build never changes:
+    </p>
+    <pre><code>reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v NoAutoUpdate /t REG_DWORD /d 1 /f
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v AUOptions   /t REG_DWORD /d 1 /f
+sc config wuauserv    start= disabled
+sc config WaaSMedicSvc start= disabled</code></pre>
+    <div class="note">
+      <div class="note-title">The CUA port is a contract</div>
+      On either OS the server must answer on the port its image module declares
+      (<code>cua_server_port</code>, 5000 by default), and the desktop session must
+      be live before it starts — the deployer only ever <em>connects</em>, it
+      never starts the server. If you change the port, open it in the firewall
+      (see <a href="#register">step&nbsp;5</a>).
+    </div>
+
     <h2>1. Boot a builder VM</h2>
     <p>
       Start from the matching published base so the CUA server, node, Python, and
@@ -167,7 +291,7 @@ env/verify_task_env.sh path/to/task_card.json path/to/task_base_dir</code></pre>
       <code>ale-win-server</code> for the GPU family) over RDP.
     </p>
 
-    <h2>2. Install and verify the software</h2>
+    <h2 id="software">2. Install and verify the software</h2>
     <p>
       Copy the <code>env/</code> tree to the builder and run the installers for
       each task card you want the image to cover. On Linux:
