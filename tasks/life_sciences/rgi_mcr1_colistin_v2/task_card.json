@@ -46,7 +46,7 @@
       "description": "Required output containing the best-hit ARO gene name, percent identity, drug class, and resistance mechanism."
     }
   ],
-  "evaluation": "Hard fails: missing or invalid `output/answer.json`, missing required keys, or non-numeric `percent_identity` score `0.0`.\n\nScoring compares the output against hidden evaluator metadata and averages four components:\n- gene name: `1.0` for a specific `MCR-*` hit, `0.5` for a generic phosphoethanolamine-transferase family string, otherwise `0.0`\n- percent identity: `1.0` within `+-0.5`, `0.5` within `+-2.0`, otherwise `0.0`\n- drug class: `1.0` if the reported text contains `peptide`\n- resistance mechanism: `1.0` if the reported text contains `target alteration`\n\nThe final score is the raw mean of those four components. Passing threshold: `>= 0.75`.",
+  "evaluation": "Hard fails: missing or invalid `output/answer.json`, missing required keys, non-string categorical fields, or a non-numeric/non-finite `percent_identity` score `0.0`.\n\nScoring compares the output against hidden evaluator metadata and averages four components. Text is normalized for case and whitespace; the best-hit ARO allele, drug class, and resistance mechanism must otherwise match their hidden reference values exactly. Percent identity must be within `+-0.05` of its hidden reference value. The best-hit ARO allele and percent identity are critical fields: if either is wrong, the final score is capped at `0.5`. Passing threshold: `>= 0.75`.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",

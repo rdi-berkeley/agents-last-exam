@@ -58,7 +58,6 @@ DOMAIN_NAME = "life_sciences"
 TASK_NAME = "rgi_mcr1_colistin_v2"
 TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
-VISIBLE_TASK_NAME = "amr_contig_annotation_instance_1"
 CANONICAL_OUTPUT_DIR_NAMES = {
     "output",
     "output_test_pos",
@@ -88,18 +87,6 @@ class RgiMcr1ColistinV2Config(LinuxTaskConfig):
     VARIANT_NAME: str = VARIANT_NAME
 
     @property
-    def data_task_dir(self) -> str:
-        return f"{self.REMOTE_ROOT_DIR}/{self.DOMAIN_NAME}/{TASK_NAME}/{self.VARIANT_NAME}"
-
-    @property
-    def task_dir(self) -> str:
-        return f"{self.REMOTE_ROOT_DIR}/{self.DOMAIN_NAME}/{VISIBLE_TASK_NAME}/{self.VARIANT_NAME}"
-
-    @property
-    def reference_dir(self) -> str:
-        return f"{self.data_task_dir}/reference"
-
-    @property
     def eval_dir(self) -> str:
         return f"{self.data_task_dir}/eval_data"
 
@@ -109,9 +96,7 @@ class RgiMcr1ColistinV2Config(LinuxTaskConfig):
 
     @property
     def remote_output_dir(self) -> str:
-        if self.output_dir_name == "output":
-            return f"{self.task_dir}/{self.output_dir_name}"
-        return f"{self.data_task_dir}/{self.output_dir_name}"
+        return f"{self.task_dir}/{self.output_dir_name}"
 
     @property
     def input_fasta(self) -> str:
@@ -225,26 +210,17 @@ def load():
 @cb.setup_task(split="train")
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
-    # Materialize the agent-visible output directory. The runner stages input/
-    # straight to the visible amr_contig_annotation_instance_1 workspace, but only
-    # mkdir's the *canonical* rgi_mcr1_colistin_v2 output dir, never the visible one
-    # the prompt and grader use (remote_output_dir). The BaseTaskSetup migration
-    # dropped the original `makedirs(remote_output_dir)` here as a presumed no-op —
-    # it is not: without it the visible output/ never exists, so the agent cannot
-    # write answer.json at the path it is told to use and evaluate() hard-fails on
-    # file_exists.
-    await session.interface.create_dir(task_cfg.metadata["remote_output_dir"])
 
 
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
 
-    if not (await session.file_exists(meta["answer_file"]) or await session.directory_exists(meta["answer_file"])):
+    if not await session.file_exists(meta["answer_file"]):
         logger.error("agent missing output: %s", meta["answer_file"])
         return [0.0]
 
-    if not (await session.file_exists(meta["verification_targets_file"]) or await session.directory_exists(meta["verification_targets_file"])):
+    if not await session.file_exists(meta["verification_targets_file"]):
         raise RuntimeError(
             f"evaluator-controlled reference missing: {meta['verification_targets_file']}"
         )
