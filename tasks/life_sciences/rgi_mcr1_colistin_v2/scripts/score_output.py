@@ -5,12 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-SPECIFIC_MCR_PATTERN = re.compile(r"\bMCR-[A-Z0-9]", re.IGNORECASE)
+MAX_IDENTITY_TOLERANCE = 0.05
+CRITICAL_FAILURE_SCORE_CAP = 0.5
 
 
 @dataclass
@@ -28,10 +28,12 @@ class ScoreResult:
     reported_identity: float | None
     reference_identity: float | None
     reported_drug_class: str | None
-    required_drug_keyword: str
+    reference_drug_class: str
     reported_resistance_mechanism: str | None
-    required_resistance_mechanism_keyword: str
+    reference_resistance_mechanism: str
+    identity_tolerance: float
     pass_threshold: float
+    critical_fields_match: bool
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -48,20 +50,22 @@ def _coerce_json_object(raw_text: str, *, label: str) -> dict[str, Any]:
 
 
 def _coerce_float(value: Any) -> float:
-    if isinstance(value, bool):
-        raise ValueError("booleans are not valid numeric values")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("value must be a JSON number")
     parsed = float(value)
     if not math.isfinite(parsed):
         raise ValueError("numeric value must be finite")
     return parsed
 
 
-def _stringify(value: Any) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, list):
-        return "; ".join(str(item) for item in value)
-    return str(value)
+def _normalize_text(value: str) -> str:
+    return " ".join(value.split()).casefold()
+
+
+def _reference_text(value: Any, *, label: str) -> tuple[str, str]:
+    if not isinstance(value, str) or not _normalize_text(value):
+        raise ValueError(f"{label} must be a non-empty string")
+    return value, _normalize_text(value)
 
 
 def score_output_payloads(*, output_json_text: str, reference_json_text: str) -> ScoreResult:
@@ -82,44 +86,63 @@ def score_output_payloads(*, output_json_text: str, reference_json_text: str) ->
         label="resistance_mechanism",
     )
 
-    reference_gene = _stringify(gene_cfg.get("reference_value"))
-    gene_prefix = str(gene_cfg["full_credit_prefix"]).strip().upper()
-    partial_gene_hint = str(gene_cfg["partial_credit_contains"]).strip().lower()
+    reference_gene, normalized_reference_gene = _reference_text(
+        gene_cfg.get("reference_value"), label="gene_name.reference_value"
+    )
 
     reference_identity = _coerce_float(identity_cfg["target"])
-    full_credit_tolerance = _coerce_float(identity_cfg["full_credit_tolerance"])
-    partial_credit_tolerance = _coerce_float(identity_cfg["partial_credit_tolerance"])
+    configured_identity_tolerance = _coerce_float(identity_cfg["full_credit_tolerance"])
+    if configured_identity_tolerance < 0:
+        raise ValueError("percent_identity.full_credit_tolerance must be non-negative")
+    identity_tolerance = min(configured_identity_tolerance, MAX_IDENTITY_TOLERANCE)
 
-    reference_drug_class = _stringify(drug_cfg.get("reference_value"))
-    required_drug_keyword = str(drug_cfg["required_keyword"]).strip().lower()
+    reference_drug_class, normalized_reference_drug_class = _reference_text(
+        drug_cfg.get("reference_value"), label="drug_class.reference_value"
+    )
 
-    reference_mechanism = _stringify(mechanism_cfg.get("reference_value"))
-    required_mechanism_keyword = str(mechanism_cfg["required_keyword"]).strip().lower()
+    reference_mechanism, normalized_reference_mechanism = _reference_text(
+        mechanism_cfg.get("reference_value"),
+        label="resistance_mechanism.reference_value",
+    )
 
     pass_threshold = _coerce_float(score_mapping["pass_threshold"])
+    if not 0.0 <= pass_threshold <= 1.0:
+        raise ValueError("score_mapping.pass_threshold must be between 0 and 1")
 
-    try:
-        output = _coerce_json_object(output_json_text, label="output_json")
-    except ValueError as exc:
+    def invalid_result(
+        reason: str,
+        *,
+        reported_gene: str | None = None,
+        gene_score: float = 0.0,
+        reported_drug_class: str | None = None,
+        reported_mechanism: str | None = None,
+    ) -> ScoreResult:
         return ScoreResult(
             score=0.0,
             passed=False,
             valid=False,
-            reason=str(exc),
-            gene_score=0.0,
+            reason=reason,
+            gene_score=gene_score,
             identity_score=0.0,
             drug_class_score=0.0,
             resistance_mechanism_score=0.0,
-            reported_gene=None,
+            reported_gene=reported_gene,
             reference_gene=reference_gene,
             reported_identity=None,
             reference_identity=reference_identity,
-            reported_drug_class=None,
-            required_drug_keyword=required_drug_keyword,
-            reported_resistance_mechanism=None,
-            required_resistance_mechanism_keyword=required_mechanism_keyword,
+            reported_drug_class=reported_drug_class,
+            reference_drug_class=reference_drug_class,
+            reported_resistance_mechanism=reported_mechanism,
+            reference_resistance_mechanism=reference_mechanism,
+            identity_tolerance=identity_tolerance,
             pass_threshold=pass_threshold,
+            critical_fields_match=False,
         )
+
+    try:
+        output = _coerce_json_object(output_json_text, label="output_json")
+    except ValueError as exc:
+        return invalid_result(str(exc))
 
     required_keys = (
         "best_hit_aro",
@@ -129,88 +152,48 @@ def score_output_payloads(*, output_json_text: str, reference_json_text: str) ->
     )
     missing_keys = [key for key in required_keys if key not in output]
     if missing_keys:
-        return ScoreResult(
-            score=0.0,
-            passed=False,
-            valid=False,
-            reason="missing required keys: " + ", ".join(missing_keys),
-            gene_score=0.0,
-            identity_score=0.0,
-            drug_class_score=0.0,
-            resistance_mechanism_score=0.0,
-            reported_gene=None,
-            reference_gene=reference_gene,
-            reported_identity=None,
-            reference_identity=reference_identity,
-            reported_drug_class=None,
-            required_drug_keyword=required_drug_keyword,
-            reported_resistance_mechanism=None,
-            required_resistance_mechanism_keyword=required_mechanism_keyword,
-            pass_threshold=pass_threshold,
-        )
+        return invalid_result("missing required keys: " + ", ".join(missing_keys))
 
-    reported_gene = _stringify(output.get("best_hit_aro"))
-    reported_gene_stripped = (reported_gene or "").strip()
-    reported_gene_normalized = reported_gene_stripped.upper()
-    reported_gene_lower = reported_gene_stripped.lower()
-    if SPECIFIC_MCR_PATTERN.search(reported_gene_stripped):
-        gene_score = 1.0
-    elif partial_gene_hint and partial_gene_hint in reported_gene_lower:
-        gene_score = 0.5
-    else:
-        gene_score = 0.0
+    text_fields = ("best_hit_aro", "drug_class", "resistance_mechanism")
+    invalid_text_fields = [key for key in text_fields if not isinstance(output[key], str)]
+    if invalid_text_fields:
+        return invalid_result("fields must be strings: " + ", ".join(invalid_text_fields))
+
+    reported_gene = output["best_hit_aro"]
+    gene_score = float(_normalize_text(reported_gene) == normalized_reference_gene)
 
     try:
         reported_identity = _coerce_float(output.get("percent_identity"))
     except (TypeError, ValueError) as exc:
-        return ScoreResult(
-            score=0.0,
-            passed=False,
-            valid=False,
-            reason=f"percent_identity is not numeric: {exc}",
-            gene_score=gene_score,
-            identity_score=0.0,
-            drug_class_score=0.0,
-            resistance_mechanism_score=0.0,
+        return invalid_result(
+            f"percent_identity is not numeric: {exc}",
             reported_gene=reported_gene,
-            reference_gene=reference_gene,
-            reported_identity=None,
-            reference_identity=reference_identity,
-            reported_drug_class=_stringify(output.get("drug_class")),
-            required_drug_keyword=required_drug_keyword,
-            reported_resistance_mechanism=_stringify(output.get("resistance_mechanism")),
-            required_resistance_mechanism_keyword=required_mechanism_keyword,
-            pass_threshold=pass_threshold,
+            gene_score=gene_score,
+            reported_drug_class=output["drug_class"],
+            reported_mechanism=output["resistance_mechanism"],
         )
 
     absolute_error = abs(reported_identity - reference_identity)
-    if absolute_error <= full_credit_tolerance:
-        identity_score = 1.0
-    elif absolute_error <= partial_credit_tolerance:
-        identity_score = 0.5
-    else:
-        identity_score = 0.0
+    identity_score = float(absolute_error <= identity_tolerance)
 
-    reported_drug_class = _stringify(output.get("drug_class"))
-    drug_class_score = (
-        1.0 if required_drug_keyword in (reported_drug_class or "").strip().lower() else 0.0
+    reported_drug_class = output["drug_class"]
+    drug_class_score = float(
+        _normalize_text(reported_drug_class) == normalized_reference_drug_class
     )
 
-    reported_mechanism = _stringify(output.get("resistance_mechanism"))
-    resistance_mechanism_score = (
-        1.0
-        if required_mechanism_keyword in (reported_mechanism or "").strip().lower()
-        else 0.0
+    reported_mechanism = output["resistance_mechanism"]
+    resistance_mechanism_score = float(
+        _normalize_text(reported_mechanism) == normalized_reference_mechanism
     )
 
-    final_score = (
-        gene_score + identity_score + drug_class_score + resistance_mechanism_score
-    ) / 4.0
+    raw_score = (gene_score + identity_score + drug_class_score + resistance_mechanism_score) / 4.0
+    critical_fields_match = gene_score == 1.0 and identity_score == 1.0
+    final_score = raw_score if critical_fields_match else min(raw_score, CRITICAL_FAILURE_SCORE_CAP)
     return ScoreResult(
         score=final_score,
-        passed=final_score >= pass_threshold,
+        passed=critical_fields_match and final_score >= pass_threshold,
         valid=True,
-        reason="scored successfully",
+        reason=("scored successfully" if critical_fields_match else "critical field mismatch"),
         gene_score=gene_score,
         identity_score=identity_score,
         drug_class_score=drug_class_score,
@@ -220,10 +203,12 @@ def score_output_payloads(*, output_json_text: str, reference_json_text: str) ->
         reported_identity=reported_identity,
         reference_identity=reference_identity,
         reported_drug_class=reported_drug_class,
-        required_drug_keyword=required_drug_keyword,
+        reference_drug_class=reference_drug_class,
         reported_resistance_mechanism=reported_mechanism,
-        required_resistance_mechanism_keyword=required_mechanism_keyword,
+        reference_resistance_mechanism=reference_mechanism,
+        identity_tolerance=identity_tolerance,
         pass_threshold=pass_threshold,
+        critical_fields_match=critical_fields_match,
     )
 
 
