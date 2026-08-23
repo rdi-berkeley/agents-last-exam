@@ -20,6 +20,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { CuaClient } from "./cua-client.js";
+import {
+  parseTextInputMode,
+  typeTextReliably,
+} from "./text-input.js";
 
 // Key normalization — maps LLM-style key names to CUA server pynput names.
 // CUA server's Windows handler has its own _key_from_string with .lower(),
@@ -89,6 +93,7 @@ function normalizeKey(key) {
 
 const CUA_URL = process.env.CUA_SERVER_URL || "http://localhost:5000";
 const client = new CuaClient(CUA_URL);
+const TEXT_INPUT_MODE = parseTextInputMode(process.env.CUA_TEXT_INPUT_MODE);
 
 // ------------------------------------------------------------------
 // Coordinate conversion: normalized [0, 1000] → absolute pixels
@@ -228,7 +233,7 @@ server.tool(
     text: z.string().describe("The text content to type."),
   },
   async ({ text }) => {
-    await client.sendCommand("type_text", { text });
+    await typeTextReliably(client, text, { mode: TEXT_INPUT_MODE });
     const preview = text.length > 50 ? text.slice(0, 50) + "..." : text;
     return textOnly(`Typed: "${preview}"`);
   }
