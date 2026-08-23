@@ -13,10 +13,10 @@ control bridge injected alongside agents; the more general non-GUI surface
 
 ## Coordinate system
 
-All coordinates are **normalized to `[0, 1000]`** on both axes, independent of
-the VM's real resolution. The bridge queries the screen size once (cached) and
-converts to absolute pixels before calling the backend. `[0,0]` is top-left,
-`[1000,1000]` bottom-right.
+Coordinates are normalized to `[0, 1000]` by default, independent of the VM's
+real resolution. Set `CUA_COORDINATE_SPACE=pixel` for models that emit
+screenshot-pixel coordinates. The bridge schema advertises the selected space
+and converts normalized coordinates before calling the backend.
 
 ## Return values
 
@@ -58,14 +58,15 @@ page_up, page_down, f1-f12`, or any single character.
 | Tool | Parameters | Returns |
 |------|------------|---------|
 | `screenshot` | `save_path?: string` (absolute path on the VM) | text confirmation **+ image** block (base64 PNG). If `save_path` given, the parent dir is validated and the PNG is written there too. |
-| `cursor_position` | — | text: `Cursor at [x, y]` (normalized). |
+| `cursor_position` | — | text: `Cursor at [x, y]` in the configured coordinate space. |
 | `wait` | `duration: number` (seconds) | text: `Waited <d>s`. Client-side pause. |
 
 ## Local testing
 
 ```bash
 npm install
-CUA_SERVER_URL=http://<host>:5000 node src/index.js --test   # smoke test
+npm run test:unit                                            # unit tests
+CUA_SERVER_URL=http://<host>:5000 npm test                   # smoke test
 CUA_SERVER_URL=http://<host>:5000 node src/index.js           # start stdio server
 ```
 
