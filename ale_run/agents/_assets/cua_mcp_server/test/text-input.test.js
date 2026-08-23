@@ -52,7 +52,7 @@ test("paste shortcut is platform-aware", () => {
 
 test("Unicode is copied and pasted without calling type_text", async () => {
   const client = recordingClient();
-  const text = "中文ABC，估值6–8亿美元🙂\n第二行";
+  const text = "中文ABC，🙂ALE2.0真棒！";
 
   const route = await typeTextReliably(client, text, {
     mode: "auto",
