@@ -1,0 +1,70 @@
+# octavus_cli - one cloud Octavus agent driven by the public `octoagent` CLI
+# (`@octavus/agent`), run headless on the ALE eval box (executor: sandbox). The
+# brain (model, prompt, tools, workers, skills, memory) runs in the Octavus
+# cloud; only the computer is local. The single credential is the agent key.
+#
+# Auth: set OCTAVUS_AGENT_API_KEY in secret/.env to the agent's oct_agt_* key
+# (minted from the agent's Settings -> API tab). The agent's Computer must be set
+# to "Your own machine (CLI)" in the dashboard.
+#
+# Docs: https://octavus.ai/docs/workforce-agents/cli
+#
+# Keys under `config:` show each knob at its dataclass default, except recording
+# (enabled to a public, shareable URL below). See
+# ale_run/agents/octavus_cli/config.py. Reference from an experiment as:
+#   agents: [ configs/agents/octavus_cli.yaml ]
+
+harness: octavus_cli
+# executor: sandbox          # only supported value (deployer default); runs inside the eval box.
+
+# Example per-run model override (sugar for config.model). Unset => the agent's
+# dashboard model is used, and is recorded on the trajectory from the effective
+# runConfig. Set it to pin (and record) an exact model for every run, e.g.:
+# model: anthropic/claude-opus-4-8
+
+config:
+  # The agent key. Named `api_key` so the framework carries it as a secret (into
+  # the sandbox via a read-once sidecar; never written to gathered host logs).
+  # The CLI targets the hosted Octavus platform (octavus.ai) by default.
+  api_key: ${env:OCTAVUS_AGENT_API_KEY}
+
+  # Optional operator WebSocket override (container/tunnel setups). Normally the
+  # platform returns a reachable operator URL per run, so leave null.
+  operator_url: null
+
+  # Per-run harness overrides (null/empty => inherit the agent's dashboard config).
+  backup_model: null
+  capabilities: {}          # e.g. { memory: false } for an ablation. NOTE: a toggle
+                            # only applies to a capability the agent's protocol
+                            # declares; toggling an undeclared one is rejected (400).
+
+  # Record each task's execution view (streamed working process + live computer)
+  # to one shareable video, stored at a permanent, paste-anywhere public URL.
+  # Best-effort and gated to funded tiers (a no-op on a free org; it never affects
+  # the run). Use record: false to disable, or record_visibility: private for
+  # signed, org-only playback.
+  record: true
+  record_visibility: public
+
+  # The graded desktop the CLI acts on. The ALE Linux box runs cua-server on :0;
+  # the CLI reuses it, so screen-graded tasks see the agent's actions.
+  display: ":0"
+
+  # Explicit browser binary. null => the deployer installs Chrome for Testing and
+  # points the CLI at it. Branded Chrome (baked into the ALE images) can't load the
+  # automation extension, so the deployer never uses it; set a path only to pin
+  # your own CfT.
+  chrome_path: null
+
+  # npm spec installed globally at setup. Pin for reproducibility; null => latest.
+  # 1.0.1+ resolves an extension-capable Chrome for Testing (the deployer installs it
+  # to ~/.octavus/browsers), so the browser tools come up during ensure-computer.
+  # 1.0.2+ streams the live computer view in near real-time (I420 capture,
+  # latest-frame-wins) so the recorded/side-by-side computer keeps up with the agent.
+  cli_version: "@octavus/agent@1.0.2"
+
+  # Best-effort apt-get of the display/accessibility stack (Xvfb, AT-SPI + its
+  # python bindings, xdotool, scrot, Chrome libs) unless the box already has both
+  # the screenshot/automation tools and the AT-SPI2 python bindings computer-use
+  # `label` needs. Set false on an image that bakes the full stack.
+  install_prereqs: true
