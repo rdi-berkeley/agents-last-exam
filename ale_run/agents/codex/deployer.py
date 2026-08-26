@@ -195,6 +195,14 @@ class CodexDeployer(BaseAgentDeployer):
         from ale_run.agents._bootstrap import ensure_cua_mcp_server
         await ensure_cua_mcp_server(sandbox)
 
+        # The ensure fast-path keeps prebaked bridges. Refresh the source so
+        # the Unicode text-input policy is present on older images too.
+        bridge_source = (
+            Path(__file__).resolve().parents[1] / "_assets/cua_mcp_server/src"
+        )
+        bridge_target = Path(sandbox.mcp_server_dir) / "src"
+        shutil.copytree(bridge_source, bridge_target, dirs_exist_ok=True)
+
         # 5. Write MCP config (config.toml) for CUA bridge
         await self._write_codex_config(cfg)
 

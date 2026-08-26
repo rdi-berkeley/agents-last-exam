@@ -11,6 +11,20 @@ control bridge injected alongside agents; the more general non-GUI surface
 - **Endpoint:** read from `CUA_SERVER_URL` (the executor injects this via
   `cua_bridge_env`), default `http://localhost:5000`
 
+## Text input
+
+The `type` tool keeps a single `{ text }` interface for agents. The bridge
+chooses the delivery path using `CUA_TEXT_INPUT_MODE`:
+
+- `auto` (default): ASCII uses CUA `type_text`; text containing non-ASCII
+  characters uses desktop clipboard paste.
+- `keystroke`: always use CUA `type_text`.
+- `clipboard`: always use clipboard paste.
+
+Clipboard mode avoids the temporary X11 keyboard mappings used by pynput for
+arbitrary Unicode, which can corrupt long CJK text. Linux and Windows paste
+with `Ctrl+V`; macOS uses `Cmd+V`.
+
 ## Coordinate system
 
 All coordinates are **normalized to `[0, 1000]`** on both axes, independent of
@@ -65,8 +79,9 @@ page_up, page_down, f1-f12`, or any single character.
 
 ```bash
 npm install
-CUA_SERVER_URL=http://<host>:5000 node src/index.js --test   # smoke test
-CUA_SERVER_URL=http://<host>:5000 node src/index.js           # start stdio server
+npm test                                                     # unit tests
+CUA_SERVER_URL=http://<host>:5000 npm run test:smoke          # CUA smoke test
+CUA_SERVER_URL=http://<host>:5000 node src/index.js            # start stdio server
 ```
 
 `node_modules` is not vendored — it is rebuilt on the substrate by
