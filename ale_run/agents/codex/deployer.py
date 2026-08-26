@@ -195,6 +195,14 @@ class CodexDeployer(BaseAgentDeployer):
         from ale_run.agents._bootstrap import ensure_cua_mcp_server
         await ensure_cua_mcp_server(sandbox)
 
+        # The ensure fast-path keeps prebaked bridges. Refresh the source so the
+        # Codex-specific coordinate contract is present on older images too.
+        bridge_source = (
+            Path(__file__).resolve().parents[1] / "_assets/cua_mcp_server/src"
+        )
+        bridge_target = Path(sandbox.mcp_server_dir) / "src"
+        shutil.copytree(bridge_source, bridge_target, dirs_exist_ok=True)
+
         # 5. Write MCP config (config.toml) for CUA bridge
         await self._write_codex_config(cfg)
 
@@ -389,17 +397,21 @@ class CodexDeployer(BaseAgentDeployer):
 
         config_toml = preamble + "\n"
 
+        coordinate_space = cfg.coordinate_space or (
+            "normalized" if "gemini" in cfg.model.lower() else "pixel"
+        )
+
         # MCP server config for CUA bridge. CUA_SERVER_URL points the bridge at
         # this image's cua-server port (it otherwise defaults to 5000, wrong on
-        # ale-kasm which runs on 8000). URL is host:port only — no backslashes,
-        # safe in a TOML basic string.
+        # ale-kasm which runs on 8000).
         cua_url = self.executor.cua_bridge_url()
         config_toml += (
             "[mcp_servers.cua]\n"
             'type = "stdio"\n'
             f'command = "{node_exe}"\n'
             f'args = ["{mcp_entry}"]\n'
-            f'env = {{ CUA_SERVER_URL = "{cua_url}" }}\n'
+            f'env = {{ CUA_SERVER_URL = "{cua_url}", '
+            f'CUA_COORDINATE_SPACE = "{coordinate_space}" }}\n'
         )
 
         # OpenRouter provider block
