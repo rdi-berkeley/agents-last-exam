@@ -17,6 +17,7 @@ from tasks.linux_runtime import LinuxTaskConfig
 from tasks.physical_sciences._shared.materials_science._common import (
     SILICON_BSE_ABSORPTION_SPEC,
     evaluate_remote_output_dir,
+    run_command,
 )
 
 logger = logging.getLogger(__name__)
@@ -115,13 +116,13 @@ _setup = BaseTaskSetup()
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
     install_script = f"{task_cfg.metadata['software_dir']}/install_software.sh"
-    result = await session.run_command(
-        "bash " + shlex.quote(install_script), timeout=600, check=False
+    result = await run_command(
+        session, "bash " + shlex.quote(install_script), timeout=600, check=False
     )
-    if result.returncode != 0:
+    if result.get("return_code", 0) != 0:
         raise RuntimeError(
             "QE/BerkeleyGW task runtime verification failed: "
-            f"{(result.stderr or result.stdout or '').strip()[-2000:]}"
+            f"{(result.get('stderr') or result.get('stdout') or '').strip()[-2000:]}"
         )
 
 
