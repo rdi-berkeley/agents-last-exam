@@ -493,7 +493,7 @@ async def _try_create_in_zone(
     zone: str,
     label_str: str,
     project: str,
-) -> tuple[bool, str, str, str]:
+) -> tuple[bool, str, str]:
     args = _build_create_args(
         name=name,
         image=image,
@@ -515,7 +515,7 @@ async def _try_create_in_zone(
         )
         rc, stdout, stderr = await _run_gcloud(*args, project=project)
         if rc == 0:
-            return True, stdout, "", zone
+            return True, stdout, ""
         last_stderr = stderr
 
         if _is_zone_capacity_error(stderr):
@@ -523,7 +523,7 @@ async def _try_create_in_zone(
                 "machine=%s exhausted in %s: %s",
                 machine_type, zone, stderr[:300],
             )
-            return False, "", last_stderr, zone
+            return False, "", last_stderr
 
         if _is_transient_error(stderr):
             # Ambiguous outcome (esp. ConnectionError / RemoteDisconnected): the
@@ -551,8 +551,8 @@ async def _try_create_in_zone(
                 await asyncio.sleep(delay)
                 continue
 
-        return False, "", last_stderr, zone
-    return False, "", last_stderr, zone
+        return False, "", last_stderr
+    return False, "", last_stderr
 
 
 def _extract_external_ip(inst: dict) -> str | None:
@@ -839,7 +839,7 @@ class GcloudProvider(Provider):
         # not offered in that zone moves on, anything else is fatal and raised.
         for zone in zones:
             for machine in machines:
-                ok, out, stderr, _ = await _try_create_in_zone(
+                ok, out, stderr = await _try_create_in_zone(
                     name=name,
                     image=snap.image,
                     gpu=snap.gpu,

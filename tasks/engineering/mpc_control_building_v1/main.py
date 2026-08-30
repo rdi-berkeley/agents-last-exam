@@ -35,9 +35,8 @@ def _parse_verifier_result(result: dict) -> float:
     stderr = str(result.get("stderr", ""))
     try:
         # verify_outputs.py prints its JSON via `uv run --with pandas --with numpy`,
-        # whose dependency-resolution output can precede the JSON on stdout. Parse
-        # the JSON object out of the surrounding text instead of assuming stdout is
-        # pure JSON (a plain json.loads(stdout) fails on the leading log lines).
+        # whose dependency-resolution output can precede the JSON on stdout, so
+        # parse the JSON object out of the surrounding text.
         text = stdout.strip()
         if not text:
             raise ValueError("verifier produced no stdout")

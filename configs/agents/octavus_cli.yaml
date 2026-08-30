@@ -57,11 +57,7 @@ config:
   chrome_path: null
 
   # npm spec installed globally at setup. Pin for reproducibility; null => latest.
-  # 1.0.1+ resolves an extension-capable Chrome for Testing (the deployer installs it
-  # to ~/.octavus/browsers), so the browser tools come up during ensure-computer.
-  # 1.0.2+ streams the live computer view in near real-time (I420 capture,
-  # latest-frame-wins) so the recorded/side-by-side computer keeps up with the agent.
-  cli_version: "@octavus/agent@1.0.2"
+  cli_version: "@octavus/agent@1.0.8"
 
   # Best-effort apt-get of the display/accessibility stack (Xvfb, AT-SPI + its
   # python bindings, xdotool, scrot, Chrome libs) unless the box already has both

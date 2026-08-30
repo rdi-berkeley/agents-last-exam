@@ -63,8 +63,11 @@ _TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
 # The computer's display + accessibility stack the CLI's browser / computer-use
 # tools need. Mirrors the public install script's apt set; a shell/filesystem-
 # only run needs none of it, so a failure here is a warning, not fatal.
+# `fluxbox` is a lightweight window manager the CLI starts on a bare display so the
+# computer-use `label` driver can find the foreground window; a no-op on the
+# standard ALE `:0`, which already runs a WM.
 _PREREQ_APT_PACKAGES = (
-    "xvfb", "dbus-x11", "at-spi2-core", "x11-utils", "xdotool", "wmctrl", "scrot", "ffmpeg",
+    "xvfb", "fluxbox", "dbus-x11", "at-spi2-core", "x11-utils", "xdotool", "wmctrl", "scrot", "ffmpeg",
     "python3", "python3-gi", "gir1.2-atspi-2.0", "python3-pil",
     "libnss3", "libatk-bridge2.0-0", "libgtk-3-0", "libgbm1",
     "fonts-liberation",

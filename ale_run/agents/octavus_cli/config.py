@@ -78,15 +78,9 @@ class OctavusCliConfig:
     uses a baked ``google-chrome``; set this only to pin your own CfT/Chromium."""
 
     # ---- install ----
-    cli_version: str | None = "@octavus/agent@1.0.2"
+    cli_version: str | None = "@octavus/agent@1.0.8"
     """npm spec installed globally at setup. Pin a version for reproducibility;
-    ``None`` installs the latest ``@octavus/agent``. 1.0.0+ raises the browser
-    window so it is visible and maximized in recordings on the reused ``:0``;
-    1.0.1+ resolves an extension-capable Chrome for Testing (never branded Chrome),
-    so the browser tools come up during ``computer-ensure-ready``; 1.0.2+ streams
-    the live computer view in near real-time (efficient I420 capture with
-    latest-frame-wins dropping), so the side-by-side/recorded computer keeps up
-    with the agent instead of lagging seconds behind."""
+    ``None`` installs the latest ``@octavus/agent``."""
 
     install_prereqs: bool = True
     """When true, ``install()`` best-effort ``apt-get``s the computer's display
