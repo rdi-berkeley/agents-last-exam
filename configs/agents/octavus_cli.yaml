@@ -57,7 +57,7 @@ config:
   chrome_path: null
 
   # npm spec installed globally at setup. Pin for reproducibility; null => latest.
-  cli_version: "@octavus/agent@1.0.8"
+  cli_version: "@octavus/agent@1.0.9"
 
   # Best-effort apt-get of the display/accessibility stack (Xvfb, AT-SPI + its
   # python bindings, xdotool, scrot, Chrome libs) unless the box already has both
