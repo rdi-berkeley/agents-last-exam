@@ -34,6 +34,9 @@ config:
 
   # Per-run harness overrides (null/empty => inherit the agent's dashboard config).
   backup_model: null
+  thinking: null            # off | low | medium | high | max (max = each provider's
+                            # maximum; off disables thinking). null inherits the
+                            # agent's default. Needs @octavus/agent >=1.0.10.
   capabilities: {}          # e.g. { memory: false } for an ablation. NOTE: a toggle
                             # only applies to a capability the agent's protocol
                             # declares; toggling an undeclared one is rejected (400).
@@ -57,7 +60,8 @@ config:
   chrome_path: null
 
   # npm spec installed globally at setup. Pin for reproducibility; null => latest.
-  cli_version: "@octavus/agent@1.0.9"
+  # >=1.0.10 is required for the per-run `thinking:` override above.
+  cli_version: "@octavus/agent@1.0.10"
 
   # Best-effort apt-get of the display/accessibility stack (Xvfb, AT-SPI + its
   # python bindings, xdotool, scrot, Chrome libs) unless the box already has both

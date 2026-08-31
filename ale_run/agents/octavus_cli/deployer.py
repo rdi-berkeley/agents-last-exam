@@ -379,6 +379,8 @@ class OctavusCliDeployer(BaseAgentDeployer):
             argv += ["--model", cfg.model]
         if cfg.backup_model:
             argv += ["--backup-model", cfg.backup_model]
+        if cfg.thinking:
+            argv += ["--thinking", cfg.thinking]
         for slug, enabled in cfg.capabilities.items():
             argv += ["--capability", f"{slug}={'on' if enabled else 'off'}"]
         if cfg.record:
