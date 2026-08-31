@@ -60,3 +60,6 @@ secret/eval_time/openai.env
 
 # Stray cua-bench eval artifacts written to cwd during host-side task eval
 trycua/
+
+# Gated task data fetched by scripts/fetch_task_data.sh (contains hidden references)
+task-data/

@@ -764,6 +764,16 @@
       "variants": [
         "base"
       ]
+    },
+    "education_info/conference_review_console": {
+      "variants": [
+        "base"
+      ]
+    },
+    "education_info/conference_reviewer_assignment": {
+      "variants": [
+        "base"
+      ]
     }
   }
 }
