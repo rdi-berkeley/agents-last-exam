@@ -1,0 +1,16 @@
+{
+  "taskId": "demo/netprobe",
+  "title": "Network-isolation probe: the agent tries to fetch its public IP",
+  "summary": "Self-contained (no input data / no staging). The agent must fetch its public IP from https://api.ipify.org (a value it cannot know without the network) and write it to output/answer.txt, or write the marker BLOCKED if it cannot reach the network. evaluate() reads that file: contains BLOCKED -> 1.0 (agent was isolated), otherwise -> 0.0 (agent reached the web). Flip vm.network between allowlist and open to flip the score 1.0 <-> 0.0.",
+  "category": "demo",
+  "vm": {
+    "snapshot": "cpu-free-ubuntu",
+    "vcpus": 4,
+    "memory_gb": 16,
+    "disk_gb": 200,
+    "timeout_s": 1800,
+    "network": {
+      "mode": "allowlist"
+    }
+  }
+}

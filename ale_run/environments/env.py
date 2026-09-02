@@ -84,6 +84,10 @@ class ALEEnv(Environment[Action, Observation, State]):
         self,
     ) -> Observation:
         self._current_phase = PHASE_ENV_START
+        # Fail closed before spending a VM: if the task asked for egress
+        # restriction the provider can't enforce yet, refuse rather than run it
+        # unisolated (see docs/network-isolation.md).
+        self._provider.assert_network_supported(self._spec)
         self._sandbox = await self._provider.acquire(self._spec)
         self._session = self._provider.open_session(self._sandbox)
         # Display resolution is a provider concern now: the gcloud provider forces

@@ -236,6 +236,16 @@ class TaskLoader:
             # over its yaml fallback list (see GcloudProvider.acquire).
             raw_mt = vm_cfg.get("machineType")
             task_info["machine_type"] = raw_mt
+            # Per-task egress policy (vm.network). Parsed+validated here so a
+            # malformed card fails fast at load, not at acquire. Absent → open.
+            from ..base_interface import NetworkPolicy
+            try:
+                task_info["network"] = NetworkPolicy.from_card(vm_cfg.get("network"))
+            except ValueError as exc:
+                raise ValueError(
+                    f"task_card.json for {self.task_path} has invalid "
+                    f"vm.network: {exc}"
+                ) from None
             if raw_mt is not None:
                 from ..environments.providers.gcloud import _parse_gce_machine_type
                 if _parse_gce_machine_type(raw_mt) is None:

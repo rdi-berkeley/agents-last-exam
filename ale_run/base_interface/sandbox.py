@@ -50,6 +50,94 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
+# Network policy — per-task egress restriction (from task_card ``vm.network``)
+# ============================================================================
+
+NetworkMode = Literal["open", "allowlist", "off"]
+"""``open`` — no restriction (default, current behaviour).
+``allowlist`` — block all egress except the model API host (auto-derived from
+the agent's ``base_url``) plus any hosts in ``allow``.
+``off`` — full air-gap; nothing reaches the network (special case of
+``allowlist`` with an empty allow set; suited to host-side agents)."""
+
+
+@dataclass(frozen=True)
+class NetworkPolicy:
+    """Per-task egress policy, declared under ``task_card.json`` ``vm.network``.
+
+    The policy only carries what the *task* declares. The model API host is
+    NOT listed here: it is unioned in by the provider at enforcement time from
+    the agent's resolved ``base_url`` (see :meth:`effective_allow`), so a task
+    card never has to name the endpoint and stays valid across experiments that
+    swap the ``base_url``.
+    """
+
+    mode: NetworkMode = "open"
+    allow: tuple[str, ...] = ()
+    """Extra hostnames permitted on top of the auto-derived model host.
+    Only meaningful when ``mode == "allowlist"``."""
+
+    @classmethod
+    def from_card(cls, raw: Any) -> "NetworkPolicy":
+        """Parse+validate a task-card ``vm.network`` object. ``None``/absent →
+        ``open`` (backward compatible; existing cards need no changes)."""
+        if raw is None:
+            return cls()
+        if not isinstance(raw, dict):
+            raise ValueError(
+                f"task_card vm.network must be an object, got {type(raw).__name__}"
+            )
+        mode = raw.get("mode", "open")
+        if mode not in ("open", "allowlist", "off"):
+            raise ValueError(
+                f"task_card vm.network.mode={mode!r}; expected one of "
+                "'open', 'allowlist', 'off'"
+            )
+        raw_allow = raw.get("allow", ())
+        if isinstance(raw_allow, str) or not isinstance(raw_allow, (list, tuple)):
+            raise ValueError(
+                "task_card vm.network.allow must be a list of hostname strings"
+            )
+        allow: list[str] = []
+        for h in raw_allow:
+            if not isinstance(h, str) or not h.strip():
+                raise ValueError(
+                    f"task_card vm.network.allow entries must be non-empty "
+                    f"strings, got {h!r}"
+                )
+            allow.append(h.strip())
+        return cls(mode=mode, allow=tuple(allow))
+
+    @staticmethod
+    def model_host_from_env(env: dict[str, str]) -> str | None:
+        """Best-effort extract the model API hostname from the agent's injected
+        env, so the enforcer can allowlist exactly the endpoint the framework
+        already routes to (no per-task config of the endpoint). Checks the
+        base-URL vars ALE injects, in precedence order."""
+        from urllib.parse import urlparse
+        for key in ("ANTHROPIC_BASE_URL", "OPENAI_BASE_URL", "OPENROUTER_BASE_URL"):
+            val = env.get(key)
+            if val:
+                host = urlparse(val).hostname
+                if host:
+                    return host
+        return None
+
+    def effective_allow(self, model_host: str | None) -> frozenset[str]:
+        """Hosts egress is permitted to reach under this policy.
+
+        ``open`` → sentinel empty set is not used; callers gate on ``mode``
+        first. For ``allowlist`` the model API host (from the agent's
+        ``base_url``) is unioned with the task-declared ``allow``. For ``off``
+        the set is empty (true air-gap) — the model host is deliberately NOT
+        added, since host-side agents don't call it from inside the VM."""
+        hosts = set(self.allow)
+        if self.mode == "allowlist" and model_host:
+            hosts.add(model_host)
+        return frozenset(hosts)
+
+
+# ============================================================================
 # Spec — pre-provision request shape
 # ============================================================================
 
@@ -71,6 +159,9 @@ class SandboxSpec:
     task_id: str = ""
     harness: str = ""
     model_tag: str = ""
+    network: NetworkPolicy = field(default_factory=NetworkPolicy)
+    """Per-task egress policy from task_card ``vm.network``. Defaults to
+    ``open`` (no restriction). Enforced by the Provider at ``acquire`` time."""
 
 
 # ============================================================================
@@ -222,9 +313,21 @@ class SandboxHandle:
 # Provider ABC
 # ============================================================================
 
+class NetworkPolicyUnsupportedError(RuntimeError):
+    """A task requested egress restriction (``vm.network.mode != "open"``) on a
+    provider that does not enforce it yet. Raised **before** the VM is used so a
+    task never runs unisolated while believing it is — fail closed, never fail
+    open."""
+
+
 class Provider(abc.ABC):
     """ABC for sandbox lifecycle. The framework consumes Provider; nothing
     else."""
+
+    enforces_network_policy: bool = False
+    """Set True on a provider once it actually applies ``spec.network`` (egress
+    cut-off + proxy routing). Until then, :meth:`assert_network_supported`
+    fail-closes any non-``open`` policy on that provider."""
 
     @abc.abstractmethod
     async def acquire(self, spec: SandboxSpec) -> SandboxHandle: ...
@@ -237,6 +340,23 @@ class Provider(abc.ABC):
     @abc.abstractmethod
     def open_session(self, sandbox: SandboxHandle) -> Any:
         """Return a cua-bench DesktopSession talking to ``sandbox``."""
+
+    def assert_network_supported(self, spec: SandboxSpec) -> None:
+        """Fail closed if the task asks for isolation this provider can't apply.
+
+        Called by the framework before the sandbox is put to work. An ``open``
+        policy is always fine (it's today's behaviour). Any other mode on a
+        provider that hasn't set :attr:`enforces_network_policy` raises, so we
+        never silently run a task that expected a firewalled sandbox on one
+        that gives it full internet."""
+        if spec.network.mode == "open":
+            return
+        if not self.enforces_network_policy:
+            raise NetworkPolicyUnsupportedError(
+                f"task requested vm.network.mode={spec.network.mode!r} but "
+                f"provider {type(self).__name__} does not enforce network "
+                "policy yet (enforcement is staged; see docs/network-isolation.md)"
+            )
 
     async def heartbeat(self, sandbox: SandboxHandle) -> None:
         return None

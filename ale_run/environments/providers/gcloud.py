@@ -32,6 +32,7 @@ from typing import Any
 import requests
 
 from ...base_interface import SandboxSpec, Provider, ReleaseMode, SandboxHandle
+from ..netguard import apply_network_policy
 
 logger = logging.getLogger(__name__)
 
@@ -752,6 +753,11 @@ def _init_computer_skip_wait(session: Any) -> None:
 class GcloudProvider(Provider):
     """Provider backed by ``gcloud compute instances create / delete``."""
 
+    # This provider enforces per-task egress policy in-guest (nftables +
+    # aleguard transparent proxy) at acquire time — so the fail-closed guard in
+    # ALEEnv lets non-``open`` policies through for gcloud. Linux only.
+    enforces_network_policy = True
+
     def __init__(self, config: GcloudProviderConfig | dict[str, Any]):
         if isinstance(config, dict):
             config = _build_provider_config(config)
@@ -893,7 +899,7 @@ class GcloudProvider(Provider):
                 except Exception as e:  # noqa: BLE001
                     logger.error("gcloud: GCS credential injection failed on %s: %s", name, e)
 
-            return SandboxHandle(
+            handle = SandboxHandle(
                 id=name,
                 endpoint=cua_url,
                 os=image.os,
@@ -909,6 +915,14 @@ class GcloudProvider(Provider):
                     "gcs_user_project": gcs_user_project,
                 },
             )
+
+            # Per-task egress isolation, applied last so code-ship + GCS
+            # injection (host→VM ingress) are unaffected. Provider-agnostic:
+            # netguard dispatches on the guest OS and drives it over the handle.
+            # No silent fallback — a failure raises here, inside the post-create
+            # try, so the VM is deleted and the run fails loudly.
+            await apply_network_policy(handle, spec.network)
+            return handle
         except BaseException:
             # Delete the just-created VM so a post-create failure doesn't leak
             # it (the caller never got a handle to clean it up). Best-effort.
