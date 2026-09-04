@@ -1,6 +1,7 @@
 """AgentHLE task: computing_math/gen1_battle_engine_reconstruction.
 
-Reconstruct a Generation I battle engine, bit-exactly, from behaviour alone.
+Reconstruct the Pokemon Generation I battle engine, bit-exactly, from behaviour
+alone.
 
 The agent is given a labelled corpus of battle scenarios and the two machine
 generated format documents the engine emits about itself. It is given no rules:
@@ -68,10 +69,10 @@ class TaskConfig(LinuxTaskConfig):
     @property
     def task_description(self) -> str:
         return """\
-Reconstruct a battle engine from its observed behaviour.
+Reconstruct the Pokemon Generation I battle engine from its observed behaviour.
 
-Under `{input}` is a corpus of battles from a deterministic Generation I battle \
-engine. You are given no specification: no damage formula, no critical-hit rule, \
+Under `{input}` is a corpus of battles from a deterministic re-implementation of \
+the Pokemon Generation I battle engine. You are given no specification: no damage formula, no critical-hit rule, \
 no random-number consumption order, no turn order. The corpus is the only \
 statement of the rules that exists.
 

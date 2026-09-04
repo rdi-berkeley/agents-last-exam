@@ -1,11 +1,11 @@
-# Battle Engine Reconstruction From Behaviour
+# Pokemon Generation I Battle Engine Reconstruction From Behaviour
 
 Reimplementing a system whose specification is lost, from the behaviour of the
 system itself, is an ordinary and expensive engineering job. This task is that,
 made exactly checkable.
 
-The agent is given a labelled corpus of battles from a deterministic Generation I
-battle engine and **no rules at all**: no damage formula, no critical-hit rule, no
+The engine here is Pokemon Generation I, as re-implemented by `pkmn/engine`. The
+agent is given a labelled corpus of its battles and **no rules at all**: no damage formula, no critical-hit rule, no
 random-number consumption order, no turn order. It must write an engine that
 reproduces held-out battles bit for bit.
 
