@@ -1,0 +1,89 @@
+{
+  "taskId": "education_info/conference_reviewer_assignment",
+  "title": "Conference Reviewer Assignment under COI, Entity Resolution, and Capacity Constraints",
+  "summary": "Assign 3 reviewers to each active conference submission (150 papers, 6 withdrawn; 60 reviewers, 6 unavailable) under tight capacity, four conflict-of-interest rules, seniority coverage, and canonical-institution diversity. Institution strings are aliases resolved via a gazetteer and coauthor names appear in three documented formats, so the conflict set must be derived, not string-matched. A second deliverable (conflict_audit.csv, exact triple F1) externalizes the derivation. Any hard violation scores 0; full marks require an optimal assignment plus a perfect audit.",
+  "category": "education_info",
+  "software": [
+    "Python"
+  ],
+  "taskPrompt": "You are assisting the program chairs of a peer-reviewed conference with reviewer assignment.\n\nInput data lives in input/: submissions.csv (150 papers including withdrawn ones), reviewers.csv (60 reviewers including unavailable ones), coauthorships.csv, declared_conflicts.csv, and institutions.csv (the alias-to-canonical institution gazetteer). Read input/README.md (the data dictionary: institution strings are aliases, author names appear in several formats, and status/availability columns matter) and then input/constraints.md (the authoritative rules and the exact scoring formula).\n\nTwo deliverables:\n1. output/assignment.csv - header `paper_id,reviewer_id`, exactly 3 reviewers for every ACTIVE paper, satisfying load limits, four kinds of conflict-of-interest rules, seniority coverage, and canonical-institution diversity. Any single hard-constraint violation scores 0.\n2. output/conflict_audit.csv - header `reviewer_id,paper_id,reason_code`, every conflicted pair over available reviewers x active papers with all applicable reason codes; graded by exact triple F1.\n\n`python3 software/check_format.py <assignment> [<audit>]` validates schemas only.\n\nReviewer capacity is tight and conflicts are dense; feasibility itself is a global problem, full marks require an optimal assignment plus a perfect audit, and every entity comparison is defined on canonical forms, so derive the conflict set carefully.",
+  "agentMustDo": [
+    "Read input/README.md and input/constraints.md before touching the data; institution strings are aliases and all institution logic is canonical via institutions.csv.",
+    "Derive the full conflict set over available reviewers x active papers: canonical-affiliation matches, co-authorship in 2023 or later under the three documented name formats, declared conflicts, and reviewers who are themselves authors.",
+    "Respect the status and available columns: withdrawn papers and unavailable reviewers must not be assigned and are outside the audit domain.",
+    "Produce an assignment satisfying every hard constraint: exactly 3 distinct reviewers per active paper, loads within max_load, no conflicted pair, at least one senior reviewer per paper, and three distinct canonical institutions per paper.",
+    "Maximize total affinity as defined in constraints.md; near-optimal total affinity is required for a high score.",
+    "Write output/assignment.csv (paper_id,reviewer_id) and output/conflict_audit.csv (reviewer_id,paper_id,reason_code with every applicable code)."
+  ],
+  "inputFiles": [
+    {
+      "name": "submissions.csv",
+      "format": "csv",
+      "path": "input/submissions.csv",
+      "description": "150 papers: paper_id, title, status (active/withdrawn), primary_area, |-separated topics, and authors as 'Name (Affiliation); ...' with alias affiliations."
+    },
+    {
+      "name": "reviewers.csv",
+      "format": "csv",
+      "path": "input/reviewers.csv",
+      "description": "60 reviewers: reviewer_id, name, alias affiliation, |-separated areas and topics, seniority, max_load, available (yes/no)."
+    },
+    {
+      "name": "coauthorships.csv",
+      "format": "csv",
+      "path": "input/coauthorships.csv",
+      "description": "Reviewer-author co-authorship records with year; names in 'First Last', 'Last, First', or 'F. Last' form; only years >= 2023 create conflicts."
+    },
+    {
+      "name": "declared_conflicts.csv",
+      "format": "csv",
+      "path": "input/declared_conflicts.csv",
+      "description": "Explicitly declared (reviewer_id, paper_id) conflicts, including inert distractor rows for withdrawn papers and unavailable reviewers."
+    },
+    {
+      "name": "institutions.csv",
+      "format": "csv",
+      "path": "input/institutions.csv",
+      "description": "Complete alias-to-canonical institution gazetteer."
+    },
+    {
+      "name": "README.md",
+      "format": "markdown",
+      "path": "input/README.md",
+      "description": "Data dictionary: column semantics, alias rules, and the exact name-matching rules."
+    },
+    {
+      "name": "constraints.md",
+      "format": "markdown",
+      "path": "input/constraints.md",
+      "description": "Authoritative rules: hard constraints, audit specification, affinity formula, and the published scoring formula."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "scoring.json",
+      "format": "json",
+      "path": "reference/scoring.json",
+      "description": "Hidden optimal total affinity (computed by exact MILP via HiGHS) plus scoring weights."
+    },
+    {
+      "name": "optimal_assignment.csv",
+      "format": "csv",
+      "path": "reference/optimal_assignment.csv",
+      "description": "One optimal feasible assignment achieving the optimal affinity."
+    },
+    {
+      "name": "conflict_audit.csv",
+      "format": "csv",
+      "path": "reference/conflict_audit.csv",
+      "description": "The true (reviewer_id, paper_id, reason_code) triple set over the audit domain."
+    }
+  ],
+  "evaluation": "Deterministic. The grader independently rebuilds canonical entities and the conflict-code set, then checks every hard constraint on assignment.csv; any violation scores 0. Otherwise score = 0.25 + 0.45 * q + 0.30 * audit_f1, where q = clamp((A - 0.9*OPT) / (0.1*OPT), 0, 1), A is the submitted total affinity, OPT is the exact MILP optimum stored in reference/scoring.json, and audit_f1 is the exact F1 of submitted (reviewer_id, paper_id, reason_code) triples against the hidden truth set. Known-good replay: output_test_pos scores 1.0, output_test_neg (one conflicted pair, no audit) scores 0.0.",
+  "requiredSystemPackages": [],
+  "vm": {
+    "snapshot": "cpu-free-ubuntu",
+    "machineType": "c4-standard-4",
+    "timeout": 7200
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "taskId": "education_info/conference_review_console",
+  "title": "Run a Full Review Cycle in the PRC Console (GUI, long-horizon)",
+  "summary": "Run a complete conference review cycle inside a local web console that is the sole source of paper, reviewer, conflict-register, and policy-amendment information (its dataset exists only in the running server's memory). The enforced workflow requires per-paper screening with comprehension checks (150 papers), progressive disclosure of conflict declarations, integration of binding inbox amendments spread across pages, a policy-compliant assignment under conflict/seniority/institution-diversity/effective-load rules, an 8-question integrative checklist gating one-way finalization, and a conflict-audit file. Deterministic grading against the generator's effective-policy truth.",
+  "category": "education_info",
+  "software": [
+    "Python",
+    "Chrome"
+  ],
+  "taskPrompt": "You are the program chair assistant running a full review cycle in the PRC Console, a local web application at http://127.0.0.1:8765 (login: chair / prc-2026; software/launch.sh opens it in Chrome). The console is the ONLY source for papers, reviewers, the conflict register, and committee announcements; there are no data files for these and the console's pages are paginated.\n\nStart with input/instructions.md and input/handbook.md. The handbook is the BASELINE policy; announcements in the console inbox are binding and supersede it, so read every inbox page before acting.\n\nComplete the enforced workflow in the console: (1) screen every active paper on its detail page (each screening asks you to confirm that paper's primary area and author count; screening unlocks the paper's conflict declarations and assignability), (2) enter a fully policy-compliant reviewer assignment (3 reviewers per active paper under the effective policy: conflicts, seniority, canonical-institution diversity, effective load limits), (3) answer the 8-question pre-submission checklist correctly, and (4) FINALIZE (one-way).\n\nAlso write output/conflict_audit.csv: header `reviewer_id,paper_id,reason_code`, every conflicted pair over the audit domain with all applicable codes from {AFFILIATION, COAUTHOR, DECLARED, AUTHOR}.\n\nMachine-readable inputs: input/coauthorships.csv and input/institutions.csv (all institution strings anywhere are aliases; comparisons are on canonical institutions). The exact scoring formula is printed in the handbook: violations collapse the score, an unfinalized submission is capped at 0.15, and full marks require an optimal assignment, a perfect audit, and a correct checklist.",
+  "agentMustDo": [
+    "Read input/instructions.md, input/handbook.md, and EVERY page of the console inbox; apply the binding amendments (emeritus exclusion, junior effective-load reduction, a promotion, a rescinded declaration).",
+    "Screen all active papers via each paper's detail page, submitting the correct primary area and author count; screening unlocks per-paper conflict declarations and assignability.",
+    "Extract the reviewer directory (per-profile pages: expertise, affiliation alias, seniority, listed load, availability, EMERITUS badges) and integrate it with input/coauthorships.csv and input/institutions.csv to derive the full effective conflict set.",
+    "Enter an assignment satisfying the effective policy: 3 distinct reviewers per active paper from 3 distinct canonical institutions, at least one effective-senior reviewer, effective load limits, no conflicted pair, eligible reviewers only.",
+    "Pass the 8-question pre-submission checklist (all integer answers correct in one submission) and finalize (one-way).",
+    "Write output/conflict_audit.csv with every conflicted pair and all applicable reason codes."
+  ],
+  "inputFiles": [
+    {
+      "name": "instructions.md",
+      "format": "markdown",
+      "path": "input/instructions.md",
+      "description": "Console URL, credentials, and the deliverables."
+    },
+    {
+      "name": "handbook.md",
+      "format": "markdown",
+      "path": "input/handbook.md",
+      "description": "Baseline policy, workflow, audit spec, and the published scoring formula. Superseded by binding inbox amendments."
+    },
+    {
+      "name": "coauthorships.csv",
+      "format": "csv",
+      "path": "input/coauthorships.csv",
+      "description": "Co-authorship export; names in three documented formats; only years >= 2023 create conflicts."
+    },
+    {
+      "name": "institutions.csv",
+      "format": "csv",
+      "path": "input/institutions.csv",
+      "description": "Complete alias-to-canonical institution gazetteer."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "scoring.json",
+      "format": "json",
+      "path": "reference/scoring.json",
+      "description": "Hidden optimum (exact MILP under the effective policy) plus scoring weights."
+    },
+    {
+      "name": "effective_world.json",
+      "format": "json",
+      "path": "reference/effective_world.json",
+      "description": "The effective-policy truth: eligibility, seniority, loads, conflict triples, screening facts, checklist answers."
+    },
+    {
+      "name": "optimal_assignment.csv",
+      "format": "csv",
+      "path": "reference/optimal_assignment.csv",
+      "description": "One optimal feasible assignment under the effective policy."
+    },
+    {
+      "name": "conflict_audit.csv",
+      "format": "csv",
+      "path": "reference/conflict_audit.csv",
+      "description": "The true (reviewer_id, paper_id, reason_code) triple set over the audit domain."
+    }
+  ],
+  "evaluation": "Deterministic, from the console's persisted state.json plus output/conflict_audit.csv, graded against reference/effective_world.json. Any effective-policy violation (including a missing or incorrect screening record for any active paper) collapses the score to 0.1 * screen_frac. Otherwise score = 0.2 + 0.35*q + 0.25*audit_f1 + 0.2*checklist_frac, with q = clamp((A - 0.9*OPT)/(0.1*OPT), 0, 1) and OPT the exact MILP optimum stored in reference/scoring.json; an unfinalized submission is capped at 0.15. The console dataset exists only in the running server's memory (the data file is deleted at boot), so state.json edits cannot bypass any knowledge requirement: screenings, checklist answers, and the assignment are all re-verified against the hidden truth.",
+  "requiredSystemPackages": [],
+  "vm": {
+    "snapshot": "cpu-free-ubuntu",
+    "machineType": "c4-standard-4",
+    "timeout": 14400
+  }
+}
