@@ -1,0 +1,84 @@
+{
+  "taskId": "computing_math/gen1_battle_engine_reconstruction",
+  "title": "Battle Engine Reconstruction From Behaviour",
+  "taskName": "Battle Engine Reconstruction From Behaviour",
+  "summary": "Reconstruct a deterministic Generation I battle engine, bit-exactly, from a labelled corpus of its behaviour and nothing else. No damage formula, no critical-hit rule, no random-number consumption order, no turn order is given. Graded on held-out scenarios by exact comparison of the protocol log and the final battle state.",
+  "category": "computing_math",
+  "taskPrompt": "Reconstruct a battle engine from its observed behaviour.\n\nUnder `input` is a corpus of battles from a deterministic Generation I battle engine. You are given no specification: no damage formula, no critical-hit rule, no random-number consumption order, no turn order. The corpus is the only statement of the rules that exists.\n\n## What you are given\n\n- `corpus/scenarios.json`: 638 scenarios. Each is self-contained and carries the roll tape it used as hex, the exact starting battle state, the move each side selected, and an update cap. The engine consumes the tape bytes in order as its only source of randomness; nothing is hidden in them.\n- `corpus/expected.json`: for each of those scenarios, the protocol log the engine emitted on every update, and the final battle state.\n- `docs/protocol.json`: the protocol vocabulary. Names every event the engine can emit. It does not say when any of them happen.\n- `docs/layout.json`: the byte layout of the battle state. Field offsets and sizes. It does not say what changes any of them.\n\nEach side has exactly one Pokemon, so there are no switches to reason about.\n\n## The interface\n\nYour engine is invoked once per scenario as\n\n    python3 engine.py <scenario.json>\n\nwhere the scenario file has the same shape as an entry in `scenarios.json`. It must write to stdout, in order, one line per update:\n\n    u<n> <p1 choice type> <p1 choice data> <p2 choice type> <p2 choice data> <protocol log hex>\n\nand then a final line:\n\n    state <final battle state hex>\n\n## Deliverable\n\nWrite your engine to `output/engine.py`. A single self-contained Python 3 file, system interpreter and standard library only.\n\n## How this is graded\n\nYour engine is run against held-out scenarios you have not seen. Every mechanic in the held-out set is demonstrated somewhere in the corpus you were given; what differs is the roll tape. Comparison is exact, byte for byte, on both the protocol log and the final state. There is no tolerance.\n\nTwo numbers are reported: the fraction of mechanics reproduced, and whether every held-out scenario reproduced exactly.\n\nDo not modify anything under `input/`. Do not rely on internet access.\n",
+  "software": [
+    "Python 3",
+    "Ubuntu"
+  ],
+  "tags": [
+    "software-engineering",
+    "reverse-engineering",
+    "deterministic-simulation",
+    "game-engine",
+    "black-box-inference",
+    "cpu-free-ubuntu"
+  ],
+  "agentMustDo": [
+    "Infer the engine's rules from a labelled corpus of scenarios, with no specification available.",
+    "Determine how the engine consumes its roll tape, which is the only source of randomness.",
+    "Write a single standard-library-only Python 3 engine to `output/engine.py`.",
+    "Reproduce held-out scenarios exactly, on both the protocol log and the final battle state."
+  ],
+  "inputFiles": [
+    {
+      "name": "Worked corpus",
+      "format": "JSON",
+      "path": "input/corpus/scenarios.json",
+      "description": "638 self-contained battle scenarios. Each carries the roll tape it consumed as hex, the exact starting battle state, the move each side selected, and an update cap."
+    },
+    {
+      "name": "Worked transcripts",
+      "format": "JSON",
+      "path": "input/corpus/expected.json",
+      "description": "For each worked scenario, the protocol log the engine emitted on every update and the final battle state. The only statement of the engine's rules that exists."
+    },
+    {
+      "name": "Protocol vocabulary",
+      "format": "JSON",
+      "path": "input/docs/protocol.json",
+      "description": "Names every event the engine can emit. It does not say when any of them happen."
+    },
+    {
+      "name": "Battle state layout",
+      "format": "JSON",
+      "path": "input/docs/layout.json",
+      "description": "Field offsets and sizes of the battle state. It does not say what changes any of them."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "Reconstructed engine",
+      "format": "Python 3 module",
+      "path": "output/engine.py",
+      "description": "A single self-contained standard-library-only file, invoked as `python3 engine.py <scenario.json>`, writing one line per update and a final state line to stdout."
+    }
+  ],
+  "evaluation": "evaluate() stages the 274 held-out scenarios onto the VM and runs the submitted engine once per scenario, then scores host side. A scenario counts only when both the protocol log and the final battle state match byte for byte; there is no tolerance and no partial credit within a scenario. reward = mechanics, the mean over the 47 held-out families of the fraction of that family's scenarios reproduced, where one family is one move, so the per-family breakdown names the broken mechanic. full_pass, whether every held-out scenario reproduced exactly, is logged alongside it. Held-out scenarios are emitted verbatim in the same shape as the worked ones, so the agent is never graded against a format it did not see, and start() fails loudly if any held-out transcript reaches the VM. A submission that crashes, hangs or prints nothing produces a result row rather than an exception and scores as a miss. Reference transcripts are recorded output of the pkmn/engine reference in cartridge-accurate mode, not hand-authored. Grading is deterministic and offline; no judge model or credential is required.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "vcpus": 4,
+    "memory_gb": 16,
+    "disk_gb": 100,
+    "timeout_s": 21600,
+    "timeout": 21600,
+    "network": {
+      "mode": "off"
+    }
+  },
+  "variants": [
+    "base"
+  ],
+  "requiredSystemPackages": [],
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.1",
+    "subdomain_code": "software_eng",
+    "subdomain_name": "Software Engineering"
+  }
+}
