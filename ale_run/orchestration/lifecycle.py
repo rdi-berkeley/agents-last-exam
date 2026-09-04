@@ -241,7 +241,7 @@ async def run_one_unit(
 
             builder = TrajectoryBuilder(
                 agent_name=getattr(config, "name", unit.agent_spec.class_),
-                agent_version=None,
+                agent_version=getattr(config, "cli_version", None),
                 model=config.model,
                 task_path=unit.task_path,
                 variant_index=unit.variant_index,
@@ -480,13 +480,7 @@ async def run_one_unit(
                         extra={"reason": "parse_error"},
                     )
 
-                traj_status = (
-                    "completed"
-                    if run_result.status == "completed"
-                    else "timeout"
-                    if run_result.status == "timeout"
-                    else "failed"
-                )
+                traj_status = _trajectory_status(run_result.status, eval_status)
                 trajectory = builder.finalize(reward=score, status=traj_status)
                 # Move inline base64 screenshots to <run_dir>/screenshots/NNNN.png
                 # and rewrite refs to relative-path form BEFORE serialising —
@@ -649,6 +643,21 @@ def _extract_score(eval_output: Any) -> float | None:
     return None
 
 
+def _trajectory_status(agent_status: str, eval_status: str) -> str:
+    """Return the whole-episode status recorded in trajectory final metrics."""
+    # Match the lifecycle promotion order below exactly so trajectory.json and
+    # run.json cannot disagree when both phases fail differently.
+    if agent_status == "timeout":
+        return "timeout"
+    if agent_status == "failed":
+        return "failed"
+    if eval_status == "timeout":
+        return "timeout"
+    if eval_status == "failed":
+        return "failed"
+    return "completed"
+
+
 def _build_env_spec(task_meta: dict[str, Any], *, unit: RunUnit | None = None) -> SandboxSpec:
     snapshot = task_meta.get("image_category") or task_meta.get("snapshot_name")
     if not snapshot:
@@ -755,6 +764,9 @@ def _collect_env_passthrough() -> dict[str, str]:
         "FACTORY_API_KEY",
         "CURSOR_AUTH_JSON_PATH",
         "CURSOR_AUTH_JSON",
+        "ANTIGRAVITY_OAUTH_TOKEN_PATH",
+        "ANTIGRAVITY_OAUTH_TOKEN",
+        "ANTIGRAVITY_GOOGLE_ACCOUNTS",
     )
     result = {k: os.environ[k] for k in keys if k in os.environ}
 
@@ -779,6 +791,42 @@ def _collect_env_passthrough() -> dict[str, str]:
                         "env_passthrough: failed to read CURSOR_AUTH_JSON_PATH=%s: %s",
                         auth_path_str, e,
                     )
+
+    # Antigravity CLI's ALE preset uses OAuth: forward its host credential
+    # file content (a refresh-token JSON) and the active-account marker so the
+    # in-sandbox deployer can write them back and silent-auth headlessly.
+    if "ANTIGRAVITY_OAUTH_TOKEN" not in result:
+        tok_path_str = os.environ.get("ANTIGRAVITY_OAUTH_TOKEN_PATH", "").strip()
+        if tok_path_str:
+            tok_path = _Path(tok_path_str).expanduser()
+            if tok_path.is_file():
+                try:
+                    content = tok_path.read_text(encoding="utf-8")
+                    if content.strip():
+                        result["ANTIGRAVITY_OAUTH_TOKEN"] = content
+                        logger.info(
+                            "env_passthrough: materialised ANTIGRAVITY_OAUTH_TOKEN "
+                            "from ANTIGRAVITY_OAUTH_TOKEN_PATH (%d B)", len(content),
+                        )
+                except OSError as e:
+                    logger.warning(
+                        "env_passthrough: failed to read ANTIGRAVITY_OAUTH_TOKEN_PATH=%s: %s",
+                        tok_path_str, e,
+                    )
+            # The active-account marker sits next to the token file (own
+            # try/except so its failure isn't mis-attributed to the token read).
+            if "ANTIGRAVITY_GOOGLE_ACCOUNTS" not in result and tok_path.is_file():
+                acc = tok_path.parent.parent / "google_accounts.json"
+                if acc.is_file():
+                    try:
+                        ac = acc.read_text(encoding="utf-8")
+                        if ac.strip():
+                            result["ANTIGRAVITY_GOOGLE_ACCOUNTS"] = ac
+                    except OSError as e:
+                        logger.warning(
+                            "env_passthrough: failed to read google_accounts.json "
+                            "next to %s: %s", tok_path_str, e,
+                        )
 
     return result
 
@@ -1017,7 +1065,7 @@ def _build_run_meta(
             "id": unit.agent_id,
             "class": unit.agent_spec.class_,
             "name": getattr(config, "name", unit.agent_spec.class_),
-            "version": None,
+            "version": getattr(config, "cli_version", None),
             "model": config.model,
             "executor": executor_type,
             "config_repr": cfg_repr,
