@@ -204,12 +204,22 @@ program computing it exists. Runtime is not an obstacle either: the reference re
 
 ### What is still not proven
 
+**No self-contained Python engine has been shown to score 1.000 on all 274 held-out
+scenarios.** The only submission that reaches 1.000 is a shim around the Zig reference,
+which does not exist on a VM. Demonstrating the full result would mean porting roughly
+7000 lines of Zig, the gen1 mechanics and its data tables, byte-exactly.
+
 One family out of 47 was modelled, not all of them. That the byte rules of this family
 are recoverable does not show that the remaining 46 are, and the mechanics they cover,
 partial trapping, lock-in, charge, multi-hit, Bide, Rage, Mimic and the rest, are
-substantially more intricate than a single self-destructing hit. Whether an agent can
-recover all of them from behaviour alone remains open. It is the reason the task's
-difficulty is credible, not a reason to think it unfair.
+substantially more intricate than a single self-destructing hit. Held-out battles run to
+21 updates, where the modelled family ends in two.
+
+So the position is: a correct submission provably exists, the deliverable form provably
+produces byte-exact output, and the byte rules of one family are provably recoverable
+from the corpus. Whether an agent can recover all of them from behaviour alone remains
+open. That is the reason the task's difficulty is credible, not a reason to think it
+unfair.
 
 ## Difficulty
 
