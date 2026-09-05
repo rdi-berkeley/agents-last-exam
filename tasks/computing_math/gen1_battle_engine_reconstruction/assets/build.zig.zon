@@ -1,0 +1,10 @@
+.{
+    .name = .oracle,
+    .version = "0.0.1",
+    .fingerprint = 0xf6e9fbe0a42a6a73,
+    .minimum_zig_version = "0.16.0",
+    .paths = .{"."},
+    .dependencies = .{
+        .pkmn = .{ .path = "../engine" },
+    },
+}
