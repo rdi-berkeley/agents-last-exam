@@ -147,3 +147,63 @@ def test_reference_engine_scores_one_through_the_harness(staged):
     sub.parent.mkdir(parents=True, exist_ok=True)
     sub.write_text(SHIM.replace("{oracle}", str(ORACLE)), encoding="utf-8")
     assert asyncio.run(task.evaluate(staged, LocalSession())) == [1.0]
+
+
+def _recover():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "recover_rules", task.TASK_DIR / "assets" / "recover_rules.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    scen = {s["id"]: s for s in json.loads(
+        (task.DATA / "visible" / "scenarios.json").read_text(encoding="utf-8"))}
+    exp = json.loads((task.DATA / "visible" / "expected.json").read_text(encoding="utf-8"))
+    return mod, mod.observations(scen, exp)
+
+
+def test_the_byte_rules_are_recoverable_from_the_visible_corpus():
+    """Fairness. The rules must be reachable from the corpus, not only from the source.
+
+    If the rotations could only be known by reading pkmn/engine, an agent given the
+    corpus could not get there and the task would be unfair rather than hard. Searching
+    every rotation, the complement and a bit reversal against the visible scenarios of
+    the modelled family leaves one transform for each rule, written two ways: rotating
+    left 7 is rotating right 1, and rotating right 5 is rotating left 3.
+    """
+    mod, obs = _recover()
+    roll = mod.recover_damage_roll(obs)
+    assert roll, "no damage-roll rule fits the visible corpus"
+    assert {n for n, *_ in roll} == {"rotr1", "rotl7"}, sorted({n for n, *_ in roll})
+    assert {b for *_, b, _ in roll} == {315}, "the damage base is not pinned to 315"
+
+    floors = sorted({f for _n, f, *_ in roll})
+    rot = dict(mod.transforms())[floors and "rotr1"]
+    crit = mod.recover_crit(obs, rot, floors[0], 315)
+    assert {n for n, _ in crit} == {"rotl3", "rotr5"}, sorted({n for n, _ in crit})
+    rates = sorted(r for n, r in crit if n == "rotl3")
+    assert rates[0] <= 52 <= rates[-1], f"the true rate 52 is outside {rates[0]}..{rates[-1]}"
+
+
+def test_the_unpinned_floor_cannot_penalise_a_correct_agent():
+    """The recovered floor is a window, so every value in it must grade the same.
+
+    The corpus narrows the acceptance floor to a range rather than a single number. If
+    two values in that range produced different held-out output, an agent that fitted
+    the corpus perfectly could still be marked wrong, which would be unfair.
+    """
+    mod, obs = _recover()
+    floors = sorted({f for _n, f, *_ in mod.recover_damage_roll(obs)})
+    src = (task.TASK_DIR / "assets" / "partial_engine.py").read_text(encoding="utf-8")
+    # the engine models exactly one family and returns the switch-in for the rest, so
+    # the floor can only show up in that family's scenarios
+    scen = {s["id"]: s for s in task._HOLDOUT
+            if grade.family_of(s["id"]).endswith("Explosion")}
+    assert scen, "no held-out scenario in the modelled family"
+
+    outputs = set()
+    for floor in (floors[0], floors[len(floors) // 2], floors[-1]):
+        variant = src.replace("while ROTR1(tape[i]) < 217:", f"while ROTR1(tape[i]) < {floor}:")
+        ns: dict = {"__name__": "variant"}
+        exec(compile(variant, "partial_engine", "exec"), ns)  # noqa: S102 - fixture, not input
+        outputs.add(tuple(sorted(ns["run"](s) for s in scen.values())))
+    assert len(outputs) == 1, f"floors {floors[0]}..{floors[-1]} disagree on held-out output"

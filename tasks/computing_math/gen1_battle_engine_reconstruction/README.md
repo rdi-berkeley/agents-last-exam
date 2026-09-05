@@ -38,6 +38,29 @@ that cannot be gamed, and it is a tradeoff rather than a free win.
 The two documents are emitted by the engine's own `dump` tool, so the split
 between format and rule is drawn by the upstream project rather than by us.
 
+## A worked example
+
+One scenario, as the agent receives it, with the tape and state elided for width:
+
+```json
+{"id": "p1_Scyther_Explosion_0", "p1": "4:2", "p2": "1:3", "cap": 20,
+ "tape": "dc8d8f87b671bb41...",   // 1024 bytes of roll tape, hex
+ "init": "57013e0102013401..."}   // the 376-byte starting battle state, hex
+```
+
+Invoked as `python3 engine.py p1_Scyther_Explosion_0.json`, it must print exactly:
+
+```
+u0 0 0 0 0 04017b64570157010004099564810181010007010000
+u1 1 2 1 3 03019909000a097000810100000601080100
+state 57013e0102013401d0008a189907a41073200000007b2664...
+```
+
+`u0` is the switch-in, which consumes no rolls. `u1` is the turn: both sides chose a
+move, the protocol log records what happened, and the final state follows. Nothing in
+the corpus says which bytes of that log mean what, or which tape byte the engine reached
+for. That is the task.
+
 ## Scoring
 
 Two numbers, because they answer different questions.
@@ -143,11 +166,33 @@ curve fit. The critical-hit rate consistent with every observation is 42 to 55, 
 Scyther's base speed is 105. Gen I halves base speed for the critical-hit rate, giving
 52, which sits inside that interval. The fit recovered the actual rule.
 
-What is still not proven is the whole of it: one family out of 47 was modelled, not
-all of them, and the bit rotations were read from the reference implementation rather
-than derived from the corpus. Whether an agent can find those from behaviour alone
-remains the open question, and it is the reason the task's difficulty is credible
-rather than the reason it is unfair.
+### The byte rules are derivable, and that was measured
+
+An earlier version of this note said the bit rotations had been read from the reference
+rather than derived from the corpus. That was wrong, and `assets/recover_rules.py`
+settles it by execution: it consults no reference and searches every rotation, the
+complement and a bit reversal against the twelve visible scenarios of the modelled
+family.
+
+| rule | transforms surviving | pinned to |
+|---|---|---|
+| damage roll | one, spelled `rotr1` or equivalently `rotl7` | base exactly **315**, floor 212 to 219 |
+| critical hit | one, spelled `rotl3` or equivalently `rotr5` | rate 42 to 55 |
+
+Each search leaves a single transform, written two ways: rotating left 7 is rotating
+right 1, and rotating right 5 is rotating left 3. The residual width costs an agent
+nothing on the damage roll, because all eight floors in 212 to 219 produce **identical**
+output on all 274 held-out scenarios, so no agent that fitted the corpus correctly can
+be marked wrong by the ambiguity.
+
+### What is still not proven
+
+One family out of 47 was modelled, not all of them. That the byte rules of this family
+are recoverable does not show that the remaining 46 are, and the mechanics they cover,
+partial trapping, lock-in, charge, multi-hit, Bide, Rage, Mimic and the rest, are
+substantially more intricate than a single self-destructing hit. Whether an agent can
+recover all of them from behaviour alone remains open. It is the reason the task's
+difficulty is credible, not a reason to think it unfair.
 
 ## Difficulty
 
