@@ -207,3 +207,35 @@ def test_the_unpinned_floor_cannot_penalise_a_correct_agent():
         exec(compile(variant, "partial_engine", "exec"), ns)  # noqa: S102 - fixture, not input
         outputs.add(tuple(sorted(ns["run"](s) for s in scen.values())))
     assert len(outputs) == 1, f"floors {floors[0]}..{floors[-1]} disagree on held-out output"
+
+
+@pytest.mark.skipif(not ORACLE.exists(), reason="reference oracle not built on this host")
+def test_the_answer_is_a_deterministic_function_of_the_shipped_inputs():
+    """Achievability, separate from whether an agent can find the rules.
+
+    The reference reads only the tape, the two move specs and the cap, all of which
+    every scenario ships, so the agent holds a superset of what produced the answer. If
+    the reference were nondeterministic, or depended on something not shipped, no
+    submission could be correct and the task would be unsolvable rather than hard.
+
+    Checked on the longest held-out battles, which are the ones with the most
+    opportunity to diverge.
+    """
+    import tempfile
+    longest = sorted(task._EXPECTED, key=lambda i: -len(task._EXPECTED[i]["updates"]))[:2]
+    scen = {s["id"]: s for s in task._HOLDOUT}
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    for sid in longest:
+        sc = scen[sid]
+        tape = tmp / f"{sid}.hex"
+        tape.write_text(sc["tape"], encoding="utf-8")
+        runs = []
+        for _ in range(2):
+            p = subprocess.run(
+                [str(ORACLE), str(tape), sc["p1"], sc["p2"], str(sc["cap"])],
+                capture_output=True, text=True, check=False)
+            runs.append(p.stdout)
+        assert runs[0] == runs[1], f"{sid}: the reference is not deterministic"
+        parsed = grade.parse(runs[0])
+        assert parsed["updates"] == list(task._EXPECTED[sid]["updates"]), sid
+        assert parsed["state"] == task._EXPECTED[sid]["state"], sid

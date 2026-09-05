@@ -185,6 +185,23 @@ nothing on the damage roll, because all eight floors in 212 to 219 produce **ide
 output on all 274 held-out scenarios, so no agent that fitted the corpus correctly can
 be marked wrong by the ambiguity.
 
+### The answer is computable from what the agent is given
+
+Separately from whether an agent can find the rules, it is worth settling whether a
+correct submission can exist at all. It can, and the argument is checkable rather than
+rhetorical.
+
+The reference is invoked as `oracle <tape> <p1 spec> <p2 spec> <cap>` and reads nothing
+else: no clock, no environment, no hidden file. Those four inputs are all shipped in
+every scenario, along with the starting state, so the agent holds a superset of what
+produced the answer. Running the reference twice on the longest held-out battles, 21
+updates each, gives byte-identical output both times, and that output is exactly the
+shipped transcript.
+
+The target is therefore a deterministic function of data the agent has in full, so a
+program computing it exists. Runtime is not an obstacle either: the reference resolves a
+21-update battle in about 2 ms, against a 60 s per-scenario budget.
+
 ### What is still not proven
 
 One family out of 47 was modelled, not all of them. That the byte rules of this family
