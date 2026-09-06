@@ -1,0 +1,39 @@
+# car — Common Agent Runtime as the system under test. Host-side agent: the
+# deployer launches the `car run-task` headless runner, hands it the vm
+# (shell/fs) and cua (GUI) MCP bridges that reach the eval VM's cua-server, and
+# CAR drives its own propose -> validate -> execute loop. The runner emits a
+# JSONL transcript the deployer converts to ATIF.
+#
+# Auth: API keys live in the operator's shell env, read by CAR directly —
+# ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY. The `car` binary must be
+# on PATH (or set config.car_bin).
+#
+# Consolidated preset; every `config:` key is the dataclass default
+# (ale_run/agents/car/config.py). Reference as:  agents: [ configs/agents/car.yaml ]
+
+harness: car
+# Executor: deployer default is "local" (host-side); "docker" adds isolation via
+# the same code path. Supported: local | docker.
+executor: local
+
+# CAR model id (CAR's own catalog id, NOT the LiteLLM "provider/model" form the
+# other harnesses use). REQUIRED — pin it for the run. Example (change to a model
+# your CAR build + API keys can serve):
+model: claude-sonnet-4-6
+
+config:
+  # Hard ceiling on CAR's agent loop (--max-turns).
+  max_turns: 100
+
+  # Path to the `car` CLI binary. Override if not on PATH.
+  car_bin: car
+
+  # Wire the cua (GUI) MCP bridge in addition to the vm (shell/fs) bridge so CAR
+  # can drive the desktop. Set false for shell/file-only tasks.
+  gui: true
+
+  # Also write CAR's engine event journal (metadata-only) next to the transcript.
+  eventlog: true
+
+  # Extra env vars injected into the car run-task process (merged over os.environ).
+  extra_env: {}
