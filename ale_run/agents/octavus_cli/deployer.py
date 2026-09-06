@@ -63,8 +63,11 @@ _TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
 # The computer's display + accessibility stack the CLI's browser / computer-use
 # tools need. Mirrors the public install script's apt set; a shell/filesystem-
 # only run needs none of it, so a failure here is a warning, not fatal.
+# `fluxbox` is a lightweight window manager the CLI starts on a bare display so the
+# computer-use `label` driver can find the foreground window; a no-op on the
+# standard ALE `:0`, which already runs a WM.
 _PREREQ_APT_PACKAGES = (
-    "xvfb", "dbus-x11", "at-spi2-core", "x11-utils", "xdotool", "wmctrl", "scrot", "ffmpeg",
+    "xvfb", "fluxbox", "dbus-x11", "at-spi2-core", "x11-utils", "xdotool", "wmctrl", "scrot", "ffmpeg",
     "python3", "python3-gi", "gir1.2-atspi-2.0", "python3-pil",
     "libnss3", "libatk-bridge2.0-0", "libgtk-3-0", "libgbm1",
     "fonts-liberation",
@@ -367,15 +370,19 @@ class OctavusCliDeployer(BaseAgentDeployer):
         )
 
     def _build_argv(self, cfg: OctavusCliConfig, *, workdir: str, prompt: str) -> list[str]:
-        # This integration targets the hosted production platform, which is the
-        # CLI's default, so neither --env nor --platform-url is passed.
+        # Use the CLI's built-in default platform unless the caller pins a
+        # platform_url to point the run at a different platform deployment.
         argv = [self._octoagent_path, "run", "--json", "--workdir", workdir]
+        if cfg.platform_url:
+            argv += ["--platform-url", cfg.platform_url]
         if cfg.operator_url:
             argv += ["--operator-url", cfg.operator_url]
         if cfg.model:
             argv += ["--model", cfg.model]
         if cfg.backup_model:
             argv += ["--backup-model", cfg.backup_model]
+        if cfg.thinking:
+            argv += ["--thinking", cfg.thinking]
         for slug, enabled in cfg.capabilities.items():
             argv += ["--capability", f"{slug}={'on' if enabled else 'off'}"]
         if cfg.record:

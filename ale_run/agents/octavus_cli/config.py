@@ -8,8 +8,8 @@ the sandbox via the read-once sidecar and never lands in gathered host logs.
 
 Everything else about the harness (prompt, tools, workers, skills, memory,
 model) lives in the agent's configuration on the Octavus platform. ``model`` /
-``backup_model`` / ``capabilities`` here are per-run overrides so one deployer
-can express many harness variants without touching the stored agent.
+``backup_model`` / ``thinking`` / ``capabilities`` here are per-run overrides so
+one deployer can express many harness variants without touching the stored agent.
 """
 from __future__ import annotations
 
@@ -28,6 +28,11 @@ class OctavusCliConfig:
     name: ClassVar[str] = "octavus-cli"
 
     # ---- platform target (the hosted Octavus platform, https://octavus.ai) ----
+    platform_url: str | None = None
+    """Optional platform base URL override (``--platform-url``). ``None`` uses the
+    CLI's built-in default. Set it to point the run at a different platform
+    deployment; the value is supplied by the caller, so no host is baked in here."""
+
     operator_url: str | None = None
     """Optional operator WebSocket override (``--operator-url``). Normally
     unset: the platform returns a reachable operator URL per run."""
@@ -44,6 +49,12 @@ class OctavusCliConfig:
 
     backup_model: str | None = None
     """Per-run backup model ``provider/model-id`` (``--backup-model``)."""
+
+    thinking: str | None = None
+    """Per-run thinking/reasoning effort (``--thinking``): one of ``off`` /
+    ``low`` / ``medium`` / ``high`` / ``max``. ``max`` is each provider's
+    maximum; ``off`` disables thinking. ``None`` (or empty) inherits the agent's
+    default, omitting the flag."""
 
     capabilities: dict[str, bool] = field(default_factory=dict)
     """Per-run capability toggles (repeated ``--capability slug=on|off``), e.g.
@@ -78,15 +89,10 @@ class OctavusCliConfig:
     uses a baked ``google-chrome``; set this only to pin your own CfT/Chromium."""
 
     # ---- install ----
-    cli_version: str | None = "@octavus/agent@1.0.2"
+    cli_version: str | None = "@octavus/agent@1.0.10"
     """npm spec installed globally at setup. Pin a version for reproducibility;
-    ``None`` installs the latest ``@octavus/agent``. 1.0.0+ raises the browser
-    window so it is visible and maximized in recordings on the reused ``:0``;
-    1.0.1+ resolves an extension-capable Chrome for Testing (never branded Chrome),
-    so the browser tools come up during ``computer-ensure-ready``; 1.0.2+ streams
-    the live computer view in near real-time (efficient I420 capture with
-    latest-frame-wins dropping), so the side-by-side/recorded computer keeps up
-    with the agent instead of lagging seconds behind."""
+    ``None`` installs the latest ``@octavus/agent``. ``--thinking`` needs
+    ``>=1.0.10``; older CLIs ignore the flag."""
 
     install_prereqs: bool = True
     """When true, ``install()`` best-effort ``apt-get``s the computer's display
@@ -104,4 +110,12 @@ class OctavusCliConfig:
         if self.record_visibility not in ("private", "public"):
             raise ValueError(
                 f"record_visibility must be 'private' or 'public', got {self.record_visibility!r}"
+            )
+        # Validate the thinking effort at load time (empty/None inherits the
+        # agent default); a typo would otherwise reach the platform and be
+        # rejected only at session creation.
+        if self.thinking and self.thinking not in ("off", "low", "medium", "high", "max"):
+            raise ValueError(
+                "thinking must be one of off/low/medium/high/max (or empty to "
+                f"inherit the agent default), got {self.thinking!r}"
             )
