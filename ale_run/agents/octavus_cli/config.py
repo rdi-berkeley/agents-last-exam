@@ -28,6 +28,11 @@ class OctavusCliConfig:
     name: ClassVar[str] = "octavus-cli"
 
     # ---- platform target (the hosted Octavus platform, https://octavus.ai) ----
+    platform_url: str | None = None
+    """Optional platform base URL override (``--platform-url``). ``None`` uses the
+    CLI's built-in default. Set it to point the run at a different platform
+    deployment; the value is supplied by the caller, so no host is baked in here."""
+
     operator_url: str | None = None
     """Optional operator WebSocket override (``--operator-url``). Normally
     unset: the platform returns a reachable operator URL per run."""

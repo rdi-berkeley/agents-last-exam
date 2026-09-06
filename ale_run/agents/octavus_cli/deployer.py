@@ -370,9 +370,11 @@ class OctavusCliDeployer(BaseAgentDeployer):
         )
 
     def _build_argv(self, cfg: OctavusCliConfig, *, workdir: str, prompt: str) -> list[str]:
-        # This integration targets the hosted production platform, which is the
-        # CLI's default, so neither --env nor --platform-url is passed.
+        # Use the CLI's built-in default platform unless the caller pins a
+        # platform_url to point the run at a different platform deployment.
         argv = [self._octoagent_path, "run", "--json", "--workdir", workdir]
+        if cfg.platform_url:
+            argv += ["--platform-url", cfg.platform_url]
         if cfg.operator_url:
             argv += ["--operator-url", cfg.operator_url]
         if cfg.model:
