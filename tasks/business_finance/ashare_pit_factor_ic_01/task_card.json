@@ -1,0 +1,125 @@
+{
+  "taskId": "business_finance/ashare_pit_factor_ic_01",
+  "title": "A-share Point-in-Time Factor Panel and Rank IC",
+  "summary": "Build a point-in-time multi-factor panel (momentum, reversal, volatility, turnover, TTM earnings yield, size) for a simulated China A-share market from daily bars and cumulative quarterly statements with announcement dates and restatements, then report rank IC statistics against 20-day forward returns.",
+  "category": "business_finance",
+  "software": [
+    "Python",
+    "pandas",
+    "NumPy"
+  ],
+  "taskPrompt": "You are the quant researcher on a China A-share equity team. Build the team's point-in-time factor pipeline from the staged vendor data and evaluate the factors with rank IC.\n\nTask directory: `base`\n\nRead these first, in this order:\n- Task brief: `base/input/task_brief.md`\n- Normative factor specification (the grader implements exactly this): `base/input/factor_spec.md`\n- Output schema: `base/input/output_contract.json`\n\nInput data under `base/input/data`:\n- `daily_bars.csv` (unadjusted OHLC, volume, amount, adj_factor, share counts, trade_status)\n- `financials.csv` (quarterly statements, cumulative year-to-date, with announce_date; restatements appear as a second row for the same report_period)\n- `securities.csv` (industry, list_date, delist_date)\n- `trading_calendar.csv`, `rebalance_dates.csv`\n\nDeliverables, written under `base/output`:\n- `factor_panel.csv`: one row per (rebalance date, eligible ticker) with the six processed factors `mom_6_1, rev_1m, vol_20, turnover_20, ep_ttm, size` and `fwd_ret_20`\n- `ic_report.json`: per-factor rank IC statistics (`mean_ic`, `ic_std`, `icir`, `n_periods`, `by_date`)\n\nRequirements:\n- Every statement is usable only from its `announce_date`; restatements replace the original only after their own announcement. Trailing-twelve-month net profit must be assembled from the cumulative year-to-date rows as the specification prescribes.\n- Eligibility, winsorisation, industry neutralisation, standardisation, forward-return and IC rules follow `base/input/factor_spec.md` exactly. No look-ahead, no survivorship filtering.\n- Python with pandas and numpy is available via `base/software/python.sh` (first call creates a virtual environment from `base/input/runtime_env/requirements.txt`). Any other tooling is acceptable if the output files match the contract.\n- Do not modify files under `base/input`.\n- The grader recomputes the rank IC from your own panel and rejects a report whose `mean_ic` disagrees with that recomputation.\n",
+  "agentMustDo": [
+    "Read task_brief.md, factor_spec.md and output_contract.json in full before coding.",
+    "Determine the eligible universe on each rebalance date from listing history, delisting and trade_status.",
+    "Assemble point-in-time trailing-twelve-month net profit from cumulative year-to-date statements using announce_date, with restatements applied only after their own announcement.",
+    "Compute the six raw factors and the 20-trading-day forward return with adjusted prices for returns and unadjusted prices for market capitalisation, excluding suspended days as specified.",
+    "Winsorise, industry-neutralise and standardise each factor cross-sectionally per date.",
+    "Compute per-date Spearman rank IC per factor and the summary statistics.",
+    "Write output/factor_panel.csv and output/ic_report.json in the exact schema of output_contract.json."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_brief.md",
+      "format": "Markdown",
+      "path": "input/task_brief.md",
+      "description": "Desk context, deliverables and the rules the grader enforces."
+    },
+    {
+      "name": "factor_spec.md",
+      "format": "Markdown",
+      "path": "input/factor_spec.md",
+      "description": "Normative definitions: eligibility, factor formulas, point-in-time TTM assembly, cross-sectional processing, forward return and rank IC."
+    },
+    {
+      "name": "output_contract.json",
+      "format": "JSON",
+      "path": "input/output_contract.json",
+      "description": "Exact schema of the two deliverables."
+    },
+    {
+      "name": "data/daily_bars.csv",
+      "format": "CSV",
+      "path": "input/data/daily_bars.csv",
+      "description": "Daily unadjusted OHLC, volume, amount, cumulative adj_factor, total and float shares, trade_status for about 300 securities over 852 trading days."
+    },
+    {
+      "name": "data/financials.csv",
+      "format": "CSV",
+      "path": "input/data/financials.csv",
+      "description": "Quarterly statements as disclosed: cumulative year-to-date revenue and net profit, total equity, announce_date; restated reports appear as additional rows; unsorted."
+    },
+    {
+      "name": "data/securities.csv",
+      "format": "CSV",
+      "path": "input/data/securities.csv",
+      "description": "Security master: name, exchange, Shenwan level-1 industry, list_date, delist_date."
+    },
+    {
+      "name": "data/trading_calendar.csv",
+      "format": "CSV",
+      "path": "input/data/trading_calendar.csv",
+      "description": "Exchange trading days; all trading-day offsets in the spec are positions in this calendar."
+    },
+    {
+      "name": "data/rebalance_dates.csv",
+      "format": "CSV",
+      "path": "input/data/rebalance_dates.csv",
+      "description": "The 30 month-end evaluation dates."
+    },
+    {
+      "name": "runtime_env/requirements.txt",
+      "format": "Text",
+      "path": "input/runtime_env/requirements.txt",
+      "description": "Pinned pandas / numpy / scipy versions for the staged runtime."
+    },
+    {
+      "name": "software/python.sh",
+      "format": "Shell script",
+      "path": "software/python.sh",
+      "description": "Canonical Python entry point; creates the virtual environment on first call."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "factor_panel.csv",
+      "format": "CSV",
+      "path": "reference/factor_panel.csv",
+      "description": "Panel produced by the normative pipeline: processed factors and forward returns for every eligible (date, ticker)."
+    },
+    {
+      "name": "ic_report.json",
+      "format": "JSON",
+      "path": "reference/ic_report.json",
+      "description": "Rank IC statistics produced by the normative pipeline."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (score = 0 when any triggers)\n- `output/factor_panel.csv` or `output/ic_report.json` missing or unparseable\n- Panel columns not exactly `date, ticker, industry_sw1, mom_6_1, rev_1m, vol_20, turnover_20, ep_ttm, size, fwd_ret_20`\n- Panel date set differs from the rebalance dates, or a duplicate (date, ticker) key\n- Mean per-date Jaccard overlap between the submitted universe and the reference universe below 0.90\n- `ic_report.json` missing any of the six factors or any of `mean_ic, ic_std, icir, n_periods, by_date`\n- Provenance: the grader recomputes the per-date Spearman rank IC from the submitted panel itself; if any factor's reported `mean_ic` deviates from that recomputation by more than 0.005 the report is rejected\n\n**Scoring method** (weighted rubric, deterministic, host-side, standard library only)\n1. Coverage (weight 0.10): mean per-date universe Jaccard mapped linearly from 0.90 (0 credit) to 0.99 (full credit).\n2. Panel fidelity (weight 0.55): for each of the seven numeric columns and each date, the share of reference cells (non-missing tickers) that the submission reproduces within tolerance (1e-3 for the six standardised factors, 1e-5 for fwd_ret_20). Averaged over dates, then weighted across columns with ep_ttm at triple weight because it carries the point-in-time logic.\n3. IC accuracy (weight 0.35): per factor, half credit for |mean_ic error| (full at 0.0005, zero at 0.005) and half for |ICIR error| (full at 0.01, zero at 0.10). Averaged over the six factors.\n\n**Current pass threshold:** 0.95.\n\n**Calibration on authored error modes** (the reference pipeline with exactly one rule broken, base variant): using report_period instead of announce_date 0.87; treating year-to-date figures as quarterly 0.79; unadjusted prices for returns 0.81; ignoring suspensions 0.59; skipping industry neutralisation 0.38; loosened listing-history rule 0.70; the three statement/price mistakes combined 0.62. Every single-rule mistake fails the pass threshold.\n\n**What does a perfect output look like?**\nA panel whose universe, factor ranks and forward returns match the reference on every date, and an IC report whose mean IC and ICIR match within tolerance for all six factors.\n\n**What does a wrong output look like?**\nA missing or malformed file, an extra or missing rebalance date, a universe that includes suspended or recently listed names, factor values built from future statements or unadjusted prices, or an IC report that was not computed from the submitted panel.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200
+  },
+  "variants": 3,
+  "taxonomy": {
+    "domain_id": "6",
+    "domain_code": "business_finance",
+    "subdomain_id": "6.5",
+    "subdomain_code": "quant_finance",
+    "subdomain_name": "Quantitative Finance & Trading",
+    "classifier": {
+      "model": "manual",
+      "source": {
+        "fields": [
+          "taskPrompt",
+          "title",
+          "summary",
+          "software"
+        ],
+        "mode": "author"
+      },
+      "rationale": "Point-in-time factor construction and IC evaluation is the core daily workflow of an equity quant researcher."
+    }
+  },
+  "requiredSystemPackages": []
+}
