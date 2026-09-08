@@ -45,6 +45,10 @@ config:
   # model_reasoning_effort → Responses-API reasoning.effort. off|low|medium|high.
   reasoning_effort: high
 
+  # Pointer coordinates emitted by the model. null auto-detects normalized for
+  # Gemini-family models and screenshot pixels for other models.
+  coordinate_space: null
+
   # npm package version to install (@openai/codex@<version>).
   codex_version: "0.114.0"
 
