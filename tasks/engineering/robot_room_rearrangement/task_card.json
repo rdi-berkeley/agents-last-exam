@@ -1,0 +1,83 @@
+{
+  "taskId": "engineering/humanoid_object_stowing",
+  "title": "Humanoid Object Stowing",
+  "summary": "In a given simulation environment, generate ONE continuous executable whole-body trajectory that makes a Unitree G1 humanoid walk to an object on a table, grasp it, carry it to a bin standing on the floor, and drop it in. The agent controls both the lower body (walking/turning, via a bundled RL balance policy's command stream) and the upper body (reaching, grasping, releasing). Fully self-contained (mujoco/torch/numpy); no motion planner, no grasp database and no IK helper are provided. Scoring is binary.",
+  "category": "engineering",
+  "software": [
+    "MuJoCo (mujoco==3.3.6)",
+    "PyTorch (torch, CUDA)",
+    "NumPy",
+    "transforms3d"
+  ],
+  "taskPrompt": "You are synthesizing a single continuous whole-body trajectory for a Unitree G1 humanoid (Dex3 3-finger hands) in a fixed MuJoCo bedroom scene.\n\nAn object sits on a table and a bin stands on the floor nearby. The robot starts standing away from the table and must walk to the object, grasp it, carry it to the bin and drop it in, ending with the object inside the bin and the robot still standing.\n\nThis is a WHOLE-BODY task. You control the legs and the upper body: one trajectory drives walking, turning, reaching, grasping and releasing. It is ONE continuous episode -- not one trajectory per object. A bundled RL balance policy converts your locomotion command stream into leg motion; you must still decide where to walk, when to turn, how to reach and how to grasp.\n\n## Variant\n`base`: walk to the table object, pick it up, and drop it into the floor bin\n\n## Input Files\n- Task brief: `/input/task_brief.md`\n- Success criteria and metrics: `/input/SUCCESS.md`\n- Trajectory format and deterministic replay/control contract: `/input/TRAJECTORY_SCHEMA.md`\n- Frozen simulation: `/input/assets/` (scene.mjb, init_state.npy, amo_init_state.npz, robot_params.json incl. joint order, PD gains, torque limits, the bin's axis-aligned bounds `bin_aabb_lo`/`bin_aabb_hi`, and `object_label`)\n- Bundled RL balance policy: `/input/policy`\n\n## What You Must Do\n1. Read the task brief, the trajectory schema, and the success criteria.\n2. Build your own control loop over `scene.mjb` + `/input/policy` and synthesize ONE continuous episode that puts the target object in the bin. There is no motion planner, no grasp database and no inverse-kinematics helper: navigation, grasp-pose selection, arm IK, finger closure and motion timing are all yours to solve.\n3. Save `/output/trajectory.npz` containing the four float32 arrays defined in `/input/TRAJECTORY_SCHEMA.md`: `action` [T, 43], `amo_policy_command` [T, 9], `amo_policy_target_yaw` [T, 1] and `amo_policy_turning_flag` [T, 1]. All four must share the same T.\n\n## Output Requirements\n- Exactly one `trajectory.npz` with the four arrays above, finite, T >= 1.\n- On replay under the contract in `/input/TRAJECTORY_SCHEMA.md`, the target object must end inside the bin (within its XY bounds and below the rim) and the robot must still be upright (pelvis > 0.60 m).\n- Scoring is binary: 1.0 or 0.0.\n- Do not write final answers outside `/output`.",
+  "agentMustDo": [
+    "Read /input/task_brief.md, /input/TRAJECTORY_SCHEMA.md, and /input/SUCCESS.md.",
+    "Drive the bundled MuJoCo scene from its fixed initial state, controlling BOTH the locomotion command stream (legs, via the bundled balance policy) and the 31 upper-body joint targets.",
+    "Navigate to the target object within ONE continuous episode -- the robot must walk and turn, not teleport.",
+    "Solve grasping yourself: choose where to stand, where to place the hand, derive the arm joint angles (your own IK), and close the Dex3 fingers. No grasp poses, motion planner or IK helper are provided.",
+    "Carry the object to the floor bin and release it so it lands inside, then keep the robot upright to the end of the episode.",
+    "Save a single trajectory.npz with the four whole-body arrays; verify success in your own loop. No self-test harness is provided."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_brief.md",
+      "format": "md",
+      "path": "input/task_brief.md",
+      "description": "Agent-facing task contract: goal, the whole-body control model, what is given vs what must be solved."
+    },
+    {
+      "name": "SUCCESS.md",
+      "format": "md",
+      "path": "input/SUCCESS.md",
+      "description": "Hard gates, the in-bin / upright metrics and the binary scoring rule."
+    },
+    {
+      "name": "TRAJECTORY_SCHEMA.md",
+      "format": "md",
+      "path": "input/TRAJECTORY_SCHEMA.md",
+      "description": "The four-array whole-body trajectory layout (action [T,43], amo_policy_command [T,9], amo_policy_target_yaw [T,1], amo_policy_turning_flag [T,1]) and the deterministic replay/control contract."
+    },
+    {
+      "name": "assets/",
+      "format": "directory",
+      "path": "input/assets/",
+      "description": "scene.mjb (meshes embedded), init_state.npy, amo_init_state.npz and robot_params.json (joint order, PD gains, torque limits, bin_aabb_lo/hi, object_label)."
+    },
+    {
+      "name": "policy/",
+      "format": "directory",
+      "path": "input/policy/",
+      "description": "The bundled RL balance policy (amo_policy.py + TorchScript weights) that turns the agent's locomotion command stream into leg motion."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "trajectory.npz",
+      "format": "npz",
+      "path": "reference/",
+      "description": "Hidden gold-standard whole-body trajectory produced by an expert pipeline driven by HUMAN-ANNOTATED grasp poses (automated grasp synthesis was not good enough, which is why this task is hard). Replays to the object inside the bin."
+    },
+    {
+      "name": "grader/run_grader.py",
+      "format": "py",
+      "path": "reference/grader/run_grader.py",
+      "description": "Hidden replay/scoring engine. Replays the submitted whole-body trajectory from the frozen state and checks the object's final position against the bin bounds plus robot uprightness."
+    }
+  ],
+  "evaluation": "Functional, reference-free, and self-contained (only mujoco/torch/numpy/transforms3d; no external framework). The evaluator enforces the output structure (exactly one trajectory.npz) and a schema gate (arrays `action` [T,43], `amo_policy_command` [T,9], `amo_policy_target_yaw` [T,1], `amo_policy_turning_flag` [T,1]; all 2-D, finite, non-empty, sharing the same T), then runs the hidden grader `reference/grader/run_grader.py`. The grader restores the frozen MuJoCo integration state and balance-policy state and replays the submitted trajectory on GPU (deterministic; bit-identical across repeated replays on the same GPU). Score is 1.0 iff at the final step the target object lies within the bin's XY bounds (bin_aabb_lo/hi, 0.02 m pad) AND below the rim (z < 0.28 m) AND the robot is upright (pelvis > 0.60 m), else 0.0. A malformed npz, a missing file, ragged array lengths, a crashed replay, a dropped object or a fallen robot all score 0.0.",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-free",
+    "timeout": 5400
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.11",
+    "subdomain_code": "robotics",
+    "subdomain_name": "Robotics & Autonomous Systems"
+  },
+  "requiredSystemPackages": [
+    "mujoco-gl-libs"
+  ]
+}
