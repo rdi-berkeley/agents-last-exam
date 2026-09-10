@@ -149,3 +149,6 @@ visual_media/human_mesh_animation_reproduction
 visual_media/inkscape_cultural_poster_design
 visual_media/uv_reproduction
 visual_media/video_storyboard_001
+engineering/mfcadpp_feature_recognition
+engineering/benchcad_views_to_step
+engineering/phm2010_tool_wear

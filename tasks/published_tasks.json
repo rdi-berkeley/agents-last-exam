@@ -764,6 +764,21 @@
       "variants": [
         "base"
       ]
+    },
+    "engineering/mfcadpp_feature_recognition": {
+      "variants": [
+        "base"
+      ]
+    },
+    "engineering/benchcad_views_to_step": {
+      "variants": [
+        "base"
+      ]
+    },
+    "engineering/phm2010_tool_wear": {
+      "variants": [
+        "base"
+      ]
     }
   }
 }
