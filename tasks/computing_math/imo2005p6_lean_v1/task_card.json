@@ -1,0 +1,53 @@
+{
+  "taskId": "computing_math/imo2005p6_lean_v1",
+  "title": "Machine-Checked Lean Proof of a Combinatorial Extremal Theorem (IMO 2005 P6)",
+  "summary": "Produce a complete, axiom-clean Lean 4 / Mathlib proof of a specified combinatorial extremal theorem: given a finite set of contestants and a solved-relation over 6 problems, if every pair of problems was solved by more than 2/5 of the contestants and nobody solved all 6, then at least two contestants each solved exactly 5. The agent fills the `sorry` in a fixed theorem statement; grading compiles the submission against Mathlib and audits `#print axioms` to certify a genuine proof (no sorry, no added axioms, no native_decide).",
+  "category": "computing_math",
+  "software": [
+    "Lean 4 (v4.27.0)",
+    "Mathlib (v4.27, prebuilt .olean cache)"
+  ],
+  "taskPrompt": "You are a formal-methods engineer producing a machine-checked verification artifact. Read the theorem statement staged at input/Problem.lean in full: it formalizes 'in a competition with 6 problems where every pair of problems was solved by more than 2/5 of the contestants and nobody solved all 6, at least two contestants each solved exactly 5 problems', as a Lean 4 theorem `imo2005_p6` over an arbitrary finite contestant type `C` with a decidable `solved : C → Fin 6 → Prop`, with `hpair : ∀ i j, i ≠ j → 2*n < 5*|{c | solved c i ∧ solved c j}|`, `hnall : ∀ c, ∃ p, ¬ solved c p`, and goal `2 ≤ numSolvedExactly solved 5`. Create exactly one file, output/solution.lean, which is Problem.lean with the `sorry` in `imo2005_p6` replaced by a complete proof. You MUST keep the `imo2005_p6` signature and the `solvedCount`/`numSolvedExactly` definitions byte-for-byte as given (the grader pins them); you may add auxiliary lemmas before the theorem. Lean 4.27.0 and the prebuilt Mathlib v4.27 .olean cache are already installed (fetched at task setup); the lean binary path is in input/LEANBIN and the olean search path in input/LEANPATH. Compile read-only via `env LEAN_PATH=\"$(cat input/LEANPATH)\" \"$(cat input/LEANBIN)\" output/solution.lean` (use the prebuilt cache; do NOT run `lake build` on Mathlib — it would rebuild from source and take hours). You are graded deterministically: score 1.0 only if the submission keeps the exact signature, contains no sorry/admit/native_decide/axiom, compiles with no errors, and `#print axioms IMO2005P6.imo2005_p6` depends only on {propext, Classical.choice, Quot.sound}. Treat input/ as read-only.",
+  "agentMustDo": [
+    "Read input/Problem.lean in full and understand the formalization contract (the meaning of solved, numSolvedExactly, hpair, hnall, and the goal).",
+    "Devise a correct mathematical proof of the theorem from first principles (no proof strategy is provided).",
+    "Formalize the proof in Lean 4 / Mathlib as output/solution.lean, keeping the imo2005_p6 signature and the solvedCount/numSolvedExactly definitions exactly as given.",
+    "Compile the file read-only against the prebuilt Mathlib cache with `env LEAN_PATH=\"$(cat input/LEANPATH)\" lean output/solution.lean` and iterate until it has no errors.",
+    "Ensure the proof is genuine: no sorry, no admit, no native_decide, and no newly declared axiom, so that `#print axioms IMO2005P6.imo2005_p6` reports only propext, Classical.choice, and Quot.sound."
+  ],
+  "inputFiles": [
+    {
+      "name": "Problem.lean",
+      "format": "lean",
+      "path": "input/Problem.lean",
+      "description": "The authoritative theorem statement: the fixed auxiliary definitions solvedCount/numSolvedExactly, the theorem imo2005_p6 with its exact hypotheses and goal, and a `sorry` to be replaced. Contains the formalization contract and no proof or hints."
+    },
+    {
+      "name": "LEANPATH",
+      "format": "text",
+      "path": "input/LEANPATH",
+      "description": "The colon-separated LEAN_PATH search path of the prebuilt Mathlib v4.27 .olean cache, so the agent can compile read-only against Mathlib without invoking lake or the network."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "reference_solution.lean",
+      "format": "lean",
+      "path": "(evaluator-only; delivered via the ALE reference channel — NOT committed to this public repo)",
+      "description": "A complete, machine-checked reference proof (32 lemmas/definitions). Compiles against Mathlib v4.27 with no sorry and `#print axioms imo2005_p6 = [propext, Classical.choice, Quot.sound]`. Provided to evaluators out-of-band and held out of the solver sandbox (only input/Problem.lean is staged), so it certifies solvability without leaking the answer to the solver."
+    }
+  ],
+  "evaluation": "Deterministic layered gate (scripts/grade_lean.py): (G1) the submission must keep the exact imo2005_p6 signature and the solvedCount/numSolvedExactly definitions (whitespace-normalized substring pin) — blocks vacuous/weaker restatements; (G2) source scan rejects sorry/admit/native_decide/axiom; (G3) `lean solution.lean` must exit 0 with no error:; (G4) append `#print axioms IMO2005P6.imo2005_p6`, recompile, and require the axiom set ⊆ {propext, Classical.choice, Quot.sound}, rejecting sorryAx, declared axioms, and Lean.ofReduceBool. Score = 1.0 iff all gates pass, else 0.0.",
+  "vm": {
+    "snapshot": "cpu-free-ubuntu",
+    "machineType": "c4-standard-4",
+    "timeout": 7200
+  },
+  "taxonomy": {
+    "domain_id": "9",
+    "domain_code": "computing_math",
+    "subdomain_id": "9.1",
+    "subdomain_code": "software_eng",
+    "subdomain_name": "Software Engineering"
+  }
+}

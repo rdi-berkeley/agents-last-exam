@@ -440,6 +440,15 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
             env.pop("MAX_THINKING_TOKENS", None)
             env["CLAUDE_CODE_DISABLE_THINKING"] = "1"
 
+        # Raise the CLI's per-response output-token ceiling. The Claude Code CLI
+        # defaults to a 32000 output-token max; a single thinking-heavy turn
+        # (large `MAX_THINKING_TOKENS` + a long tool result) can exceed it and
+        # the CLI aborts the whole run with "response exceeded the N output
+        # token maximum". Set from cfg (the yaml) — NOT os.environ, which in the
+        # sandbox is the _sandbox_entry env, not the operator's shell.
+        if cfg.max_output_tokens is not None:
+            env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(cfg.max_output_tokens)
+
         # Provider-driven routing (explicit, not key-presence heuristic).
         if cfg.provider == "openrouter":
             # A literal cfg.api_key (travels with the serialized config) takes
@@ -463,10 +472,43 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
             env["ANTHROPIC_API_KEY"] = key
             if cfg.base_url:
                 env["ANTHROPIC_BASE_URL"] = cfg.base_url
+        elif cfg.provider == "bedrock":
+            # Claude Code calls Bedrock through the AWS SDK when
+            # CLAUDE_CODE_USE_BEDROCK=1; auth is the standard AWS credential
+            # chain. The framework resolves the operator's AWS credentials on
+            # the host and propagates them into the sandbox (see
+            # _collect_env_passthrough), so they arrive here as env vars.
+            # Require at least an access key OR a bearer token so we fail fast
+            # with a clear message instead of letting the CLI 403 mid-run.
+            has_sigv4 = bool(env.get("AWS_ACCESS_KEY_ID") and env.get("AWS_SECRET_ACCESS_KEY"))
+            has_bearer = bool(env.get("AWS_BEARER_TOKEN_BEDROCK"))
+            if not (has_sigv4 or has_bearer):
+                raise RuntimeError(
+                    "claude_code: provider=bedrock but no AWS credentials in env "
+                    "(need AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, or "
+                    "AWS_BEARER_TOKEN_BEDROCK). Authenticate on the host (e.g. "
+                    "`ada credentials update ...` / `aws sso login`) before running."
+                )
+            env["CLAUDE_CODE_USE_BEDROCK"] = "1"
+            region = cfg.aws_region or env.get("AWS_REGION") or env.get("AWS_DEFAULT_REGION")
+            if region:
+                env["AWS_REGION"] = region
+            # OpenRouter/Anthropic-direct routing vars must not leak in: a
+            # stale ANTHROPIC_BASE_URL would send Bedrock traffic to the wrong
+            # endpoint. Bedrock auth is AWS-SDK only.
+            for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"):
+                env.pop(k, None)
+            # Long-run credential refresh: point the AWS SDK at a
+            # credential_process that re-reads an always-fresh creds file (kept
+            # current by a host sidecar). Static SigV4 env creds OVERRIDE
+            # credential_process, so they MUST be cleared for the refresh to
+            # take effect — verified: env creds win the AWS credential chain.
+            if cfg.aws_credential_process_file:
+                self._setup_credential_process(env, cfg.aws_credential_process_file)
         else:
             raise RuntimeError(
                 f"claude_code: unknown provider {cfg.provider!r} "
-                "(expected 'openrouter' or 'direct')"
+                "(expected 'openrouter', 'direct', or 'bedrock')"
             )
 
         # OpenTelemetry: point Claude Code's built-in exporter at the run-local
@@ -491,6 +533,65 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
                 "OTEL_LOG_TOOL_DETAILS": "1",
             })
         return env
+
+    @staticmethod
+    def _setup_credential_process(env: dict[str, str], creds_file: str) -> None:
+        """Wire the AWS SDK to a refreshable credential_process (long runs).
+
+        Writes ``~/.aws/config`` with a profile whose ``credential_process``
+        cats ``creds_file``, seeds that file with the current (still-valid) env
+        creds so calls work before the host sidecar's first refresh, points the
+        SDK at the profile, and CLEARS the static env creds (they would
+        otherwise override credential_process and keep expiring). Runs
+        in-sandbox, so all paths are sandbox-local; the host sidecar overwrites
+        ``creds_file`` in the running container as the token rotates.
+        """
+        import json as _json
+
+        home = os.path.expanduser("~")
+        aws_dir = os.path.join(home, ".aws")
+        os.makedirs(aws_dir, exist_ok=True)
+        config_path = os.path.join(aws_dir, "config")
+        profile = "ale_refresh"
+        with open(config_path, "w", encoding="utf-8") as fh:
+            fh.write(
+                f"[profile {profile}]\n"
+                f"credential_process = cat {creds_file}\n"
+            )
+
+        # Seed the creds file with the current env creds (process format) so
+        # the SDK has valid creds immediately; the sidecar refreshes it later.
+        ak, sk, st = (
+            env.get("AWS_ACCESS_KEY_ID"),
+            env.get("AWS_SECRET_ACCESS_KEY"),
+            env.get("AWS_SESSION_TOKEN"),
+        )
+        if ak and sk:
+            seed = {
+                "Version": 1,
+                "AccessKeyId": ak,
+                "SecretAccessKey": sk,
+            }
+            if st:
+                seed["SessionToken"] = st
+            try:
+                os.makedirs(os.path.dirname(creds_file) or "/", exist_ok=True)
+                with open(creds_file, "w", encoding="utf-8") as fh:
+                    _json.dump(seed, fh)
+            except OSError as e:
+                logger.warning("claude_code: could not seed creds file %s: %s", creds_file, e)
+
+        env["AWS_CONFIG_FILE"] = config_path
+        env["AWS_PROFILE"] = profile
+        env["AWS_SDK_LOAD_CONFIG"] = "1"
+        # Static env creds OVERRIDE credential_process — clear them so the SDK
+        # uses the refreshable profile instead of the frozen, expiring token.
+        for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
+            env.pop(k, None)
+        logger.info(
+            "claude_code: bedrock credential_process wired (profile=%s, creds_file=%s)",
+            profile, creds_file,
+        )
 
     def _diagnose_failure(
         self, *, stderr_log: Path, transcript: Path, exit_code: int | None,
