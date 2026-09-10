@@ -1,0 +1,94 @@
+{
+  "taskId": "engineering/cad_part_from_drawing_rubric",
+  "title": "Model six real machine parts from their dimensioned drawings, judged against the designer's requirement list",
+  "summary": "Six part-modelling jobs from recorded SOLIDWORKS sessions (mounting bracket, bike rear lever, crankshaft, tapered support bracket, forked lever, tapered mounting block): brief plus the dimensioned PDF drawing and photo; deliver one STEP solid per part, rendered from six fixed viewpoints and checked by a vision judge against the requirements the original designer wrote.",
+  "category": "engineering",
+  "software": [
+    "CadQuery",
+    "build123d",
+    "FreeCAD",
+    "OpenSCAD",
+    "Python"
+  ],
+  "taskPrompt": "You are a mechanical design engineer. Six parts must be modelled from their 2D drawings.\n\n## Input\n- Six parts in `input/parts/p01/` .. `p06/`. Each folder holds `brief.md` (the design brief) and the drawing the designer worked from: a dimensioned PDF drawing and usually a photo or screenshot of the same sheet.\n\n## What you must do\n1. Read each brief and drawing; extract every feature, count, arrangement and dimension.\n2. Model the part as a closed solid with any open-source CAD tool. Follow the drawing's dimensions and proportions.\n3. Export each part to `output/<stem>.step` (for example `p01.step`), STEP AP214, millimetres.\n\n## Scoring\nEach delivered solid is rendered from six fixed viewpoints and checked against the requirement list the original designer wrote for that part (features, counts, arrangement, proportions). Part score = fraction of requirements clearly satisfied, multiplied by a dimension factor when the drawing states the part's overall dimensions (1 when the solid's bounding box is within 5 % of them, 0 at 30 % off); task score = mean over the six parts. A missing, unreadable or invalid STEP scores 0 for that part.",
+  "agentMustDo": [
+    "Read brief.md and the dimensioned PDF drawing (plus photo) of each of the 6 parts.",
+    "Model each part as a closed solid honouring the drawing's features and dimensions.",
+    "Export output/<stem>.step for p01..p06."
+  ],
+  "inputFiles": [
+    {
+      "name": "parts/<stem>/brief.md",
+      "format": "Markdown",
+      "path": "input/parts/",
+      "description": "The design brief (objective, description, deliverable) the original designer received."
+    },
+    {
+      "name": "parts/<stem>/*.pdf, *.jpeg, *.png",
+      "format": "PDF/JPEG/PNG",
+      "path": "input/parts/",
+      "description": "Dimensioned 2D drawing of the part and a photo or screenshot of it."
+    },
+    {
+      "name": "README.md",
+      "format": "Markdown",
+      "path": "input/README.md",
+      "description": "Task brief and output contract."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "<stem>/rubrics.json",
+      "format": "JSON",
+      "path": "reference/",
+      "description": "The designer's requirement list R1..Rn for the part (5-6 statements); the grading checklist."
+    },
+    {
+      "name": "<stem>/drawing_images.json",
+      "format": "JSON (base64 PNG)",
+      "path": "reference/",
+      "description": "The drawing pages/photos the agent was given, rasterised for the judge."
+    },
+    {
+      "name": "<stem>/dims.json",
+      "format": "JSON",
+      "path": "reference/",
+      "description": "Overall dimensions stated on the drawing (largest..smallest extent, null = not stated), for the bounding-box check; present for p01, p04, p05, p06."
+    },
+    {
+      "name": "<stem>/task_desc.json",
+      "format": "JSON",
+      "path": "reference/",
+      "description": "Original brief, kept for audit."
+    },
+    {
+      "name": "manifest.json",
+      "format": "JSON",
+      "path": "reference/",
+      "description": "Per-part source session and expert time."
+    }
+  ],
+  "evaluation": "**Hard gate conditions** (part score = 0): output/<stem>.step missing, unreadable, no solid, fails BRepCheck, or zero volume.\n\n**Scoring method:** the solid is tessellated and rendered host-side from six fixed viewpoints (front, back, top, bottom, right, isometric; deterministic matplotlib shading, no fonts). A vision judge (OpenAI-compatible endpoint, ALE_JUDGE_MODEL, default gpt-5.6-terra) receives the original drawing (reference/<stem>/drawing_images.json, up to two pages), the six renders, the brief and the designer's requirement list, and returns true/false per requirement judged as drawn (feature present, count and arrangement right, proportions visibly agreeing with the drawing; orientation and placement are free); the call is repeated ALE_JUDGE_VOTES times (default 3) and the majority verdict is kept. Where the drawing states the part's overall dimensions (reference/<stem>/dims.json, four of six parts), the solid's sorted bounding-box extents are compared with them: dimension factor 1 at <= 5 % maximum relative error, linear to 0 at 30 %; the other two parts use factor 1. Part score = (satisfied / total requirements) x dimension factor; task score = mean over six parts.\n\n- Where does the scoring logic run? host-side: evaluate() copies the STEP files and hidden reference off the VM, renders with CadQuery + matplotlib and calls the judge from the host.\n\n**PERFECT output:** solids showing every listed feature with the right counts, arrangement and overall dimensions: score near 1.0.\n**WRONG/empty output:** missing or invalid STEP scores 0; a plain box scores 0.028 (one requirement of 33 judged satisfied) before the dimension factor.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 14400
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.1",
+    "subdomain_code": "mechanical",
+    "subdomain_name": "Mechanical Engineering & Design"
+  },
+  "requiredSystemPackages": [
+    "python3-cadquery",
+    "python3-build123d",
+    "freecad",
+    "openscad"
+  ],
+  "dataProvenance": {
+    "source": "markov-ai/cad-1000-hours (Hugging Face), six SOLIDWORKS single-part workflows (18-56 min of expert time) with PDF drawing inputs and designer-written rubrics",
+    "taxonomy_v2_1": "M-CAD / DRAWING-2D -> 3D + rubric"
+  }
+}

@@ -764,6 +764,21 @@
       "variants": [
         "base"
       ]
+    },
+    "engineering/autocad_drafting_from_reference": {
+      "variants": [
+        "base"
+      ]
+    },
+    "engineering/cad_part_from_drawing_rubric": {
+      "variants": [
+        "base"
+      ]
+    },
+    "engineering/cad_session_brief_recovery": {
+      "variants": [
+        "base"
+      ]
     }
   }
 }
