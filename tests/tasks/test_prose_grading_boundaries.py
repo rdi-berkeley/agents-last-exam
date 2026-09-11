@@ -31,12 +31,16 @@ def test_memo_negation_does_not_cross_statements(separator):
     )
     benign = "The alternative does not sacrifice cost targeting" + separator + conclusion
     assert healthcare._check_memo(benign, json.dumps(reference)) is None
-    denial = "The cost proxy does not systematically understate Black patients' need. " + conclusion
+    denial = "The cost proxy does not systematically\nunderstate Black patients' need. " + conclusion
     result = healthcare._check_memo(denial, json.dumps(reference))
     assert result is not None and result.reason == "audit_memo.md: incorrect_conclusion"
 
 
-def test_report_prose_and_formatted_evidence_do_not_become_extra_claims(monkeypatch):
+@pytest.mark.parametrize(
+    "extra_title",
+    ["## Finding 2: unsupported numerical mismatch", "An unsupported numerical mismatch exists."],
+)
+def test_report_prose_and_formatted_evidence_do_not_become_extra_claims(monkeypatch, extra_title):
     monkeypatch.setattr(
         legal,
         "TARGET_RULES",
@@ -65,6 +69,6 @@ and found to be consistent (no finding is reported for them).
     result = legal.score_report_text(report_text=report, reference_payload=reference)
     assert result["score"] == 1.0 and result["false_positive_count"] == 0
 
-    extra = "\n## Finding 2: unsupported numerical mismatch\nEvidence: invented discrepancy."
+    extra = "\n" + extra_title + "\nEvidence: invented discrepancy."
     result = legal.score_report_text(report_text=report + extra, reference_payload=reference)
     assert result["score"] == 0.8 and result["false_positive_count"] == 1

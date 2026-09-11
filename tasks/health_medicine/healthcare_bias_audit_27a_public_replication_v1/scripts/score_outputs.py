@@ -246,7 +246,7 @@ def _check_memo(candidate_text: str, reference_answers_text: str) -> ScoreResult
             {"sentence": forbidden_sentence},
         )
 
-    statements = re.split(r"[.!?;\n]+", candidate_text)
+    statements = re.split(r"[.!?;]+|\n\s*\n", candidate_text)
     if any(
         re.search(r"does not .*understate|do not .*understate|not support .*understate", _normalize(statement))
         for statement in statements

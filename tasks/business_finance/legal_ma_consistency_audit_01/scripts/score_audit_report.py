@@ -265,7 +265,10 @@ def _claim_start_content(line: str) -> str | None:
         r"^(?:finding|issue|error|mismatch|contradiction|discrepancy)\s*(?:\d+\b|:)",
         _normalize_text(stripped),
     )
-    return stripped if explicit_label and _looks_like_claim_title(stripped) else None
+    substantive_hint = any(
+        hint in _normalize_text(stripped) for hint in CLAIM_TITLE_HINTS if hint != "finding"
+    )
+    return stripped if (explicit_label or substantive_hint) and _looks_like_claim_title(stripped) else None
 
 
 def _split_claim_units(text: str) -> list[Section]:
