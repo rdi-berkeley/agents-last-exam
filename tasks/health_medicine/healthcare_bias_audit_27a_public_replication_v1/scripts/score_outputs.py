@@ -246,7 +246,11 @@ def _check_memo(candidate_text: str, reference_answers_text: str) -> ScoreResult
             {"sentence": forbidden_sentence},
         )
 
-    if re.search(r"does not .*understate|do not .*understate|not support .*understate", lowered):
+    statements = re.split(r"[.!?;\n]+", candidate_text)
+    if any(
+        re.search(r"does not .*understate|do not .*understate|not support .*understate", _normalize(statement))
+        for statement in statements
+    ):
         return _hard_fail("audit_memo.md: incorrect_conclusion")
     if "keep the cost-based label" in lowered or "keep cost-based label" in lowered:
         return _hard_fail("audit_memo.md: incorrect_recommendation")

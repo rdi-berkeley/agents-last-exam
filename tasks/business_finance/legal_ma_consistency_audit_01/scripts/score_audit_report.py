@@ -224,7 +224,7 @@ def _is_negative_assurance(normalized: str) -> bool:
 
 
 def _is_supporting_line(content: str) -> bool:
-    normalized = _normalize_text(content)
+    normalized = _normalize_text(re.sub(r"[*_`]", "", content))
     if not normalized:
         return True
     if normalized.startswith(
@@ -260,7 +260,12 @@ def _claim_start_content(line: str) -> str | None:
     stripped = line.strip()
     if not stripped or _is_supporting_line(stripped):
         return None
-    return stripped if _looks_like_claim_title(stripped) else None
+    # Unmarked prose mentioning a finding is not itself a new finding title.
+    explicit_label = re.match(
+        r"^(?:finding|issue|error|mismatch|contradiction|discrepancy)\s*(?:\d+\b|:)",
+        _normalize_text(stripped),
+    )
+    return stripped if explicit_label and _looks_like_claim_title(stripped) else None
 
 
 def _split_claim_units(text: str) -> list[Section]:
