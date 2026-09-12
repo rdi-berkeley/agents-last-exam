@@ -56,6 +56,14 @@
       click. It is the natural fit for harnesses that are already command-line
       tools, like Claude Code or Codex.
     </p>
+    <div class="note">
+      <div class="note-title">Harness-specific tool support</div>
+      An in-sandbox runtime is not automatically a CUA. The current
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/tree/main/ale_run/agents/deepseek_harness">DeepSeek Harness deployer</a>
+      uses upstream's bundled automation runtime, which has no MCP client. It is
+      Linux-only and supports code and terminal tasks, but not GUI tasks. See the
+      deployer README for the upstream runtime and image-result limitations.
+    </div>
 
     <h3>Out-of-sandbox</h3>
     <p>

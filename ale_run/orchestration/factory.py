@@ -35,6 +35,7 @@ _AGENT_FQNS: dict[str, str] = {
     "gemini_cli": "ale_run.agents.gemini_cli.deployer.GeminiCliDeployer",
     "antigravity_cli": "ale_run.agents.antigravity_cli.deployer.AntigravityCliDeployer",
     "grok_build": "ale_run.agents.grok_build.deployer.GrokBuildDeployer",
+    "deepseek_harness": "ale_run.agents.deepseek_harness.deployer.DeepSeekHarnessDeployer",
     "grok_cli": "ale_run.agents.grok_cli.deployer.GrokCliDeployer",
     "cursor_cli": "ale_run.agents.cursor_cli.deployer.CursorCliDeployer",
     "droid": "ale_run.agents.droid.deployer.DroidDeployer",
