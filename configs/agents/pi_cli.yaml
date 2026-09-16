@@ -1,0 +1,10 @@
+harness: pi_cli
+model: anthropic/claude-sonnet-4.6
+config:
+  provider: openrouter
+  base_url: null
+  api_key: null
+  cli_version: "0.85.1"
+  thinking_level: null
+  disabled_tools: []
+  extra_args: []
