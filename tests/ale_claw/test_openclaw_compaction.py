@@ -405,9 +405,13 @@ class TestSummarizeChunk:
                     _make_messages(3),
                     "test-model",
                     thinking_params={"reasoning_effort": "medium"},
+                    api_key="custom-key",
+                    api_base="http://127.0.0.1:4010/v1",
                 )
             )
             assert mock_acomp.call_args.kwargs["reasoning_effort"] == "medium"
+            assert mock_acomp.call_args.kwargs["api_key"] == "custom-key"
+            assert mock_acomp.call_args.kwargs["api_base"] == "http://127.0.0.1:4010/v1"
 
     def test_timeout_fallback_via_summarize_with_fallback(self):
         """Timeout errors trigger Tier 3 static fallback via summarize_with_fallback."""

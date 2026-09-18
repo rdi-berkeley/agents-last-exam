@@ -178,6 +178,8 @@ class OpenClawComputerAgent(ComputerAgent):
         self.thinking_config = thinking_config
         self.resolved_model = resolved_model
         self.summary_runtime = summary_runtime
+        self._helper_api_key: Optional[str] = None
+        self._helper_api_base: Optional[str] = None
         self._registry = registry
         # Stable bootstrap files re-injected post-compaction so the agent
         # re-anchors on workspace rules after the lossy summary. Mirrors
@@ -385,6 +387,8 @@ class OpenClawComputerAgent(ComputerAgent):
             merged_kwargs["api_key"] = api_key if api_key is not None else self.api_key
         if (api_base is not None) or (self.api_base is not None):
             merged_kwargs["api_base"] = api_base if api_base is not None else self.api_base
+        self._helper_api_key = merged_kwargs.get("api_key")
+        self._helper_api_base = merged_kwargs.get("api_base")
 
         items = self._process_input(messages)
 
@@ -463,6 +467,8 @@ class OpenClawComputerAgent(ComputerAgent):
                 else None
             ),
             summary_runtime=self.summary_runtime,
+            api_key=self._helper_api_key,
+            api_base=self._helper_api_base,
         )
 
     def _drain_completions(self, new_items: List[Dict[str, Any]]) -> None:
@@ -950,6 +956,8 @@ class OpenClawComputerAgent(ComputerAgent):
                 else None
             ),
             summary_runtime=self.summary_runtime,
+            api_key=self._helper_api_key,
+            api_base=self._helper_api_base,
         )
 
         # Persist compaction entry with firstKeptEntryId

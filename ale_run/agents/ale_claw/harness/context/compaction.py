@@ -542,6 +542,8 @@ async def summarize_chunk(
     timeout: int = SUMMARIZATION_TIMEOUT,
     thinking_params: dict[str, Any] | None = None,
     summary_runtime: ResolvedModel | None = None,
+    api_key: str | None = None,
+    api_base: str | None = None,
 ) -> str:
     """Summarize a chunk of messages via the shared helper runtime adapter.
 
@@ -586,6 +588,8 @@ async def summarize_chunk(
                 temperature=1.0,
                 timeout=timeout,
                 thinking_params=thinking_params,
+                api_key=api_key,
+                api_base=api_base,
             )
             return response.text or DEFAULT_SUMMARY_FALLBACK
         except Exception as e:
@@ -607,6 +611,8 @@ async def summarize_chunks_iterative(
     timeout: int = SUMMARIZATION_TIMEOUT,
     thinking_params: dict[str, Any] | None = None,
     summary_runtime: ResolvedModel | None = None,
+    api_key: str | None = None,
+    api_base: str | None = None,
 ) -> str:
     """Iteratively summarize chunks, feeding each summary as context to the next.
 
@@ -626,6 +632,8 @@ async def summarize_chunks_iterative(
             timeout=timeout,
             thinking_params=thinking_params,
             summary_runtime=summary_runtime,
+            api_key=api_key,
+            api_base=api_base,
         )
 
     return summary or DEFAULT_SUMMARY_FALLBACK
@@ -646,6 +654,8 @@ async def summarize_with_fallback(
     timeout: int = SUMMARIZATION_TIMEOUT,
     thinking_params: dict[str, Any] | None = None,
     summary_runtime: ResolvedModel | None = None,
+    api_key: str | None = None,
+    api_base: str | None = None,
 ) -> str:
     """Three-tier summarization with progressive fallback.
 
@@ -662,6 +672,8 @@ async def summarize_with_fallback(
                 timeout=timeout,
                 thinking_params=thinking_params,
                 summary_runtime=summary_runtime,
+                api_key=api_key,
+                api_base=api_base,
             )
     except Exception as e:
         print(f"[Compaction] Tier 1 (full) failed: {e}")
@@ -678,6 +690,8 @@ async def summarize_with_fallback(
                     timeout=timeout,
                     thinking_params=thinking_params,
                     summary_runtime=summary_runtime,
+                    api_key=api_key,
+                    api_base=api_base,
                 )
                 if oversized_count > 0:
                     summary += f"\n\n[Note: {oversized_count} oversized message(s) excluded from summary]"
@@ -809,6 +823,8 @@ async def compact_messages(
     timeout: int = SUMMARIZATION_TIMEOUT,
     thinking_params: dict[str, Any] | None = None,
     summary_runtime: ResolvedModel | None = None,
+    api_key: str | None = None,
+    api_base: str | None = None,
 ) -> CompactionResult:
     """Compact older conversation messages into a summary with budget-aware splitting.
 
@@ -881,6 +897,8 @@ async def compact_messages(
             timeout=timeout,
             thinking_params=thinking_params,
             summary_runtime=summary_runtime,
+            api_key=api_key,
+            api_base=api_base,
         )
     else:
         summary = DEFAULT_SUMMARY_FALLBACK
