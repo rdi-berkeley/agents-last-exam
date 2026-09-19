@@ -77,12 +77,16 @@ The repository ignores `secret/gcp_key.json`. Do not commit or share it.
 ## 4. Copy the published images
 
 ```bash
-for image in ale-ubuntu22 ale-win10; do
+for image in ale-ubuntu22-v1-1 ale-win10-v1-1; do
   gcloud compute images create "$image" \
     --source-image="$image" \
     --source-image-project=agenthle-488519
 done
 ```
+
+These names match the v1.1 environment profiles. Do not substitute the older
+unversioned images. Licensed applications require separately provisioned images;
+this update does not repair or replace PowerMill or Civil 3D images.
 
 ## 5. Create restricted network access
 
@@ -129,7 +133,8 @@ To upload task output directly from each sandbox, set this in a copy of
 output_path: gs://<your-results-bucket>
 ```
 
-The default `output_path: local` copies output into each local run directory.
+Set `output_path: local` to copy output into each local run directory. The shipped
+default is `null`, which skips bulk output collection.
 
 ## 7. Configure secrets
 

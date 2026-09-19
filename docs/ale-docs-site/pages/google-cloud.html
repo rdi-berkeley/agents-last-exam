@@ -99,7 +99,7 @@ gcloud iam service-accounts keys create secret/gcp_key.json \
       ALE publishes prebaked Ubuntu and Windows images. Copy them into your
       project once so every run boots from an image you control:
     </p>
-    <pre><code>for image in ale-ubuntu22 ale-win10; do
+    <pre><code>for image in ale-ubuntu22-v1-1 ale-win10-v1-1; do
   gcloud compute images create "$image" \
     --source-image="$image" \
     --source-image-project=agenthle-488519

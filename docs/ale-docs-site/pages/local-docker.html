@@ -27,8 +27,13 @@
 
     <h2>What runs where</h2>
     <p>
+      The v1.1 Docker Hub upload is currently blocked by missing push permission.
+      Check <code>docker.publication_status</code> in
+      <code>releases/v1.1/assets.json</code> before following this setup.
+    </p>
+    <p>
       The <code>docker</code> provider starts
-      <code>agentslastexam/ale-ubuntu22-docker</code>. The image is an export of
+      <code>agentslastexam/ale-ubuntu22-docker:v1.1</code>. The image is an export of
       the <code>ale-ubuntu22</code> VM userspace, including its applications,
       Python environment, Node runtime, CUA server, and filesystem paths.
       A virtual X display provides the desktop surface.
@@ -42,7 +47,7 @@
     <h2>Host requirements</h2>
     <ul>
       <li>Docker capable of running Linux amd64 containers. The supported profile targets rootless Docker on a Linux host.</li>
-      <li>Enough disk for the published image, about 105 GB uncompressed and 42 GB compressed.</li>
+      <li>Persistent disk space for the runtime (about 86 GB uncompressed), the 49 GB data archive, its extracted contents and per-run files.</li>
       <li>Enough CPU and memory for each concurrent task container.</li>
       <li>Approved access to the gated task-data dataset on Hugging Face.</li>
     </ul>
@@ -58,9 +63,12 @@ uv sync --all-packages</code></pre>
       task-data archive</a>, authenticate with Hugging Face, then run:
     </p>
     <pre><code>huggingface-cli login
-scripts/fetch_task_data.sh</code></pre>
+REVISION=$(jq -r '.huggingface.archive.revision' releases/v1.1/assets.json)
+SHA256=$(jq -r '.task_data.archive_sha256' releases/v1.1/assets.json)
+scripts/fetch_task_data.sh --revision "$REVISION" --sha256 "$SHA256"</code></pre>
     <p>
-      The script extracts the canonical data tree into <code>./task-data</code>.
+      The script verifies the immutable revision and checksum, then extracts
+      into a new or empty <code>./task-data-v1.1</code> directory.
       Before the agent runs, ALE copies <code>input/</code> and
       <code>software/</code> into the container. It copies
       <code>reference/</code> only after the agent finishes.
@@ -70,8 +78,9 @@ scripts/fetch_task_data.sh</code></pre>
     <pre><code>environment: configs/environments/docker.yaml
 tasks: selected_tasks/docker_support.txt</code></pre>
     <p>
-      The environment uses <code>task_data_source: local:task-data</code> and
-      <code>output_path: local</code>. Local task data and output both use
+      The environment uses <code>task_data_source: local:task-data-v1.1</code>.
+      Set <code>output_path: local</code> to collect output (the default is null).
+      Local task data and collected output both use
       host-side <code>docker cp</code>, avoiding per-file transfer through the
       CUA API.
     </p>
@@ -88,7 +97,7 @@ tasks: selected_tasks/docker_support.txt</code></pre>
 
     <h2>Output options</h2>
     <p>
-      The default local path copies produced files into the run directory. GCS
+      The optional local path copies produced files into the run directory. GCS
       output is also supported when <code>gcs_sa_key</code> and a
       <code>gs://</code> output path are configured. See
       <a href="/pages/run.html#output-path">Choose where task output goes</a>.

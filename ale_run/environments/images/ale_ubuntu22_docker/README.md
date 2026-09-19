@@ -2,8 +2,13 @@
 
 The container form of the `ale-ubuntu22` Linux sandbox, so the `cpu-free-ubuntu`
 (no-GPU, no-license) tasks run under the **docker provider** on one host instead
-of one GCE VM each. Published **data-less** at
-`agentslastexam/ale-ubuntu22-docker:latest`.
+of one GCE VM each. The **data-less** v1.1 release target is
+`agentslastexam/ale-ubuntu22-docker:v1.1`. Pair it with the pinned v1.1 archive,
+not an old `task-data` directory. Publication status and exact pins are in
+`releases/v1.1/assets.json` and `docs/releases/v1.1.md`.
+
+The v1.1 Docker Hub upload is currently blocked by missing push permission.
+Do not treat the prepared local image as a published registry release.
 
 To *run* it you need none of this — pull the image and fetch the data
 (`scripts/fetch_task_data.sh`); see the **Local Docker** docs page. This

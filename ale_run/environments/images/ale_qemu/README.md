@@ -60,10 +60,10 @@ The pre-baked guest disks are published in the Hugging Face dataset
 
 | File | Guest |
 |---|---|
-| `ale-win10.qcow2.manifest.json` | Windows 10 qcow2 manifest |
-| `ale-win10.qcow2.parts/*` | Verified 10 GB disk parts |
-| `ale-ubuntu22.qcow2.manifest.json` | Ubuntu 22.04 qcow2 manifest |
-| `ale-ubuntu22.qcow2.parts/*` | Verified 10 GB disk parts |
+| `ale-win10-v1.1.qcow2.manifest.json` | Windows 10 qcow2 manifest |
+| `ale-win10-v1.1.qcow2.parts/*` | Verified parts, at most 4 GB each |
+| `ale-ubuntu22-v1.1.qcow2.manifest.json` | Ubuntu 22.04 qcow2 manifest |
+| `ale-ubuntu22-v1.1.qcow2.parts/*` | Verified parts, at most 4 GB each |
 
 Configure the provider with the logical qcow2 path:
 
@@ -71,11 +71,14 @@ Configure the provider with the logical qcow2 path:
 snapshots:
   cpu-free:
     qemu:
-      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2
+      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10-v1.1.qcow2
   cpu-free-ubuntu:
     qemu:
-      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22.qcow2
+      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22-v1.1.qcow2
 ```
+
+Retain the immutable `hf_revision` from `configs/environments/qemu.yaml` in both
+snapshot blocks. See `releases/v1.1/assets.json` for checksums and GCS mirrors.
 
 The provider automatically discovers the multipart manifest, downloads and
 verifies each part, reconstructs the selected qcow2 in the host cache, verifies

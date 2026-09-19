@@ -1,5 +1,5 @@
 # Docker provider for the cpu-free-ubuntu (Linux, no-GPU, no-license) tasks —
-# boots the published `agentslastexam/ale-ubuntu22-docker:latest` image as a
+# boots the versioned `agentslastexam/ale-ubuntu22-docker:v1.1` image as a
 # local container instead of one GCE VM per task.
 #
 # Per-task cpus/memory are derived from the task card's GCE machine type by the
@@ -14,11 +14,11 @@
 snapshots:
   cpu-free-ubuntu:
     provider: docker
-    image: ale-ubuntu22-docker     # -> agentslastexam/ale-ubuntu22-docker:latest (from the Image registry; pulls from Hub if absent)
+    image: ale-ubuntu22-docker-v1-1
     docker:
       shm_size: 2g
       resolution: [1024, 768]
-task_data_source: local:task-data
+task_data_source: local:task-data-v1.1
 output_path: null
 # output_path: local          # uncomment to fetch each run's output back to the host
 gcs_sa_key: secret/gcp_key.json
