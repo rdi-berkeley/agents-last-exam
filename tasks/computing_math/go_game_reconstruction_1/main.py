@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import logging
-import os
 import tempfile
 from pathlib import Path
 from typing import Any, Optional
@@ -117,11 +116,11 @@ by move inside Sabaki, then export the reconstructed game as SGF.
 - Total moves: `168`
 - Rules: `Chinese rules`
 - Result: `White wins by resignation`
-- Move 1: `B at R4`
-- Move 2: `W at Q16`
-- Move 3: `B at C4`
-- Move 4: `W at C16`
-- Move 5: `B at E3`
+- Move 1: `B at R16`
+- Move 2: `W at Q4`
+- Move 3: `B at C16`
+- Move 4: `W at C4`
+- Move 5: `B at E17`
 
 ## What You Must Do
 1. Launch Sabaki from the staged AppImage, for example:

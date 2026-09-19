@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sys
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from types import SimpleNamespace
 from typing import Any
 
@@ -36,15 +35,13 @@ except ModuleNotFoundError:  # pragma: no cover - local import fallback only
 
 from tasks.common_setup import BaseTaskSetup
 from tasks.linux_runtime import LinuxTaskConfig
+from tasks.health_medicine.obermeyer_bias_reproduction.scripts.score_outputs import (
+    ScoreResult,
+    score_output_bundle,
+)
 
 
 _setup = BaseTaskSetup()
-
-SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-from score_outputs import ScoreResult, score_output_bundle  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -152,10 +149,6 @@ class ObermeyerBiasConfig(LinuxTaskConfig):
         return _remote_join(self.reference_dir, "reference_metrics.json")
 
     @property
-    def reference_predictions_file(self) -> str:
-        return _remote_join(self.reference_dir, "full_predictions.csv")
-
-    @property
     def task_description(self) -> str:
         return f"""\
 You are working on a Linux VM to reproduce an Obermeyer-style healthcare algorithmic bias audit.
@@ -205,7 +198,6 @@ Your job is to:
                 "baseline_report_output": self.baseline_report_output,
                 "revised_report_output": self.revised_report_output,
                 "reference_metrics_file": self.reference_metrics_file,
-                "reference_predictions_file": self.reference_predictions_file,
             }
         )
         return metadata
@@ -259,7 +251,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         logger.error("[%s] missing output: %s", TASK_NAME, meta["predictions_output"])
         return [0.0]
 
-    for ref_key in ("analysis_data_file", "reference_metrics_file", "reference_predictions_file"):
+    for ref_key in ("analysis_data_file", "reference_metrics_file"):
         if not (await session.file_exists(meta[ref_key]) or await session.directory_exists(meta[ref_key])):
             raise RuntimeError(
                 f"[{TASK_NAME}] evaluator-controlled {ref_key} missing: {meta[ref_key]}"
@@ -276,9 +268,6 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         predictions_csv=_as_text(await session.read_file(meta["predictions_output"])),
         analysis_data_csv=_as_text(await session.read_file(meta["analysis_data_file"])),
         reference_metrics_json=_as_text(await session.read_file(meta["reference_metrics_file"])),
-        reference_predictions_csv=_as_text(
-            await session.read_file(meta["reference_predictions_file"])
-        ),
         baseline_report_md=baseline_report,
         revised_report_md=revised_report,
     )

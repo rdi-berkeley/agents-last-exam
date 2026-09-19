@@ -16,11 +16,6 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-REMOTES_BOOTSTRAP_VERSION = "2.4.2.1"
-REMOTES_BOOTSTRAP_URL = (
-    "https://cran.r-project.org/src/contrib/Archive/remotes/"
-    f"remotes_{REMOTES_BOOTSTRAP_VERSION}.tar.gz"
-)
 REQUIRED_SCRIPT_NAMES = [
     "02_variance_methods_longitudinal.R",
     "03_simulation_runner_longitudinal.R",
@@ -30,6 +25,16 @@ REQUIRED_SCRIPT_NAMES = [
     "06b_analyze_by_sample_size.R",
 ]
 FIXTURE_PLAN_NAME = "fixture_smoke_plan.csv"
+CONTRACT_VERSION = "ltmle-cumulative-v2-20260910"
+DERIVATION_TOLERANCE = 1.1e-6
+
+
+class EvaluatorConfigurationError(RuntimeError):
+    pass
+
+
+class CandidateRerunError(RuntimeError):
+    pass
 
 
 def _parse_args() -> argparse.Namespace:
@@ -58,19 +63,113 @@ def _write_result(
     passed: bool,
     reason: str,
     details: dict[str, Any] | None = None,
+    infrastructure_error: bool = False,
 ) -> int:
     payload = {
         "passed": passed,
         "reason": reason,
         "details": details or {},
     }
+    if infrastructure_error:
+        payload["error_type"] = "evaluator"
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
+    if infrastructure_error:
+        return 2
     return 0 if passed else 1
 
 
 def _ensure_present(path: Path, errors: list[str], label: str) -> None:
     if not path.exists():
         errors.append(f"missing_{label}:{path}")
+
+
+def _load_evaluator_contract(
+    input_dir: Path, reference_dir: Path, positive_fixture_dir: Path
+) -> dict[str, Any]:
+    required = [
+        reference_dir / "evaluation_contract.json",
+        reference_dir / "expected_summary.csv",
+        reference_dir / "public_raw_results.csv",
+        positive_fixture_dir / FIXTURE_PLAN_NAME,
+        positive_fixture_dir / "raw_results.csv",
+        positive_fixture_dir / "summary.csv",
+        input_dir / "LTMLE_Targeted_Bootstrap_Task_INPUT/01_data_generation_longitudinal.R",
+        input_dir / "LTMLE_Targeted_Bootstrap_Task_INPUT/lmtp-bootstrap/DESCRIPTION",
+    ]
+    missing = [str(path) for path in required if not path.is_file() or not path.stat().st_size]
+    if missing:
+        raise EvaluatorConfigurationError(f"missing_evaluator_files:{missing}")
+    contract = json.loads((reference_dir / "evaluation_contract.json").read_text(encoding="utf-8"))
+    if contract.get("scientific_contract_version") != CONTRACT_VERSION:
+        raise EvaluatorConfigurationError("scientific_contract_version_mismatch")
+    for relative_path, expected_hash in contract["input_sha256"].items():
+        path = input_dir / relative_path
+        if not path.is_file() or _sha256_file(path) != expected_hash:
+            raise EvaluatorConfigurationError(f"input_hash_mismatch:{relative_path}")
+    hidden = contract["hidden_smoke"]
+    if (
+        _sha256_file(reference_dir / "public_raw_results.csv")
+        != contract["public_benchmark"]["raw_reference_sha256"]
+    ):
+        raise EvaluatorConfigurationError("public_raw_reference_hash_mismatch")
+    if (
+        _sha256_file(reference_dir / "expected_summary.csv")
+        != contract["public_benchmark"]["reference_sha256"]
+    ):
+        raise EvaluatorConfigurationError("public_reference_hash_mismatch")
+    for name in ("raw_results.csv", "summary.csv"):
+        expected = hidden["frozen_expected_hashes"]["output_test_pos"][name]
+        if _sha256_file(positive_fixture_dir / name) != expected:
+            raise EvaluatorConfigurationError(f"positive_fixture_hash_mismatch:{name}")
+    plan = _load_plan(positive_fixture_dir / FIXTURE_PLAN_NAME)
+    expected_plan = hidden["scenarios"]
+    if [{key: str(value) for key, value in row.items()} for row in plan] != [
+        {key: str(value) for key, value in row.items()} for row in expected_plan
+    ]:
+        raise EvaluatorConfigurationError("positive_fixture_plan_mismatch")
+    for path in (reference_dir / "expected_summary.csv", positive_fixture_dir / "summary.csv"):
+        columns, rows = _read_csv(path)
+        public = contract["public_benchmark"]
+        if columns != public["summary_columns"] or not rows:
+            raise EvaluatorConfigurationError(f"reference_summary_schema_mismatch:{path.name}")
+        if _compare_summary_maps(candidate_rows=rows, reference_rows=rows, contract_section=public):
+            raise EvaluatorConfigurationError(f"invalid_reference_summary:{path.name}")
+    for raw_path, summary_path, section in (
+        (positive_fixture_dir / "raw_results.csv", positive_fixture_dir / "summary.csv", hidden),
+        (reference_dir / "public_raw_results.csv", reference_dir / "expected_summary.csv", public),
+    ):
+        raw_columns, raw_rows = _read_csv(raw_path)
+        raw_errors = _validate_raw_results(
+            raw_fieldnames=raw_columns,
+            raw_rows=raw_rows,
+            plan_rows=section["scenarios"],
+            canonical_tau_true_by_scenario=section["tau_true_by_scenario"],
+            hidden_contract={**hidden, "scenarios": section["scenarios"]},
+        )
+        if raw_errors:
+            raise EvaluatorConfigurationError(
+                f"reference_scientific_invariants:{raw_path.name}:{raw_errors[:5]}"
+            )
+        derived = _recompute_summary_rows(
+            raw_rows=raw_rows,
+            scenario_levels=[row["scenario"] for row in section["scenarios"]],
+            method_levels=hidden["expected_methods"],
+        )
+        _, summary = _read_csv(summary_path)
+        if _compare_summary_maps(
+            candidate_rows=summary,
+            reference_rows=derived,
+            contract_section={
+                "row_match_keys": ["method", "scenario"],
+                "metric_tolerances": {
+                    key: DERIVATION_TOLERANCE for key in public["metric_tolerances"]
+                },
+            },
+        ):
+            raise EvaluatorConfigurationError(
+                f"reference_summary_derivation_failed:{summary_path.name}"
+            )
+    return contract
 
 
 def _probe_rscript_system_lib(rscript_binary: str) -> str:
@@ -105,126 +204,51 @@ def _prepare_r_library(
     eval_data_dir: Path,
     rscript_binary: str,
 ) -> tuple[str, str]:
-    hidden_contract = contract["hidden_smoke"]
-    package_versions = dict(hidden_contract["declared_runtime_package_versions"])
-
-    lib_root = eval_data_dir / "_hidden_smoke_r_lib"
+    hidden = contract["hidden_smoke"]
     temp_root = Path(tempfile.mkdtemp(prefix="tmp_", dir=str(eval_data_dir)))
-    lib_root.mkdir(parents=True, exist_ok=True)
-    temp_root.mkdir(parents=True, exist_ok=True)
     system_lib = _probe_rscript_system_lib(rscript_binary)
-
-    dependency_bootstrap_lines = "\n".join(
-        f'ensure_declared_package("{package_name}", "{version}")'
-        for package_name, version in package_versions.items()
-    )
-    stage_lmtp = copied_input_dir / "LTMLE_Targeted_Bootstrap_Task_INPUT" / "lmtp-bootstrap"
-
-    # Stage 4 runtime authority: `/opt/R/4.3.2/lib/R/library` (= system_lib) is the
-    # sole read-only source of pre-installed CRAN packages. The admin-dev scratch
-    # library at ADMIN_R_LIBS_USER was populated by the Stage 1 probe runtime
-    # (/usr/bin/Rscript, R >= 4.4) and contains ABI-incompatible binaries such as
-    # data.table 1.18.2.1 (built under R 4.5.3) that fail to load under R 4.3.2
-    # with `object 'sort_by' not found whilst loading namespace 'data.table'`.
-    # The Stage 4 verifier MUST NOT layer that library in front of system_lib.
-    install_r = f"""
-lib_root <- normalizePath({json.dumps(str(lib_root))}, mustWork = FALSE)
-stage_lmtp <- normalizePath({json.dumps(str(stage_lmtp))}, mustWork = TRUE)
-system_lib <- normalizePath({json.dumps(system_lib)}, mustWork = TRUE)
-dir.create(lib_root, recursive = TRUE, showWarnings = FALSE)
-active_libs <- c(lib_root, system_lib)
-.libPaths(active_libs)
-allowed_libs <- normalizePath(active_libs, mustWork = TRUE)
-
-ensure_remotes <- function() {{
-  remotes_ok <- requireNamespace("remotes", quietly = TRUE) &&
-    utils::compareVersion(as.character(utils::packageVersion("remotes")), {json.dumps(REMOTES_BOOTSTRAP_VERSION)}) == 0
-  if (remotes_ok) {{
-    return(invisible(NULL))
-  }}
-  remotes_tarball <- file.path(lib_root, basename({json.dumps(REMOTES_BOOTSTRAP_URL)}))
-  if (!file.exists(remotes_tarball)) {{
-    download.file({json.dumps(REMOTES_BOOTSTRAP_URL)}, destfile = remotes_tarball, mode = "wb", quiet = TRUE)
-  }}
-  install.packages(remotes_tarball, repos = NULL, type = "source", lib = lib_root)
-  if (!requireNamespace("remotes", quietly = TRUE, lib.loc = lib_root)) {{
-    stop("failed to install pinned remotes bootstrap package")
-  }}
-}}
-
-ensure_declared_package <- function(pkg, version) {{
-  pkg_path <- suppressWarnings(tryCatch(find.package(pkg, quiet = TRUE), error = function(e) ""))
-  pkg_ok <- nzchar(pkg_path) &&
-    any(startsWith(normalizePath(pkg_path), allowed_libs)) &&
-    utils::compareVersion(as.character(utils::packageVersion(pkg, lib.loc = allowed_libs)), version) == 0
-  if (pkg_ok) {{
-    return(invisible(NULL))
-  }}
-  ensure_remotes()
-  remotes::install_version(
-    package = pkg,
-    version = version,
-    repos = "https://cloud.r-project.org",
-    lib = lib_root,
-    upgrade = "never",
-    dependencies = NA
-  )
-  pkg_path <- find.package(pkg, lib.loc = allowed_libs)
-  if (!startsWith(normalizePath(pkg_path), normalizePath(lib_root))) {{
-    stop(sprintf("%s did not install into the hidden-smoke library", pkg))
-  }}
-  if (utils::compareVersion(as.character(utils::packageVersion(pkg, lib.loc = allowed_libs)), version) != 0) {{
-    stop(sprintf("%s did not resolve at the expected version %s", pkg, version))
-  }}
-}}
-
-{dependency_bootstrap_lines}
-# Stage 4 authority: lmtp is bundled with /opt/R/4.3.2 via install_software.sh.
-# When system_lib already has lmtp, trust it and skip the staged source install
-# — re-compiling lmtp here triggers a byte-compile that loads data.table, and
-# data.table's installed copy at /opt/R/4.3.2/lib/R/library is only loadable
-# from system_lib's own binary (not from a parallel lib_root reinstall).
-lmtp_path <- suppressWarnings(tryCatch(
-  find.package("lmtp", lib.loc = allowed_libs, quiet = TRUE),
-  error = function(e) ""
-))
-if (nzchar(lmtp_path) &&
-    startsWith(normalizePath(lmtp_path), normalizePath(system_lib))) {{
-  installed_path <- lmtp_path
-}} else {{
-  install.packages(stage_lmtp, repos = NULL, type = "source", lib = lib_root, dependencies = FALSE)
-  installed_path <- find.package("lmtp", lib.loc = lib_root)
-  if (!startsWith(normalizePath(installed_path), normalizePath(lib_root))) {{
-    stop("staged lmtp install did not land in the hidden-smoke library")
-  }}
-}}
-cat(installed_path, "\\n")
-"""
-
-    active_libs = [str(lib_root)]
+    versions = hidden["declared_runtime_package_versions"]
+    fingerprints = hidden["lmtp_function_fingerprints"]
+    checks = [
+        f"stopifnot(as.character(getRversion()) == {json.dumps(hidden['r_version'])})",
+        *(
+            f"stopifnot(utils::compareVersion(as.character(packageVersion({json.dumps(name)})), {json.dumps(version)}) == 0)"
+            for name, version in versions.items()
+        ),
+        *(
+            "stopifnot(digest::digest(paste(deparse("
+            f'getFromNamespace({json.dumps(name)}, "lmtp"), width.cutoff=500L), '
+            f'collapse="\\n"), algo="sha256", serialize=FALSE) == {json.dumps(fingerprint)})'
+            for name, fingerprint in fingerprints.items()
+        ),
+    ]
     env = {
         **dict(os.environ),
         "R_LIBS": "",
         "R_LIBS_SITE": "",
-        "R_LIBS_USER": os.pathsep.join(active_libs),
+        "R_LIBS_USER": system_lib,
         "TMPDIR": str(temp_root),
         "TMP": str(temp_root),
         "TEMP": str(temp_root),
+        "OPENBLAS_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "LC_ALL": "C",
+        "TZ": "UTC",
     }
     result = subprocess.run(
-        [rscript_binary, "-e", install_r],
+        [rscript_binary, "-e", f".libPaths({json.dumps(system_lib)});\n" + "\n".join(checks)],
         capture_output=True,
         text=True,
         env=env,
         check=False,
+        timeout=120,
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            "r_library_prepare_failed\n"
-            f"stdout:\n{result.stdout[-4000:]}\n"
-            f"stderr:\n{result.stderr[-4000:]}"
+        raise EvaluatorConfigurationError(
+            f"pinned_runtime_mismatch:stdout={result.stdout[-2000:]} stderr={result.stderr[-4000:]}"
         )
-    return env["R_LIBS_USER"], str(temp_root)
+    return system_lib, str(temp_root)
 
 
 def _compute_canonical_tau_true_map(
@@ -234,11 +258,16 @@ def _compute_canonical_tau_true_map(
     env: dict[str, str],
     rscript_binary: str,
 ) -> dict[str, float]:
-    dgp_path = copied_input_dir / "LTMLE_Targeted_Bootstrap_Task_INPUT" / "01_data_generation_longitudinal.R"
+    dgp_path = (
+        copied_input_dir
+        / "LTMLE_Targeted_Bootstrap_Task_INPUT"
+        / "01_data_generation_longitudinal.R"
+    )
     tau_true_by_scenario: dict[str, float] = {}
     for row in plan_rows:
         compute_r = f"""
 source({json.dumps(str(dgp_path))}, local = FALSE)
+RNGkind("Mersenne-Twister", "Inversion", "Rejection")
 
 with_preserved_rng <- function(seed, code) {{
   code_expr <- substitute(code)
@@ -345,7 +374,9 @@ def _materialize_candidate_bundle(
 
     hidden_contract = contract["hidden_smoke"]
     dgp_env_name = hidden_contract["dgp_source_env_var"]
-    dgp_path = scratch_input / "LTMLE_Targeted_Bootstrap_Task_INPUT" / "01_data_generation_longitudinal.R"
+    dgp_path = (
+        scratch_input / "LTMLE_Targeted_Bootstrap_Task_INPUT" / "01_data_generation_longitudinal.R"
+    )
     env = {
         **dict(os.environ),
         "R_LIBS": "",
@@ -354,6 +385,11 @@ def _materialize_candidate_bundle(
         "TMPDIR": temp_root,
         "TMP": temp_root,
         "TEMP": temp_root,
+        "OPENBLAS_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "LC_ALL": "C",
+        "TZ": "UTC",
         dgp_env_name: str(dgp_path),
     }
     canonical_tau_true_by_scenario = _compute_canonical_tau_true_map(
@@ -376,25 +412,29 @@ def _materialize_candidate_bundle(
             "-e",
             'source("06b_analyze_by_sample_size.R"); '
             'summary_df <- read.csv("summary.csv", stringsAsFactors = FALSE); '
-            'grouped <- analyze_results_by_sample_size(summary_df); '
-            'stopifnot(length(grouped) >= 1L)',
+            "grouped <- analyze_results_by_sample_size(summary_df); "
+            "stopifnot(length(grouped) >= 1L)",
         ],
     ]
     run_logs: dict[str, str] = {}
     for index, command in enumerate(commands, start=1):
-        result = subprocess.run(
-            command,
-            cwd=scratch_output,
-            capture_output=True,
-            text=True,
-            env=env,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                command,
+                cwd=scratch_output,
+                capture_output=True,
+                text=True,
+                env=env,
+                check=False,
+                timeout=1800,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise CandidateRerunError(f"hidden_smoke_timeout:{index}") from exc
         run_logs[f"command_{index}"] = " ".join(command)
         run_logs[f"stdout_{index}"] = result.stdout[-4000:]
         run_logs[f"stderr_{index}"] = result.stderr[-4000:]
         if result.returncode != 0:
-            raise RuntimeError(
+            raise CandidateRerunError(
                 f"hidden_smoke_rerun_failed:{index}\n"
                 f"stdout:\n{result.stdout[-4000:]}\n"
                 f"stderr:\n{result.stderr[-4000:]}"
@@ -407,7 +447,15 @@ def _load_plan(plan_path: Path) -> list[dict[str, Any]]:
     plan_rows: list[dict[str, Any]] = []
     for row in rows:
         normalized = dict(row)
-        for key in ("n", "tau", "replications", "base_seed", "bootstrap_B", "folds", "tau_true_seed"):
+        for key in (
+            "n",
+            "tau",
+            "replications",
+            "base_seed",
+            "bootstrap_B",
+            "folds",
+            "tau_true_seed",
+        ):
             normalized[key] = int(row[key])
         plan_rows.append(normalized)
     return plan_rows
@@ -482,7 +530,7 @@ def _compare_summary_maps(
             try:
                 candidate_value = float(candidate_row[metric_name])
                 reference_value = float(reference_row[metric_name])
-            except ValueError:
+            except (ValueError, TypeError):
                 mismatches.append(
                     {
                         "type": "invalid_numeric",
@@ -545,7 +593,8 @@ def _recompute_summary_rows(
             empirical_se = _sample_sd(estimates)
             estimated_se = statistics.fmean(std_errors)
             coverage = statistics.fmean(
-                1.0 if conf_low[i] <= tau_true <= conf_high[i] else 0.0 for i in range(len(slice_rows))
+                1.0 if conf_low[i] <= tau_true <= conf_high[i] else 0.0
+                for i in range(len(slice_rows))
             )
             ci_width = statistics.fmean(conf_high[i] - conf_low[i] for i in range(len(slice_rows)))
             summary_rows.append(
@@ -620,8 +669,15 @@ def _validate_raw_results(
 
     for row in raw_rows:
         scenario_name = row["scenario"]
-        replicate_id = int(row["replicate_id"])
         method_name = row["method"]
+        try:
+            replicate_value = float(row["replicate_id"])
+            if not math.isfinite(replicate_value) or not replicate_value.is_integer():
+                raise ValueError("replicate_id is not an integer")
+            replicate_id = int(replicate_value)
+        except (ValueError, TypeError, OverflowError):
+            errors.append({"type": "invalid_replicate_id", "value": row["replicate_id"]})
+            continue
         observed_key = (method_name, scenario_name, replicate_id)
         if observed_key in observed_keys:
             errors.append({"type": "duplicate_raw_key", "key": list(observed_key)})
@@ -653,7 +709,14 @@ def _validate_raw_results(
         }
         for key_name, expected_value in exact_checks.items():
             observed_value = row[key_name]
-            if str(observed_value) != str(expected_value):
+            if isinstance(expected_value, int):
+                try:
+                    matches = float(observed_value) == expected_value
+                except (ValueError, TypeError, OverflowError):
+                    matches = False
+            else:
+                matches = str(observed_value) == str(expected_value)
+            if not matches:
                 errors.append(
                     {
                         "type": "plan_alignment_mismatch",
@@ -665,8 +728,14 @@ def _validate_raw_results(
                 )
 
         tau_true_expected = canonical_tau_true_by_scenario[scenario_name]
-        tau_true_observed = float(row["tau_true"])
-        if abs(tau_true_observed - tau_true_expected) > 1e-6:
+        try:
+            tau_true_observed = float(row["tau_true"])
+        except (ValueError, TypeError, OverflowError):
+            tau_true_observed = math.nan
+        if (
+            not math.isfinite(tau_true_observed)
+            or abs(tau_true_observed - tau_true_expected) > 1e-6
+        ):
             errors.append(
                 {
                     "type": "tau_true_mismatch",
@@ -677,7 +746,10 @@ def _validate_raw_results(
             )
 
         for metric_name in ("estimate", "std_error", "conf_low", "conf_high"):
-            metric_value = float(row[metric_name])
+            try:
+                metric_value = float(row[metric_name])
+            except (ValueError, TypeError, OverflowError):
+                metric_value = math.nan
             if not math.isfinite(metric_value):
                 errors.append(
                     {
@@ -697,6 +769,49 @@ def _validate_raw_results(
             }
         )
 
+    if not errors:
+        errors.extend(_scientific_raw_invariants(raw_rows))
+    return errors
+
+
+def _scientific_raw_invariants(raw_rows: list[dict[str, str]]) -> list[dict[str, Any]]:
+    errors = []
+    grouped: dict[tuple[str, str], dict[str, dict[str, str]]] = {}
+    normal = statistics.NormalDist().inv_cdf(0.975)
+    for row in raw_rows:
+        key = (row["scenario"], str(int(float(row["replicate_id"]))))
+        grouped.setdefault(key, {})[row["method"]] = row
+        estimate, error, lower, upper = (
+            float(row[name]) for name in ("estimate", "std_error", "conf_low", "conf_high")
+        )
+        if error < 0 or lower > upper or abs(estimate) > 1 + 1e-8:
+            errors.append(
+                {"type": "invalid_scientific_range", "key": list(key), "method": row["method"]}
+            )
+        if row["method"] != "Targeted Bootstrap (Quantile)":
+            if (
+                max(
+                    abs(lower - (estimate - normal * error)),
+                    abs(upper - (estimate + normal * error)),
+                )
+                > 1e-7
+            ):
+                errors.append(
+                    {"type": "wald_interval_mismatch", "key": list(key), "method": row["method"]}
+                )
+        elif lower < -1 - 1e-8 or upper > 1 + 1e-8:
+            errors.append({"type": "quantile_outside_estimand_range", "key": list(key)})
+    for key, methods in grouped.items():
+        full = methods["Full-Data Targeting Contrast (EIF)"]
+        wald = methods["Targeted Bootstrap (Wald)"]
+        quantile = methods["Targeted Bootstrap (Quantile)"]
+        if (
+            max(abs(float(full["estimate"]) - float(row["estimate"])) for row in (wald, quantile))
+            > 1e-8
+        ):
+            errors.append({"type": "shared_full_data_point_mismatch", "key": list(key)})
+        if abs(float(wald["std_error"]) - float(quantile["std_error"])) > 1e-8:
+            errors.append({"type": "shared_bootstrap_se_mismatch", "key": list(key)})
     return errors
 
 
@@ -709,64 +824,50 @@ def main() -> int:
         positive_fixture_dir = Path(args.positive_fixture_dir)
         eval_data_dir = Path(args.eval_data_dir)
 
+        contract = _load_evaluator_contract(input_dir, reference_dir, positive_fixture_dir)
         errors: list[str] = []
         _ensure_present(candidate_dir, errors, "candidate_dir")
-        _ensure_present(input_dir, errors, "input_dir")
-        _ensure_present(reference_dir, errors, "reference_dir")
-        _ensure_present(positive_fixture_dir, errors, "positive_fixture_dir")
         for script_name in REQUIRED_SCRIPT_NAMES:
             _ensure_present(candidate_dir / script_name, errors, f"candidate_script_{script_name}")
         if errors:
             return _write_result(passed=False, reason="missing_paths", details={"errors": errors})
 
         eval_data_dir.mkdir(parents=True, exist_ok=True)
-        contract = json.loads((reference_dir / "evaluation_contract.json").read_text(encoding="utf-8"))
         hidden_contract = contract["hidden_smoke"]
         public_contract = contract["public_benchmark"]
 
-        frozen_hashes = hidden_contract["frozen_expected_hashes"]["output_test_pos"]
-        actual_positive_raw_hash = _sha256_file(positive_fixture_dir / "raw_results.csv")
-        actual_positive_summary_hash = _sha256_file(positive_fixture_dir / "summary.csv")
-        if actual_positive_raw_hash != frozen_hashes["raw_results.csv"]:
-            return _write_result(
-                passed=False,
-                reason="positive_fixture_raw_hash_mismatch",
-                details={
-                    "actual_hash": actual_positive_raw_hash,
-                    "expected_hash": frozen_hashes["raw_results.csv"],
-                },
+        scratch_output_dir, run_logs, canonical_tau_true_by_scenario = (
+            _materialize_candidate_bundle(
+                contract=contract,
+                candidate_dir=candidate_dir,
+                input_dir=input_dir,
+                positive_fixture_dir=positive_fixture_dir,
+                eval_data_dir=eval_data_dir,
+                rscript_binary=args.rscript_binary,
             )
-        if actual_positive_summary_hash != frozen_hashes["summary.csv"]:
-            return _write_result(
-                passed=False,
-                reason="positive_fixture_summary_hash_mismatch",
-                details={
-                    "actual_hash": actual_positive_summary_hash,
-                    "expected_hash": frozen_hashes["summary.csv"],
-                },
-            )
-
-        scratch_output_dir, run_logs, canonical_tau_true_by_scenario = _materialize_candidate_bundle(
-            contract=contract,
-            candidate_dir=candidate_dir,
-            input_dir=input_dir,
-            positive_fixture_dir=positive_fixture_dir,
-            eval_data_dir=eval_data_dir,
-            rscript_binary=args.rscript_binary,
         )
 
         raw_path = scratch_output_dir / "raw_results.csv"
         summary_path = scratch_output_dir / "summary.csv"
         report_path = scratch_output_dir / "report.pdf"
         if not raw_path.exists():
-            return _write_result(passed=False, reason="hidden_raw_results_missing", details=run_logs)
+            return _write_result(
+                passed=False, reason="hidden_raw_results_missing", details=run_logs
+            )
         if not summary_path.exists():
             return _write_result(passed=False, reason="hidden_summary_missing", details=run_logs)
         if not report_path.exists() or report_path.stat().st_size <= 0:
-            return _write_result(passed=False, reason="hidden_report_missing_or_empty", details=run_logs)
+            return _write_result(
+                passed=False, reason="hidden_report_missing_or_empty", details=run_logs
+            )
 
         raw_fieldnames, raw_rows = _read_csv(raw_path)
         summary_fieldnames, summary_rows = _read_csv(summary_path)
+        if any(
+            None in row or any(value is None for value in row.values())
+            for row in raw_rows + summary_rows
+        ):
+            return _write_result(passed=False, reason="candidate_csv_row_width_mismatch")
         plan_rows = _load_plan(positive_fixture_dir / FIXTURE_PLAN_NAME)
         _, positive_reference_raw_rows = _read_csv(positive_fixture_dir / "raw_results.csv")
         positive_summary_fieldnames, positive_reference_summary_rows = _read_csv(
@@ -786,6 +887,7 @@ def main() -> int:
             return _write_result(
                 passed=False,
                 reason="positive_fixture_summary_schema_mismatch",
+                infrastructure_error=True,
                 details={
                     "fixture_fieldnames": positive_summary_fieldnames,
                     "expected_fieldnames": list(public_contract["summary_columns"]),
@@ -806,6 +908,30 @@ def main() -> int:
                 details={"errors": raw_errors[:20], "error_count": len(raw_errors), **run_logs},
             )
 
+        raw_mismatches = _compare_summary_maps(
+            candidate_rows=[
+                {**row, "replicate_id": str(int(float(row["replicate_id"])))} for row in raw_rows
+            ],
+            reference_rows=[
+                {**row, "replicate_id": str(int(float(row["replicate_id"])))}
+                for row in positive_reference_raw_rows
+            ],
+            contract_section={
+                "row_match_keys": ["method", "scenario", "replicate_id"],
+                "metric_tolerances": hidden_contract["raw_metric_tolerances"],
+            },
+        )
+        if raw_mismatches:
+            return _write_result(
+                passed=False,
+                reason="hidden_raw_numerical_mismatch",
+                details={
+                    "mismatches": raw_mismatches[:20],
+                    "mismatch_count": len(raw_mismatches),
+                    **run_logs,
+                },
+            )
+
         expected_scenarios = [row["scenario"] for row in hidden_contract["scenarios"]]
         expected_methods = list(hidden_contract["expected_methods"])
         recomputed_summary_rows = _recompute_summary_rows(
@@ -816,7 +942,12 @@ def main() -> int:
         derivation_mismatches = _compare_summary_maps(
             candidate_rows=summary_rows,
             reference_rows=recomputed_summary_rows,
-            contract_section=public_contract,
+            contract_section={
+                "row_match_keys": public_contract["row_match_keys"],
+                "metric_tolerances": {
+                    key: DERIVATION_TOLERANCE for key in public_contract["metric_tolerances"]
+                },
+            },
         )
         if derivation_mismatches:
             return _write_result(
@@ -857,10 +988,15 @@ def main() -> int:
                 **run_logs,
             },
         )
+    except CandidateRerunError as exc:
+        return _write_result(
+            passed=False, reason="candidate_rerun_failed", details={"error": str(exc)}
+        )
     except Exception as exc:  # pragma: no cover - defensive path for remote execution
         return _write_result(
             passed=False,
             reason="verifier_exception",
+            infrastructure_error=True,
             details={"error": str(exc), "traceback": traceback.format_exc()[-12000:]},
         )
 

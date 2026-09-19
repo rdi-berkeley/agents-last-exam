@@ -1,0 +1,18 @@
+{
+  "release": "v1.1",
+  "source_sha256": "REPLACE_WITH_SEALED_SANITIZED_QCOW2_SHA256",
+  "data_manifest_sha256": "REPLACE_WITH_DATA_MANIFEST_SHA256",
+  "required_paths": [
+    "/opt/ale-run/.venv",
+    "/opt/cua-server/.venv",
+    "/usr/lib/R",
+    "/home/user/R"
+  ],
+  "preserve_cache_paths": [],
+  "preserve_runtime_paths": [],
+  "exclude_paths": [],
+  "probes": [
+    ["/opt/ale-run/.venv/bin/python", "-c", "import numpy, scipy, pandas"],
+    ["/usr/bin/Rscript", "-e", "library(stats); stopifnot(is.finite(mean(c(1,2,3))))"]
+  ]
+}

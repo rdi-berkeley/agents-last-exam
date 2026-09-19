@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 import posixpath
 import shlex
@@ -109,7 +110,7 @@ async def _read_remote_tail(
 ) -> str:
     result = await _run_command(
         session,
-        "bash -lc " + json.dumps(f"tail -n {lines} {shlex.quote(path)} 2>/dev/null"),
+        "bash -lc " + shlex.quote(f"tail -n {lines} {shlex.quote(path)} 2>/dev/null"),
         check=False,
     )
     return result.get("stdout", "") or ""
@@ -130,16 +131,23 @@ async def _run_verifier_background(
         f"{verifier_command} > {shlex.quote(stdout_log)} 2> {shlex.quote(stderr_log)}; "
         f"rc=$?; printf '%s\\n' \"$rc\" > {shlex.quote(rc_file)}"
     )
-    launch_command = "bash -lc " + json.dumps(
-        f"nohup bash -lc {shlex.quote(wrapped_command)} >/dev/null 2>&1 & echo $!"
+    launch_script = (
+        "import subprocess; "
+        f"process = subprocess.Popen(['bash', '-lc', {wrapped_command!r}], "
+        "stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, "
+        "close_fds=True, start_new_session=True); print(process.pid)"
     )
+    launch_command = "python3 -c " + shlex.quote(launch_script)
     launch = await _run_command(session, launch_command, check=False)
     if launch.get("return_code") != 0:
         raise RuntimeError(
             "failed to launch verifier: "
             f"stdout={launch.get('stdout')} stderr={launch.get('stderr')}"
         )
-    pid = (launch.get("stdout") or "").strip().splitlines()[-1] if launch.get("stdout") else ""
+    pid_lines = (launch.get("stdout") or "").strip().splitlines()
+    if not pid_lines or not pid_lines[-1].isdigit():
+        raise RuntimeError(f"verifier launch returned no process ID: {launch!r}")
+    pid = pid_lines[-1]
     logger.info("[%s] verifier started in background pid=%s run_dir=%s", tag, pid or "unknown", run_dir)
 
     waited = 0
@@ -148,14 +156,14 @@ async def _run_verifier_background(
         waited += VERIFIER_POLL_INTERVAL_S
         done = await _run_command(
             session,
-            "bash -lc " + json.dumps(f"test -f {shlex.quote(rc_file)} && echo DONE || echo RUNNING"),
+            "bash -lc " + shlex.quote(f"test -f {shlex.quote(rc_file)} && echo DONE || echo RUNNING"),
             check=False,
         )
         if (done.get("stdout") or "").strip() == "DONE":
             rc_text = (
                 await _run_command(
                     session,
-                    "bash -lc " + json.dumps(f"cat {shlex.quote(rc_file)} 2>/dev/null"),
+                    "bash -lc " + shlex.quote(f"cat {shlex.quote(rc_file)} 2>/dev/null"),
                     check=False,
                 )
             ).get("stdout", "")
@@ -169,10 +177,19 @@ async def _run_verifier_background(
                 waited,
                 run_dir,
             )
+            if (rc_text or "").strip() not in {"0", "1"}:
+                raise RuntimeError(
+                    f"verifier exited unexpectedly: rc={rc_text!r}; "
+                    f"stderr={stderr_tail[:2000]}; logs under {run_dir}"
+                )
             return await _read_remote_tail(session, stdout_log, lines=400), stderr_tail
 
     if pid.isdigit():
-        await _run_command(session, f"kill {pid} 2>/dev/null || true", check=False)
+        await _run_command(
+            session,
+            "bash -lc " + shlex.quote(f"kill -TERM -- -{pid} 2>/dev/null || true"),
+            check=False,
+        )
     raise TimeoutError(f"verifier timed out after {VERIFIER_TIMEOUT_S}s; logs under {run_dir}")
 
 
@@ -305,8 +322,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     ]
     missing_reference = [path for path in required_reference if not (await session.file_exists(path) or await session.directory_exists(path))]
     if missing_reference:
-        logger.error("[%s] missing evaluator reference paths: %s", tag, missing_reference)
-        return [0.0]
+        raise RuntimeError(f"[{tag}] missing evaluator reference paths: {missing_reference}")
 
     if not (await session.file_exists(meta["remote_output_dir"]) or await session.directory_exists(meta["remote_output_dir"])):
         logger.error("[%s] missing submission directory: %s", tag, meta["remote_output_dir"])
@@ -315,21 +331,19 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     await session.interface.create_dir(EVAL_TMP_DIR)
     run_dir_result = await _run_command(
         session,
-        "bash -lc " + json.dumps(f"mktemp -d {shlex.quote(EVAL_TMP_DIR)}/run_XXXXXX"),
+        "bash -lc " + shlex.quote(f"mktemp -d {shlex.quote(EVAL_TMP_DIR)}/run_XXXXXX"),
         check=False,
     )
     if run_dir_result.get("return_code") != 0:
-        logger.error(
-            "[%s] failed to create verifier run dir: stdout=%s stderr=%s",
-            tag,
-            run_dir_result.get("stdout", ""),
-            run_dir_result.get("stderr", ""),
+        raise RuntimeError(
+            f"[{tag}] failed to create verifier run dir: "
+            f"stdout={run_dir_result.get('stdout', '')} "
+            f"stderr={run_dir_result.get('stderr', '')}"
         )
-        return [0.0]
-    run_dir = (run_dir_result.get("stdout") or "").strip().splitlines()[-1]
-    if not run_dir:
-        logger.error("[%s] failed to create verifier run dir: empty mktemp output", tag)
-        return [0.0]
+    run_dir_lines = (run_dir_result.get("stdout") or "").strip().splitlines()
+    if not run_dir_lines:
+        raise RuntimeError(f"[{tag}] failed to create verifier run dir: empty mktemp output")
+    run_dir = run_dir_lines[-1]
 
     verifier_path = f"{run_dir}/verify_submission.py"
     await session.write_file(verifier_path, _read_script("verify_submission.py"))
@@ -358,23 +372,25 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             run_dir=run_dir,
         )
     except Exception as exc:
-        logger.error("[%s] verifier execution failed: %s", tag, exc)
-        return [0.0]
+        raise RuntimeError(f"[{tag}] verifier execution failed; logs under {run_dir}") from exc
 
     try:
         payload = _parse_json_stdout(stdout)
+        if not isinstance(payload, dict):
+            raise ValueError("verifier result must be a JSON object")
+        raw_score = payload["normalized_score"]
+        if isinstance(raw_score, bool) or not isinstance(raw_score, (int, float)):
+            raise ValueError("normalized_score must be a number")
+        normalized_score = float(raw_score)
+        if not math.isfinite(normalized_score) or not 0.0 <= normalized_score <= 1.0:
+            raise ValueError("normalized_score must be finite and within [0, 1]")
+        total_score = float(payload.get("total_score", 0.0))
     except Exception as exc:
-        logger.error(
-            "[%s] failed to parse verifier JSON: %s stdout=%s stderr=%s",
-            tag,
-            exc,
-            stdout[:2000],
-            stderr[:2000],
-        )
-        return [0.0]
+        raise RuntimeError(
+            f"[{tag}] invalid verifier result: {exc}; "
+            f"stdout={stdout[:2000]} stderr={stderr[:2000]}"
+        ) from exc
 
-    normalized_score = float(payload.get("normalized_score", 0.0))
-    total_score = float(payload.get("total_score", 0.0))
     passed = bool(payload.get("passed", False))
     logger.info(
         "[%s] normalized_score=%.4f total_score=%.1f passed=%s",
@@ -383,4 +399,4 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         total_score,
         passed,
     )
-    return [max(0.0, min(1.0, normalized_score))]
+    return [normalized_score]

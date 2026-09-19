@@ -94,7 +94,12 @@ def score_output_payloads(*, output_json_text: str, reference_json_text: str) ->
     configured_identity_tolerance = _coerce_float(identity_cfg["full_credit_tolerance"])
     if configured_identity_tolerance < 0:
         raise ValueError("percent_identity.full_credit_tolerance must be non-negative")
-    identity_tolerance = min(configured_identity_tolerance, MAX_IDENTITY_TOLERANCE)
+    if configured_identity_tolerance > MAX_IDENTITY_TOLERANCE:
+        raise ValueError(
+            "percent_identity.full_credit_tolerance exceeds the published "
+            f"maximum of {MAX_IDENTITY_TOLERANCE}"
+        )
+    identity_tolerance = configured_identity_tolerance
 
     reference_drug_class, normalized_reference_drug_class = _reference_text(
         drug_cfg.get("reference_value"), label="drug_class.reference_value"

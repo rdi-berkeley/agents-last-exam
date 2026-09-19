@@ -96,18 +96,19 @@ You are evaluating whole-body-control policy rollouts for a Unitree G1 humanoid 
 - Policy case list: `{self.input_policy_cases}`
 - Required JSON output schema: `{self.input_output_schema}`
 - mjlab runtime archive and exported package list: `{self.input_runtime_env_dir}`
-- Offline motion and checkpoint archives: `{self.input_runtime_env_dir}/motions-1.zip`
+- Motion and checkpoint archives: `{self.input_runtime_env_dir}/motions-1.zip`
   and `{self.input_runtime_env_dir}/policies.zip`
-- Offline installer inside `mjlab.zip`: `mjlab (Copy)/install_offline.sh`
 
 ## What You Must Do
 1. Inspect the 8 policy cases in `{self.input_policy_cases}`.
-2. Extract `mjlab.zip`, run `bash install_offline.sh ./mjlab-runtime`, and use
-   `./mjlab-runtime/bin/play` with the remaining arguments from each listed
-   `play_command` or `video_command` to observe
-   each policy against its reference motion. The runtime archive, motion files,
-   and policy checkpoints are staged under `{self.input_runtime_env_dir}` if you
-   need to install mjlab locally on the VM.
+2. Extract `mjlab.zip`, inspect its project metadata and the exported package
+   list, and create a task-local mjlab environment with Python 3.11 using
+   `uv sync --python 3.11 --extra cpu --no-dev --locked`. The included lockfile
+   pins the validated Linux CPU runtime. Then run mjlab playback using the arguments from
+   each listed `play_command` or `video_command` to observe each policy against
+   its reference motion. The commands use mjlab's CPU extra and explicit
+   `--device cpu` playback option. Motion files and policy checkpoints are
+   staged under `{self.input_runtime_env_dir}`.
 3. For each case, save a visible motion demo artifact. The supplied
    `video_command` adds mjlab's existing `--video` flag; mjlab writes those
    videos under the run/checkpoint log directory, so copy or rename the
@@ -117,6 +118,18 @@ You are evaluating whole-body-control policy rollouts for a Unitree G1 humanoid 
 5. Save the final JSON report at `{self.output_report}` and one visible motion
    demo artifact per case under `{self.output_visual_demos_dir}`.
 
+## Verdict Boundaries
+A slight delay or offset confined to the last few steps does not by itself
+make a rollout nearly_successful: if balance, gait, and meaningful reference
+tracking are otherwise maintained, use successful. Use nearly_successful for
+visible instability or a persistent tracking deficit beyond this final-step exception,
+provided the motion is mostly executed without an unrecovered failure.
+An unrecovered fall that prevents completion is failed, even if tracking was
+initially good. For a get-up motion, judge the recovery, not the scripted fall.
+Describe visible robot/reference tracking; do not infer stair contacts or stair
+completion from a render that does not show the stair geometry. An abrupt
+endpoint reset is not a successful recovery.
+
 ## Output Requirements
 - The final answer must include `policy_evaluation_report.json` and a
   `visual_demos/` directory.
@@ -125,8 +138,8 @@ You are evaluating whole-body-control policy rollouts for a Unitree G1 humanoid 
 - Preserve the exact `case_id`, `motion`, `mjlab_task`, `motion_file`, and `checkpoint_file`
   values from `{self.input_policy_cases}`.
 - Each evaluation item must include `evidence.visual_demo_path`, pointing to a
-  visible playback artifact under `visual_demos/`. Accepted formats are
-  `.mp4`, `.webm`, `.gif`, and `.html`.
+  recorded playback video under `visual_demos/`. Accepted formats are `.mp4`
+  and `.webm`.
 - Do not write final answers outside `{self.remote_output_dir}`.
 """
 
@@ -190,9 +203,9 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         return [0.0]
 
     entries = sorted(await session.list_dir(meta["remote_output_dir"]))
-    if entries != ["policy_evaluation_report.json", "visual_demos"]:
+    if not {"policy_evaluation_report.json", "visual_demos"}.issubset(entries):
         logger.error(
-            "[%s] Output directory contents must be exactly "
+            "[%s] Output directory contents must include "
             "['policy_evaluation_report.json', 'visual_demos'], found %s",
             tag,
             entries,

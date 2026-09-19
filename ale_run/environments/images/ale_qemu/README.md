@@ -46,6 +46,8 @@ docker push agentslastexam/ale-qemu:latest
 - Container ports `5000` and `8006` expose CUA and noVNC.
 - `VM_NET_IP` defaults to `172.30.0.2`.
 - Docker health becomes healthy when the guest CUA `/status` endpoint responds.
+- For Linux guests, the provider aligns the guest NIC MTU with the host's
+  default IPv4 route before returning the sandbox.
 
 The runner never downloads guest disks. Docker bind mounts are fixed when a
 container is created, so the host-side provider resolves and caches the qcow2,

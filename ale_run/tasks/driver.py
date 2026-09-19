@@ -240,7 +240,7 @@ def install_resilient_cua_commands(interface: Any, *, os_type: str = "linux") ->
 
     async def resilient_run_command(command: str):
         try:
-            return await _detached_run_command(
+            result = await _detached_run_command(
                 interface, raw_run_command, command, os_type=os_type,
             )
         except _DetachedSetupError as e:
@@ -249,10 +249,12 @@ def install_resilient_cua_commands(interface: Any, *, os_type: str = "linux") ->
             logger.warning(
                 "detached run_command setup failed (%s); falling back to direct run", e,
             )
-            return await raw_run_command(command)
+            result = await raw_run_command(command)
         # Any other error (poll timeout, result-read failure, cancellation)
         # propagates: the command has already run on the VM, so re-running it
         # would be wrong (and could re-run a multi-minute eval).
+        result.return_code = result.returncode
+        return result
 
     interface.run_command = resilient_run_command
     interface._ale_resilient_commands = True

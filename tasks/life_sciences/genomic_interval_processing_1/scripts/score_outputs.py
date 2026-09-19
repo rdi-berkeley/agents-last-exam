@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import posixpath
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -55,6 +56,9 @@ def _parse_bed3(payload: bytes, label: str) -> tuple[list[tuple[str, int, int]],
             issues.append(f"{label}:{line_number} must have exactly 3 tab-delimited columns")
             continue
         chrom, start_raw, end_raw = parts
+        if not all(value.isascii() and value.isdecimal() for value in (start_raw, end_raw)):
+            issues.append(f"{label}:{line_number} has non-integer coordinates")
+            continue
         try:
             start = int(start_raw)
             end = int(end_raw)
@@ -117,7 +121,14 @@ def _summary_score(
         score += 0.04
     else:
         reasons.append("summary.json input counts do not match staged inputs")
-    if observed_output == output_rows and observed_output_file == "union_peaks.bed":
+    output_filename_matches = (
+        isinstance(observed_output_file, str)
+        and not any(ord(character) < 32 for character in observed_output_file)
+        and "\\" not in observed_output_file
+        and "://" not in observed_output_file
+        and posixpath.basename(observed_output_file) == "union_peaks.bed"
+    )
+    if observed_output == output_rows and output_filename_matches:
         score += 0.06
     else:
         reasons.append("summary.json output count or output filename is inconsistent")
@@ -130,6 +141,18 @@ def score_submission(
     reference_bed: bytes,
     input_counts: dict[str, int],
 ) -> ScoreReport:
+    try:
+        reference_rows, reference_issues = _parse_bed3(reference_bed, "reference union_ref.bed")
+    except ValueError as exc:
+        raise RuntimeError(f"invalid evaluator reference: {exc}") from exc
+    if (
+        reference_issues
+        or not _bed_is_sorted(reference_rows)
+        or not _bed_is_non_overlapping(reference_rows)
+    ):
+        raise RuntimeError(
+            "invalid evaluator reference: expected sorted, non-overlapping BED3 intervals"
+        )
     reasons: list[str] = []
     details: dict[str, Any] = {}
     missing = [name for name in REQUIRED_FILES if name not in outputs or not outputs[name]]
@@ -155,9 +178,7 @@ def score_submission(
         else:
             reasons.append("union_peaks.bed contains overlapping intervals")
 
-    observed_bed = _normalize_bed_text(outputs["union_peaks.bed"], "union_peaks.bed")
-    expected_bed = _normalize_bed_text(reference_bed, "reference union_ref.bed")
-    if observed_bed == expected_bed:
+    if not bed_issues and rows == reference_rows:
         score += 0.75
         details["exact_reference_match"] = True
     else:

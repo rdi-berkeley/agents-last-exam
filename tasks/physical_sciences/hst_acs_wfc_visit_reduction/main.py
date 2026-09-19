@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-import os
+import math
 import shlex
 import asyncio
 import subprocess
@@ -40,6 +40,10 @@ VARIANT_NAME = "base"
 SCRIPTS_DIR = Path(__file__).parent / "scripts"
 EVAL_TMP_DIR = f"/tmp/agenthle_eval/{TASK_NAME}"
 STATIC_OUTPUT_DIRS = {"output_test_pos", "output_test_neg"}
+
+
+class CandidateReductionFailure(RuntimeError):
+    pass
 
 
 def _shell_quote(value: str) -> str:
@@ -110,6 +114,49 @@ directory, for example `<output_dir>/<visit_id>/`, containing:
 - `photometry_qc.json`
 - `reduction_report.md`
 
+## Alignment Shift Convention
+Write `alignment_solution.csv` with columns exactly
+`exposure_id,dx_pix,dy_pix,rms_pix,matched_sources`.
+The recommended convention is detector displacement from the Gaia-anchored
+mosaic: `x_mosaic = x_detector - dx_pix`, `y_mosaic = y_detector - dy_pix`.
+Applied registration shifts with the opposite sign are also accepted:
+`x_mosaic = x_detector + dx_pix`, `y_mosaic = y_detector + dy_pix`.
+Use one convention for both axes and every exposure within a visit, and
+state it in `reduction_report.md`. These are equivalent translation
+representations, not permission to change individual signs, swap axes or
+exposure identities, or leave the mosaic unregistered. Shifts are in pixels
+at the unchanged detector/output scale, relative to the anchored mosaic,
+not merely relative to the first exposure.
+
+## Photometry QC Contract
+Use a circular aperture radius of 3.0 output pixels and drizzle pixfrac 0.8.
+Keep the final pixel scale at the visit calibration context's `pixel_scale_arcsec`.
+These parameters must be used in the reduction, not just recorded in the QC file.
+
+Write `photometry_qc.json` as an object with the following exact keys. Additional
+diagnostics are allowed. Use JSON numbers for measurements/counts, not unit-bearing
+strings; measurements must be finite.
+
+| Key | Value and units |
+| --- | --- |
+| `visit_id` | String: input visit folder name. |
+| `filter` | String: visit filter from the association table or FITS header. |
+| `num_sources` | Integer: number of rows in the output source catalog. |
+| `background_median_e_s` | Number: estimated median background count rate, electrons/s per output pixel. |
+| `cosmic_ray_pixels_masked` | Integer: total masked pixels with DQ bit 4096 set, summed over exposures. |
+| `hot_pixels_masked` | Integer: total masked pixels with DQ bit 16 set, summed over exposures. |
+| `aperture_radius_pix` | Number: 3.0 output pixels. |
+| `pixfrac` | Number: 0.8, the dimensionless drizzle drop fraction. |
+| `final_scale_arcsec_per_pix` | Number: final pixel scale in arcsec/pixel from the calibration context. |
+| `astrometric_rms_pix` | Number: RMS astrometric residual against the matched Gaia-like anchors, in pixels. |
+
+Count each flagged pixel in each exposure, not unique mosaic coordinates. Test
+DQ flags as bits; a pixel with both bits set contributes to both counts.
+In `reduction_report.md`, describe the actual calacs-style calibration,
+AstroDrizzle-style alignment/coaddition, astrometric RMS, and cosmic-ray masking.
+Case, hyphens, and whitespace in these report phrases may vary; the required
+methods and scientific measurements do not change.
+
 The starter implementation is at `{self.starter_script}`. The runtime manifest is
 under `{self.runtime_env_dir}`, and the helper wrapper is:
 `{self.python_wrapper}`
@@ -164,12 +211,18 @@ def _write_tree_from_mapping(root: Path, files: dict[str, bytes]) -> None:
         target.write_bytes(payload)
 
 
-async def _pull_tree(session: cb.DesktopSession, remote_root: str) -> dict[str, bytes]:
+async def _pull_tree(
+    session: cb.DesktopSession, remote_root: str, *, allow_missing: bool = False
+) -> dict[str, bytes]:
+    if not await session.directory_exists(remote_root):
+        if allow_missing:
+            return {}
+        raise RuntimeError(f"missing evaluator directory: {remote_root}")
     result = await session.run_command(
         f"find {_shell_quote(remote_root)} -type f -printf '%P\\n'",
         check=False,
     )
-    if result.get("return_code") not in (0, 1):
+    if result.get("return_code") != 0:
         raise RuntimeError(f"could not list remote tree {remote_root}: {result}")
     files: dict[str, bytes] = {}
     for rel_path in result.get("stdout", "").splitlines():
@@ -181,8 +234,13 @@ async def _pull_tree(session: cb.DesktopSession, remote_root: str) -> dict[str, 
 
 async def _run_candidate(session: cb.DesktopSession, meta: dict[str, Any]) -> str:
     candidate = meta["candidate_script"]
-    if not (await session.file_exists(candidate) or await session.directory_exists(candidate)):
-        raise RuntimeError(f"missing required candidate script: {candidate}")
+    if not await session.file_exists(candidate):
+        raise CandidateReductionFailure(f"missing required candidate script: {candidate}")
+    if not await session.file_exists(meta["python_wrapper"]):
+        raise RuntimeError(f"missing evaluator runtime wrapper: {meta['python_wrapper']}")
+    for key in ("visible_visit_dir", "hidden_input_dir"):
+        if not await session.directory_exists(meta[key]):
+            raise RuntimeError(f"missing evaluator input: {meta[key]}")
 
     run_dir = f"{EVAL_TMP_DIR}/candidate_run"
     input_dir = f"{run_dir}/combined_input"
@@ -193,19 +251,21 @@ async def _run_candidate(session: cb.DesktopSession, meta: dict[str, Any]) -> st
             f"rm -rf {_shell_quote(run_dir)}",
             f"mkdir -p {_shell_quote(input_dir)} {_shell_quote(generated_dir)}",
             f"cp -a {_shell_quote(meta['visible_visit_dir'])} {_shell_quote(input_dir)}/",
-            (
-                f"if [ -d {_shell_quote(meta['hidden_input_dir'])} ]; "
-                f"then cp -a {_shell_quote(meta['hidden_input_dir'])}/* {_shell_quote(input_dir)}/; fi"
-            ),
-            (
-                f"{_shell_quote(meta['python_wrapper'])} {_shell_quote(candidate)} "
-                f"--input {_shell_quote(input_dir)} --output {_shell_quote(generated_dir)}"
-            ),
+            f"cp -a {_shell_quote(meta['hidden_input_dir'])}/* {_shell_quote(input_dir)}/",
         ]
     )
     result = await session.run_command(f"bash -lc {_shell_quote(command)}", check=False)
     if result.get("return_code") != 0:
-        raise RuntimeError(
+        raise RuntimeError(f"could not prepare candidate evaluation inputs: {result}")
+    command = (
+        f"{_shell_quote(meta['python_wrapper'])} {_shell_quote(candidate)} "
+        f"--input {_shell_quote(input_dir)} --output {_shell_quote(generated_dir)}"
+    )
+    result = await session.run_command(f"bash -lc {_shell_quote(command)}", check=False)
+    if type(result.get("return_code")) is not int:
+        raise RuntimeError(f"candidate execution has no valid exit code: {result}")
+    if result["return_code"] != 0:
+        raise CandidateReductionFailure(
             "candidate reduction failed: "
             + str(result.get("stdout", ""))[-1000:]
             + str(result.get("stderr", ""))[-1000:]
@@ -217,16 +277,18 @@ async def _run_candidate(session: cb.DesktopSession, meta: dict[str, Any]) -> st
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     output_dir_name = Path(meta["remote_output_dir"]).name
+    reference_files = await _pull_tree(session, meta["reference_outputs_dir"])
+    if not reference_files:
+        raise RuntimeError("evaluator reference outputs are empty")
     try:
-        reference_files = await _pull_tree(session, meta["reference_outputs_dir"])
         if output_dir_name in STATIC_OUTPUT_DIRS:
             output_root = meta["remote_output_dir"]
         else:
             output_root = await _run_candidate(session, meta)
-        output_files = await _pull_tree(session, output_root)
-    except Exception as exc:
-        logger.error("failed to collect evaluation assets: %s", exc)
+    except CandidateReductionFailure as exc:
+        logger.info("candidate reduction failed: %s", exc)
         return [0.0]
+    output_files = await _pull_tree(session, output_root, allow_missing=True)
 
     with tempfile.TemporaryDirectory(prefix="agenthle_hst_acs_eval_") as tmp:
         tmp_path = Path(tmp)
@@ -252,6 +314,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
     if result.stderr:
         logger.info("local scorer stderr: %s", result.stderr.strip()[:2000])
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"HST scorer failed with exit {result.returncode}: {result.stderr[-2000:]}"
+        )
     payload: dict[str, Any] | None = None
     try:
         candidate = json.loads(result.stdout)
@@ -267,18 +333,12 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
                 payload = candidate
                 break
     if payload is None:
-        logger.error(
-            "could not parse scorer JSON; rc=%s stdout=%s", result.returncode, result.stdout[:2000]
-        )
-        return [0.0]
-
-    try:
-        score = float(payload["score"])
-    except (TypeError, ValueError):
-        logger.error("scorer score was not numeric: %r", payload.get("score"))
-        return [0.0]
+        raise RuntimeError(f"could not parse HST scorer JSON: {result.stdout[:2000]}")
+    score = payload["score"]
+    if type(score) not in (int, float) or not math.isfinite(score) or not 0.0 <= score <= 1.0:
+        raise RuntimeError(f"invalid HST scorer score: {score!r}")
     logger.info("evaluation result: %s", json.dumps(payload, sort_keys=True))
-    return [max(0.0, min(1.0, score))]
+    return [float(score)]
 
 
 if __name__ == "__main__":

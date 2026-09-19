@@ -400,12 +400,40 @@ class OpenClawCliDeployer(BaseAgentDeployer):
             self._vision_usage_proxy_url,
         )
 
-    def _stop_vision_usage_proxy(self) -> None:
-        proxy = getattr(self, "_vision_usage_proxy", None)
-        if proxy is None:
+    def _start_primary_compat_proxy(
+        self,
+        cfg: OpenClawCliConfig,
+        work_dir: Path,
+    ) -> None:
+        if (
+            cfg.provider != "custom"
+            or not cfg.sanitize_empty_text_blocks
+            or not cfg.base_url
+            or not cfg.provider_id
+        ):
             return
-        proxy.stop()
-        self._vision_usage_proxy = None
+        proxy = VisionUsageProxy(
+            upstream_url=cfg.base_url,
+            usage_log=None,
+            provider=cfg.provider_id,
+            model=cfg.model_id or cfg.model,
+            sanitize_empty_text_blocks=True,
+        )
+        proxy.start()
+        self._primary_compat_proxy = proxy
+        self._primary_compat_proxy_provider = cfg.provider_id
+        self._primary_compat_proxy_url = proxy.base_url
+        logger.info(
+            "openclaw_cli: primary compatibility proxy listening at %s",
+            self._primary_compat_proxy_url,
+        )
+
+    def _stop_vision_usage_proxy(self) -> None:
+        for attribute in ("_vision_usage_proxy", "_primary_compat_proxy"):
+            proxy = getattr(self, attribute, None)
+            if proxy is not None:
+                proxy.stop()
+                setattr(self, attribute, None)
 
     def _write_config(self, cfg: OpenClawCliConfig) -> None:
         """Write openclaw.json, auth-profiles.json, exec-approvals, workspace-state."""
@@ -451,6 +479,14 @@ class OpenClawCliDeployer(BaseAgentDeployer):
             proxy_url = getattr(self, "_vision_usage_proxy_url", None)
             if proxy_url:
                 vision_base_url = proxy_url
+            primary_proxy_url = getattr(self, "_primary_compat_proxy_url", None)
+            if (
+                primary_proxy_url
+                and vision_provider
+                == getattr(self, "_primary_compat_proxy_provider", None)
+                and vision_base_url == cfg.base_url
+            ):
+                vision_base_url = primary_proxy_url
 
         # --- openclaw.json ---
         primary_model = self._route_model(primary_route_model, provider)
@@ -467,6 +503,9 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         agent_defaults: dict = {
             "model": {"primary": primary_model},
             "timeoutSeconds": int(cfg.agent_timeout_s),
+            "llm": {
+                "idleTimeoutSeconds": int(cfg.llm_idle_timeout_s),
+            },
             "models": {
                 primary_model: (
                     {"params": cfg.model_params}
@@ -548,7 +587,7 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         route_catalog_specs = [
             (
                 provider,
-                cfg.base_url,
+                getattr(self, "_primary_compat_proxy_url", None) or cfg.base_url,
                 primary_route_model,
                 cfg.model,
                 cfg.provider_api if cfg.provider == "custom" else None,
@@ -589,6 +628,8 @@ class OpenClawCliDeployer(BaseAgentDeployer):
             if (
                 catalog_provider
                 == getattr(self, "_vision_usage_proxy_provider", None)
+                or catalog_provider
+                == getattr(self, "_primary_compat_proxy_provider", None)
             ):
                 existing["request"] = {"allowPrivateNetwork": True}
             if not any(model["id"] == catalog_id for model in existing["models"]):
@@ -596,6 +637,12 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                     "id": catalog_id,
                     "name": catalog_name or catalog_id,
                 }
+                if (
+                    cfg.provider == "custom"
+                    and catalog_provider == provider
+                    and cfg.model_input_types is not None
+                ):
+                    model_entry["input"] = list(cfg.model_input_types)
                 if (
                     catalog_provider
                     == getattr(self, "_vision_usage_proxy_provider", None)
@@ -821,15 +868,18 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         else:
             logger.info("openclaw_cli: CUA plugin already installed")
 
-        # 3. Route the direct OpenAI vision model through an ALE-owned
+        # 3. Start any provider compatibility proxy before writing config.
+        self._start_primary_compat_proxy(cfg, wd)
+
+        # 4. Route the direct OpenAI vision model through an ALE-owned
         # loopback proxy that records response usage only.
         self._start_vision_usage_proxy(cfg, wd)
 
         try:
-            # 4. Write config files
+            # 5. Write config files
             self._write_config(cfg)
 
-            # 5. Pre-warm the bundled-plugin runtime-deps mirror.
+            # 6. Pre-warm the bundled-plugin runtime-deps mirror.
             await self._prewarm_plugin_runtime_mirror(cfg)
         except BaseException:
             self._stop_vision_usage_proxy()
@@ -986,9 +1036,21 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         self._stop_vision_usage_proxy()
         duration_s = time.monotonic() - t0
         exit_code = proc.returncode
-        status = "completed" if result_envelope is not None or exit_code == 0 else "failed"
+        if result_envelope is None:
+            result_envelope = _parse_stderr_json(
+                _read_text_tolerant(stderr_log)
+            )
+        envelope_error = _result_envelope_error(result_envelope)
+        if envelope_error:
+            status = "failed"
+        elif result_envelope is not None or exit_code == 0:
+            status = "completed"
+        else:
+            status = "failed"
         error: str | None = None
-        if status == "failed":
+        if envelope_error:
+            error = envelope_error
+        elif status == "failed":
             error = _diagnose_failure(stderr_log, exit_code)
 
         # Copy session trajectory to work_dir for gathering
@@ -1001,7 +1063,13 @@ class OpenClawCliDeployer(BaseAgentDeployer):
             dst = wd / "transcript.jsonl"
             if src.exists():
                 shutil.copy2(str(src), str(dst))
-                stage_transcript_file_images(dst, wd)
+                try:
+                    stage_transcript_file_images(dst, wd)
+                except Exception as exc:
+                    logger.warning(
+                        "openclaw_cli: failed to stage transcript images: %s",
+                        exc,
+                    )
                 logger.info("openclaw_cli: copied session trajectory to %s", dst)
 
         return AgentRunResult(
@@ -1435,6 +1503,37 @@ def _diagnose_failure(stderr_log: Path, exit_code: int | None) -> str:
             parts.append("stderr signals: " + " || ".join(signal[-5:]))
         parts.append(f"stderr tail: ...{text[-1200:]}")
     return " | ".join(parts)
+
+
+def _result_envelope_error(result_envelope: dict | None) -> str | None:
+    if result_envelope is None:
+        return None
+    meta = result_envelope.get("meta", {})
+    if meta.get("aborted") is True:
+        payload_text = next(
+            (
+                payload["text"]
+                for payload in result_envelope.get("payloads", [])
+                if isinstance(payload, dict)
+                and isinstance(payload.get("text"), str)
+                and payload["text"].strip()
+            ),
+            "OpenClaw reported an aborted agent run",
+        )
+        return f"agent aborted: {payload_text}"
+    if (
+        meta.get("stopReason") == "stop"
+        and meta.get("replayInvalid") is True
+        and not any(
+            isinstance(meta.get(field), str) and meta[field].strip()
+            for field in ("finalAssistantVisibleText", "finalAssistantRawText")
+        )
+    ):
+        return (
+            "OpenClaw completed with no usable terminal assistant response; "
+            "the episode must be retried"
+        )
+    return None
 
 
 def _read_text_tolerant(path: Path) -> str:

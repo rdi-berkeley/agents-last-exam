@@ -1,10 +1,14 @@
 """AgentHLE task: health_medicine/simglucose_safe_basal_control_instance_1."""
 
+import asyncio
 import json
 import logging
+import math
 import os
 import shlex
 import sys
+import time
+import uuid
 from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 from typing import Any, Optional
@@ -51,6 +55,9 @@ TASK_NAME = "simglucose_safe_basal_control_instance_1"
 TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
 EVAL_TMP_DIR = f"/tmp/agenthle_eval/{TASK_NAME}"
+EVAL_TIMEOUT_S = 3600
+EVAL_POLL_INTERVAL_S = 15
+EVAL_TRANSPORT_TIMEOUT_S = 60
 
 
 def _remote_join(*parts: str) -> str:
@@ -64,13 +71,7 @@ async def _run_command(
     check: bool = False,
     timeout: Optional[float] = None,
 ) -> dict[str, Any]:
-    try:
-        if timeout is not None:
-            return await session.run_command(command, check=check, timeout=timeout)
-        return await session.run_command(command, check=check)
-    except TypeError:
-        if timeout is not None:
-            return await session.run_command(command, check=check)
+    async with asyncio.timeout(timeout):
         return await session.run_command(command, check=check)
 
 
@@ -79,36 +80,83 @@ def _as_text(payload: Any) -> str:
 
 
 async def _run_hidden_eval(session: cb.DesktopSession, meta: dict[str, Any]) -> dict[str, Any]:
+    run_id = uuid.uuid4().hex
+    summary_path = f"{meta['hidden_summary_path']}.{run_id}"
+    status_path = f"{meta['eval_status_path']}.{run_id}"
+    log_path = f"{meta['eval_log_path']}.{run_id}"
     shell_script = f"""\
 set -euo pipefail
 cd {shlex.quote(meta["task_dir"])}
 mkdir -p {shlex.quote(EVAL_TMP_DIR)} {shlex.quote(meta["eval_runtime_dir"])}
 cp {shlex.quote(meta["runtime_pyproject"])} {shlex.quote(_remote_join(meta["eval_runtime_dir"], "pyproject.toml"))}
 cp {shlex.quote(meta["runtime_lock"])} {shlex.quote(_remote_join(meta["eval_runtime_dir"], "uv.lock"))}
-rm -f {shlex.quote(meta["hidden_summary_path"])} {shlex.quote(meta["eval_log_path"])}
-PYTHONPATH=input:reference uv run --project {shlex.quote(meta["eval_runtime_dir"])} python {shlex.quote(meta["hidden_evaluator"])} --submission-dir {shlex.quote(meta["submission_dir"])} --output {shlex.quote(meta["hidden_summary_path"])} > {shlex.quote(meta["eval_log_path"])} 2>&1
-cat {shlex.quote(meta["hidden_summary_path"])}
+PYTHONPATH=input:reference uv run --project {shlex.quote(meta["eval_runtime_dir"])} python {shlex.quote(meta["hidden_evaluator"])} --submission-dir {shlex.quote(meta["submission_dir"])} --output {shlex.quote(summary_path)}
 """
-    result = await _run_command(
-        session,
-        "bash -lc " + shlex.quote(shell_script),
-        check=False,
-        timeout=2400.0,
+    wrapped_script = (
+        f"timeout --kill-after=30s {EVAL_TIMEOUT_S}s bash -lc {shlex.quote(shell_script)}; "
+        f"rc=$?; printf '%s\\n' \"$rc\" > {shlex.quote(status_path + '.tmp')} && "
+        f"mv {shlex.quote(status_path + '.tmp')} {shlex.quote(status_path)}"
     )
-    if result.get("return_code", 0) != 0:
-        raise RuntimeError(
-            "hidden eval failed\n"
-            f"stdout:\n{_as_text(result.get('stdout', ''))[-4000:]}\n"
-            f"stderr:\n{_as_text(result.get('stderr', ''))[-4000:]}"
-        )
+    launch_script = (
+        "import os, subprocess\n"
+        f"os.makedirs({str(PurePosixPath(log_path).parent)!r}, exist_ok=True)\n"
+        f"with open({log_path!r}, 'w') as log:\n"
+        f"    process = subprocess.Popen(['bash', '-lc', {wrapped_script!r}], "
+        "stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, "
+        "close_fds=True, start_new_session=True)\n"
+        "print(process.pid)\n"
+    )
     try:
-        return json.loads(_as_text(result.get("stdout", "")))
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(
-            "failed to parse hidden summary JSON from evaluator stdout\n"
-            f"stdout:\n{_as_text(result.get('stdout', ''))[-4000:]}\n"
-            f"stderr:\n{_as_text(result.get('stderr', ''))[-4000:]}"
-        ) from exc
+        launch = await _run_command(
+            session,
+            "python3 -c " + shlex.quote(launch_script),
+            check=False,
+            timeout=EVAL_TRANSPORT_TIMEOUT_S,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"hidden eval launch failed; log: {log_path}") from exc
+    if launch.get("return_code") != 0:
+        raise RuntimeError(f"hidden eval launch failed: {launch!r}; log: {log_path}")
+    pid = _as_text(launch.get("stdout", "")).strip()
+    if not pid.isdigit() or int(pid) <= 0:
+        raise RuntimeError(f"hidden eval launch returned no process ID: {launch!r}")
+    logger.info("hidden eval started pid=%s; log: %s; status: %s", pid, log_path, status_path)
+
+    deadline = time.monotonic() + EVAL_TIMEOUT_S + EVAL_TRANSPORT_TIMEOUT_S
+    last_transport_error = None
+    while (remaining := deadline - time.monotonic()) > 0:
+        try:
+            async with asyncio.timeout(min(EVAL_TRANSPORT_TIMEOUT_S, remaining)):
+                completed = await session.file_exists(status_path)
+                if completed:
+                    status = _as_text(await session.read_file(status_path)).strip()
+                    if status == "0":
+                        summary_exists = await session.file_exists(summary_path)
+                        if summary_exists:
+                            raw_summary = _as_text(await session.read_file(summary_path))
+        except Exception as exc:
+            last_transport_error = exc
+            logger.warning("hidden eval transport failed; retrying status %s: %s", status_path, exc)
+        else:
+            if completed:
+                if status != "0":
+                    raise RuntimeError(f"hidden eval failed: status={status!r}; log: {log_path}")
+                if not summary_exists:
+                    raise RuntimeError(
+                        f"hidden eval result missing: {summary_path}; log: {log_path}"
+                    )
+                try:
+                    return json.loads(raw_summary)
+                except json.JSONDecodeError as exc:
+                    raise RuntimeError(
+                        f"invalid hidden summary JSON: {summary_path}; log: {log_path}"
+                    ) from exc
+        await asyncio.sleep(max(0, min(EVAL_POLL_INTERVAL_S, deadline - time.monotonic())))
+
+    raise TimeoutError(
+        f"hidden eval deadline exceeded after {EVAL_TIMEOUT_S}s plus "
+        f"{EVAL_TRANSPORT_TIMEOUT_S}s retrieval grace; status: {status_path}; log: {log_path}"
+    ) from last_transport_error
 
 
 class SimGlucoseSafeBasalControlConfig(LinuxTaskConfig):
@@ -330,16 +378,23 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             logger.error("metadata.json missing: %s", metadata_output)
         return [0.0]
 
-    try:
-        payload = await _run_hidden_eval(session, meta)
-    except Exception as exc:
-        logger.error("failed to run hidden eval for %s on active session VM: %s", submission_dir, exc)
-        return [0.0]
-
-    summary = payload.get("summary")
+    payload = await _run_hidden_eval(session, meta)
+    summary = payload.get("summary") if isinstance(payload, dict) else None
     if not isinstance(summary, dict):
-        logger.error("hidden summary payload missing `summary`: %s", payload)
-        return [0.0]
+        raise RuntimeError(f"hidden summary payload missing `summary`: {payload!r}")
+    episodes = summary.get("episodes")
+    mean_tir = summary.get("mean_tir_70_180")
+    catastrophic = summary.get("catastrophic_episode_count")
+    if (
+        type(episodes) is not int
+        or episodes <= 0
+        or type(catastrophic) is not int
+        or not 0 <= catastrophic <= episodes
+        or type(mean_tir) not in (int, float)
+        or not math.isfinite(mean_tir)
+        or not 0 <= mean_tir <= 1
+    ):
+        raise RuntimeError(f"invalid hidden summary score inputs: {summary!r}")
 
     scored = score_hidden_summary(summary)
     logger.info("hidden summary for %s: %s", submission_dir, json.dumps(summary, ensure_ascii=True))

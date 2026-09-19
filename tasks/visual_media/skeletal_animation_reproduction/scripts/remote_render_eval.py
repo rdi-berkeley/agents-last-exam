@@ -41,6 +41,8 @@ def main() -> int:
         blender_binary,
         "--background",
         args.blend,
+        "--python-exit-code",
+        "1",
         "--python",
         args.renderer_script,
         "--",
@@ -55,11 +57,14 @@ def main() -> int:
         "--evaluation-config",
         args.evaluation_config,
     ]
+    report_path.unlink(missing_ok=True)
     result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
+    if result.returncode != 0 or not report_path.is_file():
         failure = {
             "validity_gate_passed": False,
-            "gate_fail_reasons": ["blender_render_failed"],
+            "gate_fail_reasons": [
+                "blender_render_failed" if result.returncode != 0 else "missing_render_report"
+            ],
             "stdout": result.stdout[-4000:],
             "stderr": result.stderr[-4000:],
             "view_paths": {},

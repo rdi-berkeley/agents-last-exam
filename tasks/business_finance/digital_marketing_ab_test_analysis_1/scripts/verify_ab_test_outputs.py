@@ -5,6 +5,7 @@ import csv
 import json
 import math
 import re
+import unicodedata
 from pathlib import Path
 from statistics import NormalDist
 
@@ -31,6 +32,23 @@ RECOMMENDATION_TOKEN_RE = re.compile(r"\b(ship|hold)\b", re.IGNORECASE)
 NEGATED_TOKEN_RE = re.compile(
     r"(?:\b(?:not|never|avoid|without)\b|\brather\s+than\b|\binstead\s+of\b)"
     r"(?:\s+\w+){0,3}\s*$",
+    re.IGNORECASE,
+)
+LIFT_UNITS = (
+    r"percentage[ -]+points?|percent[ -]+points?|p\.?p\.?|"
+    r"basis[ -]+points?|bps?|percent|%"
+)
+LIFT_UNIT_RE = re.compile(
+    rf"\s*(?P<unit>{LIFT_UNITS})(?!\w)",
+    re.IGNORECASE,
+)
+REPORT_NUMBER_RE = re.compile(
+    r"(?<![\w.,+-])(?P<number>[+-]?(?:\d{1,3}(?:,\d{3})+|\d+|(?=\.\d))"
+    rf"(?:\.\d+)?(?:e[+-]?\d+)?)(?![\d_]|,\d|\.\d)(?=$|[^\w]|(?:{LIFT_UNITS})(?!\w))",
+    re.IGNORECASE,
+)
+LIFT_LABEL_RE = re.compile(
+    r"\b(?:(?P<kind>absolute|relative)\s+)?(?:lift|difference|delta)\b",
     re.IGNORECASE,
 )
 
@@ -108,7 +126,7 @@ def metric_stats(results_raw: Path) -> dict[str, dict[str, float | bool]]:
             "control_rate": p_c,
             "treatment_rate": p_t,
             "absolute_lift": diff,
-            "relative_lift_pct": 0.0 if math.isinf(rel_lift) else rel_lift,
+            "relative_lift_pct": rel_lift,
             "ci_lower_95": ci_lower,
             "ci_upper_95": ci_upper,
             "z_statistic": z_stat,
@@ -148,7 +166,8 @@ def numeric_value_matches(
     if text in UNDEFINED_NUMERIC_VALUES:
         return allow_undefined
     try:
-        return floats_close(float(text), expected, tol=tol)
+        observed = float(text)
+        return math.isfinite(observed) and floats_close(observed, expected, tol=tol)
     except ValueError:
         return False
 
@@ -156,10 +175,77 @@ def numeric_value_matches(
 def report_has_acceptable_sample_size(text: str, required_n: int) -> bool:
     """Allow the small Cohen's h vs. closed-form power-analysis difference."""
     minimum_n = max(0, required_n - POWER_SAMPLE_SIZE_LOWER_TOLERANCE)
-    return any(
-        str(candidate) in text or f"{candidate:,}" in text
-        for candidate in range(minimum_n, required_n + 1)
-    )
+    for match in REPORT_NUMBER_RE.finditer(unicodedata.normalize("NFKC", text)):
+        value = float(match["number"].replace(",", ""))
+        if math.isfinite(value) and value.is_integer() and minimum_n <= value <= required_n:
+            return True
+    return False
+
+
+def report_has_primary_lift(text: str, expected_lift: float) -> bool:
+    text = unicodedata.normalize("NFKC", text).replace("\u2212", "-")
+    text = re.sub(r"[`*\"'\u2018\u2019\u201c\u201d]", "", text)
+    text = re.sub(r"(?<!\w)_+|_+(?!\w)", "", text)
+    candidates = []
+    for paragraph in re.split(r"\n\s*\n", text):
+        prose = []
+        table_header = None
+        for line in paragraph.splitlines():
+            if "|" not in line:
+                prose.append(line.strip())
+                continue
+            cells = next(csv.reader([line.strip().strip("|")], delimiter="|"))
+            cells = [cell.strip() for cell in cells]
+            if all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
+                continue
+            if table_header is None:
+                table_header = cells
+                continue
+            if len(cells) != len(table_header):
+                continue
+            row_context = " ".join(cells)
+            if re.search(r"open|primary", row_context, re.IGNORECASE):
+                for header, cell in zip(table_header, cells):
+                    if LIFT_LABEL_RE.search(header):
+                        candidates.append(f"Primary {header}: {cell}")
+            for cell in cells:
+                if LIFT_LABEL_RE.search(cell):
+                    candidates.append(" ".join(cells))
+                    break
+        candidates.extend(re.split(r";|(?<=[.!?])\s+(?=[A-Z])", " ".join(prose)))
+
+    for candidate in candidates:
+        if re.search(r"click|unsubscrib|convert", candidate, re.IGNORECASE) and not re.search(
+            r"primary|open", candidate, re.IGNORECASE
+        ):
+            continue
+        labels = list(LIFT_LABEL_RE.finditer(candidate))
+        for index, label in enumerate(labels):
+            if (label["kind"] or "").lower() == "relative":
+                continue
+            end = labels[index + 1].start() if index + 1 < len(labels) else len(candidate)
+            quantity = candidate[label.end() : end]
+            match = REPORT_NUMBER_RE.search(quantity)
+            if match is None:
+                continue
+            value = float(match["number"].replace(",", ""))
+            unit_match = LIFT_UNIT_RE.match(quantity, match.end())
+            if unit_match is None:
+                unit_match = re.search(
+                    rf"(?<!\w)(?P<unit>{LIFT_UNITS})(?!\w)",
+                    quantity[: match.start()],
+                    re.IGNORECASE,
+                )
+            unit = unit_match["unit"].lower() if unit_match else ""
+            if unit.startswith(("basis", "bp")):
+                value /= 10_000
+            elif unit:
+                value /= 100
+            if math.isfinite(value) and math.isclose(
+                value, expected_lift, rel_tol=0, abs_tol=0.00005
+            ):
+                return True
+    return False
 
 
 def extract_recommendation(text: str) -> str | None:
@@ -215,6 +301,23 @@ def validate_metric_row(
 
         control_rate = float(expected["control_rate"])
         treatment_rate = float(expected["treatment_rate"])
+        if row["relative_lift_pct"] is None:
+            return False
+        if control_rate == 0.0 and treatment_rate > 0.0:
+            relative_text = row["relative_lift_pct"].strip().lower()
+            if relative_text not in UNDEFINED_NUMERIC_VALUES:
+                try:
+                    relative_value = float(relative_text)
+                except (TypeError, ValueError):
+                    return False
+                if relative_value != math.inf:
+                    return False
+        elif not numeric_value_matches(
+            row["relative_lift_pct"],
+            float(expected["relative_lift_pct"]),
+            allow_undefined=control_rate == 0.0,
+        ):
+            return False
         degenerate = control_rate == treatment_rate and control_rate in {0.0, 1.0}
         if not numeric_value_matches(
             row["z_statistic"],
@@ -274,30 +377,50 @@ def validate_results_tsv(
     return all(validate_result_rows(output_path, expected_stats).values())
 
 
-def validate_assignment_csv(output_path: Path) -> bool:
+def validate_assignment_csv(output_path: Path, results_raw: Path) -> bool:
     try:
-        rows = read_csv_rows(output_path)
+        with output_path.open(encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle, strict=True)
+            if len(reader.fieldnames or []) != 2 or set(reader.fieldnames) != {"metric", "value"}:
+                return False
+            rows = list(reader)
     except (OSError, csv.Error):
         return False
-    if not rows:
+    if any(None in row or None in row.values() for row in rows):
         return False
     try:
         values = {row["metric"]: row["value"] for row in rows}
     except (KeyError, TypeError):
         return False
     required = {"n_control", "n_treatment", "ratio", "srm_chi2", "srm_pvalue", "srm_pass"}
-    if set(values) != required:
+    if len(rows) != len(required) or set(values) != required:
         return False
+    raw_rows = read_csv_rows(results_raw)
+    n_control = sum(row["variant"] == "control" for row in raw_rows)
+    n_treatment = sum(row["variant"] == "treatment" for row in raw_rows)
+    if not n_control or not n_treatment:
+        return False
+    chi2 = (n_treatment - n_control) ** 2 / (n_control + n_treatment)
+    pvalue = math.erfc(math.sqrt(chi2 / 2))
     try:
-        if int(float(values["n_control"])) <= 0 or int(float(values["n_treatment"])) <= 0:
+        for key, expected in [("n_control", n_control), ("n_treatment", n_treatment)]:
+            observed = float(values[key])
+            if not math.isfinite(observed) or not observed.is_integer() or observed != expected:
+                return False
+        if not numeric_value_matches(values["ratio"], n_treatment / n_control):
             return False
-        if not floats_close(float(values["ratio"]), 1.0):
+        if float(values["srm_chi2"]) < 0 or not numeric_value_matches(values["srm_chi2"], chi2):
             return False
-        if float(values["srm_pvalue"]) <= 0.01:
+        if not 0 <= float(values["srm_pvalue"]) <= 1 or not numeric_value_matches(
+            values["srm_pvalue"], pvalue
+        ):
             return False
     except (TypeError, ValueError):
         return False
-    return to_bool(values["srm_pass"])
+    flag = values["srm_pass"].strip().lower()
+    if flag not in {"true", "false", "1", "0", "yes", "no"}:
+        return False
+    return to_bool(flag) == (pvalue > 0.01)
 
 
 def validate_report_md(
@@ -308,14 +431,14 @@ def validate_report_md(
     except OSError:
         return False
     guardrail_lift_pp = expected_stats["unsubscribed_rate"]["absolute_lift"] * 100
-    guardrail_pass = guardrail_lift_pp < 0.5
+    guardrail_pass = guardrail_lift_pp <= 0.5
     primary_sig = bool(expected_stats[PRIMARY_METRIC]["significant_at_05"])
     expected_recommendation = "ship" if primary_sig and guardrail_pass else "hold"
     if extract_recommendation(text) != expected_recommendation:
         return False
     if not report_has_acceptable_sample_size(text, required_n):
         return False
-    return "3.4" in text or "3.40" in text
+    return report_has_primary_lift(text, float(expected_stats[PRIMARY_METRIC]["absolute_lift"]))
 
 
 def component_scores(
@@ -356,7 +479,7 @@ def main() -> int:
     expected_stats = metric_stats(input_dir / "experiment_results_raw.csv")
     required_n = sample_size_required(input_dir / "historical_metrics.csv")
     assignment_ok = required_files["assignment"].exists() and validate_assignment_csv(
-        required_files["assignment"]
+        required_files["assignment"], input_dir / "experiment_results_raw.csv"
     )
     if required_files["results"].exists():
         result_checks = validate_result_rows(required_files["results"], expected_stats)

@@ -1,0 +1,66 @@
+{
+  "estimator_id": "palantir-tradeseq-v2-20260910",
+  "input": {
+    "file": "marrow_sample_scseq_counts.h5ad",
+    "sha256": "be4f8603826dfe4d0a8289a6a868d75bd1ceaa190b32b42fa9c72b85e9fffe34",
+    "cells": 4142,
+    "genes": 16106,
+    "order": "original cell and gene order",
+    "additional_filtering": false
+  },
+  "preprocessing": {
+    "working_dtype": "float64",
+    "normalize_total": {"target_sum": 10000, "exclude_highly_expressed": false},
+    "log_transform": "natural log1p",
+    "highly_variable_genes": {"n_top_genes": 1500, "flavor": "cell_ranger", "batch_key": null},
+    "pca": {"n_comps": 50, "zero_center": true, "svd_solver": "arpack", "random_state": 0, "dtype": "float64", "mask_var": "highly_variable"},
+    "gene_variance_scaling": false,
+    "imputation": false
+  },
+  "trajectory": {
+    "run_diffusion_maps": {"n_components": 5, "knn": 30, "alpha": 0, "seed": 0, "kernel_backend": "scanpy"},
+    "determine_multiscale_space": {"n_eigs": null},
+    "neighbors": {"representation": "multiscale space", "n_neighbors": 15, "metric": "euclidean", "method": "umap", "random_state": 0},
+    "umap": {"n_components": 2, "min_dist": 0.5, "spread": 1, "init_pos": "spectral", "random_state": 0},
+    "early_cell": "Run5_164698952452459",
+    "terminal_states": [
+      {"lineage": "DC", "cell": "Run5_131097901611291"},
+      {"lineage": "Mono", "cell": "Run5_134936662236454"},
+      {"lineage": "Ery", "cell": "Run4_200562869397916"}
+    ],
+    "run_palantir": {"num_waypoints": 500, "knn": 30, "seed": 20, "scale_components": true, "use_early_cell_as_start": true, "max_iterations": 25},
+    "result": "PResults pseudotime and branch_probs, including standard probability truncation below 0.01; no additional pseudotime normalization",
+    "waypoints": "500 requested samples, not a required final cardinality after Palantir unions and deduplication"
+  },
+  "differential_expression": {
+    "counts": "original raw counts for all 16106 genes",
+    "lineage_order": ["DC", "Ery"],
+    "cell_selection": "drop only zero combined DC/Ery probability; renormalize retained two weights row-wise",
+    "pseudotime": "same Palantir pseudotime in both lineage columns, aligned by barcode",
+    "offset": "log(colSums(raw_counts_retained_cells) * edgeR::calcNormFactors(raw_counts_retained_cells, method='TMM')); compute using all genes; no fallback",
+    "RNGkind": ["Mersenne-Twister", "Inversion", "Rejection"],
+    "R_seed": 27,
+    "fitGAM": {"nknots": 6, "family": "nb", "conditions": null, "U": null, "weights": null, "sce": true, "parallel": false, "control": "mgcv::gam.control() defaults"},
+    "SCE_dispatch": "assemble SingleCellExperiment; pass its raw-count assay with explicit pseudotime/cellWeights to fitGAM (the SCE-input method assumes slingshot)",
+    "batching": "allowed with complete-count shared TMM offset, seed 27 reset immediately before every fitGAM call, identical cells/lineage assignments/knots/design; fit all genes exactly once",
+    "patternTest": {"global": true, "pairwise": false, "nPoints": 12, "l2fc": "log2(1.5)", "eigenThresh": 0.01},
+    "failed_tests": "effective p=1 when tradeSeq converged flag is not TRUE, coefficients/covariance are nonfinite, or test p-value is nonfinite; record failures; never skip a batch after a batch-level exception",
+    "p_adjust": {"method": "BH", "n": 16106, "scope": "all tested genes together, never per batch"},
+    "selection": "finite padj < 0.05; no separate absolute logFC or fcMedian filter"
+  },
+  "reproducibility": {
+    "python_version": "3.11.15",
+    "R_version": "4.5.3",
+    "PYTHONHASHSEED": "0",
+    "numpy_legacy_seed": 0,
+    "scanpy_n_jobs": 1,
+    "palantir_n_jobs": 1,
+    "numeric_threads_per_worker": 1,
+    "maximum_workers": 4,
+    "locale": "C.UTF-8",
+    "unlisted_arguments": "pinned-package defaults",
+    "python_versions": "runtime_env/pyproject.toml",
+    "R_versions": "runtime_env/R-versions.json"
+  },
+  "scoring": {"precision_threshold": 0.80, "recall_threshold": 0.80, "combine": "both required; compare unrounded"}
+}

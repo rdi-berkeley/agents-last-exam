@@ -83,7 +83,7 @@ class KetcherSmilesTaskConfig(GeneralTaskConfig):
 
     @property
     def software_shortcut(self) -> str:
-        return rf"{self.software_dir}\Ketcher.lnk"
+        return rf"{self.software_dir}\Ketcher.url"
 
     @property
     def evaluator_python(self) -> str:

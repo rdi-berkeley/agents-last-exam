@@ -60,6 +60,35 @@ TASK_NAME = "healthcare_bias_audit_27a_public_replication_v1"
 TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
 
+RUNTIME_CONTRACT = r"""Numerical reproduction runtime (Linux x86_64):
+Use the tested environment below for the supplied scripts. This specific recipe takes precedence over the general allowance for functionally equivalent versions in `task_note.txt`. `bias.yml` records the original bundle environment; the recipe retains its analytical package versions with a validated MKL build. Task-local `software/task_python` and `software/task_rscript` wrappers are not provided.
+
+Create an isolated environment with micromamba:
+```bash
+export BIAS_ENV="$HOME/.local/share/healthcare-bias-runtime"
+micromamba create -y -p "$BIAS_ENV" --override-channels \
+  -c https://repo.anaconda.com/pkgs/main -c https://repo.anaconda.com/pkgs/r \
+  python=3.7.3=h0371630_0 \
+  numpy=1.17.2=py37haad9e8e_0 numpy-base=1.17.2=py37hde5b4d6_0 \
+  scipy=1.3.1=py37h7c811a0_0 pandas=0.25.1=py37he6710b0_0 \
+  scikit-learn=0.21.3=py37hd81dba3_0 statsmodels=0.10.1=py37hdd07704_0 \
+  matplotlib=3.1.1=py37h5429711_0 patsy=0.5.1=py37_0 joblib=0.13.2=py37_0 \
+  blas=1.0=mkl mkl=2020.2=256 \
+  r-base=3.5.1=h1e0a451_2 r-data.table=1.11.4=r351h96ca727_0
+export PYTHONNOUSERSITE=1 MPLBACKEND=Agg
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+unset PYTHONPATH PYTHONHOME R_HOME R_LIBS
+export R_LIBS_USER="$BIAS_ENV/lib/R/library"
+export R_LIBS_SITE="$BIAS_ENV/lib/R/library"
+export R_ENVIRON_USER=/dev/null R_PROFILE_USER=/dev/null
+```
+Run Python scripts with `"$BIAS_ENV/bin/python" -s` and R scripts with `"$BIAS_ENV/bin/Rscript" --vanilla`, from the writable bundle root containing `code/` and `data/`. Keep the environment outside the deliverable directory. Do not rely on the machine's default Python/R or user-installed packages. If GitPython is available, ensure the working copy does not resolve to an unrelated parent Git repository.
+
+Preserve the supplied feature selection, training split, grouped cross-validation, `LassoCV(normalize=True)`, seeds, and R 3.5.1 sampling behavior. Merely replacing a removed API argument or using modern R's default `sample()` is not the same numerical reproduction. Minimal path/setup repairs remain permitted; do not change model logic or data.
+
+CSV filenames, headers, row counts and row order must match the supplied workflow's outputs. Numeric CSV cells and structured numeric answers are compared with absolute tolerance `1e-6`; retain full numeric precision rather than rounding beyond what the scripts already do. JSON categorical values use the starter template's exact strings. No precomputed results may be substituted.
+"""
+
 
 def _as_text(payload: Any) -> str:
     return payload.decode("utf-8") if isinstance(payload, bytes) else str(payload)
@@ -203,8 +232,7 @@ Read these staged task materials first:
 - `{self.starter_answers_file}`
 - `{self.starter_memo_file}`
 
-`{self.env_spec_file}` lists the package versions used in the original public bundle.
-Set up a working Python and R environment that satisfies those version constraints (or functionally equivalent versions) before running the scripts.
+{RUNTIME_CONTRACT}
 
 Inspect the provided workflow scripts before you run anything:
 - `{self.model_script}`

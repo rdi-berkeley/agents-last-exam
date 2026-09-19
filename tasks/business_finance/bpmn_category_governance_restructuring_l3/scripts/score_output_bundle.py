@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import io
 import json
 import os
@@ -148,6 +149,8 @@ def score_output_bundle(
     rules_path: Path,
     results_path: Path,
     scenario_path: Path | None = None,
+    trusted_runtime: dict[str, Any] | None = None,
+    static_only: bool = False,
 ) -> dict[str, Any]:
     evaluator = _load_evaluator()
     bpmn_path = Path(bpmn_path).resolve()
@@ -157,6 +160,22 @@ def score_output_bundle(
     if scenario_path is None:
         scenario_path = bpmn_path.parent.parent / "input" / "starter_project" / "test_scenarios_L3.json"
     scenario_path = Path(scenario_path).resolve()
+    if trusted_runtime is None and not static_only:
+        raise RuntimeError("Evaluator-owned runtime results required; static_only is diagnostic, not production scoring")
+    if trusted_runtime is not None:
+        if trusted_runtime.get("authority") != "evaluator_owned_flowable":
+            raise RuntimeError("Untrusted runtime result authority")
+        manifest = json.loads(scenario_path.read_text())
+        expected_manifest = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
+        if trusted_runtime.get("bpmn_sha256") != hashlib.sha256(bpmn_path.read_bytes()).hexdigest() or trusted_runtime.get("manifest_sha256") != expected_manifest:
+            raise RuntimeError("Runtime evidence does not bind the candidate and scenario manifest")
+        if trusted_runtime.get("candidate_failure"):
+            return {"score": 0.0, "overall_pass": False, "runtime": trusted_runtime}
+        from .runtime_validation import summarize_results, validate_manifest
+
+        summary = summarize_results(trusted_runtime.get("scenarios"), validate_manifest(manifest))
+        if any(trusted_runtime.get(key) != value for key, value in summary.items()):
+            raise RuntimeError("Runtime aggregate counts differ from trusted scenario outcomes")
     try:
         validation = _validate_test_results(results_path, scenario_path)
     except Exception as exc:
@@ -178,6 +197,7 @@ def score_output_bundle(
         rules=str(rules_path),
         results=str(results_path),
         output=str(results_path.parent / "evaluation_report_L3.json"),
+        trusted_results=trusted_runtime,
     )
 
     stdout_buffer = io.StringIO()
@@ -199,4 +219,6 @@ def score_output_bundle(
         "validation": validation,
         "report": report,
         "stdout": stdout_buffer.getvalue(),
+        "diagnostic_only": static_only,
+        "runtime": trusted_runtime,
     }

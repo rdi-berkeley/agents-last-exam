@@ -9,6 +9,9 @@ from typing import Any
 import cua_bench as cb
 
 from tasks.common_setup import BaseTaskSetup
+from tasks.life_sciences.amber_minimization_script_prep_instance_1.scripts.workflow_parser import (
+    SHELL_CONTRACT,
+)
 from tasks.life_sciences.amber_three_stage_mmgbsa_workflow_instance_1.scripts.verify_submission import (
     evaluate_output_bundle,
 )
@@ -106,7 +109,12 @@ Requirements:
 - `submit_prod.sh` should define one implicit-solvent production MD stage with `pmemd.cuda`.
 - `submit_mmgbsa.sh` should run `MMPBSA.py` with complex / receptor-A / ligand-BC roles wired correctly.
 - The graded MMGBSA result must use the provided `input/prod.mdcrd` as trajectory input.
+- Fixed deterministic calculation: use ff14SB protein topologies with mbondi3 radii; in `&gb`, set `igb=8` and `saltcon=0.150` M. Retain the AmberTools 23 classical GB/LCPO defaults (`ifqnt=0`, `molsurf=0`, `surften=0.0072`, `surfoff=0`); do not substitute another GB model. Analyze all 250 provided frames (`startframe=1`, `interval=1`, `endframe` at least 250 or omitted) using the single-trajectory protocol, with `entropy=0`. Numerical equivalents and namelist keyword case variations are accepted. Parameters in MMPBSA namelists must be comma-separated; whole-line `#` comments are supported, not inline comments. Put explicit receptor/ligand masks, if used, in `&general`, not outside namelists. The reference uses optional `&decomp idecomp=2`; decomposition is not required for the graded binding total.
+- Topology roles must be traceable from the generated `ante-MMPBSA.py` split masks or `cpptraj` parm/parmstrip/parmwrite commands, or use the canonical prebuilt topology names: `{SYSTEM_BASENAME}.prmtop` (or `_hmr.prmtop`) for the complex, `{SYSTEM_BASENAME}_A.prmtop` for the receptor, and `{SYSTEM_BASENAME}_BC.prmtop` for the ligand. Receptor suffixes `_rec`, `_receptor`, `_receptor_A` and ligand suffixes `_lig`, `_ligand`, `_ligand_BC` are also accepted. For this supplied structure, chain A occupies residues 1-299; B and C together occupy 300-964. Atom selections and topology contents must preserve this split; naming alone does not make an incorrectly built topology valid.
+- The report must be the standard MMPBSA GB output, including the echoed input, topology identities, receptor/ligand masks, 250-frame summary, and finite DELTA gas/solvation/TOTAL rows with uncertainty columns. Preserve the complete result; do not submit a hand-written energy row.
 - Do not write extra deliverable files.
+
+{SHELL_CONTRACT}
 
 """
 

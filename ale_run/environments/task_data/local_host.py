@@ -43,15 +43,33 @@ def _host_task_dir(source: str, task_data: TaskDataSpec) -> str:
     )
 
 
-async def _docker_cp(src: str, container: str, dst: str) -> None:
+async def _docker_cp(src: str, sandbox: SandboxHandle, dst: str) -> None:
     proc = await asyncio.create_subprocess_exec(
-        "docker", "cp", src, f"{container}:{dst}",
+        "docker", "cp", src, f"{sandbox.id}:{dst}",
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )
     _, err = await proc.communicate()
     if proc.returncode != 0:
         raise RuntimeError(
-            f"docker cp {src} -> {container}:{dst} failed "
+            f"docker cp {src} -> {sandbox.id}:{dst} failed "
+            f"(rc={proc.returncode}): {err.decode(errors='replace')[:300]}"
+        )
+    owner = []
+    for flag in ("-u", "-g"):
+        result = await sandbox.run_command(f"id {flag}")
+        value = (result.stdout or "").strip()
+        if result.returncode or not value.isascii() or not value.isdecimal():
+            raise RuntimeError("Could not determine task-data user/group in Docker sandbox")
+        owner.append(value)
+    proc = await asyncio.create_subprocess_exec(
+        "docker", "exec", "--user", "0", sandbox.id,
+        "chown", "-R", "-h", "--", ":".join(owner), dst,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    _, err = await proc.communicate()
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"docker task-data ownership repair failed for {sandbox.id}:{dst} "
             f"(rc={proc.returncode}): {err.decode(errors='replace')[:300]}"
         )
 
@@ -79,19 +97,21 @@ async def stage_input(
     in_dst = join(sandbox, base, "input")
     await sandbox.mkdir(in_dst)
     await sandbox.mkdir(join(sandbox, base, "output"))
-    await _docker_cp(os.path.join(host, "input") + "/.", sandbox.id, in_dst)
+    await _docker_cp(os.path.join(host, "input") + "/.", sandbox, in_dst)
     staged = ["input"]
     sw = os.path.join(host, "software")
     if os.path.isdir(sw):
         sw_dst = join(sandbox, base, "software")
         await sandbox.mkdir(sw_dst)
-        await _docker_cp(sw + "/.", sandbox.id, sw_dst)
+        await _docker_cp(sw + "/.", sandbox, sw_dst)
         # mirror baked_in_sandbox: make software wrappers/binaries executable.
-        await sandbox.run_command(
+        result = await sandbox.run_command(
             f"find {shell_q(sandbox, join(sandbox, base, 'software'))} "
             f"-type f -exec chmod +x {{}} +",
             timeout=60,
         )
+        if result.returncode:
+            raise RuntimeError(f"Could not make staged software executable: {result.stderr}")
         staged.append("software")
     logger.info("local: staged %s for %s from %s", staged, task_data.task_name, host)
     return {"staged": staged, "source": "local"}
@@ -114,6 +134,6 @@ async def stage_reference(
     base = task_subdir(sandbox, task_data)
     target = join(sandbox, base, "reference")
     await sandbox.rm([target])  # defend against stale reference from a prior run
-    await _docker_cp(ref, sandbox.id, target)
+    await _docker_cp(ref, sandbox, target)
     logger.info("local: staged reference %s -> %s:%s", ref, sandbox.id, target)
     return {"staged": ["reference"], "source": "local"}

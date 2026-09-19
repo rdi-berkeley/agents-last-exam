@@ -16,7 +16,9 @@ from tasks.common_setup import BaseTaskSetup
 from tasks.linux_runtime import LinuxTaskConfig
 from tasks.physical_sciences._shared.materials_science._common import (
     SILICON_BSE_ABSORPTION_SPEC,
+    command_result_parts,
     evaluate_remote_output_dir,
+    run_command,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,6 +78,11 @@ Use the task-local command-line tools staged here:
 - `{self.remote_output_dir}/bandstructure_inteqp.png`
 - `{self.remote_output_dir}/absorption.png`
 
+## Numeric Output Format
+- All seven `.dat` files must contain nonempty UTF-8, whitespace-separated tables of finite numeric values. Blank lines and lines starting with `#` after optional whitespace are allowed. Un-commented text headers, including QE `&plot ... /` headers, are not accepted.
+- `bandstructure.dat` must have at least seven columns per data row: (1) numeric field, conventionally spin, ignored by the scorer; (2) band index; (3-5) Cartesian kx, ky, kz; (6) mean-field energy in eV; (7) GW quasiparticle energy in eV. Additional numeric columns are allowed.
+- Include both valence and conduction bands: the scorer treats band indices <= 4 as valence and >= 5 as conduction. It extracts the DFT/GW gaps and band-edge locations from these columns. Native BerkeleyGW `inteqp` band tables follow this layout; a QE `bands.x` header and wrapped energy list do not.
+
 Do not write outputs outside `{self.remote_output_dir}`.
 """
 
@@ -115,13 +122,16 @@ _setup = BaseTaskSetup()
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
     install_script = f"{task_cfg.metadata['software_dir']}/install_software.sh"
-    result = await session.run_command(
-        "bash " + shlex.quote(install_script), timeout=600, check=False
+    result = await run_command(
+        session,
+        "timeout --foreground 600s bash " + shlex.quote(install_script),
+        check=False,
     )
-    if result.returncode != 0:
+    return_code, stdout, stderr = command_result_parts(result)
+    if return_code != 0:
         raise RuntimeError(
             "QE/BerkeleyGW task runtime verification failed: "
-            f"{(result.stderr or result.stdout or '').strip()[-2000:]}"
+            f"{(stderr or stdout or '').strip()[-2000:]}"
         )
 
 

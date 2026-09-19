@@ -90,6 +90,7 @@ agent:
   config:
     provider: openrouter   # or "direct" / "zai" / "custom"
     agent_timeout_s: 1800
+    llm_idle_timeout_s: 180
     thinking: high
     tarball_path: /opt/ale/openclaw-fork.tgz
     tarball_url: https://github.com/cua-verse/openclaw/releases/download/v0.1.0/openclaw-fork.tgz
@@ -109,6 +110,8 @@ agent:
 | `supports_usage_in_streaming` | Request streamed token usage metadata; defaults to `true` |
 | `model` | Model slug. OpenRouter: `openai/gpt-5.4`, `anthropic/claude-sonnet-4-6`. Direct: `gpt-5.4` or `claude-sonnet-4-6` |
 | `model_params` | Provider-specific model parameters; use `extra_body` for raw request fields |
+| `agent_timeout_s` | Overall OpenClaw agent-run timeout in seconds |
+| `llm_idle_timeout_s` | Maximum time without a streamed model response chunk; defaults to 180 seconds |
 | `thinking` | Provider-specific reasoning depth; common values are `off`, `on`, `low`, `medium`, `high`, and `max` |
 | `vision_model` | Per-tool model override for image analysis |
 | `vision_provider` | Optional independent route for `vision_model`; `null` inherits `provider` |

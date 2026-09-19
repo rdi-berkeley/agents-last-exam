@@ -31,7 +31,7 @@ def eval_credentials_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "secret" / "eval_time"
 
 
-def load_eval_env(*, override: bool = False) -> list[str]:
+def load_eval_env(*, override: bool = True) -> list[str]:
     """Export every ``secret/eval_time/*.env`` (one file per service) into
     ``os.environ`` so evaluator judges/scorers find their keys no matter which
     runner launched the eval — no fragile manual ``source`` step. Shell env wins
@@ -70,7 +70,7 @@ def load_eval_env(*, override: bool = False) -> list[str]:
 # / tests / ad-hoc): load the lumped dev .env (back-compat) then every per-service
 # secret/eval_time/*.env. Runs once at import, before the DEFAULT_* reads below.
 load_dotenv(override=False)
-load_eval_env()
+load_eval_env(override=True)
 
 DEFAULT_LLM_JUDGE_MODEL = os.environ.get("LLM_JUDGE_MODEL", "gpt-5.4")
 DEFAULT_GEMINI_VIDEO_JUDGE_MODEL = os.environ.get(
@@ -101,7 +101,7 @@ def resolve_llm_judge_model(*, env_var: str | None = None, default: str | None =
 
 
 def _resolve_client_kwargs(api_key: str | None = None) -> dict[str, str]:
-    load_eval_env()  # ensure secret/eval_time/*.env is loaded at the point creds are read
+    load_eval_env(override=True)  # evaluator credentials take precedence at read time
     resolved_key = api_key or os.environ.get("OPENAI_API_KEY")
     if not resolved_key:
         raise RuntimeError("OPENAI_API_KEY is not set")
@@ -199,7 +199,7 @@ def _resolve_gemini_auth(
     api_key: str | None = None,
     auth_mode: str | None = None,
 ) -> dict[str, Any]:
-    load_eval_env()  # ensure secret/eval_time/*.env is loaded at the point creds are read
+    load_eval_env(override=True)  # evaluator credentials take precedence at read time
     raw_mode = (auth_mode or os.environ.get("GEMINI_AUTH_MODE") or "auto").strip().lower()
     key = api_key or os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
     project = (

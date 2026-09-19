@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools==75.8.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brca-deg-objective-inference"
+version = "1.0.0"
+requires-python = "==3.10.*"
+dependencies = [
+  "numpy==1.26.4",
+  "pandas==2.2.3",
+  "scipy==1.14.1",
+  "statsmodels==0.14.4",
+  "pydeseq2==0.4.12",
+  "gseapy==1.1.5",
+]
+
+[tool.setuptools.packages.find]
+include = ["deg_inference*"]

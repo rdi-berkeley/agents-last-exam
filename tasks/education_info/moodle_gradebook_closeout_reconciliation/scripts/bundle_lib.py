@@ -8,7 +8,6 @@ import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 from xml.etree import ElementTree as ET
 
 import pandas as pd
@@ -542,7 +541,7 @@ def compute_grade_outputs(
             item = item_lookup[row["item_id"]]
             raw_score = _score_to_float(row["raw_score"])
             override_score = _score_to_float(row["override_score"])
-            missing = row["missing"] == "true"
+            _missing = row["missing"] == "true"
             excused = row["excused"] == "true"
             late_days = int(row["late_days"])
 
@@ -787,7 +786,7 @@ def build_oneroster_tables(
         for item in items.to_dict("records"):
             detail = detail_lookup[(moodle_user_id, item["item_id"])]
             score = detail["effective_score"]
-            status = "exempt" if detail["status"].startswith("excused") else ("missing" if detail["status"] == "missing_zero" else "completed")
+            status = "exempt" if detail["status"].startswith("excused") else ("missing" if detail["status"].removesuffix("_late") == "missing_zero" else "completed")
             results_rows.append(
                 {
                     "sourcedId": f"{moodle_user_id}-{item['item_id']}",
@@ -994,10 +993,10 @@ def read_backup_state(backup_path: Path) -> dict[str, object]:
             "policy": json.loads((temp / "gradebook" / "policy.json").read_text()),
             "section_cutoffs": json.loads((temp / "gradebook" / "section_cutoffs.json").read_text()),
             "items": pd.read_csv(temp / "gradebook" / "items.csv"),
-            "submissions": pd.read_csv(temp / "gradebook" / "submissions.csv", keep_default_na=False),
-            "student_flags": pd.read_csv(temp / "gradebook" / "student_flags.csv", keep_default_na=False),
-            "id_map": pd.read_csv(temp / "integration" / "id_map.csv"),
-            "final_grade_flags": pd.read_csv(temp / "gradebook" / "final_grade_flags.csv", keep_default_na=False),
+            "submissions": pd.read_csv(temp / "gradebook" / "submissions.csv", keep_default_na=False, dtype=str),
+            "student_flags": pd.read_csv(temp / "gradebook" / "student_flags.csv", keep_default_na=False, dtype=str),
+            "id_map": pd.read_csv(temp / "integration" / "id_map.csv", dtype=str),
+            "final_grade_flags": pd.read_csv(temp / "gradebook" / "final_grade_flags.csv", keep_default_na=False, dtype=str),
             "contract": json.loads((temp / "benchmark_contract.json").read_text()),
             "file_hashes": {
                 str(path.relative_to(temp)): sha256_path(path)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-import sys
 from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 from typing import Any
@@ -34,13 +33,10 @@ except ModuleNotFoundError:  # pragma: no cover - local fallback only
     )
 
 from tasks.common_setup import BaseTaskSetup
+from tasks.life_sciences.hg002_chr22_germline_variant_pipeline.scripts.score_outputs import (
+    evaluate as score_submission,
+)
 from tasks.linux_runtime import LinuxTaskConfig
-
-SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-from score_outputs import evaluate as score_submission  # noqa: E402
 
 _setup = BaseTaskSetup()
 
@@ -121,6 +117,8 @@ Write these required artifacts under `{self.submission_root}`:
 
 Requirements:
 1. Correct the samplesheet so it is valid for the HG002 chr22 run.
+   Use relative FASTQ paths, a nonempty lane, and HG002 male sex encoded as
+   `XY`, `MALE`, or `M`. Put the R1 and R2 mates in `fastq_1` and `fastq_2`.
 2. Rename the Mills contigs to `chr22` and re-index the corrected file.
 3. Rebuild the missing `bwa-mem2` index.
 4. Tune the workflow config for the available host.
@@ -128,6 +126,30 @@ Requirements:
 6. Aggregate QC into MultiQC and write `results/qc/qc_summary.json` as a
    flat JSON object with at least these top-level keys:
    `{{"alignment_rate": NUMBER, "dup_rate": NUMBER, "mean_coverage_chr22": NUMBER}}`.
+   Use finite numeric values: `dup_rate` is a fraction in [0, 1], and mean
+   chr22 coverage is nonnegative read depth (x). The descriptive `alignment_rate`
+   may be a fraction or percentage; it does not receive a numerical score.
+   The five-point MultiQC completeness check requires QC from all four families:
+   FastQC, Picard/GATK MarkDuplicates, samtools (stats or flagstat), and mosdepth.
+   Run these QC tools on this run's reads/alignment and include their data in
+   the HTML report and `multiqc_general_stats.txt`. This TSV must have a `Sample`
+   column, named sample rows, and at least one populated numeric metric per
+   family (different families may populate different rows).
+   Accepted metric prefixes, case-insensitively: `fastqc`, `fastqc_raw`,
+   `fastqc-status-check`; `picard`, `gatk4_markduplicates`, `gatk_markduplicates`;
+   `samtools`, `samtools_stats`, `samtools_flagstat`; and `mosdepth`.
+   Prefixes precede a metric name separated by `_` or `-`; spaces and hyphens
+   in module names are equivalent to underscores. Native MultiQC names such as
+   `Picard_mqc-generalstats-picard-PERCENT_DUPLICATION` are also accepted.
+   Record actual versions of GATK 4, samtools, FastQC, and mosdepth in
+   `multiqc_software_versions.txt`: tab-separated `Software` (or `Tool`) and
+   `Version` columns, optionally with a `Group` column. Headerless two-column
+   tool/version rows or a `Sample`/`Group`/`Module` by tool-name matrix are also
+   accepted. Tool names are case-insensitive; `GATK` and `GATK4` both identify
+   GATK 4, but Picard alone does not. Use one numeric release version per cell
+   (optional leading `v` and `-`/`+` build suffix), not placeholders.
+   You may re-export these TSVs without changing their measured data or actual
+   versions. No particular minor tool version is required.
 7. Explain any filtering choices in `DECISIONS.md` with concrete numeric values.
 
 Rules:

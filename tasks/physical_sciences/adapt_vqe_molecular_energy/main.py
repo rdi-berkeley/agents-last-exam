@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -90,9 +91,16 @@ the tier structure, the visible output schema, and the library constraints.
 
 5. `results.json` must follow the schema in `{self.problem_spec_file}` and
    include:
-   - Tier 1 (`H2`): `molecule`, `energy_ha`, `method`, `n_parameters`
+   - All tiers: `molecule`, `energy_ha`, `method`, `n_parameters`,
+     `operator_sequence`, `parameters` (the final optimized real angles)
    - Tier 2 / 3: `molecule`, `energy_ha`, `method`, `adapt_iterations`,
      `n_parameters`, `operator_sequence`
+
+The evaluator replays your ordered excitation sequence and final parameters
+from the public Hamiltonian and Hartree-Fock state, without reoptimizing them.
+Follow the operator sign/order convention in problem_spec.md. Both reported
+and replayed energies must meet the original tier accuracy, and must agree
+within 5e-4 Ha. Exact diagonalization with fabricated ADAPT metadata is invalid.
 
 ## Constraints
 - Allowed libraries: NumPy and SciPy only.
@@ -139,20 +147,20 @@ async def start(task_cfg, session: cb.DesktopSession):
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    reference_results = f'{meta["reference_dir"]}/results.json'
-    if not (await session.file_exists(reference_results) or await session.directory_exists(reference_results)):
-        logger.error("reference results missing on VM: %s", reference_results)
-        return [0.0]
+    reference_results = f"{meta['reference_dir']}/results.json"
+    if not await session.file_exists(reference_results):
+        raise FileNotFoundError(f"controlled reference results missing: {reference_results}")
 
     await session.interface.create_dir(meta["eval_tmp_dir"])
-    verifier_path = f'{meta["eval_tmp_dir"]}/score_outputs.py'
+    verifier_path = f"{meta['eval_tmp_dir']}/score_outputs.py"
     await session.write_file(verifier_path, _read_script("score_outputs.py"))
 
     command = (
-        f'cd {meta["eval_tmp_dir"]} && '
+        f"cd {meta['eval_tmp_dir']} && "
         f'python "{verifier_path}" '
         f'--output-dir "{meta["remote_output_dir"]}" '
-        f'--reference-file "{reference_results}"'
+        f'--reference-file "{reference_results}" '
+        f'--input-dir "{meta["input_dir"]}"'
     )
     result = await session.run_command(command, check=False)
     stdout = result.get("stdout", "") if isinstance(result, dict) else ""
@@ -163,8 +171,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         logger.info("verifier stderr: %s", stderr.strip()[:2000])
 
     if rc != 0:
-        logger.error("verifier failed rc=%s stdout=%s stderr=%s", rc, stdout[:1000], stderr[:1000])
-        return [0.0]
+        raise RuntimeError(f"ADAPT verifier failed rc={rc}: {stderr[:2000]}")
 
     payload: Optional[dict[str, Any]] = None
     for line in reversed(stdout.strip().splitlines()):
@@ -178,14 +185,14 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             continue
 
     if payload is None:
-        logger.error(
-            "could not parse verifier JSON; stdout=%s stderr=%s", stdout[:2000], stderr[:1000]
-        )
-        return [0.0]
+        raise RuntimeError(f"ADAPT verifier returned no JSON: {stdout[:2000]}")
 
-    score = payload.get("score", 0.0)
-    try:
-        return [float(score)]
-    except (TypeError, ValueError):
-        logger.error("invalid score payload: %r", payload)
-        return [0.0]
+    score = payload.get("score") if isinstance(payload, dict) else None
+    if (
+        isinstance(score, bool)
+        or not isinstance(score, (int, float))
+        or not math.isfinite(score)
+        or not 0 <= score <= 1
+    ):
+        raise RuntimeError(f"ADAPT verifier returned invalid score: {payload!r}")
+    return [float(score)]
