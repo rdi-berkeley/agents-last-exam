@@ -1,0 +1,36 @@
+# antigravity_cli — Google's Antigravity CLI (`agy`), run headless on the sandbox.
+#
+# Default auth is a reusable Google OAuth credential. Log in ONCE on the host:
+#
+#     ~/.local/bin/agy            # browser/paste-code login with a Google account
+#
+# That writes ~/.gemini/antigravity-cli/antigravity-oauth-token (a refresh-token
+# credential). Point the run at it via the host env (in secret/.env or shell):
+#
+#     export ANTIGRAVITY_OAUTH_TOKEN_PATH=$HOME/.gemini/antigravity-cli/antigravity-oauth-token
+#     # optional: export ANTIGRAVITY_GOOGLE_ACCOUNTS="$(cat $HOME/.gemini/google_accounts.json)"
+#
+# The lifecycle forwards that into the sandbox and the deployer writes it back
+# into place, after which agy silent-auths headlessly. agy >= 1.1.13 also has a
+# direct Gemini-API-key mode, but this preset intentionally validates the
+# account/OAuth route first. OpenRouter is not Gemini-wire-compatible and needs
+# a translation proxy rather than merely a different base URL.
+#
+# Reference from an experiment as:  agents: [ configs/agents/antigravity_cli.yaml ]
+
+harness: antigravity_cli
+# executor: sandbox          # only supported value (deployer default).
+
+# One of the display names printed by `agy models` (accepted verbatim by --model).
+model: Gemini 3.7 Flash (High)
+
+config:
+  # Bypass tool-permission prompts (required headless) -> --dangerously-skip-permissions.
+  dangerously_skip_permissions: true
+
+  # Exact CLI version. Empty download_url resolves this version through Google's
+  # updater manifest and verifies SHA-512; stale binaries are replaced.
+  cli_version: "1.1.25"
+  print_timeout: "120m"        # agy --print-timeout; its 5m default truncates long tasks
+  download_url: ""
+  download_sha512: ""          # required SHA-512 when overriding download_url
