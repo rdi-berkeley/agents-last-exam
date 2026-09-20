@@ -67,6 +67,7 @@ def test_manifest_preserves_gates_and_has_no_private_paths(assets):
     assert assets["huggingface"]["reference"]["gated"] == "manual"
     assert assets["huggingface"]["archive"]["gated"] == "manual"
     text = json.dumps(assets)
+    assert "gcs_all" not in assets["task_data"]
     for forbidden in ("/home/allennie", "private-vm-transfer", "Bearer ", "api_key", "password"):
         assert forbidden not in text
     assert assets["task_data"]["selected_tasks"] == 152

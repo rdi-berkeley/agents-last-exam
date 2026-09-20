@@ -148,11 +148,6 @@
       "objects": 68653,
       "prefix": "gs://ale-data-public/v1.1/"
     },
-    "gcs_all": {
-      "generation_size_crc32c_match": true,
-      "objects": 94993,
-      "prefix": "gs://ale-data-all/v1.1/"
-    },
     "public_input_software_objects": 68501,
     "public_reference_archives": 152,
     "hf_native_path_transport": "_transport/v1.1/path-compatibility.tar",
