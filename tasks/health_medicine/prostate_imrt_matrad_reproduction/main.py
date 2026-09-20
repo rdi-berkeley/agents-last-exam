@@ -1,6 +1,7 @@
 """AgentHLE task: prostate IMRT matRad reproduction (base)."""
 
 import asyncio
+import importlib
 import json
 import logging
 import os
@@ -38,7 +39,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from tasks.common_setup import BaseTaskSetup
+BaseTaskSetup = importlib.import_module("tasks.common_setup").BaseTaskSetup
 from tasks.linux_runtime import LinuxTaskConfig  # noqa: E402
 
 
@@ -180,6 +181,18 @@ Required outputs, written only under `{self.remote_output_dir}`:
 - `dvh_metrics.csv`, `plan_metrics.json`, `beam_summary.csv`
 - `figures/axial.png`, `figures/sagittal.png`, `figures/coronal.png` (each >= 800x800)
 - `report.md`, `decisions.md`
+
+Replay file contract:
+- Save `replay_state.mat` in MATLAB v7 format with these top-level numeric variables: `w_replay = w`, `dij_physicalDose = dij.physicalDose{{1}}`, `dij_dimensions = dij.doseGrid.dimensions`, and `nFractions = pln.numOfFractions`. Sparse numeric dose matrices are accepted; do not save class objects in this replay file.
+- These names specify the independent replay interface. Replayed total dose is `reshape(dij_physicalDose * w_replay, dij_dimensions) * nFractions`; use the same weights, grid, and fraction count as your submitted RTDOSE, without applying the fraction count twice.
+
+Fixed-phantom applicability and DVH CSV contract:
+- The Bowel exception below supersedes the Bowel row in the staged institutional constraints. Missing Bowel is fixed input scope, not a candidate failure. The applicable raw maximum is 98 (G4 has 15 available points and G5 has 23); raw 100 is not available. The final binary reward can still reach 1.0 by satisfying G0 and earning at least 70 raw points.
+- This input has no Bowel/Bowel bag contour, and the supplied repair recipes do not define one. Do not invent one. The Bowel Dmax criterion is unassessed for this fixed phantom; its 3 G5 points remain unawarded, with no redistribution or rescaling. All other dose limits, weights, and the absolute pass threshold of 70 with G0 satisfied remain unchanged.
+- Document the unavailable Bowel metric in report.md. In dvh_metrics.csv either omit Bowel or use `Bowel,Dmax,NA,Gy,NA` (case-insensitive NA or N/A; units Gy or NA). Only trusted-reference Bowel absence authorizes this exception. Removing any submitted structure does not make its metric optional; adding an invented Bowel earns no points.
+- Use the five template columns `structure,metric_type,metric_value,units,constraint_pass`, once each. Include one row for each applicable constraint: PTV_7800 V95%, V107%, Dmax; Rectum V70Gy, V50Gy; Bladder V70Gy, V50Gy; each femoral head V50Gy; PenileBulb mean dose. Use finite numeric metric_value, `%` for volume percentages and `Gy` for doses. G7 compares values within 0.5 percentage points or 0.5 Gy respectively; it does not score numeric rows' pass flags separately.
+- Structure aliases include PTV/PTV_68/PTV_Prostate_7800, FemHead_L/Lt femoral head/Left femoral head, FemHead_R/Rt femoral head/Right femoral head, Penile_bulb/Penile bulb, and BowelBag/Bowel_bag. Case and spaces/underscores/hyphens are equivalent in CSV structure names. Metric aliases include V95/V95%, V107/V107%, V70/V70Gy, V50/V50Gy, Dmax/MaximumDose, and mean/Dmean/MeanDose/Mean dose. An optional parenthesized constraint must agree with the institutional limit, e.g. `V95% (>=95%)` or `Dmax (<=83Gy)`.
+- Standard CSV quoting, UTF-8 BOM, reordered rows/columns, and equivalent numeric notation are accepted. Supplemental numeric metrics may be included but earn no G7 credit and cannot replace required metrics. Duplicate semantic metrics, malformed rows, missing required metrics, invalid units, or nonfinite/unsupported NA values receive G7=0. With a complete valid table, zero numeric mismatches earns 4, one or two earns 2, and more earns 0.
 
 Runtime guidance:
 - Invoke matRad / Octave via `{self.matrad_wrapper}`; the wrapper activates the pinned `rtplan-matrad` environment (GNU Octave 6.4.0, matRad commit `c014dc82`, Python 3.10 with pydicom / pymedphys / numba / numpy / scipy / matplotlib / scikit-image).

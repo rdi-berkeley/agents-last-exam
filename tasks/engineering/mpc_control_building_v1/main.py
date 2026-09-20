@@ -79,6 +79,10 @@ Use the task input directory `{self.input_dir}`. It contains:
 - `SFH.idf`: the EnergyPlus 22.1.0 building model.
 - `Denver_current_TMY.epw`: the weather file.
 - `task_spec.json`: deterministic controller, tariff, reporting, and output-contract details.
+- `benchmark_driver.py`: the official deterministic simulation driver.
+- `controller.py`: the controller interface and starter implementation.
+- `canonical_baseline.csv`: the benchmark-owned EnergyPlus baseline trace used
+  by the driver for model fitting and closed-loop evaluation.
 - `runtime_env/pyproject.toml`: Python dependencies useful for MPC, RC-model fitting, and reporting.
 
 You must use the provided IDF and EPW. Do not substitute a different building,
@@ -91,19 +95,24 @@ sample invocation. Use the `-x` flag to run ExpandObjects automatically
 
 ## Task
 
-Build and evaluate an MPC controller using EnergyPlus as the virtual testbed.
+Build and evaluate an MPC controller using the supplied deterministic benchmark
+driver. The driver owns the simulation mechanics, the EnergyPlus-generated
+baseline, model-training split, tariff calculations, output schema, and the
+closed-loop plant update. Do not modify `benchmark_driver.py` or
+`canonical_baseline.csv`; implement the documented functions in `controller.py`.
 
-1. Run a deterministic baseline on-off HVAC controller from July 1 through
-   July 28 at 15-minute intervals. Use occupied cooling setpoint 24 C, 2 C
-   unoccupied setback, 0.5 C deadband, flow states 0.0/0.1/0.3 kg/s, supply
-   air temperature 13 C, COP 3.0, and the occupancy schedule randomized with
-   seed 142857.
-2. Train a 3R2C thermal model from the simulated data.
-3. Build two MPC policies: one for energy-cost saving and one for demand
+1. Inspect `controller.py` and `task_spec.json`.
+2. Implement `fit_model`, `predict_next_temperature`, and `select_action` in
+   `controller.py`. The model returned by `fit_model` must be JSON-serializable,
+   predictions must be finite temperatures, and actions must be exactly one of
+   0.0, 0.1, or 0.3 kg/s.
+3. Build two controller policies: one for energy-cost saving and one for demand
    response / on-peak load reduction.
-4. Deploy both MPC policies against EnergyPlus or an equivalent closed-loop
-   EnergyPlus-generated co-simulation trace.
-5. Report July 28 performance: cooling energy, electric energy, tariff cost,
+4. Run `benchmark_driver.py --controller controller.py --baseline
+   canonical_baseline.csv --output-dir {self.remote_output_dir}`. It fits on
+   July 1-20, validates predictions on July 21-25, and evaluates both policies
+   on the deterministic 28-day trace, reporting July 28 metrics.
+5. Review and report July 28 performance: cooling energy, electric energy, tariff cost,
    peak cooling load, peak-period average load, comfort degree-hours, load
    shifting behavior, and RC-model calibration quality.
 
@@ -181,6 +190,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     await session.write_file(
         f"{EVAL_TMP_DIR}/verify_outputs.py",
         _read_script("verify_outputs.py"),
+    )
+    await session.write_file(
+        f"{EVAL_TMP_DIR}/official_driver.py",
+        _read_script("official_driver.py"),
     )
     result = await session.run_command(
         f"UV_CACHE_DIR=/tmp/uv-cache uv run --with pandas --with numpy "

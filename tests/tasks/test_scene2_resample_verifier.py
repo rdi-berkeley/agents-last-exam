@@ -15,6 +15,14 @@ read_stats = VERIFIER.read_stats
 score_stats = VERIFIER.score_stats
 
 
+def test_task_prompt_publishes_the_scored_csv_schema() -> None:
+    from tasks.psychology_neuro._shared.cognitive_science.neuro_common import scene_spec
+
+    prompt = scene_spec("scene2_resample").instruction_text
+
+    assert "`mean,max,voxel_count`" in prompt
+
+
 def test_read_stats_ignores_descriptive_columns(tmp_path: Path) -> None:
     stats = tmp_path / "scene2_stats.csv"
     stats.write_text(

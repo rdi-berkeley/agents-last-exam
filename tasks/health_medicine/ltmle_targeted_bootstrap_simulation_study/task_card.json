@@ -8,12 +8,13 @@
     "lmtp",
     "SuperLearner"
   ],
-  "taskPrompt": "You are working on a Linux R biostatistics simulation benchmark.\n\nRead these staged inputs first:\n- `base/input/LTMLE_Targeted_Bootstrap_Task_INPUT/01_data_generation_longitudinal.R`\n- `base/input/LTMLE_Targeted_Bootstrap_Task_INPUT/lmtp-bootstrap`\n- `base/input/LTMLE_Targeted_Bootstrap_Task_INPUT/tmleVariance.pdf`\n- `base/input/public_benchmark/README_output.md`\n- `base/input/public_benchmark/reference_summary.csv`\n- `base/input/public_benchmark/study_plan_public.json`\n\nYour job is to reconstruct the missing longitudinal simulation pipeline and write the required deliverables under `base/output`.\n\nRequired pipeline files:\n- `base/output/02_variance_methods_longitudinal.R`\n- `base/output/03_simulation_runner_longitudinal.R`\n- `base/output/04_analysis_functions_longitudinal.R`\n- `base/output/05_run_full_simulation_longitudinal.R`\n- `base/output/06_analyze_part2_results_longitudinal.R`\n- `base/output/06b_analyze_by_sample_size.R`\n\nRequired generated outputs:\n- `base/output/summary.csv`\n- `base/output/report.pdf`\n\nRequirements:\n1. Use the bundled longitudinal DGP, the local `lmtp-bootstrap` source tree, the variance paper, and the public benchmark materials under `input/public_benchmark/`.\n2. Cover the two public benchmark scenarios from `study_plan_public.json` and generate your own `summary.csv` plus `report.pdf` from a working pipeline.\n3. The public benchmark summary is visible for orientation, but do not treat it as a file to relocate or copy into `output/`.\n5. Write solver-created files only under `base/output`.\n",
+  "taskPrompt": "You are working on a Linux R biostatistics simulation benchmark.\n\nRead these staged inputs first:\n- `base/input/LTMLE_Targeted_Bootstrap_Task_INPUT/01_data_generation_longitudinal.R`\n- `base/input/LTMLE_Targeted_Bootstrap_Task_INPUT/lmtp-bootstrap`\n- `base/input/LTMLE_Targeted_Bootstrap_Task_INPUT/tmleVariance.pdf`\n- `base/input/public_benchmark/README_output.md`\n- `base/input/public_benchmark/reference_summary.csv`\n- `base/input/public_benchmark/study_plan_public.json`\n- `base/input/public_benchmark/study_plan_public.csv`\n- `base/input/public_benchmark/SCIENTIFIC_CONTRACT.md`\n- `base/input/public_benchmark/runtime_manifest.json`\n\nYour job is to reconstruct the missing longitudinal simulation pipeline and write the required deliverables under `base/output`.\n\nRuntime:\nUse `/opt/R/4.3.2/bin/Rscript` (R 4.3.2) for every R session, including analysis. Do not use unqualified `Rscript` or `/usr/bin/Rscript`.\nUse the installed task-controlled package closure in `input/public_benchmark/runtime_manifest.json`; do not install replacement CRAN/GitHub packages.\nFrom `output/`, run `/opt/R/4.3.2/bin/Rscript 05_run_full_simulation_longitudinal.R`.\n\nRequired pipeline files:\n- `base/output/02_variance_methods_longitudinal.R`\n- `base/output/03_simulation_runner_longitudinal.R`\n- `base/output/04_analysis_functions_longitudinal.R`\n- `base/output/05_run_full_simulation_longitudinal.R`\n- `base/output/06_analyze_part2_results_longitudinal.R`\n- `base/output/06b_analyze_by_sample_size.R`\n\nRequired generated outputs:\n- `base/output/summary.csv`\n- `base/output/report.pdf`\n- `base/output/raw_results.csv`\n\nRequirements:\n1. Use the bundled longitudinal DGP, the local `lmtp-bootstrap` source tree, the variance paper, and the public benchmark materials under `input/public_benchmark/`.\n2. Cover the two public benchmark scenarios from `study_plan_public.json` and generate your own `summary.csv` plus `report.pdf` from a working pipeline.\n3. The public benchmark summary is visible for orientation, but do not treat it as a file to relocate or copy into `output/`.\n4. Follow scientific contract v2 (2026-09-10), not the superseded April numbers. Standard uses paired EIF variance. Full-data targeting uses cumulative density ratios and shares its point with both targeted-bootstrap methods. Do not use the bundled raw-ratio boot=TRUE shortcut.\n5. Honor a local fixture_smoke_plan.csv in place of the public plan. Only the six R scripts are copied into a fresh rerun. The public SCIENTIFIC_CONTRACT.md defines function APIs, RNG seeds, numerical boundaries, exact CSV schemas, and tolerances.\n6. Generate raw results and derive summary from them. Do not drop replications or bootstrap draws. Write solver-created files only under `base/output`.\n",
   "agentMustDo": [
     "Read the staged longitudinal DGP, bundled `lmtp-bootstrap` source tree, variance paper, and public benchmark materials under `input/public_benchmark/`.",
     "Reconstruct the missing six-file R pipeline for the standard LMTP, full-data targeting, and targeted-bootstrap inference workflows.",
     "Run the required `n=200` and `n=1000` study settings from the public study plan.",
-    "Write the six R scripts plus `summary.csv` and `report.pdf` under `output/`."
+    "Write the six R scripts plus raw_results.csv, summary.csv and report.pdf under output/.",
+    "Use the v2 cumulative targeting and paired inference contract, preserve shared point estimates, and implement the documented fresh-session rerun APIs."
   ],
   "inputFiles": [
     {
@@ -51,6 +52,24 @@
       "format": "`.json`",
       "path": "input/public_benchmark/study_plan_public.json",
       "description": "Lists the two required public benchmark scenarios"
+    },
+    {
+      "name": "Scientific and execution contract v2",
+      "format": ".md",
+      "path": "input/public_benchmark/SCIENTIFIC_CONTRACT.md",
+      "description": "Public mathematical definitions, boundary handling, plan/RNG rules, APIs, schemas and scoring tolerances."
+    },
+    {
+      "name": "Exact public CSV plan",
+      "format": ".csv",
+      "path": "input/public_benchmark/study_plan_public.csv",
+      "description": "Explicit newly selected scientific settings; not inferred April settings."
+    },
+    {
+      "name": "Pinned runtime",
+      "format": ".json",
+      "path": "input/public_benchmark/runtime_manifest.json",
+      "description": "Validated R/package versions and bundled lmtp function fingerprints."
     }
   ],
   "referenceFiles": [
@@ -101,9 +120,15 @@
       "format": "`.pdf`",
       "path": "output/report.pdf",
       "description": "Non-empty diagnostic report generated from the reconstructed pipeline"
+    },
+    {
+      "name": "Replication results",
+      "format": ".csv",
+      "path": "output/raw_results.csv",
+      "description": "One finite row per method, scenario and replication, generated by the submitted pipeline."
     }
   ],
-  "evaluation": "**Scoring behavior:** binary `0.0` or `1.0`.\n\n**Hard gates:**\n- All six required R scripts, `summary.csv`, and `report.pdf` must exist and be non-empty.\n- `summary.csv` must use the expected schema and row keys.\n- Public summary metrics must stay within the recorded absolute tolerances.\n- The generated pipeline must remain executable under an evaluator-side rerun from the submitted scripts.\n\n**Pass condition:**\n1. The public `summary.csv` is compared against the canonical benchmark summary.\n2. The evaluator reruns the generated R pipeline in a clean scratch area and checks that the recreated summary remains consistent with the canonical passing result.\n3. Any schema mismatch, duplicate keys, non-finite metric, or rerun failure returns `0.0`.\n\nA perfect submission reconstructs the study pipeline faithfully enough that both the public summary and the evaluator rerun agree with the expected result.",
+  "evaluation": "**Scoring behavior:** binary `0.0` or `1.0`.\n\n**Hard gates:**\n- All six required R scripts, `summary.csv`, and `report.pdf` must exist and be non-empty.\n- `summary.csv` must use the expected schema and row keys.\n- Public summary metrics must stay within the recorded absolute tolerances.\n- The generated pipeline must remain executable under an evaluator-side rerun from the submitted scripts.\n\n**Pass condition:**\n1. The public `summary.csv` is compared against the canonical benchmark summary.\n2. The evaluator reruns the generated R pipeline in a clean scratch area and checks that the recreated summary remains consistent with the canonical passing result.\n3. Any schema mismatch, duplicate keys, non-finite metric, or rerun failure returns `0.0`.\n\nA perfect submission reconstructs the study pipeline faithfully enough that both the public summary and the evaluator rerun agree with the expected result.\n\nContract v2 additionally checks raw policy/plan metadata, full-data/bootstrap shared points, bootstrap shared SE, Wald endpoints, scientific ranges and summary derivation within 1.1e-6. Runtime/data/reference mismatches are evaluator errors, not solver failures.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",

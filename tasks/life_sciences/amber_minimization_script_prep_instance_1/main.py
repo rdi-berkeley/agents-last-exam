@@ -11,6 +11,9 @@ from tasks.common_setup import BaseTaskSetup
 from tasks.life_sciences.amber_minimization_script_prep_instance_1.scripts.verify_submission import (
     evaluate_output_bundle,
 )
+from tasks.life_sciences.amber_minimization_script_prep_instance_1.scripts.workflow_parser import (
+    SHELL_CONTRACT,
+)
 from tasks.linux_runtime import LinuxTaskConfig
 
 _setup = BaseTaskSetup()
@@ -61,10 +64,12 @@ Requirements:
 
 Canonical workflow contract:
 - In `leap.in`, source `leaprc.protein.ff14SB`, set `default PBRadii mbondi3`, load `complex_structure.pdb`, and write `{SYSTEM_BASENAME}.prmtop`, `{SYSTEM_BASENAME}.inpcrd`, and `{SYSTEM_BASENAME}_fixed.pdb`.
-- In `step2_implicit.mini.mdin`, use `imin=1`, `ntb=0`, the canonical spelling `cut=999.0`, `igb=7` or `igb=8`, and include both `ntpr` and `ntxo`. Use at least 2000 minimization cycles with `0 < ncyc < maxcyc`. If supplied, use `saltcon` in `[0.0, 0.2]`, `intdiel` in `[1.0, 4.0]`, and `extdiel` in `[60.0, 90.0]`.
+- In the `&cntrl` namelist of `step2_implicit.mini.mdin`, use `imin=1`, `ntb=0`, `cut=999.0` (numerically equivalent spellings are accepted), `igb=7` or `igb=8`, a positive integer `ntpr`, and `ntxo=1` or `2`. Use at least 2000 minimization cycles with integer counts and `0 < ncyc < maxcyc`. If supplied, use `saltcon` in `[0.0, 0.2]`, `intdiel` in `[1.0, 4.0]`, and `extdiel` in `[60.0, 90.0]`.
 - In `submit_min.sh`, request one node, exactly one GPU, and exactly one task using `#SBATCH --ntasks-per-node=1`. Request 1-4 CPUs per task, 8-32 GB of memory, and 1-12 hours.
-- Load modules whose command text contains `amber/22` and `cuda/11.6.2`. Create/use a `params` directory, run `tleap` conditionally when topology or coordinates are absent, and invoke `pmemd.cuda -O` exactly once.
+- Load `amber/22` and `cuda/11.6.2` modules. Create/use a `params` directory, run `tleap` conditionally when topology or coordinates are absent, and invoke `pmemd.cuda -O` exactly once.
 - Wire `step2_implicit.mini.mdin`, the named topology and starting/reference coordinates, `min.out`, and `min.rst` to the corresponding `-i`, `-p`, `-c`, `-ref`, `-o`, and `-r` options.
+
+{SHELL_CONTRACT}
 
 """
 

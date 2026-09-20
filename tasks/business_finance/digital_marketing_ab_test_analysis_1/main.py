@@ -124,6 +124,9 @@ Write exactly these outputs under `{self.remote_output_dir}`:
    Compute the sample-ratio mismatch (SRM) chi-squared test over the
    **full** `experiment_results_raw.csv` population (do NOT filter by
    exclusion rules — use every row in the raw results file).
+   Test against equal 1:1 allocation using Pearson chi-square with
+   1 degree of freedom (no continuity correction); `srm_pass` is True
+   exactly when `srm_pvalue > 0.01`.
 
 2. `experiment_results.tsv` — tab-separated file with exactly 4 rows
    (one per metric: `opened_rate`, `clicked_rate`, `converted_rate`,
@@ -139,12 +142,34 @@ Write exactly these outputs under `{self.remote_output_dir}`:
    or both 100%), `z_statistic` and `p_value_raw` may be left blank as
    undefined, or reported as the conventional `0.0` and `1.0`. Use
    `p_value_raw=1.0` when ranking that metric for BH correction.
+   Use the pooled two-proportion z test without continuity correction:
+   for delivered counts n_c, n_t and event counts x_c, x_t, let
+   p_c=x_c/n_c, p_t=x_t/n_t, d=p_t-p_c, and p_pool=(x_c+x_t)/(n_c+n_t).
+   Report `absolute_lift=d` and
+   `z_statistic=d/sqrt(p_pool*(1-p_pool)*(1/n_c+1/n_t))`.
+   Use the two-sided `p_value_raw=2*(1-Phi(abs(z_statistic)))`, where
+   Phi is the standard normal CDF; `significant_at_05` means p < 0.05.
+   The 95% CI instead uses the unpooled Wald standard error:
+   `d +/- Phi_inverse(0.975)*sqrt(p_c*(1-p_c)/n_c+p_t*(1-p_t)/n_t)`.
+   For BH at FDR 0.05, rank the three secondary raw p-values ascending,
+   set `bh_threshold=bh_rank/3*0.05`, and find the largest rank k with
+   p_(k) <= k/3*0.05. Mark all ranks <= k significant (none if no k).
 
 3. `experiment_report.md` — Markdown report that includes:
    the required per-arm sample size (from a power analysis on
    `historical_metrics.csv`), a clear **Recommendation** section
    containing the word "ship" or "hold", and the observed absolute
-   lift on the primary metric.
+   lift on the primary metric. Recommend **ship** only when the primary
+   metric is significant at 0.05 and the treatment unsubscribe lift is
+   at most 0.5 percentage points; otherwise recommend **hold**.
+   For power, use equal 1:1 allocation, two-sided alpha=0.05, 80% power,
+   and the arithmetic mean of historical `open_rate` as p1 (not a
+   delivered-email-weighted mean or the rounded baseline in the brief).
+   Set p2=p1+0.03 and p_bar=(p1+p2)/2. The required per-arm size is
+   `ceil((Phi_inverse(0.975)*sqrt(2*p_bar*(1-p_bar)) +
+   Phi_inverse(0.80)*sqrt(p1*(1-p1)+p2*(1-p2)))**2/0.03**2)`.
+   The Cohen's h normal-power alternative with the same inputs is also
+   accepted for its small rounding-level sample-size difference.
 """
 
     def to_metadata(self) -> dict[str, Any]:

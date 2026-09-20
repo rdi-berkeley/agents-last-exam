@@ -8,6 +8,10 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
+from tasks.health_medicine.ltmle_targeted_bootstrap_simulation_study.scripts import (
+    verify_hidden_smoke as verifier,
+)
+
 
 @dataclass
 class ScoreResult:
@@ -15,6 +19,49 @@ class ScoreResult:
     passed: bool
     reason: str
     details: dict[str, Any] = field(default_factory=dict)
+
+
+def validate_public_raw(raw_csv: str, summary_csv: str, contract: dict[str, Any]) -> ScoreResult:
+    public = contract["public_benchmark"]
+    raw_columns, raw_rows = _parse_csv_text(raw_csv)
+    summary_columns, summary_rows = _parse_csv_text(summary_csv)
+    if any(
+        None in row or any(value is None for value in row.values())
+        for row in raw_rows + summary_rows
+    ):
+        return ScoreResult(0.0, False, "public_csv_row_width_mismatch")
+    errors = verifier._validate_raw_results(
+        raw_fieldnames=raw_columns,
+        raw_rows=raw_rows,
+        plan_rows=public["scenarios"],
+        canonical_tau_true_by_scenario=public["tau_true_by_scenario"],
+        hidden_contract={**contract["hidden_smoke"], "scenarios": public["scenarios"]},
+    )
+    if errors:
+        return ScoreResult(0.0, False, "public_raw_contract_failed", {"errors": errors[:20]})
+    if summary_columns != public["summary_columns"]:
+        return ScoreResult(0.0, False, "public_summary_schema_mismatch")
+    derived = verifier._recompute_summary_rows(
+        raw_rows=raw_rows,
+        scenario_levels=[row["scenario"] for row in public["scenarios"]],
+        method_levels=public["expected_methods"],
+    )
+    errors = verifier._compare_summary_maps(
+        candidate_rows=summary_rows,
+        reference_rows=derived,
+        contract_section={
+            "row_match_keys": public["row_match_keys"],
+            "metric_tolerances": {
+                key: verifier.DERIVATION_TOLERANCE for key in public["metric_tolerances"]
+            },
+        },
+    )
+    return ScoreResult(
+        0.0 if errors else 1.0,
+        not errors,
+        "public_summary_derivation_failed" if errors else "public_raw_passed",
+        {"errors": errors[:20]},
+    )
 
 
 def _parse_csv_text(text: str) -> tuple[list[str], list[dict[str, str]]]:

@@ -84,6 +84,7 @@ for _ in $(seq 1 50); do
   [ -S /tmp/.X11-unix/X0 ] && break
   sleep 0.2
 done
+[ -S /tmp/.X11-unix/X0 ] || { echo "FATAL: Xvfb did not start" >&2; exit 1; }
 
 # --- 3. cua-computer-server on :5000 (+ optional XFCE desktop) ---------------
 # A container has no display manager, so the VM's gdm/GNOME desktop isn't
@@ -98,7 +99,12 @@ done
 # inherit it — xfconf/dconf/notifications/a11y then work instead of warning.
 # cua-server stays PID 1 (clean signals / health checks). machine-id is baked at
 # build (cleanup.sh) so dbus has a valid id here.
-cd /opt/cua-server 2>/dev/null || cd /
+cd /opt/cua-server || exit 1
+if [ "${ALE_DESKTOP:-1}" = "1" ]; then
+  for binary in startxfce4 dbus-launch; do
+    command -v "$binary" >/dev/null || { echo "FATAL: missing $binary" >&2; exit 1; }
+  done
+fi
 if [ "${ALE_DESKTOP:-1}" = "1" ] && command -v startxfce4 >/dev/null 2>&1; then
   export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/xdg-$(id -u)}"
   mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true

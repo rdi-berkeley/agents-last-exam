@@ -1,40 +1,41 @@
 #!/usr/bin/env python3
-"""Verify IDP ensemble scoring output against reference.
-
-Reads the agent's output CSV and the reference CSV, compares structure
-and numeric values, and prints a JSON result to stdout.
-
-Usage:
-    python verify_output.py --output-file <path> --reference-file <path>
-
-Prints JSON to stdout:
-    {"score": float, "passed": bool, "reasons": [...]}
-Debug/error info goes to stderr.
-"""
+"""Validate both CSV contracts, then award unchanged two-decimal cell credit."""
 
 import argparse
 import csv
 import json
+import math
 import sys
 
 REQUIRED_COLUMNS = ["Method", "Total", "CS", "JC", "NOE/PRE"]
-NUMERIC_COLUMNS = ["Total", "CS", "JC", "NOE/PRE"]
+NUMERIC_COLUMNS = REQUIRED_COLUMNS[1:]
 EXPECTED_MODELS = {"Model1", "Model2", "Model3", "Model4", "Model5"}
-# Observables that should NOT appear (hallucination check)
-FORBIDDEN_COLUMNS = {"Rg", "FRET", "SAXS", "RDC", "SANS"}
 
 
 def load_csv(path):
-    """Load CSV file into a list of dicts."""
-    with open(path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+    """Return a validated method lookup or raise for an invalid CSV."""
+    with open(path, newline="", encoding="utf-8-sig") as stream:
+        reader = csv.DictReader(stream, strict=True)
+        headers = reader.fieldnames
+        if not headers or len(headers) != len(set(headers)):
+            raise ValueError("CSV must have nonduplicate column names")
+        if set(headers) != set(REQUIRED_COLUMNS):
+            raise ValueError("Expected exactly these columns: " + ", ".join(REQUIRED_COLUMNS))
         rows = list(reader)
-    return rows
-
-
-def round2(val):
-    """Round a float to 2 decimal places."""
-    return round(float(val), 2)
+    if any(None in row or any(value is None for value in row.values()) for row in rows):
+        raise ValueError("CSV row width does not match header")
+    if len(rows) != 5 or {row["Method"].strip() for row in rows} != EXPECTED_MODELS:
+        raise ValueError("Expected exactly one row for each of Model1 through Model5")
+    result = {}
+    for row in rows:
+        method = row["Method"].strip()
+        result[method] = {}
+        for column in NUMERIC_COLUMNS:
+            value = float(row[column])
+            if not math.isfinite(value) or not 0 <= value <= 1:
+                raise ValueError(f"{method}/{column}: expected a finite number in [0,1]")
+            result[method][column] = value
+    return result
 
 
 def main():
@@ -42,128 +43,39 @@ def main():
     parser.add_argument("--output-file", required=True)
     parser.add_argument("--reference-file", required=True)
     args = parser.parse_args()
-
-    reasons = []
-
-    # --- Load agent output ---
     try:
-        agent_rows = load_csv(args.output_file)
-    except FileNotFoundError:
-        result = {"score": 0.0, "passed": False, "reasons": ["Output file not found"]}
-        print(json.dumps(result))
-        return
-    except Exception as e:
-        result = {"score": 0.0, "passed": False, "reasons": [f"Cannot parse output: {e}"]}
-        print(json.dumps(result))
-        return
-
-    # --- Load reference ---
+        reference = load_csv(args.reference_file)
+    except (OSError, UnicodeError, csv.Error, ValueError) as error:
+        print(json.dumps({"error": "invalid_reference", "message": str(error)}))
+        return 2
     try:
-        ref_rows = load_csv(args.reference_file)
-    except Exception as e:
-        print(json.dumps({"score": 0.0, "passed": False, "reasons": [f"Cannot load reference: {e}"]}),
-              file=sys.stdout)
-        return
+        candidate = load_csv(args.output_file)
+    except (OSError, UnicodeError, csv.Error, ValueError) as error:
+        print(json.dumps({"score": 0.0, "passed": False, "reasons": [f"Invalid output: {error}"]}))
+        return 0
 
-    # --- Structure checks ---
-    if not agent_rows:
-        print(json.dumps({"score": 0.0, "passed": False, "reasons": ["Output CSV is empty"]}))
-        return
-
-    agent_columns = list(agent_rows[0].keys())
-
-    # Check for forbidden columns (hallucination)
-    found_forbidden = FORBIDDEN_COLUMNS & set(agent_columns)
-    if found_forbidden:
-        reasons.append(f"Forbidden observable columns found: {sorted(found_forbidden)}")
-        print(json.dumps({"score": 0.0, "passed": False, "reasons": reasons}))
-        return
-
-    # Check required columns exist
-    missing_cols = set(REQUIRED_COLUMNS) - set(agent_columns)
-    if missing_cols:
-        reasons.append(f"Missing required columns: {sorted(missing_cols)}")
-        print(json.dumps({"score": 0.0, "passed": False, "reasons": reasons}))
-        return
-
-    # Check model rows
-    agent_models = {row["Method"].strip() for row in agent_rows}
-    missing_models = EXPECTED_MODELS - agent_models
-    if missing_models:
-        reasons.append(f"Missing model rows: {sorted(missing_models)}")
-        print(json.dumps({"score": 0.0, "passed": False, "reasons": reasons}))
-        return
-
-    # Build lookup by method
-    agent_by_method = {}
-    for row in agent_rows:
-        method = row["Method"].strip()
-        if method in EXPECTED_MODELS:
-            agent_by_method[method] = row
-
-    ref_by_method = {}
-    for row in ref_rows:
-        method = row["Method"].strip()
-        ref_by_method[method] = row
-
-    # --- Value range check ---
-    for method in sorted(EXPECTED_MODELS):
-        for col in NUMERIC_COLUMNS:
-            try:
-                val = float(agent_by_method[method][col])
-            except (ValueError, KeyError):
-                reasons.append(f"{method}/{col}: not a valid number")
-                print(json.dumps({"score": 0.0, "passed": False, "reasons": reasons}))
-                return
-            if val < 0.0 or val > 1.0:
-                reasons.append(f"{method}/{col}={val} is outside [0,1]")
-                print(json.dumps({"score": 0.0, "passed": False, "reasons": reasons}))
-                return
-
-    # --- Value accuracy (2 decimal places) ---
-    total_cells = 0
-    matching_cells = 0
     mismatches = []
-
     for method in sorted(EXPECTED_MODELS):
-        for col in NUMERIC_COLUMNS:
-            total_cells += 1
-            agent_val = round2(agent_by_method[method][col])
-            ref_val = round2(ref_by_method[method][col])
-            if agent_val == ref_val:
-                matching_cells += 1
-            else:
-                mismatches.append(f"{method}/{col}: agent={agent_val} ref={ref_val}")
-
-    accuracy = matching_cells / total_cells if total_cells > 0 else 0.0
-
+        for column in NUMERIC_COLUMNS:
+            actual = round(candidate[method][column], 2)
+            expected = round(reference[method][column], 2)
+            if actual != expected:
+                mismatches.append(f"{method}/{column}: agent={actual} ref={expected}")
+    score = (20 - len(mismatches)) / 20
+    reasons = []
     if mismatches:
-        reasons.append(f"{len(mismatches)}/{total_cells} cells mismatched: {mismatches[:5]}")
-
-    # --- Ranking check ---
-    try:
-        agent_ranking = sorted(
-            EXPECTED_MODELS,
-            key=lambda m: float(agent_by_method[m]["Total"]),
-            reverse=True,
-        )
-        ref_ranking = sorted(
-            EXPECTED_MODELS,
-            key=lambda m: float(ref_by_method[m]["Total"]),
-            reverse=True,
-        )
-        if agent_ranking != ref_ranking:
-            reasons.append(
-                f"Ranking mismatch: agent={agent_ranking} ref={ref_ranking}"
-            )
-    except (ValueError, KeyError) as e:
-        reasons.append(f"Could not compute ranking: {e}")
-
-    passed = accuracy == 1.0 and not reasons
-    score = accuracy
-
-    print(json.dumps({"score": score, "passed": passed, "reasons": reasons}))
+        reasons.append(f"{len(mismatches)}/20 cells mismatched: {mismatches[:5]}")
+    candidate_ranking = sorted(
+        EXPECTED_MODELS, key=lambda method: (-candidate[method]["Total"], method)
+    )
+    reference_ranking = sorted(
+        EXPECTED_MODELS, key=lambda method: (-reference[method]["Total"], method)
+    )
+    if candidate_ranking != reference_ranking:
+        reasons.append(f"Ranking mismatch: agent={candidate_ranking} ref={reference_ranking}")
+    print(json.dumps({"score": score, "passed": score == 1.0, "reasons": reasons}))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

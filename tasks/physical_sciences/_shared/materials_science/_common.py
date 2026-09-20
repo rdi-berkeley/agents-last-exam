@@ -77,6 +77,20 @@ async def run_command(
         return await session.run_command(command, check=check)
 
 
+def command_result_parts(result: Any) -> tuple[int, str, str]:
+    if isinstance(result, dict):
+        return (
+            int(result.get("return_code", result.get("returncode", 1))),
+            str(result.get("stdout", "") or ""),
+            str(result.get("stderr", "") or ""),
+        )
+    return (
+        int(getattr(result, "returncode", getattr(result, "return_code", 1))),
+        str(getattr(result, "stdout", "") or ""),
+        str(getattr(result, "stderr", "") or ""),
+    )
+
+
 def _decode_text(data: bytes, filename: str) -> str:
     try:
         return data.decode("utf-8-sig")

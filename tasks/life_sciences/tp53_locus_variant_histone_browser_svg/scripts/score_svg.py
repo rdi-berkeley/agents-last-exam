@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import heapq
 import json
 import math
 import re
@@ -13,6 +14,8 @@ from typing import Any
 
 SVG_NS = "http://www.w3.org/2000/svg"
 GRAPHICAL_TAGS = {"rect", "path", "polygon", "polyline", "circle", "ellipse", "line"}
+NUMBER = r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?"
+IDENTITY = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 
 
 @dataclass
@@ -92,15 +95,289 @@ def _has_track_evidence(text: str) -> tuple[bool, str]:
 
 
 def _float_values(value: str) -> list[float]:
-    values: list[float] = []
-    for raw in re.findall(r"-?\d+(?:\.\d+)?", value):
-        try:
-            num = float(raw)
-        except ValueError:
-            continue
-        if math.isfinite(num):
-            values.append(num)
+    if re.sub(NUMBER, "", value).strip(" \t\r\n,") or re.search(r",\s*,|^\s*,|,\s*$", value):
+        raise ValueError("invalid SVG number list")
+    values = [float(raw) for raw in re.findall(NUMBER, value)]
+    if not all(math.isfinite(number) and abs(number) <= 1e12 for number in values):
+        raise ValueError("nonfinite or excessive SVG coordinate")
     return values
+
+
+def _compose_transform(parent: tuple, local: tuple) -> tuple:
+    pa, pb, pc, pd, pe, pf = parent
+    la, lb, lc, ld, le, lf = local
+    result = (
+        pa * la + pc * lb,
+        pb * la + pd * lb,
+        pa * lc + pc * ld,
+        pb * lc + pd * ld,
+        pa * le + pc * lf + pe,
+        pb * le + pd * lf + pf,
+    )
+    if not all(math.isfinite(value) and abs(value) <= 1e12 for value in result):
+        raise ValueError("invalid composed SVG transform")
+    return result
+
+
+def _parse_transform(raw: str) -> tuple:
+    matrix = IDENTITY
+    cursor = 0
+    for match in re.finditer(r"([A-Za-z]+)\s*\(([^()]*)\)", raw):
+        if raw[cursor : match.start()].strip(" \t\r\n,"):
+            raise ValueError("invalid SVG transform")
+        name, arguments = match.groups()
+        values = _float_values(arguments)
+        if name == "matrix" and len(values) == 6:
+            local = tuple(values)
+        elif name == "translate" and len(values) in {1, 2}:
+            local = (1, 0, 0, 1, values[0], values[1] if len(values) == 2 else 0)
+        elif name == "scale" and len(values) in {1, 2}:
+            local = (values[0], 0, 0, values[-1], 0, 0)
+        elif name == "rotate" and len(values) in {1, 3}:
+            angle = math.radians(values[0])
+            cosine, sine = math.cos(angle), math.sin(angle)
+            local = (cosine, sine, -sine, cosine, 0, 0)
+            if len(values) == 3:
+                center_x, center_y = values[1:]
+                local = _compose_transform(
+                    (1, 0, 0, 1, center_x, center_y),
+                    _compose_transform(local, (1, 0, 0, 1, -center_x, -center_y)),
+                )
+        elif name in {"skewX", "skewY"} and len(values) == 1:
+            tangent = math.tan(math.radians(values[0]))
+            local = (1, 0, tangent, 1, 0, 0) if name == "skewX" else (1, tangent, 0, 1, 0, 0)
+        else:
+            raise ValueError("unsupported SVG transform")
+        matrix = _compose_transform(matrix, local)
+        cursor = match.end()
+    if raw[cursor:].strip(" \t\r\n,"):
+        raise ValueError("invalid SVG transform")
+    return matrix
+
+
+def _transform_points(
+    points: list[tuple[float, float]], matrix: tuple
+) -> list[tuple[float, float]]:
+    scale_x, shear_y, shear_x, scale_y, offset_x, offset_y = matrix
+    result = [
+        (scale_x * xpos + shear_x * ypos + offset_x, shear_y * xpos + scale_y * ypos + offset_y)
+        for xpos, ypos in points
+    ]
+    if not all(math.isfinite(value) and abs(value) <= 1e12 for point in result for value in point):
+        raise ValueError("invalid transformed SVG coordinate")
+    return result
+
+
+def _path_contours(raw: str) -> list[list[tuple[float, float]]]:
+    """Parse linear SVG subpaths without connecting separate moveto commands."""
+    token_pattern = rf"{NUMBER}|[MmLlHhVvZz]"
+    if re.sub(token_pattern, "", raw).strip(" \t\r\n,") or re.search(
+        r",\s*,|^\s*,|,\s*$|[MmLlHhVvZz]\s*,|,\s*[MmLlHhVvZz]", raw
+    ):
+        raise ValueError("unsupported or malformed SVG path")
+    tokens = re.findall(token_pattern, raw)
+    contours = []
+    points = []
+    position = (0.0, 0.0)
+    command = ""
+    cursor = 0
+    while cursor < len(tokens):
+        if tokens[cursor].isalpha():
+            command = tokens[cursor]
+            cursor += 1
+            if command.upper() == "Z":
+                if not points:
+                    raise ValueError("closepath without moveto")
+                position = points[0]
+                contours.append(points + [position])
+                points = []
+                command = ""
+                continue
+        if not command or (not points and command.upper() != "M"):
+            raise ValueError("path must start with moveto")
+        count = 1 if command.upper() in {"H", "V"} else 2
+        arguments = tokens[cursor : cursor + count]
+        if len(arguments) != count or any(token.isalpha() for token in arguments):
+            raise ValueError("incomplete SVG path command")
+        values = _float_values(" ".join(arguments))
+        cursor += count
+        if command.upper() == "M" and points:
+            contours.append(points)
+            points = []
+        if command.upper() == "H":
+            position = (values[0] + (position[0] if command.islower() else 0), position[1])
+        elif command.upper() == "V":
+            position = (position[0], values[0] + (position[1] if command.islower() else 0))
+        else:
+            position = tuple(
+                value + (previous if command.islower() else 0)
+                for value, previous in zip(values, position)
+            )
+        points.append(position)
+        if command.upper() == "M":
+            command = "l" if command.islower() else "L"
+    if points:
+        contours.append(points)
+    return contours
+
+
+def _signal_contour(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Return a monotone signal boundary, excluding an area plot's baseline closure."""
+    if len(points) < 2:
+        return []
+    if points[0] == points[-1]:
+        points = points[:-1]
+    min_x = min(point[0] for point in points)
+    max_x = max(point[0] for point in points)
+    min_y = min(point[1] for point in points)
+    max_y = max(point[1] for point in points)
+    for baseline in (min_y, max_y):
+        off_baseline = next(
+            (
+                index
+                for index, point in enumerate(points)
+                if not math.isclose(point[1], baseline, abs_tol=1e-7)
+            ),
+            None,
+        )
+        if off_baseline is None:
+            continue
+        rotated = points[off_baseline:] + points[:off_baseline]
+        start = 0
+        for end in range(len(rotated) + 1):
+            if end < len(rotated) and math.isclose(rotated[end][1], baseline, abs_tol=1e-7):
+                continue
+            baseline_x = {point[0] for point in rotated[start:end]}
+            if min_x in baseline_x and max_x in baseline_x:
+                points = rotated[end - 1 :] + rotated[: start + 1]
+                break
+            start = end + 1
+    if points[0][0] > points[-1][0]:
+        points = points[::-1]
+    while len(points) > 1 and points[0][0] == points[1][0]:
+        points = points[1:]
+    while len(points) > 1 and points[-1][0] == points[-2][0]:
+        points = points[:-1]
+    if any(left[0] > right[0] for left, right in zip(points, points[1:])):
+        return []
+    return points
+
+
+def _bar_contour(
+    aligned: list[tuple[float, float, float]], baseline: float, direction: str
+) -> list[tuple[float, float]]:
+    """Extract the visible silhouette of co-baselined bars, including zero-signal gaps."""
+    if len(aligned) < 12:
+        return []
+    ordered = sorted(aligned)
+    edges = sorted({edge for left, right, _ in ordered for edge in (left, right)})
+    active = []
+    cursor = 0
+    points = []
+    orientation = 1 if direction == "up" else -1
+    for left, right in zip(edges, edges[1:]):
+        while cursor < len(ordered) and ordered[cursor][0] <= left:
+            _, endpoint, tip = ordered[cursor]
+            heapq.heappush(active, (orientation * tip, endpoint))
+            cursor += 1
+        while active and active[0][1] <= left:
+            heapq.heappop(active)
+        tip = orientation * active[0][0] if active else baseline
+        points.extend([(left, tip), (right, tip)])
+    return points
+
+
+def _signal_candidates(root: ET.Element) -> list[tuple[str, list[tuple[float, float]]]]:
+    candidates = []
+    bars: dict[tuple, list[tuple[float, float, float]]] = {}
+    pending = [(root, IDENTITY, {"fill": "black", "stroke": "none"})]
+    while pending:
+        elem, parent_matrix, inherited_style = pending.pop()
+        tag = _strip_namespace(elem.tag)
+        if tag in {"defs", "clipPath", "mask", "marker", "pattern", "symbol", "script", "metadata"}:
+            continue
+        style = dict(inherited_style)
+        style.update(
+            {
+                key: value
+                for key, value in elem.attrib.items()
+                if key
+                in {
+                    "fill",
+                    "stroke",
+                    "display",
+                    "visibility",
+                    "opacity",
+                    "fill-opacity",
+                    "stroke-opacity",
+                }
+            }
+        )
+        for declaration in elem.get("style", "").split(";"):
+            key, separator, value = declaration.partition(":")
+            if separator:
+                style[key.strip()] = value.strip()
+        try:
+            opacity = float(style.get("opacity", "1"))
+            if style.get("display") == "none" or not math.isfinite(opacity) or opacity <= 0:
+                continue
+            matrix = _compose_transform(parent_matrix, _parse_transform(elem.get("transform", "")))
+            if tag in {"svg", "g", "a"}:
+                pending.extend((child, matrix, style) for child in elem)
+            if style.get("visibility") in {"hidden", "collapse"}:
+                continue
+            visible_paint = False
+            for paint in ("fill", "stroke"):
+                paint_opacity = float(style.get(f"{paint}-opacity", "1"))
+                if not math.isfinite(paint_opacity):
+                    raise ValueError("nonfinite SVG paint opacity")
+                visible_paint |= style.get(paint) != "none" and paint_opacity > 0
+            if not visible_paint:
+                continue
+            if tag == "rect":
+                dimensions = []
+                for attribute in ("x", "y", "width", "height"):
+                    values = _float_values(elem.get(attribute, "0"))
+                    if len(values) != 1:
+                        raise ValueError("invalid rect dimension")
+                    dimensions.append(values[0])
+                xpos, ypos, width, height = dimensions
+                if width <= 0 or height < 0:
+                    continue
+                corners = _transform_points(
+                    [
+                        (xpos, ypos),
+                        (xpos + width, ypos),
+                        (xpos + width, ypos + height),
+                        (xpos, ypos + height),
+                    ],
+                    matrix,
+                )
+                if not (
+                    math.isclose(corners[0][1], corners[1][1], abs_tol=1e-7)
+                    and math.isclose(corners[0][0], corners[3][0], abs_tol=1e-7)
+                ):
+                    continue
+                left, right = sorted((corners[0][0], corners[1][0]))
+                top, bottom = sorted((corners[0][1], corners[3][1]))
+                for baseline, tip, direction in ((bottom, top, "up"), (top, bottom, "down")):
+                    key = (round(baseline, 6), direction, style["stroke"])
+                    bars.setdefault(key, []).append((left, right, tip))
+            elif tag in {"polyline", "polygon", "path"}:
+                if tag == "path":
+                    contours = _path_contours(elem.get("d", ""))
+                else:
+                    values = _float_values(elem.get("points", ""))
+                    if len(values) % 2:
+                        raise ValueError("unpaired SVG point")
+                    contours = [list(zip(values[0::2], values[1::2]))]
+                for points in contours:
+                    candidates.append((tag, _signal_contour(_transform_points(points, matrix))))
+        except (ValueError, OverflowError):
+            continue
+    for (baseline, direction, _), aligned in bars.items():
+        candidates.append(("rect-group", _bar_contour(aligned, baseline, direction)))
+    return candidates
 
 
 def _pearson(left: list[float], right: list[float]) -> float:
@@ -126,7 +403,9 @@ def _linear_detrend(values: list[float]) -> list[float]:
     denominator = sum((index - mean_x) ** 2 for index in range(len(values)))
     if denominator == 0:
         return []
-    slope = sum((index - mean_x) * (value - mean_y) for index, value in enumerate(values)) / denominator
+    slope = (
+        sum((index - mean_x) * (value - mean_y) for index, value in enumerate(values)) / denominator
+    )
     intercept = mean_y - slope * mean_x
     return [value - (intercept + slope * index) for index, value in enumerate(values)]
 
@@ -144,7 +423,7 @@ def _best_oriented_correlation(left: list[float], right: list[float]) -> float:
 def _resample_y_profile(points: list[tuple[float, float]], bins: int) -> list[float]:
     if not points or bins <= 1:
         return []
-    ordered = sorted(points)
+    ordered = points
     min_x = ordered[0][0]
     max_x = ordered[-1][0]
     if max_x <= min_x:
@@ -165,33 +444,18 @@ def _resample_y_profile(points: list[tuple[float, float]], bins: int) -> list[fl
     return sampled
 
 
-def _path_points(elem: ET.Element) -> list[tuple[float, float]]:
-    tag = _strip_namespace(elem.tag)
-    raw = elem.attrib.get("points" if tag == "polyline" else "d", "")
-    values = _float_values(raw)
-    if len(values) < 2:
-        return []
-    return list(zip(values[0::2], values[1::2]))
-
-
 def _has_graphical_evidence(root: ET.Element, reference: dict[str, Any]) -> tuple[bool, str]:
-    graphical_count = 0
+    graphical_count = sum(_strip_namespace(elem.tag) in GRAPHICAL_TAGS for elem in root.iter())
     best_correlation = 0.0
     best_detrended_correlation = 0.0
     best_delta_correlation = 0.0
     signal_candidate_count = 0
-    passing_candidate: tuple[float, float, float] | None = None
+    candidate_sources: set[str] = set()
+    passing_candidate: tuple[str, float, float, float] | None = None
     signal_profile = [float(value) for value in reference.get("signal_profile", [])]
     signal_detrended = _linear_detrend(signal_profile)
     signal_deltas = _first_differences(signal_profile)
-    for elem in root.iter():
-        tag = _strip_namespace(elem.tag)
-        if tag not in GRAPHICAL_TAGS:
-            continue
-        graphical_count += 1
-        if tag not in {"path", "polyline"}:
-            continue
-        points = _path_points(elem)
+    for source, points in _signal_candidates(root):
         if len(points) < 12:
             continue
         x_values = [point[0] for point in points]
@@ -204,6 +468,7 @@ def _has_graphical_evidence(root: ET.Element, reference: dict[str, Any]) -> tupl
         if x_span < 400 or y_span < 30 or distinct_y < 8:
             continue
         signal_candidate_count += 1
+        candidate_sources.add(source)
         sampled_y = _resample_y_profile(points, len(signal_profile))
         if not sampled_y or not signal_profile:
             continue
@@ -217,21 +482,22 @@ def _has_graphical_evidence(root: ET.Element, reference: dict[str, Any]) -> tupl
         best_delta_correlation = max(best_delta_correlation, delta_correlation)
         shape_match = detrended_correlation >= 0.70 or delta_correlation >= 0.60
         if raw_correlation >= 0.65 and shape_match:
-            passing_candidate = (raw_correlation, detrended_correlation, delta_correlation)
+            passing_candidate = (source, raw_correlation, detrended_correlation, delta_correlation)
 
     if passing_candidate is not None and signal_candidate_count <= 20:
-        raw_correlation, detrended_correlation, delta_correlation = passing_candidate
+        source, raw_correlation, detrended_correlation, delta_correlation = passing_candidate
         return True, (
-            "signal path matches hidden BigWig profile "
+            "signal geometry matches hidden BigWig profile "
             f"(raw={raw_correlation:.3f}, detrended={detrended_correlation:.3f}, "
-            f"delta={delta_correlation:.3f})"
+            f"delta={delta_correlation:.3f}, source={source})"
         )
 
     return False, (
-        "no signal-like path/polyline matched hidden BigWig profile "
+        "no signal geometry matched hidden BigWig profile "
         f"(raw={best_correlation:.3f}, detrended={best_detrended_correlation:.3f}, "
         f"delta={best_delta_correlation:.3f}, graphical elements={graphical_count}, "
-        f"signal candidates={signal_candidate_count})"
+        f"signal candidates={signal_candidate_count}, "
+        f"sources={','.join(sorted(candidate_sources)) or 'none'})"
     )
 
 
@@ -273,7 +539,9 @@ def score_svg_bytes(svg_bytes: bytes, reference: dict[str, Any]) -> SvgScoreResu
     start = int(reference["start"])
     end = int(reference["end"])
 
-    checks["coordinate_evidence"], coordinate_note = _has_coordinate_evidence(text, chrom, start, end)
+    checks["coordinate_evidence"], coordinate_note = _has_coordinate_evidence(
+        text, chrom, start, end
+    )
     checks["track_evidence"], track_note = _has_track_evidence(text)
     checks["graphical_evidence"], graphical_note = _has_graphical_evidence(root, reference)
     checks["browser_provenance"], provenance_note = _has_browser_provenance(text)

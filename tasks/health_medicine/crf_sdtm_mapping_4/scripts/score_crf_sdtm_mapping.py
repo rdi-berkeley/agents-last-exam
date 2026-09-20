@@ -81,7 +81,15 @@ def normalize_cell(value: object) -> str:
 
 
 def _format_key(row: dict[str, str]) -> tuple[str, str, str]:
-    return tuple(normalize_cell(row[column]) for column in KEY_COLUMNS)
+    if "derived_or_assigned" in row:
+        return tuple(normalize_cell(row[column]) for column in KEY_COLUMNS)
+    return (
+        ";".join(
+            sorted(_normalized_value("crf_item_or_placeholder", row["crf_item_or_placeholder"]))
+        ),
+        normalize_cell(row["sdtm_dataset"]),
+        normalize_cell(row["sdtm_variable"]),
+    )
 
 
 def _parse_csv(
@@ -89,7 +97,7 @@ def _parse_csv(
 ) -> tuple[list[str], list[dict[str, str]], list[str]]:
     errors: list[str] = []
     try:
-        reader = csv.DictReader(io.StringIO(text.lstrip("﻿")))
+        reader = csv.DictReader(io.StringIO(text.lstrip("﻿")), strict=True)
         fieldnames = reader.fieldnames or []
         rows = list(reader)
     except csv.Error as exc:
@@ -104,6 +112,9 @@ def _parse_csv(
             continue
         if None in row:
             errors.append(f"{label}: row {row_index} has extra unheaded values")
+            continue
+        if any(value is None for value in row.values()):
+            errors.append(f"{label}: row {row_index} has missing values")
             continue
         normalized_rows.append({column: normalize_cell(row.get(column, "")) for column in columns})
 
@@ -179,8 +190,8 @@ def _relaxed_match(
     """Match each reference row to an agent row using relaxed criteria.
 
     Primary: exact (sdtm_dataset, sdtm_variable) match.
-    Fallback for SUPP* rows: reference sdtm_variable found as substring in
-    agent's crf_item_or_placeholder within the same sdtm_dataset.
+    Fallback for SUPP* QVAL rows: reference QNAM found as a whole identifier
+    in the agent's crf_item_or_placeholder within the same sdtm_dataset.
 
     Tracks used agent rows by list index so that supplemental rows sharing the
     same (dataset, QVAL) relaxed key can each be claimed independently.
@@ -220,8 +231,13 @@ def _relaxed_match(
             for idx in agent_supp_indices:
                 if idx in used_agent_indices:
                     continue
+                if agent_rows[idx]["sdtm_variable"] != "QVAL":
+                    continue
                 agent_placeholder = normalize_cell(agent_rows[idx]["crf_item_or_placeholder"])
-                if ref_variable in agent_placeholder:
+                if re.search(
+                    rf"(?<![A-Za-z0-9_]){re.escape(ref_variable)}(?![A-Za-z0-9_])",
+                    agent_placeholder,
+                ):
                     matches.append((ref_row, agent_rows[idx]))
                     used_agent_indices.add(idx)
                     found = True
@@ -234,6 +250,83 @@ def _relaxed_match(
     return matches
 
 
+def _valid_mapping_rule(rule: str, target_variable: str, *, require_target: bool = True) -> bool:
+    """Check the public requirement for prose naming the target as a whole token."""
+    words = re.findall(r"[A-Za-z][A-Za-z0-9_]*", rule)
+    if len(words) < 2 or rule.casefold() in {"n/a", "not applicable", "to do"}:
+        return False
+    if not require_target:
+        destinations = re.findall(
+            r"\b(?:populate|set|assign|store|write|derive|copy|to|into|as)\s+"
+            r"(?:the\s+)?((?:AE|DM)[A-Za-z0-9_]+)\b",
+            rule,
+            flags=re.IGNORECASE,
+        )
+        return not destinations or target_variable.upper() in {
+            destination.upper() for destination in destinations
+        }
+    return target_variable.casefold() in {word.casefold() for word in words}
+
+
+def _normalized_value(column: str, value: str) -> object:
+    value = normalize_cell(value)
+    if column in {"crf_form", "crf_field_label"}:
+        labels = [re.sub(r"[^a-z0-9]", "", label.casefold()) for label in value.split("||")]
+        if column == "crf_field_label":
+            labels = [label.removesuffix("forpfizeruseonly") for label in labels]
+        return frozenset(labels) if all(labels) else None
+    if column == "crf_item_or_placeholder":
+        return frozenset(part.strip().casefold() for part in value.split(";"))
+    if column == "origin":
+        return {"crf/acrf": "crf", "acrf": "crf"}.get(value.casefold(), value.casefold())
+    if column == "role":
+        return value.casefold()
+    if column == "controlled_terms_or_expected_values":
+        aliases = {
+            "free text / sponsor-defined identifier": "free text",
+            "iso 8601 date/time": "iso 8601 datetime",
+            "iso8601 datetime": "iso 8601 datetime",
+            "meddra lowest level term": "meddra llt",
+            "meddra lowest level term code": "meddra llt code",
+            "meddra preferred term": "meddra pt",
+            "meddra preferred/decoded term": "meddra pt",
+            "meddra preferred term code": "meddra pt code",
+            "meddra high level term": "meddra hlt",
+            "meddra high level term code": "meddra hlt code",
+            "meddra high level group term": "meddra hlgt",
+            "meddra high level group term code": "meddra hlgt code",
+            "meddra body system / soc": "meddra soc",
+            "meddra body system / soc code": "meddra soc code",
+            "meddra system organ class": "meddra soc",
+            "meddra primary system organ class": "meddra soc",
+            "meddra primary soc code": "meddra soc code",
+        }
+        lowered = value.casefold()
+        if lowered in {"y/n", "n/y"}:
+            return frozenset({"n", "y"})
+        if value.startswith("["):
+            try:
+                terms = json.loads(value)
+            except json.JSONDecodeError:
+                return None
+            if (
+                not isinstance(terms, list)
+                or not terms
+                or not all(isinstance(term, str) and normalize_cell(term) for term in terms)
+            ):
+                return None
+        else:
+            terms = value.split(";")
+        normalized = [
+            aliases.get(normalize_cell(term).casefold(), normalize_cell(term).casefold())
+            for term in terms
+        ]
+        if not all(normalized) or len(normalized) != len(set(normalized)):
+            return None
+        return frozenset(normalized)
+    return value
+
+
 def _compare_columns(
     ref_row: dict[str, str],
     agent_row: dict[str, str],
@@ -241,8 +334,26 @@ def _compare_columns(
 ) -> tuple[int, int, list[str]]:
     correct = 0
     mismatched: list[str] = []
+    revised_contract = "goes_to_suppqual" in columns
     for col in columns:
-        if normalize_cell(ref_row.get(col, "")) == normalize_cell(agent_row.get(col, "")):
+        expected = normalize_cell(ref_row.get(col, ""))
+        observed = normalize_cell(agent_row.get(col, ""))
+        if col == "mapping_rule":
+            matches = _valid_mapping_rule(
+                observed, ref_row["sdtm_variable"], require_target=revised_contract
+            )
+        elif col == "notes":
+            matches = (not observed and (revised_contract or not expected)) or (
+                bool(re.search(r"[A-Za-z]", observed))
+                and observed.casefold() not in {"todo", "tbd", "n/a", "null"}
+            )
+        else:
+            if revised_contract:
+                normalized = _normalized_value(col, observed)
+                matches = normalized is not None and normalized == _normalized_value(col, expected)
+            else:
+                matches = observed == expected
+        if matches:
             correct += 1
         else:
             mismatched.append(col)
@@ -255,12 +366,15 @@ def score_mapping_csv(agent_csv: str, reference_csv: str, *, variant: str) -> Sc
     Scoring has two tiers:
     1. **Strict** — original binary logic on the full composite key
        (crf_item_or_placeholder, sdtm_dataset, sdtm_variable).  If every
-       reference row matches perfectly, strict_score = score = 1.0.
+       reference row matches structurally with explanatory prose,
+       strict_score = score = 1.0.
     2. **Relaxed** — rows are matched by (sdtm_dataset, sdtm_variable) with
        a fuzzy fallback for supplemental rows.  For each matched pair every
-       column is compared.  The final score is row_coverage *
-       avg_column_accuracy, giving partial credit for identifying the right
-       variable set even when formatting differs.
+       structured column is compared using the public normalization; mapping_rule and notes are
+       checked for explanatory content rather than reference wording.
+       Notes are optional for every row. The final
+       score is row_coverage * avg_column_accuracy, with unmatched rows on
+       either side reducing coverage.
     """
 
     if variant not in VARIANT_SPECS:
@@ -271,14 +385,18 @@ def score_mapping_csv(agent_csv: str, reference_csv: str, *, variant: str) -> Sc
 
     # ---- parse ----
     _, agent_rows, agent_errors = _parse_csv(agent_csv, label="agent", columns=columns)
-    _, reference_rows, reference_errors = _parse_csv(reference_csv, label="reference", columns=columns)
+    _, reference_rows, reference_errors = _parse_csv(
+        reference_csv, label="reference", columns=columns
+    )
     errors = agent_errors + reference_errors
     if errors:
         return ScoreResult(score=0.0, errors=errors)
 
     # ---- strict index ----
     agent_index, agent_index_errors = _index_rows(agent_rows, label="agent", spec=spec)
-    reference_index, reference_index_errors = _index_rows(reference_rows, label="reference", spec=spec)
+    reference_index, reference_index_errors = _index_rows(
+        reference_rows, label="reference", spec=spec
+    )
     errors.extend(agent_index_errors)
     errors.extend(reference_index_errors)
     if errors:
@@ -294,17 +412,17 @@ def score_mapping_csv(agent_csv: str, reference_csv: str, *, variant: str) -> Sc
     for key in sorted(reference_keys & agent_keys):
         expected = reference_index[key]
         observed = agent_index[key]
-        for column in columns:
-            if observed[column] != expected[column]:
-                strict_mismatches.append(
-                    {
-                        "key": " | ".join(key),
-                        "column": column,
-                        "expected": expected[column],
-                        "observed": observed[column],
-                    }
-                )
-                break
+        _, _, mismatched_columns = _compare_columns(expected, observed, columns)
+        if mismatched_columns:
+            column = mismatched_columns[0]
+            strict_mismatches.append(
+                {
+                    "key": " | ".join(key),
+                    "column": column,
+                    "expected": expected[column],
+                    "observed": observed[column],
+                }
+            )
 
     strict_passed = not missing_keys and not extra_keys and not strict_mismatches
     strict_score = 1.0 if strict_passed else 0.0
@@ -322,7 +440,7 @@ def score_mapping_csv(agent_csv: str, reference_csv: str, *, variant: str) -> Sc
     matches = _relaxed_match(agent_rows, reference_rows, spec)
 
     num_matched = sum(1 for _, a in matches if a is not None)
-    row_coverage = num_matched / len(reference_rows) if reference_rows else 0.0
+    row_coverage = num_matched / max(len(reference_rows), len(agent_rows))
 
     row_scores: list[float] = []
     relaxed_match_details: list[dict] = []

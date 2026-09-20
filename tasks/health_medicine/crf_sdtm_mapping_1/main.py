@@ -3,22 +3,19 @@
 import json
 import logging
 import os
-import sys
-from pathlib import Path
 from typing import Any
 
 import cua_bench as cb
 from tasks.common_setup import BaseTaskSetup
 from tasks.linux_runtime import LinuxTaskConfig
+from tasks.health_medicine.crf_sdtm_mapping_1.scripts.cm_contract import CM_CONTRACT_TEXT
+from tasks.health_medicine.crf_sdtm_mapping_1.scripts.score_crf_sdtm_mapping import (
+    ScoreResult,
+    score_mapping_csv,
+)
 
 
 _setup = BaseTaskSetup()
-
-SCRIPTS_DIR = Path(__file__).parent / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-from score_crf_sdtm_mapping import ScoreResult, score_mapping_csv  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +67,7 @@ VARIANTS = [
             "MAIN INFORMED CONSENT (CONSENT),"
             "Consent Was,Consent Was:,"
             "DS,DSTERM,Topic,CRF,"
-            "\"When Consent Was = OBTAINED, populate DSTERM with "
+            '"When Consent Was = OBTAINED, populate DSTERM with '
             "'INFORMED CONSENT OBTAINED'.\","
             "OBTAINED -> INFORMED CONSENT OBTAINED,"
             "NO,"
@@ -146,7 +143,7 @@ class CrfSdtmMappingConfig(LinuxTaskConfig):
 
     @property
     def task_description(self) -> str:
-        return f"""You are preparing a field-level CRF-to-SDTM mapping specification on Linux.
+        description = f"""You are preparing a field-level CRF-to-SDTM mapping specification on Linux.
 
 ## Your Task
 Create the {self.domain_label} mapping for study C4591001.
@@ -200,6 +197,17 @@ crf_form,crf_field_label,crf_item_or_placeholder,sdtm_dataset,sdtm_variable,role
 - Do not modify files under `{self.input_dir}`.
 - Use the visible task files only; do not use external web sources.
 """
+        if self.primary_dataset == "CM":
+            start = description.index("The following shows one correctly formatted CSV row")
+            stop = description.index("```csv", start)
+            description = (
+                description[:start]
+                + "The example illustrates the CSV schema, not the full mapping.\n\n"
+                + CM_CONTRACT_TEXT
+                + "\n\n"
+                + description[stop:]
+            )
+        return description
 
     def to_metadata(self) -> dict[str, Any]:
         metadata = super().to_metadata()

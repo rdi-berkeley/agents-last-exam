@@ -159,11 +159,13 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 def _score(agent: dict, reference: dict) -> float:
     score = 0.0
 
+    if not isinstance(agent, dict):
+        return 0.0
     if not isinstance(agent.get("chisel_sources"), list):
         return 0.0
     sources = agent["chisel_sources"]
     pattern = re.compile(r"^Fifo\.scala:\d+:\d+$")
-    if not all(isinstance(s, str) and pattern.match(s) for s in sources):
+    if not all(isinstance(s, str) and pattern.fullmatch(s) for s in sources):
         return 0.0
 
     required_fields = {"target_signal", "target_location_in_optimized_sv", "chisel_sources"}

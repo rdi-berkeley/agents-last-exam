@@ -120,6 +120,15 @@ class OpenClawCliConfig:
     endpoints normally support this via ``stream_options.include_usage``;
     disable only for an endpoint that rejects that request field."""
 
+    model_input_types: tuple[str, ...] | None = None
+    """Input modalities declared for a custom provider model. Add ``"image"``
+    when the primary model accepts screenshots natively. ``None`` leaves the
+    provider's existing/default model catalog behavior unchanged."""
+
+    sanitize_empty_text_blocks: bool = False
+    """Route a custom OpenAI-compatible provider through an ALE loopback proxy
+    that removes empty text blocks from multimodal request content."""
+
     model_params: dict[str, object] | None = None
     """Provider-specific parameters written to the primary model's
     ``agents.defaults.models.<provider/model>.params`` entry. Use
@@ -132,6 +141,10 @@ class OpenClawCliConfig:
     # from the orchestration episode budget. agenthle
     # openclaw_cli_openrouter_gpt-5_4.yaml: timeout_seconds: 600.
     agent_timeout_s: int = 600
+
+    # Maximum time between streamed model response chunks. This is separate
+    # from the overall agent timeout above.
+    llm_idle_timeout_s: int = 180
 
     # Provider-specific accepted values are validated by OpenClaw.
     thinking: str = "high"

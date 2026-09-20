@@ -50,9 +50,10 @@ class VisionUsageProxy:
         self,
         *,
         upstream_url: str,
-        usage_log: Path,
+        usage_log: Path | None,
         provider: str,
         model: str,
+        sanitize_empty_text_blocks: bool = False,
     ) -> None:
         parsed = urlsplit(upstream_url)
         if parsed.scheme != "https" or not parsed.hostname:
@@ -61,6 +62,7 @@ class VisionUsageProxy:
         self._usage_log = usage_log
         self._provider = provider
         self._model = model
+        self._sanitize_empty_text_blocks = sanitize_empty_text_blocks
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._write_lock = threading.Lock()
@@ -73,7 +75,8 @@ class VisionUsageProxy:
         return f"http://127.0.0.1:{self._server.server_port}{base_path}"
 
     def start(self) -> None:
-        self._usage_log.unlink(missing_ok=True)
+        if self._usage_log is not None:
+            self._usage_log.unlink(missing_ok=True)
         proxy = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -91,6 +94,8 @@ class VisionUsageProxy:
             def _forward(self) -> None:
                 content_length = int(self.headers.get("content-length", "0"))
                 body = self.rfile.read(content_length) if content_length else None
+                if body and proxy._sanitize_empty_text_blocks:
+                    body = sanitize_openai_request_body(body)
                 headers = {
                     name: value
                     for name, value in self.headers.items()
@@ -158,6 +163,8 @@ class VisionUsageProxy:
         self._thread = None
 
     def _record_usage(self, response_body: bytes) -> None:
+        if self._usage_log is None:
+            return
         usage = extract_provider_usage(response_body)
         if not usage:
             return
@@ -169,6 +176,41 @@ class VisionUsageProxy:
         with self._write_lock:
             with self._usage_log.open("a", encoding="utf-8") as stream:
                 stream.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def sanitize_openai_request_body(body: bytes) -> bytes:
+    """Remove empty text blocks that strict OpenAI-compatible APIs reject."""
+    try:
+        payload = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return body
+
+    def _sanitize(value: object) -> object:
+        if isinstance(value, list):
+            result = []
+            for item in value:
+                if (
+                    isinstance(item, dict)
+                    and item.get("type") in {"text", "input_text", "output_text"}
+                    and not str(item.get("text", "")).strip()
+                ):
+                    continue
+                result.append(_sanitize(item))
+            return result
+        if isinstance(value, dict):
+            result = {key: _sanitize(child) for key, child in value.items()}
+            if isinstance(value.get("content"), list) and not result["content"]:
+                role = value.get("role")
+                if role == "assistant":
+                    result["content"] = None
+                elif role == "tool":
+                    result["content"] = "Tool completed."
+                else:
+                    result["content"] = "Continue."
+            return result
+        return value
+
+    return json.dumps(_sanitize(payload), separators=(",", ":")).encode()
 
 
 def _first_nonnegative_int(mapping: dict, *keys: str) -> int:
@@ -306,12 +348,10 @@ def stage_transcript_file_images(
     path_map: dict[str, str] = {}
     changed = False
 
-    def _stage(value: object) -> object:
+    def _stage_path(value: object) -> object:
         nonlocal changed
-        if isinstance(value, dict):
-            return {key: _stage(child) for key, child in value.items()}
         if isinstance(value, list):
-            return [_stage(child) for child in value]
+            return [_stage_path(child) for child in value]
         if not isinstance(value, str):
             return value
         if (
@@ -328,22 +368,42 @@ def stage_transcript_file_images(
             if source_path.is_absolute()
             else [workspace / source_path, work_dir / source_path]
         )
-        source = next(
-            (candidate for candidate in candidates if candidate.is_file()),
-            None,
-        )
+        source = None
+        for candidate in candidates:
+            try:
+                if candidate.is_file():
+                    source = candidate
+                    break
+            except OSError:
+                continue
         if source is None:
             return value
-        digest = hashlib.sha256(source.read_bytes()).hexdigest()[:16]
-        suffix = source.suffix.lower() or ".png"
-        relative = f"screenshots/openclaw-input-{digest}{suffix}"
-        destination = work_dir / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        if not destination.exists():
-            shutil.copy2(source, destination)
+        try:
+            digest = hashlib.sha256(source.read_bytes()).hexdigest()[:16]
+            suffix = source.suffix.lower() or ".png"
+            relative = f"screenshots/openclaw-input-{digest}{suffix}"
+            destination = work_dir / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if not destination.exists():
+                shutil.copy2(source, destination)
+        except OSError as exc:
+            logger.warning(
+                "openclaw_cli: failed to stage transcript image %s: %s",
+                source,
+                exc,
+            )
+            return value
         path_map[value] = relative
         changed = True
         return relative
+
+    def _stage_image_fields(value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        for key in ("image", "images"):
+            if key in value:
+                value[key] = _stage_path(value[key])
+        return value
 
     output: list[str] = []
     for line in transcript_file.read_text(
@@ -365,9 +425,9 @@ def stage_transcript_file_images(
                     and block.get("name") == "image"
                 ):
                     key = "arguments" if "arguments" in block else "input"
-                    block[key] = _stage(block.get(key))
+                    block[key] = _stage_image_fields(block.get(key))
         if isinstance(message, dict) and message.get("toolName") == "image":
-            message["details"] = _stage(message.get("details"))
+            message["details"] = _stage_image_fields(message.get("details"))
         output.append(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
     if changed:
         transcript_file.write_text("\n".join(output) + "\n", encoding="utf-8")

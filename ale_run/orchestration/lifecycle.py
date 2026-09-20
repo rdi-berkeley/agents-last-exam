@@ -57,18 +57,44 @@ _DEFAULT_TIMEOUT_S = 7200
 _EVAL_TIMEOUT_S = 7200
 
 
-def _append_prompt_suffix(task_meta: dict[str, Any], prompt_suffix: str) -> None:
-    """Append the experiment-wide ``prompt_suffix`` to the task description.
+def _append_prompt_suffix(
+    task_meta: dict[str, Any],
+    prompt_suffix: str,
+    *,
+    sandbox_metadata: dict[str, Any] | None = None,
+) -> None:
+    """Append experiment text and configured Docker ceilings to the task prompt.
 
-    No-op when the suffix is empty/whitespace. The suffix is added as its
-    own paragraph (blank-line separator) after the task prompt, mutating
-    *task_meta* in place so every downstream consumer — the recorded
-    trajectory and the prompt handed to the agent — sees the same text.
+    Mutate the per-run description so the trajectory and every deployer
+    receive the same text. Other providers retain the suffix-only behavior.
     """
-    if not prompt_suffix or not prompt_suffix.strip():
+    suffixes = [prompt_suffix.strip()] if prompt_suffix and prompt_suffix.strip() else []
+    metadata = sandbox_metadata or {}
+    if metadata.get("provider") == "docker":
+        limits = metadata.get("resource_limits") or {}
+        cpu_quota = limits.get("cpu_quota", 0)
+        memory_bytes = limits.get("memory_limit_bytes", 0)
+        ceilings = []
+        if cpu_quota > 0:
+            ceilings.append(f"CPU quota {cpu_quota:g} CPU equivalents")
+        if memory_bytes > 0:
+            ceilings.append(
+                f"memory limit {memory_bytes / (1024 ** 3):g} GiB ({memory_bytes} bytes)"
+            )
+        if ceilings:
+            suffixes.append(
+                "Task sandbox configured per-container ceilings: "
+                + "; ".join(ceilings)
+                + ". These are not guaranteed free memory or exclusive CPU capacity. "
+                "All sandbox processes share these ceilings. In Docker, /proc, nproc, "
+                "os.cpu_count(), and free may report host resources rather than "
+                "container limits. Size worker pools and numerical-library threads "
+                "to these ceilings and leave memory headroom."
+            )
+    if not suffixes:
         return
     description = task_meta.get("description", "") or ""
-    task_meta["description"] = f"{description.rstrip()}\n\n{prompt_suffix.strip()}"
+    task_meta["description"] = "\n\n".join([description.rstrip(), *suffixes])
 
 
 # Mount-fallback: how many provision attempts before we give up. Matches
@@ -237,7 +263,9 @@ async def run_one_unit(
                 machine_type=env.sandbox.metadata.get("machine_type"),
             )
 
-            _append_prompt_suffix(task_meta, prompt_suffix)
+            _append_prompt_suffix(
+                task_meta, prompt_suffix, sandbox_metadata=env.sandbox.metadata,
+            )
 
             builder = TrajectoryBuilder(
                 agent_name=getattr(config, "name", unit.agent_spec.class_),
@@ -413,8 +441,8 @@ async def run_one_unit(
 
             # 3b. STAGING_EVAL (simprun runner.py:_phase3_evaluate second half)
             #     Pull reference data from GCS to the env if the task needs
-            #     it for scoring. Best-effort: many tasks don't have a
-            #     reference/ prefix and we just log + continue.
+            #     it for scoring. Backends explicitly report missing
+            #     reference data; real staging errors abort evaluation.
             env.set_phase("stage_reference")
             await stage_reference(
                 env=env, provider=provider, artifacts=artifacts, task_meta=task_meta,
@@ -752,15 +780,19 @@ def _collect_env_passthrough() -> dict[str, str]:
         "ANTHROPIC_API_KEY",
         "ANTHROPIC_AUTH_TOKEN",
         "ANTHROPIC_BASE_URL",
+        "AZURE_CODE_API_KEY",
         "OPENAI_API_KEY",
         "OPENROUTER_API_KEY",
         "BRAVE_API_KEY",
         "CURSOR_API_KEY",
         "GEMINI_API_KEY",
+        "GLM_API_KEY",
         "GOOGLE_API_KEY",
         "XAI_API_KEY",
         "GROK_API_KEY",
         "MOONSHOT_API_KEY",
+        "ZAI_API_KEY",
+        "Z_AI_API_KEY",
         "FACTORY_API_KEY",
         "CURSOR_AUTH_JSON_PATH",
         "CURSOR_AUTH_JSON",
@@ -965,7 +997,9 @@ async def stage_reference(
     """Pull reference data from GCS onto the env for eval (simprun parity).
 
     Mirrors simprun runner.py:_phase3_evaluate phase ``eval_stage``.
-    Best-effort: many tasks don't ship a reference/ prefix.
+    Backends report an absent reference explicitly. Any staging error is
+    propagated so a corrupt or inaccessible reference cannot be mistaken for
+    a task with no reference data.
     """
     task_data = task_meta.get("task_data")
     if task_data is None or not task_data.requires_task_data:
@@ -973,24 +1007,19 @@ async def stage_reference(
     from ..environments import task_data as task_data_pkg
 
     source = _task_data_source(artifacts)
-    try:
-        backend = task_data_pkg.select(source)
-        report = await backend.stage_reference(env.sandbox, task_data, source=source)
-        if report.get("skipped"):
-            writer.emit_event(
-                "reference_stage_skipped",
-                reason=report.get("reason", "unknown"),
-            )
-        else:
-            writer.emit_event(
-                "reference_stage_completed",
-                staged=report.get("staged"),
-                source=report.get("source"),
-            )
-    except RuntimeError as e:
-        # Reference data is optional — many tasks don't have it.
-        logger.info("Reference staging skipped (may not exist): %s", e)
-        writer.emit_event("reference_stage_skipped", reason=str(e)[:200])
+    backend = task_data_pkg.select(source)
+    report = await backend.stage_reference(env.sandbox, task_data, source=source)
+    if report.get("skipped"):
+        writer.emit_event(
+            "reference_stage_skipped",
+            reason=report.get("reason", "unknown"),
+        )
+    else:
+        writer.emit_event(
+            "reference_stage_completed",
+            staged=report.get("staged"),
+            source=report.get("source"),
+        )
 
 
 async def _stage_task_data(

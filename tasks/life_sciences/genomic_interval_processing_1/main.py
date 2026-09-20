@@ -6,22 +6,20 @@ import json
 import logging
 import os
 import posixpath
-import sys
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from typing import Any
 
 import cua_bench as cb
 
 from tasks.common_setup import BaseTaskSetup
 from tasks.linux_runtime import LinuxTaskConfig
+from tasks.life_sciences.genomic_interval_processing_1.scripts.score_outputs import (
+    INPUT_BED_FILES,
+    REQUIRED_FILES,
+    score_submission,
+)
 
 _setup = BaseTaskSetup()
-
-SCRIPTS_DIR = Path(__file__).parent / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-from score_outputs import INPUT_BED_FILES, REQUIRED_FILES, score_submission  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -108,10 +106,15 @@ Visible input files:
 
 What you must do:
 1. Read the operation specification and apply it to the three ENCODE CTCF narrowPeak BED files.
+   Merge all complete input intervals transitively into maximal components, retain
+   only components that contain intervals from all three input files, and keep the
+   component's full extent. Source membership is enough; a common base pair is not
+   required. Do not join merely touching intervals, and do not count duplicate rows
+   as additional sources.
 2. Produce the final non-overlapping CTCF union peak set as a 3-column BED file with columns `chrom`, `start`, and `end`.
 3. Sort the final BED lexicographically by chromosome, then numerically by start and end.
 4. Record the commands or script steps you used.
-5. Write a JSON summary whose input and output counts match the files you used and produced.
+5. Write a JSON summary whose input and output counts match the files you used and produced. The `output_file` value may be `union_peaks.bed` or a local POSIX path with that basename; it is a filename label, not an additional output location.
 6. Write exactly these required files under `{self.remote_output_dir}`:
    - `union_peaks.bed`
    - `commands.sh`

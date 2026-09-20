@@ -1,4 +1,4 @@
-"""evaluate.py — Score a prostate IMRT submission against the 100-point rubric.
+"""evaluate.py — Score a prostate IMRT submission against the applicable rubric.
 
 Usage:
   python evaluate.py --submission <dir> --reference <evaluator_reference_dir>
@@ -13,6 +13,7 @@ import argparse
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,8 +22,6 @@ from typing import Any
 
 import numpy as np
 import pydicom
-from pydicom.sequence import Sequence
-from scipy.ndimage import binary_erosion
 from skimage import measure  # noqa: F401
 
 try:
@@ -38,7 +37,7 @@ DVH_CONSTRAINTS = {
     "Rectum_V70":    {"gate": "G5", "limit_op": "<=", "limit": 20.0, "dose_gy": 70.0, "metric": "V_pct"},
     "Rectum_V50":    {"gate": "G5", "limit_op": "<=", "limit": 50.0, "dose_gy": 50.0, "metric": "V_pct"},
     "Bladder_V70":   {"gate": "G5", "limit_op": "<=", "limit": 25.0, "dose_gy": 70.0, "metric": "V_pct"},
-    "Bladder_V65":   {"gate": "G5", "limit_op": "<=", "limit": 65.0, "dose_gy": 50.0, "metric": "V_pct"},
+    "Bladder_V50":   {"gate": "G5", "limit_op": "<=", "limit": 65.0, "dose_gy": 50.0, "metric": "V_pct"},
     "FemHead_L_V50": {"gate": "G5", "limit_op": "<=", "limit": 5.0, "dose_gy": 50.0, "metric": "V_pct"},
     "FemHead_R_V50": {"gate": "G5", "limit_op": "<=", "limit": 5.0, "dose_gy": 50.0, "metric": "V_pct"},
     "Bowel_Dmax":    {"gate": "G5", "limit_op": "<=", "limit": 50.0, "metric": "Dmax_gy"},
@@ -46,8 +45,66 @@ DVH_CONSTRAINTS = {
 }
 
 
+ROI_ALIASES = {
+    "PTV_7800": ("PTV", "PTV_7800", "PTV_68", "PTV_Prostate_7800"),
+    "Rectum": ("Rectum",),
+    "Bladder": ("Bladder",),
+    "FemHead_L": ("FemHead_L", "Lt femoral head", "Left femoral head"),
+    "FemHead_R": ("FemHead_R", "Rt femoral head", "Right femoral head"),
+    "Bowel": ("Bowel", "BowelBag", "Bowel_bag"),
+    "PenileBulb": ("PenileBulb", "Penile_bulb"),
+}
+
+
+def canonical_roi(name: str) -> str:
+    normalized = re.sub(r"[\s_-]+", "", name).casefold()
+    for canonical, aliases in ROI_ALIASES.items():
+        if any(re.sub(r"[\s_-]+", "", alias).casefold() == normalized for alias in aliases):
+            return canonical
+    return normalized
+
+
+def unassessed_dvh_metrics(gold_rtstruct: pydicom.Dataset | None) -> frozenset[str]:
+    """Only trusted reference anatomy can establish the fixed phantom's Bowel absence."""
+    if gold_rtstruct is None or not getattr(gold_rtstruct, "StructureSetROISequence", None):
+        return frozenset()
+    if any(canonical_roi(str(roi.ROIName)) == "Bowel" for roi in gold_rtstruct.StructureSetROISequence):
+        return frozenset()
+    return frozenset({"Bowel_Dmax"})
+
+
+def csv_metric_key(structure: str, metric: str) -> str:
+    roi = canonical_roi(structure)
+    match = re.fullmatch(
+        r"\s*([^()]+?)\s*(?:\(\s*(<=|>=|≤|≥)\s*"
+        r"([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)"
+        r"\s*(%|Gy)\s*\))?\s*",
+        metric, re.IGNORECASE,
+    )
+    if match is None:
+        raise ValueError(f"malformed metric label: {metric}")
+    label, operator, limit, units = match.groups()
+    label = re.sub(r"[\s_-]+", "", label).casefold()
+    aliases = {"dmax": "Dmax", "maximumdose": "Dmax", "mean": "mean", "dmean": "mean", "meandose": "mean"}
+    for volume in ("V95", "V107") if roi == "PTV_7800" else ("V70", "V50"):
+        aliases[volume.casefold()] = volume
+        aliases[volume.casefold() + ("%" if roi == "PTV_7800" else "gy")] = volume
+    key = f"{roi}_{aliases.get(label, label)}"
+    if operator is not None and key in DVH_CONSTRAINTS:
+        spec = DVH_CONSTRAINTS[key]
+        expected_units = "%" if spec["metric"] == "V_pct" else "gy"
+        if (operator.replace("≤", "<=").replace("≥", ">=") != spec["limit_op"]
+                or float(limit) != spec["limit"] or units.casefold() != expected_units):
+            raise ValueError(f"incorrect constraint annotation: {metric}")
+    return key
+
+
 def load_rtplan(path: Path) -> pydicom.Dataset:
-    return pydicom.dcmread(str(path))
+    rtplan = pydicom.dcmread(str(path))
+    for beam_index, beam in enumerate(rtplan.BeamSequence, 1):
+        if not getattr(beam, "ControlPointSequence", None):
+            raise ValueError(f"RTPLAN beam {beam_index}: missing or empty ControlPointSequence")
+    return rtplan
 
 
 def load_rtstruct(path: Path) -> pydicom.Dataset:
@@ -158,7 +215,10 @@ def gate_G0_files_and_validity(sub_dir: Path) -> tuple[bool, list[str]]:
     # DICOM parse
     for name in ("RTPLAN.dcm", "RTDOSE.dcm", "RTSTRUCT_corrected.dcm"):
         try:
-            pydicom.dcmread(str(sub_dir / name))
+            if name == "RTPLAN.dcm":
+                load_rtplan(sub_dir / name)
+            else:
+                pydicom.dcmread(str(sub_dir / name))
         except Exception as exc:  # noqa: BLE001
             notes.append(f"DICOM parse failed for {name}: {exc}")
     if notes:
@@ -229,7 +289,7 @@ def gate_G2_deliverability(rtplan: pydicom.Dataset, ref_total_mu: float, ref_per
     if per_beam_ok:
         score += 3
     else:
-        notes.append(f"per-beam MU shares outside ±10% of ref envelope")
+        notes.append("per-beam MU shares outside ±10% of ref envelope")
     return score, notes
 
 
@@ -352,27 +412,33 @@ def gate_G4_ptv_coverage(sub_dose: np.ndarray, sub_masks: dict[str, np.ndarray])
     if v95 >= 95.0:
         score += 5
     elif v95 >= 90.0:
-        score += 2; notes.append(f"PTV V95 {v95:.1f}% partial")
+        score += 2
+        notes.append(f"PTV V95 {v95:.1f}% partial")
     else:
         notes.append(f"PTV V95 {v95:.1f}% FAIL")
     if v107 <= 2.0:
         score += 5
     elif v107 <= 5.0:
-        score += 2; notes.append(f"PTV V107 {v107:.1f}% partial")
+        score += 2
+        notes.append(f"PTV V107 {v107:.1f}% partial")
     else:
         notes.append(f"PTV V107 {v107:.1f}% FAIL")
     if dmax <= 83.0:
         score += 5
     elif dmax <= 86.0:
-        score += 2; notes.append(f"PTV Dmax {dmax:.1f} Gy partial")
+        score += 2
+        notes.append(f"PTV Dmax {dmax:.1f} Gy partial")
     else:
         notes.append(f"PTV Dmax {dmax:.1f} Gy FAIL")
 
     return score, notes, metrics
 
 
-def gate_G5_oar_sparing(sub_dose: np.ndarray, sub_masks: dict[str, np.ndarray]) -> tuple[int, list[str], dict[str, float]]:
-    """26-point OAR gate: 7 constraints, weights summing to 26."""
+def gate_G5_oar_sparing(
+    sub_dose: np.ndarray, sub_masks: dict[str, np.ndarray],
+    gold_rtstruct: pydicom.Dataset | None = None,
+) -> tuple[int, list[str], dict[str, float]]:
+    """26-point OAR gate; trusted absent Bowel is unassessed with no credit."""
     notes: list[str] = []
     metrics: dict[str, float] = {}
 
@@ -389,25 +455,12 @@ def gate_G5_oar_sparing(sub_dose: np.ndarray, sub_masks: dict[str, np.ndarray]) 
     # Total weights: 4+4+3+3+3+3+3+3 = 26 ✓
 
     score = 0
+    unassessed = unassessed_dvh_metrics(gold_rtstruct)
     for roi, kind, dose_th, op, limit, weight in gates:
-        # match ROI name with fuzzy aliases
-        mask = None
-        for alias in (roi, roi.replace("_", " "), roi.replace("_", "")):
-            if alias in sub_masks and sub_masks[alias].any():
-                mask = sub_masks[alias]; break
-        # Additional aliases matching matRad PROSTATE phantom names
-        aliases = {
-            "Rectum": ["Rectum"],
-            "Bladder": ["Bladder"],
-            "FemHead_L": ["Lt femoral head", "FemHead_L", "Left femoral head"],
-            "FemHead_R": ["Rt femoral head", "FemHead_R", "Right femoral head"],
-            "Bowel": ["BowelBag", "Bowel_bag", "Bowel"],
-            "PenileBulb": ["Penile_bulb", "PenileBulb", "Penile bulb"],
-        }
-        if mask is None:
-            for a in aliases.get(roi, []):
-                if a in sub_masks and sub_masks[a].any():
-                    mask = sub_masks[a]; break
+        if f"{roi}_{kind}" in unassessed:
+            notes.append(f"{roi}: absent in trusted reference; unassessed ({weight}pts unawarded)")
+            continue
+        mask = next((mask for name, mask in sub_masks.items() if canonical_roi(name) == roi and mask.any()), None)
         if mask is None:
             notes.append(f"{roi}: ROI not found, skipping ({weight}pts lost)")
             continue
@@ -475,25 +528,59 @@ def gate_G6_gamma(sub_dose: np.ndarray, ref_dose: np.ndarray, geom: dict, extern
     return 0, [f"gamma pass {pass_rate:.1f}% FAIL"], pass_rate
 
 
-def gate_G7_dvh_csv_honesty(submitted_csv: Path, computed: dict[str, float]) -> tuple[int, list[str]]:
+def gate_G7_dvh_csv_honesty(
+    submitted_csv: Path, computed: dict[str, float],
+    gold_rtstruct: pydicom.Dataset | None = None,
+) -> tuple[int, list[str]]:
     notes: list[str] = []
+    unassessed = unassessed_dvh_metrics(gold_rtstruct)
+    required = set(DVH_CONSTRAINTS) - unassessed
     try:
         import csv
-        with submitted_csv.open() as f:
-            reader = csv.DictReader(f)
+        with submitted_csv.open(encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f, strict=True)
+            columns = {"structure", "metric_type", "metric_value", "units", "constraint_pass"}
+            if reader.fieldnames is None or len(reader.fieldnames) != len(columns) or set(reader.fieldnames) != columns:
+                raise ValueError("expected the five submission-template columns, without duplicates")
             declared: dict[str, float] = {}
+            seen: set[str] = set()
             for row in reader:
-                key = f"{row['structure'].strip()}_{row['metric_type'].strip()}"
-                declared[key] = float(row["metric_value"])
+                if None in row or any(value is None or not value.strip() for value in row.values()):
+                    raise ValueError("ragged row or empty field")
+                key = csv_metric_key(row["structure"], row["metric_type"])
+                if key in seen:
+                    raise ValueError(f"duplicate metric: {key}")
+                seen.add(key)
+                value = row["metric_value"].strip()
+                if key in unassessed:
+                    if value.casefold() not in {"na", "n/a"}:
+                        raise ValueError(f"{key}: trusted absent anatomy requires NA, not a numeric claim")
+                    if row["constraint_pass"].strip().casefold() not in {"na", "n/a"}:
+                        raise ValueError(f"{key}: constraint_pass must be NA")
+                    if row["units"].strip().casefold() not in {"gy", "na", "n/a"}:
+                        raise ValueError(f"{key}: units must be Gy or NA")
+                    continue
+                number = float(value)
+                if not math.isfinite(number):
+                    raise ValueError(f"{key}: nonfinite metric")
+                if key in required:
+                    expected_units = "%" if DVH_CONSTRAINTS[key]["metric"] == "V_pct" else "gy"
+                    if row["units"].strip().casefold() != expected_units:
+                        raise ValueError(f"{key}: incorrect units")
+                    declared[key] = number
+            missing = required - declared.keys()
+            if missing:
+                raise ValueError(f"missing required metrics: {sorted(missing)}")
+            if any(key not in computed or not math.isfinite(computed[key]) for key in required):
+                raise ValueError("required recomputed metric unavailable or nonfinite; candidate absence does not authorize NA")
     except Exception as exc:  # noqa: BLE001
         notes.append(f"CSV parse failed: {exc}")
         return 0, notes
 
     mismatches = 0
-    for key, val in computed.items():
-        d = declared.get(key)
-        if d is None:
-            continue
+    for key in sorted(required):
+        val = computed[key]
+        d = declared[key]
         if abs(d - val) > 0.5:
             mismatches += 1
             notes.append(f"{key}: CSV={d:.2f} vs recomputed={val:.2f}")
@@ -504,14 +591,91 @@ def gate_G7_dvh_csv_honesty(submitted_csv: Path, computed: dict[str, float]) -> 
     return 0, notes
 
 
+def report_section_coverage(text: str) -> set[str]:
+    """Recognize report topics from headings or quantitative summary sections."""
+    sections: list[tuple[str, list[str]]] = [("", [])]
+    fence = ""
+    for line in text.splitlines():
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if fence:
+            if re.fullmatch(
+                r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*", line
+            ):
+                fence = ""
+            continue
+        if marker:
+            fence = marker[1]
+            continue
+        heading = re.match(r"^ {0,3}#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$", line)
+        if heading:
+            sections.append((heading[1].casefold(), []))
+        else:
+            sections[-1][1].append(line)
+
+    covered: set[str] = set()
+    for heading, lines in sections:
+        heading_topics = {
+            re.sub(r"\s*\([^)]*\)\s*$", "", part).strip()
+            for part in re.split(r"[/&]", heading)
+        }
+        if "independent dvh" in heading_topics:
+            heading_topics.add("dvh")
+        covered.update(heading_topics & {"beam summary", "dvh", "constraint compliance"})
+        body = " ".join(lines).casefold()
+        if (
+            re.search(
+                r"\b\d+(?:-beam\b|\s+(?:coplanar\s+)?(?:\d+(?:\.\d+)?\s*mv\s+)?(?:imrt\s+)?(?:beams|fields)\b)",
+                body,
+            )
+            and re.search(r"\b\d+(?:\.\d+)?\s*mv\b", body)
+            and re.search(r"\bgantry angles?\s*:\s*\d+(?:\s*,\s*\d+){6}\b", body)
+        ):
+            covered.add("beam summary")
+        if "dvh" not in heading_topics:
+            continue
+        columns: list[str] = []
+        outcomes: set[str] = set()
+        for line in lines:
+            if not line.strip().startswith("|"):
+                columns = []
+                continue
+            cells = [
+                cell.strip().strip("*").casefold() for cell in line.strip().strip("|").split("|")
+            ]
+            if {"structure", "metric", "value"} <= set(cells) and {"pass", "status"} & set(cells):
+                columns = cells
+                continue
+            if not columns or len(cells) != len(columns):
+                continue
+            row = dict(zip(columns, cells))
+            value = re.fullmatch(
+                r"([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s*(%|gy)", row["value"]
+            )
+            if value is None or not math.isfinite(float(value[1])):
+                continue
+            if row.get("pass", row.get("status")) not in {"true", "false", "pass", "fail"}:
+                continue
+            try:
+                key = csv_metric_key(row["structure"], row["metric"])
+            except ValueError:
+                continue
+            if key in DVH_CONSTRAINTS:
+                units = "%" if DVH_CONSTRAINTS[key]["metric"] == "V_pct" else "gy"
+                if value[2] == units:
+                    outcomes.add(key)
+        if set(DVH_CONSTRAINTS) - {"Bowel_Dmax"} <= outcomes:
+            covered.add("constraint compliance")
+    return covered
+
+
 def gate_G8_report_structure(sub_dir: Path) -> tuple[int, list[str]]:
     notes: list[str] = []
     score = 0
-    # report.md required keywords
     try:
         rpt = (sub_dir / "report.md").read_text()
-        required_sections = ["## Beam summary", "## DVH", "## Constraint compliance"]
-        missing = [s for s in required_sections if s not in rpt]
+        required_sections = ["beam summary", "dvh", "constraint compliance"]
+        covered = report_section_coverage(rpt)
+        missing = [section for section in required_sections if section not in covered]
         if not missing:
             score += 2
         else:
@@ -716,15 +880,17 @@ def run(sub_dir: Path, ref_dir: Path) -> dict[str, Any]:
         g4_score, g4_notes, g4_metrics = gate_G4_ptv_coverage(sub_dose, sub_masks)
     else:
         g4_score, g4_notes = 0, ["skipped: RTDOSE or RTSTRUCT not loaded"]
-    report["gates"]["G4"] = {"score": g4_score, "max": 14, "notes": g4_notes, "metrics": g4_metrics}
+    report["gates"]["G4"] = {"score": g4_score, "max": 15, "notes": g4_notes, "metrics": g4_metrics}
 
     # G5
     g5_metrics: dict[str, float] = {}
     if sub_dose is not None and sub_masks:
-        g5_score, g5_notes, g5_metrics = gate_G5_oar_sparing(sub_dose, sub_masks)
+        g5_score, g5_notes, g5_metrics = gate_G5_oar_sparing(sub_dose, sub_masks, gold_rtstruct)
     else:
         g5_score, g5_notes = 0, ["skipped: RTDOSE or RTSTRUCT not loaded"]
-    report["gates"]["G5"] = {"score": g5_score, "max": 26, "notes": g5_notes, "metrics": g5_metrics}
+    g5_unassessed = 3 if "Bowel_Dmax" in unassessed_dvh_metrics(gold_rtstruct) else 0
+    report["gates"]["G5"] = {"score": g5_score, "max": 26 - g5_unassessed,
+                              "unassessed_points": g5_unassessed, "notes": g5_notes, "metrics": g5_metrics}
 
     # G6 gamma
     if sub_dose is not None and ref_dose is not None and sub_geom is not None:
@@ -737,8 +903,9 @@ def run(sub_dir: Path, ref_dir: Path) -> dict[str, Any]:
     report["gates"]["G6"] = {"score": g6_score, "max": 12, "notes": g6_notes, "gamma_pass_pct": g6_pass}
 
     # G7 CSV honesty
-    computed = {**{f"PTV_{k}": v for k, v in g4_metrics.items()}, **g5_metrics}
-    g7_score, g7_notes = gate_G7_dvh_csv_honesty(sub_dir / "dvh_metrics.csv", computed)
+    computed = {**{key.replace("PTV_", "PTV_7800_", 1): value
+                   for key, value in g4_metrics.items() if key.startswith("PTV_")}, **g5_metrics}
+    g7_score, g7_notes = gate_G7_dvh_csv_honesty(sub_dir / "dvh_metrics.csv", computed, gold_rtstruct)
     report["gates"]["G7"] = {"score": g7_score, "max": 4, "notes": g7_notes}
 
     # G8 report structure
@@ -758,6 +925,7 @@ def run(sub_dir: Path, ref_dir: Path) -> dict[str, Any]:
 
     total = g1_score + g2_score + g3_score + g4_score + g5_score + g6_score + g7_score + g8_score + g9_score + g10_score
     report["total_score_before_g0"] = total
+    report["maximum_score"] = sum(info.get("max", 0) for info in report["gates"].values())
     if g0_ok:
         report["total_score"] = total
     else:
@@ -786,7 +954,7 @@ def main() -> int:
             print(f"  {g}: {info['score']}/{info['max']}")
         else:
             print(f"  {g}: {'OK' if info['ok'] else 'FAIL'}")
-    print(f"  TOTAL: {report.get('total_score', 0)}/100  {'PASS' if report.get('pass') else 'FAIL'}")
+    print(f"  TOTAL: {report.get('total_score', 0)}/{report['maximum_score']}  {'PASS' if report.get('pass') else 'FAIL'}")
     return 0
 
 

@@ -4,8 +4,8 @@ Pure helpers:
 
   - :func:`classify_error`   substring-match an exception against a small
                              category vocabulary.
-  - :func:`redact_config`    redact ``*_api_key`` / ``api_key`` from an
-                             agent's yaml config before logging.
+  - :func:`redact_config`    recursively redact ``*_api_key`` / ``api_key``
+                             from an agent's yaml config before logging.
   - :func:`err_dict`         build the termination.error payload.
 """
 
@@ -76,25 +76,24 @@ def classify_error(exc: BaseException) -> str | None:
     return None
 
 
-_REDACTED_KEYS = frozenset(
-    {
-        "anthropic_api_key",
-        "openrouter_api_key",
-        "openai_api_key",
-        "brave_api_key",
-        "api_key",
-    }
-)
-
-
 def redact_config(cfg: dict[str, Any]) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for k, v in cfg.items():
-        if k.lower() in _REDACTED_KEYS and isinstance(v, str) and v:
-            out[k] = f"***{v[-4:]}" if len(v) >= 4 else "***"
-        else:
-            out[k] = v
-    return out
+    def redact(value: Any, key: str | None = None) -> Any:
+        if (
+            key is not None
+            and (key.lower() == "api_key" or key.lower().endswith("_api_key"))
+            and isinstance(value, str)
+            and value
+        ):
+            return f"***{value[-4:]}" if len(value) >= 4 else "***"
+        if isinstance(value, dict):
+            return {item_key: redact(item, item_key) for item_key, item in value.items()}
+        if isinstance(value, list):
+            return [redact(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(redact(item) for item in value)
+        return value
+
+    return redact(cfg)
 
 
 def err_dict(exc: BaseException) -> dict[str, Any]:

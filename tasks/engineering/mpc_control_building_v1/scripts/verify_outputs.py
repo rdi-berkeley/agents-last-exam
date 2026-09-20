@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -12,11 +13,8 @@ import pandas as pd
 COP = 3.0
 STEP_HOURS = 0.25
 EXPECTED_TRACE_ROWS = 28 * 24 * 4
-REFERENCE_BASELINE = {
-    "cooling_kwh": 14.27,
-    "elec_kwh": 4.76,
-    "cost_usd": 0.6947,
-}
+DRIVER_VERSION = "ale-mpc-driver-v1"
+DRIVER_SOURCE_SHA256 = hashlib.sha256((Path(__file__).parent / "official_driver.py").read_bytes()).hexdigest()
 REQUIRED_DATA = {
     "baseline": "baseline_data.csv",
     "mpc_energy_saving": "mpc_energy_saving_data.csv",
@@ -84,22 +82,51 @@ def _metrics_from_timeseries(path: Path) -> dict[str, float]:
         day[column] = pd.to_numeric(day[column], errors="coerce")
     if day[DATA_COLUMNS].isna().any().any():
         raise ValueError(f"{path.name} has non-numeric required data")
-    hours = day["hour"].astype(int).clip(0, 23)
+    hours = day["hour"].astype(float) % 24.0
     cooling_kw = day["cooling_w"].abs() / 1000.0
     elec_kw = cooling_kw / COP
     discomfort = (
         (day["t_zone"] - (day["setpoint"] + 1.0)).clip(lower=0)
         + ((day["setpoint"] - 1.0) - day["t_zone"]).clip(lower=0)
     ).sum() * STEP_HOURS
-    on_peak = cooling_kw[hours.between(17, 19)]
+    on_peak = elec_kw[(hours >= 17.0) & (hours < 20.0)]
     return {
         "cooling_kwh": float((cooling_kw * STEP_HOURS).sum()),
         "elec_kwh": float((elec_kw * STEP_HOURS).sum()),
         "cost_usd": float(sum(elec_kw.iloc[i] * STEP_HOURS * _price(int(hours.iloc[i])) for i in range(len(day)))),
         "peak_load_kw": float(cooling_kw.max()),
-        "peak_hour_avg_kw": float(on_peak.mean()) if len(on_peak) else float(cooling_kw.mean()),
+        "peak_hour_avg_kw": float(on_peak.mean()) if len(on_peak) else float(elec_kw.mean()),
         "discomfort_dh": float(discomfort),
     }
+
+
+def _series_digest(path: Path) -> str:
+    df = pd.read_csv(path)
+    required = ["hour", "cooling_w", "t_zone", "setpoint"]
+    missing = [column for column in required if column not in df.columns]
+    if missing:
+        raise ValueError(f"{path.name} missing columns: {missing}")
+    canonical = df[required].apply(pd.to_numeric, errors="raise")
+    payload = canonical.to_csv(index=False, float_format="%.12g").encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _check_action_trace_consistency(actions: pd.DataFrame, trace: pd.DataFrame, label: str) -> None:
+    required = ["flow_kg_s", "cooling_w", "t_zone"]
+    missing = [column for column in required if column not in actions.columns]
+    if missing:
+        raise ValueError(f"{label} actions missing columns: {missing}")
+    day = trace.tail(96).reset_index(drop=True)
+    if len(actions) != 96:
+        raise ValueError(f"{label} actions must contain exactly 96 July 28 timesteps")
+    numeric = actions[required].apply(pd.to_numeric, errors="raise")
+    if not numeric["flow_kg_s"].isin([0.0, 0.1, 0.3]).all():
+        raise ValueError(f"{label} actions contain an unsupported flow state")
+    for column in ("cooling_w", "t_zone"):
+        trace_values = pd.to_numeric(day[column], errors="raise")
+        tolerance = max(1e-6, float(trace_values.abs().max()) * 1e-8)
+        if (numeric[column] - trace_values).abs().max() > tolerance:
+            raise ValueError(f"{label} actions disagree with {column} in the closed-loop trace")
 
 
 def _score_ratio(value: float, target: float, *, better: str, slack: float = 0.0) -> float:
@@ -170,7 +197,14 @@ def _rc_score(logs: list) -> float:
 
 
 def verify(output_dir: Path, input_dir: Path, reference_dir: Path) -> dict:
-    for name in ["SFH.idf", "Denver_current_TMY.epw", "task_spec.json"]:
+    for name in [
+        "SFH.idf",
+        "Denver_current_TMY.epw",
+        "task_spec.json",
+        "benchmark_driver.py",
+        "controller.py",
+        "canonical_baseline.csv",
+    ]:
         if not (input_dir / name).exists():
             return _fail(f"missing input asset visible to task: {name}")
     for name in list(REQUIRED_DATA.values()) + REQUIRED_FILES:
@@ -178,6 +212,9 @@ def verify(output_dir: Path, input_dir: Path, reference_dir: Path) -> dict:
             return _fail(f"missing required output file: {name}")
 
     try:
+        traces = {
+            label: pd.read_csv(output_dir / filename) for label, filename in REQUIRED_DATA.items()
+        }
         metrics = {label: _metrics_from_timeseries(output_dir / filename) for label, filename in REQUIRED_DATA.items()}
         reported = _load_reported_metrics(output_dir / "metrics_comparison.csv")
         rc_logs = [
@@ -190,21 +227,30 @@ def verify(output_dir: Path, input_dir: Path, reference_dir: Path) -> dict:
     except Exception as exc:
         return _fail(f"failed to parse outputs: {exc}")
 
-    if len(actions_energy) < 96 or len(actions_dr) < 96:
-        return _fail("MPC action files must contain at least 96 July 28 timesteps")
-    if not isinstance(summary, dict) or len(json.dumps(summary)) < 200:
-        return _fail("results_summary.json is too sparse")
+    if (
+        not isinstance(summary, dict)
+        or summary.get("driver_version") != DRIVER_VERSION
+        or summary.get("driver_sha256") != DRIVER_SOURCE_SHA256
+    ):
+        return _fail("results_summary.json was not produced by the official benchmark driver")
+
+    try:
+        canonical_digest = _series_digest(input_dir / "canonical_baseline.csv")
+        submitted_digest = _series_digest(output_dir / "baseline_data.csv")
+        _check_action_trace_consistency(actions_energy, traces["mpc_energy_saving"], "energy-saving")
+        _check_action_trace_consistency(actions_dr, traces["mpc_demand_response"], "demand-response")
+    except Exception as exc:
+        return _fail(f"official-driver consistency check failed: {exc}")
+    if submitted_digest != canonical_digest:
+        return _fail("baseline_data.csv does not match the canonical EnergyPlus baseline")
 
     for label, values in metrics.items():
-        for key in ["cooling_kwh", "elec_kwh", "cost_usd", "peak_load_kw", "discomfort_dh"]:
+        for key in METRIC_COLUMNS[1:]:
             tolerance = max(0.05, abs(values[key]) * 0.08)
             if abs(values[key] - reported[label][key]) > tolerance:
                 return _fail(f"reported {label}.{key} disagrees with time series")
 
     baseline = metrics["baseline"]
-    for key, ref in REFERENCE_BASELINE.items():
-        if abs(baseline[key] - ref) > 0.10 * ref:
-            return _fail(f"baseline {key}={baseline[key]:.4f} outside 10% of reference {ref}")
 
     energy = metrics["mpc_energy_saving"]
     demand = metrics["mpc_demand_response"]

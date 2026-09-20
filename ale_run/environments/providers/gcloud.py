@@ -24,6 +24,7 @@ import json
 import logging
 import random
 import re
+import shlex
 import time
 from dataclasses import dataclass, field as dataclass_field
 from pathlib import Path
@@ -256,6 +257,7 @@ class SnapshotConfig:
     image: str          # GCE image name (= framework Image-registry family)
     gpu: str | None     # accelerator type; None for CPU snapshots
     zones: tuple[str, ...]   # zones to try, in order, on capacity errors
+    boot_disk_size_gb: int | None = None
     resolution: tuple[int, int] | None = None
     """Windows display resolution (w, h) to force after the VM boots. None
     leaves the image/driver default. Applied in acquire() for Windows snapshots
@@ -309,8 +311,16 @@ def _build_snapshot_config(raw: Any) -> SnapshotConfig:
     zones = tuple(raw.get("zones") or ())
     if not zones:
         raise KeyError(f"snapshot {image!r} missing required `zones`")
+    boot_disk_size_gb = raw.get("boot_disk_size_gb")
+    if boot_disk_size_gb is not None:
+        boot_disk_size_gb = int(boot_disk_size_gb)
+        if boot_disk_size_gb <= 0:
+            raise ValueError(
+                f"snapshot {image!r} boot_disk_size_gb must be positive"
+            )
     return SnapshotConfig(
         image=str(image), gpu=raw.get("gpu"), zones=zones,
+        boot_disk_size_gb=boot_disk_size_gb,
         resolution=_parse_resolution(raw.get("resolution"), image),
     )
 
@@ -428,10 +438,11 @@ def _build_create_args(
     label_str: str,
     project: str,
     boot_disk_type: str,
+    boot_disk_size_gb: int | None,
 ) -> list[str]:
     """``gcloud compute instances create`` argv.
 
-    Boot disk size is NOT passed — we use the GCE image's baked size.
+    Boot disk size defaults to the image's baked size unless overridden.
     """
     args = [
         "compute",
@@ -449,6 +460,8 @@ def _build_create_args(
         f"--labels={label_str}",
         "--format=json",
     ]
+    if boot_disk_size_gb is not None:
+        args.append(f"--boot-disk-size={boot_disk_size_gb}GB")
     if gpu and not _is_accelerator_machine_type(machine_type):
         args.append(f"--accelerator=type={gpu},count=1")
     # onHostMaintenance: some families (c4) REQUIRE TERMINATE and reject MIGRATE;
@@ -472,6 +485,7 @@ async def _try_create_in_zone(
     zone: str,
     label_str: str,
     project: str,
+    boot_disk_size_gb: int | None,
 ) -> tuple[bool, str, str, str]:
     args = _build_create_args(
         name=name,
@@ -485,6 +499,7 @@ async def _try_create_in_zone(
         label_str=label_str,
         project=project,
         boot_disk_type=_boot_disk_type(machine_type),
+        boot_disk_size_gb=boot_disk_size_gb,
     )
     last_stderr = ""
     for attempt in range(1, _GCP_MAX_RETRIES_TRANSIENT + 1):
@@ -821,6 +836,7 @@ class GcloudProvider(Provider):
                     zone=zone,
                     label_str=label_str,
                     project=self._cfg.project,
+                    boot_disk_size_gb=snap.boot_disk_size_gb,
                 )
                 if ok:
                     stdout = out
@@ -872,6 +888,9 @@ class GcloudProvider(Provider):
             if not ready:
                 raise RuntimeError(f"CUA server at {cua_url} did not become ready")
 
+            if image.os == "linux" and snap.boot_disk_size_gb is not None:
+                await self._expand_linux_root_disk(cua_url)
+
             # Force the Windows display resolution if the snapshot configures one
             # (Linux X picks its own size, so we never touch it). No silent
             # fallback: if the configured mode isn't supported by this VM's
@@ -920,6 +939,53 @@ class GcloudProvider(Provider):
             except Exception as de:  # noqa: BLE001
                 logger.error("acquire: could not delete leaked VM %s: %s", name, de)
             raise
+
+    @staticmethod
+    async def _expand_linux_root_disk(cua_url: str) -> None:
+        """Grow the Linux root partition and filesystem to the boot disk size."""
+        from cua_bench.computers.remote import RemoteDesktopSession
+
+        session = RemoteDesktopSession(api_url=cua_url, os_type="linux")
+        _init_computer_skip_wait(session)
+        script = r"""
+set -eu
+root="$(findmnt -n -o SOURCE /)"
+parent="$(lsblk -no PKNAME "$root")"
+partition="$(lsblk -no PARTN "$root")"
+test -n "$parent"
+test -n "$partition"
+sudo growpart "/dev/$parent" "$partition" || true
+fstype="$(findmnt -n -o FSTYPE /)"
+case "$fstype" in
+  ext2|ext3|ext4) sudo resize2fs "$root" ;;
+  xfs) sudo xfs_growfs / ;;
+  *) echo "unsupported root filesystem: $fstype" >&2; exit 1 ;;
+esac
+partition_bytes="$(lsblk -bno SIZE "$root")"
+filesystem_bytes="$(df -B1 --output=size / | tail -1 | tr -d ' ')"
+test "$filesystem_bytes" -ge "$((partition_bytes * 95 / 100))"
+df -h /
+"""
+        result = await session.run_command(
+            f"bash -lc {shlex.quote(script)}",
+            check=False,
+        )
+        return_code = (
+            result.get("return_code")
+            if isinstance(result, dict)
+            else None
+        )
+        if return_code != 0:
+            stderr = result.get("stderr", "") if isinstance(result, dict) else ""
+            stdout = result.get("stdout", "") if isinstance(result, dict) else ""
+            raise RuntimeError(
+                "gcloud: failed to expand Linux root disk: "
+                f"{stderr or stdout or result}"
+            )
+        logger.info(
+            "gcloud: expanded Linux root disk: %s",
+            str(result.get("stdout", "")).strip(),
+        )
 
     @staticmethod
     async def _set_windows_resolution(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import os
 import shlex
@@ -45,7 +46,14 @@ SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from score_outputs import ScoreResult, compare_summary_csv  # noqa: E402
+from tasks.health_medicine.ltmle_targeted_bootstrap_simulation_study.scripts.score_outputs import (  # noqa: E402
+    ScoreResult,
+    compare_summary_csv,
+    validate_public_raw,
+)
+from tasks.health_medicine.ltmle_targeted_bootstrap_simulation_study.scripts.verify_hidden_smoke import (  # noqa: E402
+    CONTRACT_VERSION,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +63,7 @@ TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
 PREFERRED_EVAL_TMP_ROOT = f"/tmp/agenthle_eval/{TASK_NAME}"
 RSCRIPT_BINARY = "/usr/bin/Rscript"
+PINNED_RSCRIPT_BINARY = "/opt/R/4.3.2/bin/Rscript"
 REQUIRED_SCRIPT_NAMES = [
     "02_variance_methods_longitudinal.R",
     "03_simulation_runner_longitudinal.R",
@@ -138,6 +147,27 @@ async def _ensure_remote_dir_with_fallback(
         preferred_result.get("stderr", "")[:400],
     )
     return fallback_dir
+
+
+async def _select_rscript(
+    session: cb.DesktopSession, *, software_rscript: str, required_version: str
+) -> str:
+    probes = []
+    for binary in dict.fromkeys([PINNED_RSCRIPT_BINARY, software_rscript, RSCRIPT_BINARY]):
+        result = await _run_command(
+            session,
+            _shell_join(["timeout", "30", binary, "-e", "cat(as.character(getRversion()))"]),
+            timeout=35.0,
+            check=False,
+        )
+        version = _as_text(result.get("stdout", "")).strip()
+        if result.get("return_code") == 0 and version == required_version:
+            logger.info("LTMLE evaluator runtime: %s (R %s)", binary, version)
+            return binary
+        probes.append(
+            {"binary": binary, "return_code": result.get("return_code"), "version": version[:120]}
+        )
+    raise RuntimeError(f"LTMLE evaluator pinned R {required_version} unavailable: {probes}")
 
 
 def _log_score(label: str, result: ScoreResult) -> None:
@@ -271,8 +301,16 @@ Read these staged inputs first:
 - `{self.public_note_file}`
 - `{self.public_summary_file}`
 - `{self.public_study_plan_file}`
+- `{self.public_benchmark_dir}/study_plan_public.csv`
+- `{self.public_benchmark_dir}/SCIENTIFIC_CONTRACT.md`
+- `{self.public_benchmark_dir}/runtime_manifest.json`
 
 Your job is to reconstruct the missing longitudinal simulation pipeline and write the required deliverables under `{self.task_dir}/output`.
+
+Runtime:
+Use `{PINNED_RSCRIPT_BINARY}` (R 4.3.2) for every R session, including analysis. Do not use unqualified `Rscript` or `/usr/bin/Rscript`.
+Use the installed task-controlled package closure in `input/public_benchmark/runtime_manifest.json`; do not install replacement CRAN/GitHub packages.
+From `output/`, run `{PINNED_RSCRIPT_BINARY} 05_run_full_simulation_longitudinal.R`.
 
 Required pipeline files:
 {required_script_lines}
@@ -280,12 +318,15 @@ Required pipeline files:
 Required generated outputs:
 - `{self.task_dir}/output/summary.csv`
 - `{self.task_dir}/output/report.pdf`
+- `{self.task_dir}/output/raw_results.csv`
 
 Requirements:
 1. Use the bundled longitudinal DGP, the local `lmtp-bootstrap` source tree, the variance paper, and the public benchmark materials under `input/public_benchmark/`.
 2. Cover the two public benchmark scenarios from `study_plan_public.json` and generate your own `summary.csv` plus `report.pdf` from a working pipeline.
 3. The public benchmark summary is visible for orientation, but do not treat it as a file to relocate or copy into `output/`.
-5. Write solver-created files only under `{self.task_dir}/output`.
+4. Follow scientific contract v2 (2026-09-10), not the superseded April numbers. Standard uses paired EIF variance. Full-data targeting uses cumulative density ratios; its point is shared by both targeted-bootstrap methods. Do not use the bundled raw-ratio `boot=TRUE` shortcut.
+5. `05` must honor a local `fixture_smoke_plan.csv` in place of the public plan. The evaluator copies only your six R scripts, stages sibling input/, then executes `05` and the two documented analysis functions in separate R sessions. Exact APIs, seed schedule, schemas, numerical boundary rules, and tolerances are in `SCIENTIFIC_CONTRACT.md`.
+6. Generate raw results, derive summary from them, and discuss the study and numerical diagnostics in your report. No dropped replications or bootstrap draws. Write solver-created files only under `{self.task_dir}/output`.
 """
 
     def to_metadata(self) -> dict[str, Any]:
@@ -350,26 +391,45 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["reference_dir"],
         meta["reference_expected_summary_file"],
         meta["evaluation_contract_file"],
+        *(
+            f"{meta['reference_dir']}/{name}"
+            for name in (
+                "raw_results.csv",
+                "public_raw_results.csv",
+                "summary.csv",
+                "fixture_smoke_plan.csv",
+            )
+        ),
     ]
-    missing_eval = [path for path in required_eval_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
+    missing_eval = [
+        path
+        for path in required_eval_paths
+        if not (await session.file_exists(path) or await session.directory_exists(path))
+    ]
     if missing_eval:
-        logger.error("missing evaluator paths: %s", missing_eval)
-        return [0.0]
+        raise RuntimeError(f"LTMLE evaluator files are missing: {missing_eval}")
 
     required_candidate_paths = [
         meta["output_summary_file"],
         meta["output_report_file"],
-        *(f'{meta["remote_output_dir"]}/{name}' for name in meta["required_scripts"]),
+        f"{meta['remote_output_dir']}/raw_results.csv",
+        *(f"{meta['remote_output_dir']}/{name}" for name in meta["required_scripts"]),
     ]
-    missing_candidate = [path for path in required_candidate_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
+    missing_candidate = [
+        path
+        for path in required_candidate_paths
+        if not (await session.file_exists(path) or await session.directory_exists(path))
+    ]
     if missing_candidate:
         logger.error("missing candidate output paths: %s", missing_candidate)
         return [0.0]
 
     contract = json.loads(_as_text(await session.read_file(meta["evaluation_contract_file"])))
+    if contract.get("scientific_contract_version") != CONTRACT_VERSION:
+        raise RuntimeError("LTMLE scientific contract v2 data is not staged")
 
     script_bodies = {
-        script_name: _as_text(await session.read_file(f'{meta["remote_output_dir"]}/{script_name}'))
+        script_name: _as_text(await session.read_file(f"{meta['remote_output_dir']}/{script_name}"))
         for script_name in meta["required_scripts"]
     }
     empty_scripts = [name for name, text in script_bodies.items() if not text.strip()]
@@ -384,7 +444,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
     report_check = await _run_command(
         session,
-        _shell_join(["bash", "-lc", f'test -s {shlex.quote(meta["output_report_file"])}']),
+        _shell_join(["bash", "-lc", f"test -s {shlex.quote(meta['output_report_file'])}"]),
         check=False,
     )
     if report_check.get("return_code") != 0:
@@ -392,7 +452,22 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         return [0.0]
 
     if not fixture_mode:
-        reference_summary_text = _as_text(await session.read_file(meta["reference_expected_summary_file"]))
+        reference_summary_text = _as_text(
+            await session.read_file(meta["reference_expected_summary_file"])
+        )
+        if (
+            hashlib.sha256(reference_summary_text.encode()).hexdigest()
+            != contract["public_benchmark"]["reference_sha256"]
+        ):
+            raise RuntimeError("LTMLE public reference hash mismatch")
+        raw_result = validate_public_raw(
+            _as_text(await session.read_file(f"{meta['remote_output_dir']}/raw_results.csv")),
+            summary_text,
+            contract,
+        )
+        _log_score("public_raw", raw_result)
+        if not raw_result.passed:
+            return [0.0]
         public_result = compare_summary_csv(
             candidate_summary_csv=summary_text,
             expected_summary_csv=reference_summary_text,
@@ -418,8 +493,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     verify_script_path = f"{eval_tmp_dir}/verify_hidden_smoke.py"
     await session.write_file(verify_script_path, _read_script("verify_hidden_smoke.py"))
 
-    rscript_binary = (
-        meta["software_rscript"] if (await session.file_exists(meta["software_rscript"]) or await session.directory_exists(meta["software_rscript"])) else RSCRIPT_BINARY
+    rscript_binary = await _select_rscript(
+        session,
+        software_rscript=meta["software_rscript"],
+        required_version=contract["hidden_smoke"]["r_version"],
     )
 
     verify_command = _shell_join(
@@ -447,22 +524,18 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     hidden_result = await _run_command(session, verify_command, timeout=2400.0, check=False)
     stdout = hidden_result.get("stdout", "").strip()
     if not stdout:
-        logger.error(
-            "hidden smoke verifier did not emit JSON: rc=%s stderr=%s",
-            hidden_result.get("return_code"),
-            hidden_result.get("stderr", "")[:1200],
+        raise RuntimeError(
+            f"LTMLE verifier did not emit JSON: rc={hidden_result.get('return_code')} "
+            f"stderr={hidden_result.get('stderr', '')[:1200]}"
         )
-        return [0.0]
 
     try:
         hidden_payload = json.loads(stdout)
-    except Exception:
-        logger.error(
-            "could not parse hidden smoke verifier output: stdout=%r stderr=%r",
-            stdout[:1200],
-            hidden_result.get("stderr", "")[:1200],
-        )
-        return [0.0]
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"LTMLE verifier emitted invalid JSON: {stdout[:1200]!r}") from exc
+
+    if hidden_result.get("return_code") == 2 or hidden_payload.get("error_type") == "evaluator":
+        raise RuntimeError(f"LTMLE evaluator failed: {hidden_payload}")
 
     hidden_passed = bool(hidden_payload.get("passed"))
     logger.info("hidden_smoke=%s", json.dumps(hidden_payload, ensure_ascii=True, sort_keys=True))
