@@ -177,8 +177,6 @@
       "health_medicine/nsclc_radiomics_cox_signature_v1"
     ],
     "excluded": [
-      "PowerMill",
-      "Civil 3D",
       "AWS",
       "Aliyun"
     ]

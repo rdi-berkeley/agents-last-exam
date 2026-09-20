@@ -85,8 +85,7 @@ done
 ```
 
 These names match the v1.1 environment profiles. Do not substitute the older
-unversioned images. Licensed applications require separately provisioned images;
-this update does not repair or replace PowerMill or Civil 3D images.
+unversioned images. Licensed applications require separately provisioned images.
 
 ## 5. Create restricted network access
 
