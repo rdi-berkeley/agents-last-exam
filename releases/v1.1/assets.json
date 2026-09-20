@@ -165,10 +165,12 @@
   },
   "docker": {
     "image": "agentslastexam/ale-ubuntu22-docker:v1.1",
-    "publication_status": "blocked_missing_push_permission",
-    "registry_digest": null,
-    "blocker": "Docker Hub authentication grants pull but not push on agentslastexam/ale-ubuntu22-docker. Grant write access or authenticate with a permitted account, publish the prepared image, record the registry digest and verify a fresh pull before merging.",
-    "local_config_digest": "sha256:c44076360b0fe6da4ae11a067d69b8ea09f2421a9926c806303dbf8ad0ffb092",
+    "pinned_image": "agentslastexam/ale-ubuntu22-docker:v1.1@sha256:0b4d5173e0be38234d97a3b193a70ebbcd766a0983476d4d7c86539d3cb033be",
+    "publication_status": "published",
+    "published_date": "2026-09-20",
+    "registry_digest": "sha256:0b4d5173e0be38234d97a3b193a70ebbcd766a0983476d4d7c86539d3cb033be",
+    "config_digest": "sha256:c44076360b0fe6da4ae11a067d69b8ea09f2421a9926c806303dbf8ad0ffb092",
+    "compressed_layer_bytes": 35571545017,
     "uncompressed_bytes": 85332499832
   },
   "scope": {

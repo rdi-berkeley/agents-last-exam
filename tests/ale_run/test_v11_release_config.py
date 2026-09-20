@@ -48,19 +48,19 @@ def test_gcloud_free_profiles_use_versioned_images(assets):
         assert profile["snapshots"][snapshot]["image"] == "ale-win10"
 
 
-def test_docker_uses_matching_data_and_honest_publication_state(assets):
+def test_docker_pins_published_image_and_matching_data(assets):
     profile = yaml.safe_load((ROOT / "configs/environments/docker.yaml").read_text())
     image = get(profile["snapshots"]["cpu-free-ubuntu"]["image"])
-    assert image.docker_image == assets["docker"]["image"]
+    assert image.docker_image == assets["docker"]["pinned_image"]
+    assert image.docker_image == (
+        assets["docker"]["image"] + "@" + assets["docker"]["registry_digest"]
+    )
     assert profile["task_data_source"] == "local:task-data-v1.1"
     assert re.fullmatch(r"[0-9a-f]{64}", assets["task_data"]["archive_sha256"])
     assert re.fullmatch(r"[0-9a-f]{40}", assets["huggingface"]["archive"]["revision"])
-    if assets["docker"]["publication_status"] == "published":
-        assert re.fullmatch(r"sha256:[0-9a-f]{64}", assets["docker"]["registry_digest"])
-    else:
-        assert assets["docker"]["publication_status"] == "blocked_missing_push_permission"
-        assert assets["docker"]["registry_digest"] is None
-        assert assets["docker"]["blocker"]
+    assert assets["docker"]["publication_status"] == "published"
+    assert re.fullmatch(r"sha256:[0-9a-f]{64}", assets["docker"]["registry_digest"])
+    assert re.fullmatch(r"sha256:[0-9a-f]{64}", assets["docker"]["config_digest"])
 
 
 def test_manifest_preserves_gates_and_has_no_private_paths(assets):

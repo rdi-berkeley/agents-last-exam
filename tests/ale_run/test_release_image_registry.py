@@ -1,4 +1,5 @@
 from dataclasses import replace
+import re
 
 import pytest
 
@@ -19,7 +20,10 @@ def test_versioned_docker_does_not_move_latest():
     original = get("ale-ubuntu22-docker")
     candidate = get("ale-ubuntu22-docker-v1-1")
     assert original.docker_image == "agentslastexam/ale-ubuntu22-docker:latest"
-    assert candidate.docker_image == "agentslastexam/ale-ubuntu22-docker:v1.1"
+    assert re.fullmatch(
+        r"agentslastexam/ale-ubuntu22-docker:v1\.1@sha256:[0-9a-f]{64}",
+        candidate.docker_image,
+    )
     assert candidate.sandbox_paths() == original.sandbox_paths()
     assert candidate.docker_entrypoint == original.docker_entrypoint
     assert len(registered()) == len(set(registered()))
