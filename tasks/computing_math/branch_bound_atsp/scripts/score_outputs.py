@@ -176,8 +176,14 @@ def score_tier3(observed: dict[str, Any], reference: dict[str, Any]) -> tuple[fl
     if cost_matches_tour:
         score += 0.20
 
-    reference_cost = float(reference["best_cost"])
-    near_reference_incumbent = cost_matches_tour and reported_cost is not None and reported_cost <= reference_cost + COST_TOL
+    # The visible contract (problem_spec.md) defines tier-3 success as an
+    # incumbent within TIER3_GAP_LIMIT of optimality. Judge the incumbent against
+    # that envelope rather than requiring it to beat the reference solver's own
+    # (non-optimal) incumbent. `optimal_cost` is used when the reference records
+    # a proven optimum; otherwise the reference incumbent is the anchor.
+    reference_cost = float(reference.get("optimal_cost", reference["best_cost"]))
+    incumbent_ceiling = reference_cost * (1.0 + TIER3_GAP_LIMIT) + COST_TOL
+    near_reference_incumbent = cost_matches_tour and reported_cost is not None and reported_cost <= incumbent_ceiling
     details["checks"]["incumbent_within_reference_gap"] = near_reference_incumbent
     if near_reference_incumbent:
         score += 0.20

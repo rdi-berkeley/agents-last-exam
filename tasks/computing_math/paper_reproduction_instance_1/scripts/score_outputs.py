@@ -31,6 +31,11 @@ EXPECTED_DATASET_TOKENS = (
 )
 
 RELATIVE_TOLERANCE = 0.10
+# Gold cells are the paper's 3-decimal renderings, so a value that rounds to the
+# printed cell can differ from it by up to half a unit of the last digit. Without
+# this floor a tiny cell (e.g. 0.004 for a true 0.00354) fails the 10% relative
+# check even though the artifact-derived answer is exactly right.
+ABSOLUTE_TOLERANCE_FLOOR = 0.0005
 
 
 @dataclass
@@ -116,7 +121,8 @@ def score_rule3(agent: dict, gold_cells: dict) -> tuple[float, int, int]:
             if a == 0.0:
                 matched += 1
             continue
-        if abs(a - g) / abs(g) <= RELATIVE_TOLERANCE:
+        tolerance = max(RELATIVE_TOLERANCE * abs(g), ABSOLUTE_TOLERANCE_FLOOR)
+        if abs(a - g) <= tolerance:
             matched += 1
     return matched / len(gold_cells), matched, len(gold_cells)
 

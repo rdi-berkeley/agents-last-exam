@@ -165,6 +165,18 @@ def score_factor_csv(
     min_slope = float(unit_consistency.get("min_slope", 0.8))
     max_slope = float(unit_consistency.get("max_slope", 1.25))
     max_abs_intercept = float(unit_consistency.get("max_abs_intercept", 0.5))
+    # The affine gate exists to catch unit/scale errors (decimal vs percent).
+    # Because slope = corr * sigma_agent / sigma_reference, applying the
+    # [0.8, 1.25] band to every factor silently demands corr >= 0.8 on each of
+    # SMB/HML/RMW/CMA, which is stricter than the documented 0.7 mean-correlation
+    # pass threshold and zeroes honest partial reconstructions. A percent-vs-
+    # decimal mistake affects all five series equally, so gating on the market
+    # factor alone is sufficient to detect it. The contract may widen the set.
+    gated_factors = [
+        str(factor)
+        for factor in unit_consistency.get("gated_factors", ["MKT_RF"])
+        if str(factor) in SCORED_FACTORS
+    ]
 
     trace_payloads = list(trace_texts or [])
     offenders = _find_non_allowlisted_urls(trace_payloads, allowed_domains)
@@ -257,7 +269,7 @@ def score_factor_csv(
             trace_paths_checked=list(trace_paths or []),
         )
 
-    for factor in SCORED_FACTORS:
+    for factor in gated_factors:
         slope = slopes[factor]
         intercept = intercepts[factor]
         if slope < min_slope or slope > max_slope or abs(intercept) > max_abs_intercept:

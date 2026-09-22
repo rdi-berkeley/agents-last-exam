@@ -91,6 +91,12 @@ def _compare_array(
             f"{name}:{key} shape mismatch ({agent.shape} != {reference.shape})",
         )
         return
+    if reference.size and np.any(reference > 0) and np.any(reference < 0):
+        # A relative tolerance is meaningless where a sign-changing quantity
+        # (e.g. the Helmholtz free energy) passes through zero: near the root
+        # any finite absolute error becomes an unbounded relative error. Scale
+        # the absolute tolerance to the magnitude of the array instead.
+        atol = max(atol, rtol * float(np.max(np.abs(reference))))
     if not np.allclose(agent, reference, rtol=rtol, atol=atol, equal_nan=False):
         max_abs = float(np.max(np.abs(agent - reference)))
         _fail(
