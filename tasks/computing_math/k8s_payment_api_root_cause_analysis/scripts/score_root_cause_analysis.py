@@ -140,7 +140,16 @@ def _normalize_resource(value: Any) -> str | None:
     return None
 
 
-def _affected_resources_score(report: dict[str, Any]) -> tuple[float, dict[str, Any]]:
+def _resource_in_corpus(resource: str, corpus: str) -> bool:
+    # resource is "kind/name@namespace"; a resource counts as grounded when its name
+    # appears literally in the staged cluster state (case-insensitive).
+    name = resource.split("@", 1)[0].split("/", 1)[-1]
+    return bool(name) and name in corpus
+
+
+def _affected_resources_score(
+    report: dict[str, Any], cluster_state: str = ""
+) -> tuple[float, dict[str, Any]]:
     values = report.get("affected_resources")
     observed: set[str] = set()
     if isinstance(values, list):
@@ -149,12 +158,25 @@ def _affected_resources_score(report: dict[str, Any]) -> tuple[float, dict[str, 
             if normalized:
                 observed.add(normalized)
     true_positive = len(observed & REFERENCE_RESOURCES)
-    precision = true_positive / len(observed) if observed else 0.0
+    # The prompt asks for "affected Kubernetes resources" without bounding the
+    # list, and the staged cluster state names more affected objects than the
+    # four reference items (the owning ReplicaSet, a third restarting pod, the
+    # missing ConfigMap). Extra resources that are grounded in the cluster state
+    # are not counted as false positives; fabricated resources still are.
+    corpus = cluster_state.lower()
+    grounded_extras = {
+        item for item in observed - REFERENCE_RESOURCES if _resource_in_corpus(item, corpus)
+    }
+    fabricated = observed - REFERENCE_RESOURCES - grounded_extras
+    precision_denominator = true_positive + len(fabricated)
+    precision = true_positive / precision_denominator if precision_denominator else 0.0
     recall = true_positive / len(REFERENCE_RESOURCES)
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return f1, {
         "observed": sorted(observed),
         "expected": sorted(REFERENCE_RESOURCES),
+        "grounded_extras": sorted(grounded_extras),
+        "fabricated": sorted(fabricated),
         "precision": precision,
         "recall": recall,
     }
@@ -237,7 +259,9 @@ def score_report(
     components["primary_root_cause"] = _primary_score(causes)
     components["secondary_liveness_probe"] = _secondary_score(causes)
     components["tertiary_metrics_port"] = _tertiary_score(causes)
-    components["affected_resources"], details["affected_resources"] = _affected_resources_score(report)
+    components["affected_resources"], details["affected_resources"] = _affected_resources_score(
+        report, cluster_state
+    )
     components["remediation_plan"], details["remediation_plan"] = _remediation_score(report)
     components["evidence_grounding"], details["evidence_grounding"] = _evidence_grounding_score(
         causes,

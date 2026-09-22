@@ -349,6 +349,17 @@ def warehouse_metrics(db_path: Path) -> dict[str, Any]:
     }
 
 
+def _as_flag(value: Any) -> bool | None:
+    """Coerce a sidecar flag to a boolean; None when it is not a recognisable flag."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str) and value.strip().lower() in {"true", "false", "yes", "no", "1", "0"}:
+        return value.strip().lower() in {"true", "yes", "1"}
+    return None
+
+
 def within_pct(actual: int | float, target: int | float, pct: float) -> bool:
     return abs(actual - target) <= abs(target) * pct
 
@@ -413,17 +424,22 @@ def report_and_summary_truthful(
         != RAW_INPUT_COUNTS["raw_transaction_rows"]
     ):
         return False
-    if transformations.get("timestamps_standardized") is not True:
+    # output_contract.json lists these keys without value types. Accept the
+    # boolean flags as JSON booleans, 0/1, or "true"/"false" strings (a count of
+    # standardised rows next to integer counters is a natural reading of the
+    # contract), and accept the filled-column list in either order.
+    if _as_flag(transformations.get("timestamps_standardized")) is not True:
         return False
-    if transformations.get("schema_drift_columns_filled") != ["discount_pct", "channel"]:
+    drift_columns = transformations.get("schema_drift_columns_filled")
+    if not isinstance(drift_columns, list) or set(map(str, drift_columns)) != {"discount_pct", "channel"}:
         return False
-    if transformations.get("country_codes_standardized") != (metrics["invalid_country_codes"] == 0):
+    if _as_flag(transformations.get("country_codes_standardized")) != (metrics["invalid_country_codes"] == 0):
         return False
-    if transformations.get("supplier_names_standardized") != (metrics["invalid_supplier_rows"] == 0):
+    if _as_flag(transformations.get("supplier_names_standardized")) != (metrics["invalid_supplier_rows"] == 0):
         return False
-    if transformations.get("boolean_fields_normalized") != (metrics["invalid_boolean_rows"] == 0):
+    if _as_flag(transformations.get("boolean_fields_normalized")) != (metrics["invalid_boolean_rows"] == 0):
         return False
-    if transformations.get("empty_categories_labeled") != (metrics["null_category_rows"] == 0):
+    if _as_flag(transformations.get("empty_categories_labeled")) != (metrics["null_category_rows"] == 0):
         return False
 
     expected_load = {

@@ -6,6 +6,7 @@ import argparse
 import csv
 import io
 import json
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -98,7 +99,17 @@ def _load_csv_rows(text: str | bytes, *, label: str) -> tuple[list[str], list[di
 
 
 def _normalize_token(value: Any) -> str:
-    return str(value).strip().lower()
+    # Fold the separator variants agents use for the same action token
+    # ("right_size", "right size", "right-size") onto the hyphenated form.
+    return re.sub(r"[\s_]+", "-", str(value).strip().lower())
+
+
+def _compact_token(value: Any) -> str:
+    # Identifier comparison that ignores punctuation. Resource ids that only exist
+    # in a dashboard screenshot get transcribed with a dropped or moved separator
+    # (e.g. "cw-loggroup-aws/lambda/old-processor" for
+    # "cw-loggroup-/aws/lambda/old-processor"); the alias lookup falls back to this.
+    return re.sub(r"[^0-9a-z]+", "", str(value).lower())
 
 
 def _nonempty_text(value: Any) -> bool:
@@ -167,7 +178,13 @@ def _canonical_resource_id(resource_id: Any, alias_lookup: dict[str, str]) -> st
     if not _nonempty_text(resource_id):
         return None
     normalized = _normalize_token(resource_id)
-    return alias_lookup.get(normalized, normalized)
+    if normalized in alias_lookup:
+        return alias_lookup[normalized]
+    compact = _compact_token(resource_id)
+    for alias, canonical in alias_lookup.items():
+        if _compact_token(alias) == compact:
+            return canonical
+    return normalized
 
 
 def _extract_reference_recommendations(

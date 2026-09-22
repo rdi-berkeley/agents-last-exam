@@ -48,7 +48,7 @@ def load_tiff_array(data: bytes, *, expected_shape: tuple[int, int] | None = Non
 
 
 def parse_track_table(text: str) -> dict[int, TrackRow]:
-    rows: dict[int, TrackRow] = {}
+    parsed: list[tuple[int, int, int, int, int]] = []
     for lineno, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.strip()
         if not line:
@@ -60,6 +60,17 @@ def parse_track_table(text: str) -> dict[int, TrackRow]:
             label, begin, end, parent = (int(part) for part in parts)
         except ValueError as exc:
             raise EvaluationError(f"res_track.txt line {lineno} contains non-integers") from exc
+        parsed.append((lineno, label, begin, end, parent))
+
+    # The prompt says only "B is the first frame index, E is the last frame index"
+    # and never states the base. A table that is consistently 1-based (no frame 0,
+    # some track ending on frame FRAME_COUNT) is unambiguous, so shift it instead of
+    # rejecting the whole submission.
+    if parsed and all(b >= 1 for _, _, b, _, _ in parsed) and max(e for _, _, _, e, _ in parsed) == FRAME_COUNT:
+        parsed = [(ln, lab, b - 1, e - 1, par) for ln, lab, b, e, par in parsed]
+
+    rows: dict[int, TrackRow] = {}
+    for lineno, label, begin, end, parent in parsed:
         if label <= 0:
             raise EvaluationError(f"res_track.txt line {lineno} has nonpositive label")
         if label in rows:

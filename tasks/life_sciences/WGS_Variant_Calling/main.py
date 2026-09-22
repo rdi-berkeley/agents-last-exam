@@ -151,20 +151,36 @@ def parse_mapping_rate(flagstat_text: str) -> Optional[float]:
     return None
 
 
+def _fraction_or_percent(value: float) -> float:
+    # Picard reports PERCENT_DUPLICATION as a fraction; free-form summaries
+    # ("Percentage duplicates: 33.33") report a percentage.
+    return value * 100 if value <= 1.0 else value
+
+
 def parse_duplication_rate(metrics_text: str) -> Optional[float]:
     lines = [line for line in metrics_text.strip().splitlines() if line.strip()]
     for idx, line in enumerate(lines):
-        if line.startswith("LIBRARY") and idx + 1 < len(lines):
-            headers = line.split("\t")
+        # Any tab-separated metrics table carrying a PERCENT_DUPLICATION column
+        # (Picard's LIBRARY table, samtools/sambamba/GATK variants, or a
+        # re-serialised table whose header starts with another column).
+        headers = line.split("\t")
+        if "PERCENT_DUPLICATION" in headers and idx + 1 < len(lines):
             values = lines[idx + 1].split("\t")
             try:
                 dup_col = headers.index("PERCENT_DUPLICATION")
-                return float(values[dup_col]) * 100
+                return _fraction_or_percent(float(values[dup_col]))
             except (ValueError, IndexError):
                 continue
-        if line.lower().startswith("percent_duplication"):
+        # "percent_duplication 0.33", "PERCENT_DUPLICATION: 0.33",
+        # "## Percentage duplicates: 33.33", "Duplication rate: 33.3%".
+        match = re.search(
+            r"(?:percent(?:age)?[_ ]duplicat(?:ion|es)|duplication[_ ]rate)\s*[:=]?\s*([0-9]*\.?[0-9]+)\s*%?",
+            line,
+            flags=re.IGNORECASE,
+        )
+        if match:
             try:
-                return float(line.split()[-1]) * 100
+                return _fraction_or_percent(float(match.group(1)))
             except ValueError:
                 continue
     read_total = None

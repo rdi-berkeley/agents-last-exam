@@ -425,8 +425,14 @@ def _evaluate_model_config(model_config: Any) -> Dict[str, Any]:
     if not has_hybrid_method:
         return {"passed": False, "reason": "missing hybrid method/combination"}
 
-    dimensionality_keys = ["n_factors", "latent_factors", "embedding_dim", "n_components", "dim", "rank"]
-    has_dimensionality = any(key in warm_model or key in cold_model for key in dimensionality_keys)
+    # The agent-visible prompt lists the required model_config keys without naming a
+    # dimensionality key, so accept any reasonable spelling of a latent-dimension
+    # parameter (n_factors, factors, embedding_dim, dims, n_components, rank, ...).
+    dimensionality_markers = ("factor", "dim", "component", "rank", "embedding")
+    has_dimensionality = any(
+        any(marker in str(key).lower() for marker in dimensionality_markers)
+        for key in [*warm_model.keys(), *cold_model.keys()]
+    )
     if not has_dimensionality:
         return {"passed": False, "reason": "missing dimensionality / latent-factor parameter"}
 
@@ -453,10 +459,10 @@ def _evaluate_split_contract(
     evaluation_report: Any,
     warm_metrics: Dict[str, Any],
 ) -> Dict[str, Any]:
-    model_result = _evaluate_model_config(model_config)
-    if not model_result["passed"]:
-        return {"passed": False, "reason": model_result["reason"]}
-
+    # model_config completeness is scored by its own criterion (model_documentation);
+    # re-checking it here double-counted a single documentation slip as two failed
+    # criteria. This criterion covers the split contract only: no cold items in the
+    # warm predictions and reported warm metrics consistent with the recomputation.
     if any(metadata_labels.get(_parse_int(row["item_id"]), False) for row in warm_rows):
         return {"passed": False, "reason": "warm predictions include cold items"}
 

@@ -46,6 +46,19 @@ def exact_file_match(path_a: Path, path_b: Path) -> bool:
     return path_a.read_bytes() == path_b.read_bytes()
 
 
+def csv_content_match(path_a: Path, path_b: Path) -> bool:
+    """Byte equality after newline normalisation, for editable CSVs.
+
+    The editable-file contract never specifies line endings, and Python's csv
+    module writes CRLF by default; a row-identical file must not lose points for
+    that. Immutable files keep the strict byte comparison.
+    """
+    if exact_file_match(path_a, path_b):
+        return True
+    normalise = lambda raw: raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n").rstrip(b"\n")  # noqa: E731
+    return normalise(path_a.read_bytes()) == normalise(path_b.read_bytes())
+
+
 def sha256_path(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -141,7 +154,15 @@ def main() -> int:
         policy_points += 10
     if policy.get("drop_lowest") == expected_policy["drop_lowest"]:
         policy_points += 5
-    if policy.get("empty_grade_behavior") == expected_policy["empty_grade_behavior"]:
+    # The visible bundle_lib.py only branches on == "exclude" (anything else counts
+    # missing work as zero) and the visible policy vocabulary is {"exclude",
+    # "count_as_zero"}; "zero" appears in no agent-visible file. Accept any spelling
+    # the visible recomputation treats identically to the canonical value.
+    observed_empty = policy.get("empty_grade_behavior")
+    expected_empty = expected_policy["empty_grade_behavior"]
+    if observed_empty == expected_empty or (
+        expected_empty == "zero" and observed_empty in {"count_as_zero", "zero", "missing_zero"}
+    ):
         policy_points += 5
     gates.append(gate("category_weights_drop_empty", policy_points, 20, "Policy settings for weights, drop-lowest, and empty-grade behavior."))
 
@@ -254,12 +275,12 @@ def main() -> int:
         )
         gates.insert(0, immutable_gate)
 
-        if not exact_file_match(sub_path / "integration" / "id_map.csv", ref_path / "integration" / "id_map.csv"):
+        if not csv_content_match(sub_path / "integration" / "id_map.csv", ref_path / "integration" / "id_map.csv"):
             registrar_gate = find_gate(gates, "registrar_and_oneroster_exports")
             registrar_gate["points"] = round(max(0.0, registrar_gate["points"] - 4.0), 2)
             registrar_gate["detail"] += " ID map mismatch against gold backup."
             registrar_gate["passed"] = False
-        if not exact_file_match(sub_path / "gradebook" / "final_grade_flags.csv", ref_path / "gradebook" / "final_grade_flags.csv"):
+        if not csv_content_match(sub_path / "gradebook" / "final_grade_flags.csv", ref_path / "gradebook" / "final_grade_flags.csv"):
             workflow_gate = find_gate(gates, "late_override_excused_cutoffs")
             workflow_gate["points"] = round(max(0.0, workflow_gate["points"] - 2.5), 2)
             workflow_gate["detail"] += " Final grade lock flags not fully repaired."

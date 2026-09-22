@@ -266,8 +266,12 @@ def _score_tier3(output: Dict[str, Any]) -> Tuple[float, List[str], bool]:
             exact = row.get(f"exact_mean_{species}")
             tau = row.get(f"tauleap_mean_{species}")
             rel = row.get(f"relative_error_mean_{species}")
-            if not _is_number(exact) or float(exact) < 0.0:
-                comp_ok = False
+            # The output schema in problem_spec.md only defines the species-A
+            # fields for comparison rows; B/C fields are optional extras and are
+            # validated only when present (as tauleap_mean_* already is).
+            if species == "A" or exact is not None:
+                if not _is_number(exact) or float(exact) < 0.0:
+                    comp_ok = False
             if tau is not None and (not _is_number(tau) or float(tau) < 0.0):
                 comp_ok = False
             if rel is not None and (not _is_number(rel) or not (0.0 <= float(rel) < 0.05)):

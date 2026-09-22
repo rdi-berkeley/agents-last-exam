@@ -38,6 +38,19 @@ def _to_float(value: Any) -> float:
     return float(value)
 
 
+def _passes(check) -> bool:
+    """Evaluate one field-level check; a missing/malformed field fails that field only.
+
+    Each scoring component used to sit in a single try-block, so one missing key
+    (e.g. `adjusted_total_n`) raised and discarded the partial credit already earned
+    by the other fields of that component.
+    """
+    try:
+        return bool(check())
+    except Exception:
+        return False
+
+
 def _png_ok(raw: bytes) -> bool:
     return len(raw) > 100 and raw.startswith(b"\x89PNG\r\n\x1a\n")
 
@@ -75,15 +88,17 @@ def evaluate_output_bundle(
 
     try:
         sample_size = _load_json(output_files["sample_size.json"])
-        pred_n = _to_float(sample_size.get("per_arm_n"))
+        if not isinstance(sample_size, dict):
+            raise ValueError("sample_size.json is not a JSON object")
         ref_n = _to_float(ref["sample_size"]["per_arm_n"])
-        if abs(pred_n - ref_n) / ref_n <= 0.03:
+        if _passes(lambda: abs(_to_float(sample_size.get("per_arm_n")) - ref_n) / ref_n <= 0.03):
             checks["sample_size"] += 0.65
         for key in ["events_required", "total_n", "adjusted_total_n"]:
-            if int(round(_to_float(sample_size.get(key)))) == int(ref["sample_size"][key]):
+            if _passes(lambda key=key: int(round(_to_float(sample_size.get(key)))) == int(ref["sample_size"][key])):
                 checks["sample_size"] += 0.08
-        inflation = _to_float(sample_size.get("inflation_factor"))
-        if abs(inflation - _to_float(ref["sample_size"]["inflation_factor"])) <= 0.01:
+        if _passes(
+            lambda: abs(_to_float(sample_size.get("inflation_factor")) - _to_float(ref["sample_size"]["inflation_factor"])) <= 0.01
+        ):
             checks["sample_size"] += 0.11
         checks["sample_size"] = min(1.0, checks["sample_size"])
     except Exception as exc:
@@ -102,18 +117,18 @@ def evaluate_output_bundle(
                 total += 4
                 continue
             total += 4
-            if abs(_to_float(row.get("info_fraction")) - _to_float(ref_row["info_fraction"])) <= 0.001:
+            if _passes(lambda: abs(_to_float(row.get("info_fraction")) - _to_float(ref_row["info_fraction"])) <= 0.001):
                 passed += 1
-            if int(round(_to_float(row.get("events_at_look")))) == int(ref_row["events_at_look"]):
+            if _passes(lambda: int(round(_to_float(row.get("events_at_look")))) == int(ref_row["events_at_look"])):
                 passed += 1
-            if abs(_to_float(row.get("efficacy_z_boundary")) - _to_float(ref_row["efficacy_z_boundary"])) <= 0.05:
+            if _passes(lambda: abs(_to_float(row.get("efficacy_z_boundary")) - _to_float(ref_row["efficacy_z_boundary"])) <= 0.05):
                 passed += 1
             futility = str(ref_row["futility_z_boundary"]).upper()
             if futility == "NA":
                 observed_futility = str(row.get("futility_z_boundary", "")).strip().upper()
                 if observed_futility in {"", "NA", "NAN", "NONE"}:
                     passed += 1
-            elif abs(_to_float(row.get("futility_z_boundary")) - _to_float(ref_row["futility_z_boundary"])) <= 0.05:
+            elif _passes(lambda: abs(_to_float(row.get("futility_z_boundary")) - _to_float(ref_row["futility_z_boundary"])) <= 0.05):
                 passed += 1
         checks["boundaries"] = passed / total if total else 0.0
     except Exception as exc:
@@ -132,12 +147,12 @@ def evaluate_output_bundle(
             if ep is None:
                 issues.append(f"secondary endpoint {ref_ep['name']} missing")
                 continue
-            if int(round(_to_float(ep.get("hochberg_rank")))) == int(ref_ep["hochberg_rank"]):
+            if _passes(lambda: int(round(_to_float(ep.get("hochberg_rank")))) == int(ref_ep["hochberg_rank"])):
                 passed += 1
-            if abs(round(_to_float(ep.get("adjusted_alpha")), 4) - _to_float(ref_ep["adjusted_alpha"])) <= 0.0001:
+            if _passes(lambda: abs(round(_to_float(ep.get("adjusted_alpha")), 4) - _to_float(ref_ep["adjusted_alpha"])) <= 0.0001):
                 passed += 1
         total += 1
-        if abs(_to_float(mt.get("subgroup_bonferroni_alpha")) - _to_float(ref["multiple_testing"]["subgroup_bonferroni_alpha"])) <= 0.00001:
+        if _passes(lambda: abs(_to_float(mt.get("subgroup_bonferroni_alpha")) - _to_float(ref["multiple_testing"]["subgroup_bonferroni_alpha"])) <= 0.00001):
             passed += 1
         checks["multiple_testing"] = passed / total if total else 0.0
     except Exception as exc:
