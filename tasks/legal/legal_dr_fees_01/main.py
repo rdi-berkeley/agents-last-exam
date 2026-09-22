@@ -117,6 +117,16 @@ for each case are:
 - `institution_fee_rmb`
 - `arbitrator_remuneration_rmb`
 - `total_fee_rmb`
+
+## Evaluation conventions
+- Case 4 (settlement reached before applying for arbitration) is charged under the BAC
+  mediation-arbitration linkage fast-track fee schedule (the fast-track document in the staged
+  set): compute the standard institution-fee and arbitrator-remuneration bases for the amount in
+  dispute, then apply the fast-track ratio for that amount band (25% for Case 4's band) to each
+  component separately; `total_fee_rmb` is the sum of the two reduced components. The ratio
+  table in that document spans several amount bands per merged cell, so read it from the
+  rendered page rather than from raw text extraction.
+- Each evaluated field is compared with the answer key to within 0.01 RMB.
 """
 
     def to_metadata(self) -> dict:

@@ -157,6 +157,13 @@ Rules:
 - Do not modify files under `input/`.
 - Keep the final deliverables at the output-directory root.
 - Write valid SQLite / JSON outputs only.
+
+Sidecar value types (`data_quality_report.json` -> `transformations`):
+- `duplicates_removed`, `null_rows_dropped`, `null_customer_ids_mapped`: integer counts.
+- `timestamps_standardized`, `country_codes_standardized`, `supplier_names_standardized`,
+  `boolean_fields_normalized`, `empty_categories_labeled`: JSON booleans, `true` when the
+  corresponding quality check passes on the loaded warehouse.
+- `schema_drift_columns_filled`: the list of filled column names, e.g. `["discount_pct", "channel"]`.
 """
 
     def to_metadata(self) -> dict[str, Any]:

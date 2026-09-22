@@ -120,6 +120,24 @@ Required output filenames:
 - `boundary_plot.png`
 
 Read the protocol and instructions, compute the group-sequential design quantities, document the SAP, and include a reproducible R script. Do not use internet access.
+
+## Output field names (used by the evaluator)
+- `sample_size.json`: `per_arm_n`, `events_required`, `total_n`, `adjusted_total_n`,
+  `inflation_factor`.
+- `boundaries.csv`: columns `look`, `info_fraction`, `events_at_look`, `efficacy_z_boundary`,
+  `futility_z_boundary` (write `NA` where no futility bound applies).
+- `multiple_testing.json`: `secondary_endpoints` (a list of objects with `name`,
+  `hochberg_rank`, `adjusted_alpha`) and `subgroup_bonferroni_alpha`.
+- `power_curve.csv`: columns `hazard_ratio`, `power`, at least 5 rows including the protocol
+  hazard ratio.
+- `SAP.md` must discuss sample size, O'Brien-Fleming boundaries, Hochberg, futility and overall
+  survival; `analysis.R` must use `gsDesign` and read `protocol.json`.
+
+## Design conventions
+- Use the protocol's target number of events as the design events for the group-sequential
+  boundaries; report the Schoenfeld-powered sample size separately.
+- "O'Brien-Fleming" means the Lan-DeMets O'Brien-Fleming-type spending function.
+- Compute conditional power for the futility rule under the design (alternative) hazard ratio.
 """
 
     def to_metadata(self) -> dict:

@@ -137,6 +137,17 @@ Write all final files under `{self.remote_output_dir}`:
 
 Follow the file contracts in `{self.task_prompt_file}` and the schemas under
 `{self.input_dir}/output_schemas`. Do not modify files under `{self.input_dir}`.
+
+## Classification conventions
+- Assign the business line from the event's content (the affected product, customer segment or
+  activity, cf. `Key_Keywords`) rather than from the reporting department alone; the
+  `Key_Departments` column is guidance and content takes precedence when they disagree.
+- Events reported by bank-wide support functions (IT, operations management, HR, finance,
+  customer service, research) take the business line of the affected product or customer
+  segment; trade-finance and letter-of-credit events belong to Commercial Banking (`BL4`)
+  regardless of department.
+- The evaluator requires at least 54 of 60 events correct on each of the loss-event-category and
+  business-line axes.
 """
 
     def to_metadata(self) -> dict[str, Any]:

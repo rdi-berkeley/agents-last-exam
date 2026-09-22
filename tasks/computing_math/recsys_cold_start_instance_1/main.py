@@ -133,6 +133,15 @@ Environment notes:
 - Use `{self.setup_runtime_script}` to materialize the staged task-local Python environment.
 - Use `{self.run_runtime_script}` to run Python inside that environment.
 - Do not modify files under `{self.input_dir}`.
+
+Evaluation conventions:
+- `model_config.json`: `warm_model` and `cold_model` must each include a `type` string, and at
+  least one of them must state its latent dimensionality under a key such as `n_factors`,
+  `embedding_dim`, `n_components`, `dim` or `rank`.
+- Warm-item acceptance thresholds, recomputed by the evaluator from `predictions_warm.csv` on
+  the canonical split: `NDCG@10 >= 0.03`, `HitRate@10 >= 0.15`, `RMSE <= 5.0`. The
+  `warm_items` metrics you report must agree with that recomputation (NDCG within 0.01,
+  HitRate within 0.05, RMSE within 0.1), and `predictions_warm.csv` must not contain cold items.
 """
 
     def to_metadata(self) -> dict:

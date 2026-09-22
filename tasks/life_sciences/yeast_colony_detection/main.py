@@ -94,6 +94,11 @@ Detect the red yeast colonies growing on the agar plate while excluding white do
 - Do not modify files under `{self.input_dir}`.
 - Only read the visible files under `{self.input_dir}`.
 - Keep all task-produced files inside `{self.remote_output_dir}`.
+
+## Counting conventions
+- Faint or pale pink colonies count as red colonies. Only white or cream dots, glare and other
+  non-colony artefacts are noise. When a threshold sweep straddles the answer, prefer the
+  inclusive count.
 """
 
     def to_metadata(self) -> dict[str, Any]:

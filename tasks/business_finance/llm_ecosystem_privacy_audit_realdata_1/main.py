@@ -157,6 +157,12 @@ locally on this VM. No network access is required or permitted.
   `", "` only; some `api_name` values contain commas.
 - Do not modify any file under `{self.input_dir}`.
 - Write only to `{self.remote_output_dir}`.
+
+## Evaluation conventions
+- `action_count` and `avg_datatypes_per_action` count only Actions that have at least one
+  classified data field in `pp_action_data_entities.json`. An Action whose entity list is empty
+  does not count toward either value, and a domain whose Actions all have empty entity lists is
+  omitted from the report even if it is served by 3 or more GPTs.
 """
 
     def to_metadata(self) -> dict:

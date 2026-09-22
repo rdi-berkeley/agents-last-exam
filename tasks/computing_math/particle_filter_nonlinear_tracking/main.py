@@ -146,6 +146,23 @@ Requirements:
 - Tier 1 and Tier 2 are required for any passing score. Tier 3 upgrades the task from partial credit to full credit.
 - If you cannot complete Tier 3, still write truthful Tier 1 / Tier 2 outputs and a truthful `results.json` rather than fabricating missing work.
 - Do not modify files outside `{self.remote_output_dir}`.
+
+Random-draw order (the evaluator regenerates the ground truth with the same seed and requires
+your saved `true_states` / `observations` to match it to 1e-8, so reproduce this exact order):
+- Tier 1: `x0 = rng.normal(x0_mean, sqrt(x0_var))`, then `obs[0] = x0 + rng.normal(0, sqrt(R))`;
+  for each `t >= 1`: `x_t = A * x_{{t-1}} + rng.normal(0, sqrt(Q))`, then
+  `obs[t] = x_t + rng.normal(0, sqrt(R))`. Draw process and measurement noise interleaved per
+  time step, not as vectors after the loop.
+- Tier 2: a fresh `default_rng(24601)`; for each `t` (starting at 0): if `t > 0`,
+  `z = sqrt(q) * rng.standard_normal(2)` and `state = F @ state + G @ z`; then the bearing noise
+  `rng.normal(0, sigma_bearing)` and the range noise `rng.normal(0, sigma_range)`.
+- Tier 3: a fresh `default_rng(24601)`; for each `t` (starting at 0): if `t > 0`,
+  `chi2 = rng.chisquare(nu)`, `noise = sqrt(nu / chi2) * rng.standard_normal(5) * sqrt(q_diag)`,
+  `state = F(omega) @ state + noise`, then two bias-drift draws
+  `bias[0] += rng.normal(0, bias_drift_std)` and `bias[1] += rng.normal(0, bias_drift_std)`;
+  then the bearing noise `rng.normal(0, sigma_bearing)` for the active sensor.
+- Alternatively, Tier 2 and Tier 3 may continue the Tier 1 generator instead of re-seeding
+  (a shared reference RNG); both conventions are accepted.
 """
 
     def to_metadata(self) -> dict:
