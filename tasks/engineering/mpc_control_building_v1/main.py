@@ -30,11 +30,23 @@ def _read_script(name: str) -> str:
 
 
 def _parse_verifier_result(result: dict) -> float:
-    stdout = result.get("output", result.get("stdout", ""))
+    stdout = str(result.get("stdout", result.get("output", "")))
     return_code = result.get("return_code", result.get("returncode"))
     stderr = str(result.get("stderr", ""))
     try:
-        data = json.loads(stdout)
+        # verify_outputs.py prints its JSON via `uv run --with pandas --with numpy`,
+        # whose dependency-resolution output can precede the JSON on stdout, so
+        # parse the JSON object out of the surrounding text.
+        text = stdout.strip()
+        if not text:
+            raise ValueError("verifier produced no stdout")
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            start, end = text.find("{"), text.rfind("}")
+            if start == -1 or end <= start:
+                raise
+            data = json.loads(text[start : end + 1])
         if not isinstance(data, dict):
             raise TypeError("verifier result must be a JSON object")
         passed = data.get("passed")
@@ -50,7 +62,7 @@ def _parse_verifier_result(result: dict) -> float:
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise RuntimeError(
             "MPC verifier failed to produce a valid result: "
-            f"return_code={return_code!r}, stderr={stderr[:1000]!r}"
+            f"return_code={return_code!r}, stdout={stdout[-500:]!r} stderr={stderr[:1000]!r}"
         ) from exc
     logger.info("MPC control building eval result: %s", data)
     return score

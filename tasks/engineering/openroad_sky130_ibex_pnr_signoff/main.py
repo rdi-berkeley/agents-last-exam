@@ -139,7 +139,8 @@ async def _run_verifier_background(
             "failed to launch verifier: "
             f"stdout={launch.get('stdout')} stderr={launch.get('stderr')}"
         )
-    pid = (launch.get("stdout") or "").strip().splitlines()[-1] if launch.get("stdout") else ""
+    launch_lines = (launch.get("stdout") or "").strip().splitlines()
+    pid = launch_lines[-1] if launch_lines else ""
     logger.info("[%s] verifier started in background pid=%s run_dir=%s", tag, pid or "unknown", run_dir)
 
     waited = 0
@@ -326,7 +327,8 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             run_dir_result.get("stderr", ""),
         )
         return [0.0]
-    run_dir = (run_dir_result.get("stdout") or "").strip().splitlines()[-1]
+    run_dir_lines = (run_dir_result.get("stdout") or "").strip().splitlines()
+    run_dir = run_dir_lines[-1] if run_dir_lines else ""
     if not run_dir:
         logger.error("[%s] failed to create verifier run dir: empty mktemp output", tag)
         return [0.0]
