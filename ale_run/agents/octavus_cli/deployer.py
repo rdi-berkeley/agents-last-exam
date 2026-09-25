@@ -59,6 +59,11 @@ _TERM_GRACE_S = 3.0
 
 # Terminal thread statuses on the consumer read surface.
 _TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
+# The execution recording is stopped and uploaded after the run ends, so a finished
+# thread can still report it `recording` / `processing`. It is final in one of these
+# states; the thread read waits up to _RECORDING_GRACE_S for it (normally seconds).
+_RECORDING_SETTLED = frozenset({"ready", "failed", "unavailable"})
+_RECORDING_GRACE_S = 120.0
 
 # The computer's display + accessibility stack the CLI's browser / computer-use
 # tools need. Mirrors the public install script's apt set; a shell/filesystem-
@@ -634,15 +639,20 @@ class OctavusCliDeployer(BaseAgentDeployer):
 
         The CLI already waited for the run to finish, so the thread is normally
         terminal by the time this host-side pass runs; a short poll absorbs the
-        few seconds usage aggregation can lag.
+        few seconds usage aggregation can lag, and a finished thread is read until
+        its recording settles (see ``_RECORDING_SETTLED``).
         """
         url = (
             f"{platform_url}/api/v1/workforce/agents/{agent_id}"
             f"/threads/{thread_id}"
         )
         deadline = time.monotonic() + 60.0
+        # Set once the run is finished but its recording is not: the recording gets its
+        # own window instead of the usage one.
+        recording_deadline: float | None = None
         last: dict | None = None
         while True:
+            until = deadline if recording_deadline is None else recording_deadline
             try:
                 request = urllib.request.Request(
                     url,
@@ -652,14 +662,19 @@ class OctavusCliDeployer(BaseAgentDeployer):
                     last = json.loads(response.read().decode("utf-8"))
             except (urllib.error.URLError, TimeoutError, ValueError) as exc:
                 logger.warning("octavus_cli: thread read error: %s", exc)
-                if time.monotonic() >= deadline:
+                if time.monotonic() >= until:
                     return last
                 time.sleep(5.0)
                 continue
             status = str((last or {}).get("status") or "")
             if status in _TERMINAL_STATUSES and (last or {}).get("usage"):
-                return last
-            if time.monotonic() >= deadline:
+                recording = (last or {}).get("recording")
+                if not isinstance(recording, dict) or recording.get("status") in _RECORDING_SETTLED:
+                    return last
+                if recording_deadline is None:
+                    recording_deadline = time.monotonic() + _RECORDING_GRACE_S
+                    until = recording_deadline
+            if time.monotonic() >= until:
                 return last
             time.sleep(5.0)
 
