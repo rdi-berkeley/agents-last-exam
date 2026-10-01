@@ -59,6 +59,7 @@ CUA MCP Server, stdio transport. Written to `~/.codex/config.toml`:
 type = "stdio"
 command = "/usr/local/bin/node"
 args = ["/home/user/cua_mcp_server/src/index.js"]
+env = { CUA_SERVER_URL = "http://127.0.0.1:5000", CUA_COORDINATE_SPACE = "pixel" }
 ```
 
 ## Config
@@ -70,6 +71,7 @@ Config fields (standalone dataclass):
 | `sandbox_mode` | str | `"danger-full-access"` | Codex sandbox policy |
 | `yolo` | bool | `true` | Bypass all approval prompts |
 | `reasoning_effort` | str | `"high"` | Model reasoning effort hint |
+| `coordinate_space` | str \| null | `null` | Pointer coordinates emitted by the model. Auto-detects Gemini as normalized and other models as pixels |
 | `codex_version` | str | `"0.114.0"` | NPM package version to install |
 | `patched_binary_url` | str | `""` | GitHub Release URL for patched Linux native binary (`codex`, musl x86-64) |
 | `patched_binary_url_windows` | str | `""` | GitHub Release URL for patched Windows binary (`codex.exe`, windows-msvc); used instead of `patched_binary_url` on Windows |

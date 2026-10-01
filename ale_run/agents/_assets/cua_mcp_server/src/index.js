@@ -3,10 +3,10 @@
  * CUA MCP Server — LiteDesktopActionSpace over MCP (stdio).
  *
  * Wraps CUA computer-server HTTP API into MCP tools aligned with
- * LiteDesktopActionSpace (normalized [0, 1000] coordinates).
+ * LiteDesktopActionSpace pointer actions.
  *
- * The MCP bridge converts normalized coordinates to absolute pixels
- * by querying screen size from the CUA server on first use, then caching.
+ * Pointer coordinates default to normalized [0, 1000]. Set
+ * CUA_COORDINATE_SPACE=pixel to use screenshot pixels instead.
  *
  * Runs on the VM, consumed by Claude Code / Codex via stdio transport.
  *
@@ -20,6 +20,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { CuaClient } from "./cua-client.js";
+import {
+  coordinateDescription,
+  fromAbsoluteCoordinate,
+  parseCoordinateSpace,
+  toAbsoluteCoordinate,
+} from "./coordinate-space.js";
 
 // Key normalization — maps LLM-style key names to CUA server pynput names.
 // CUA server's Windows handler has its own _key_from_string with .lower(),
@@ -91,10 +97,11 @@ const CUA_URL = process.env.CUA_SERVER_URL || "http://localhost:5000";
 const client = new CuaClient(CUA_URL);
 
 // ------------------------------------------------------------------
-// Coordinate conversion: normalized [0, 1000] → absolute pixels
+// Coordinate conversion
 // ------------------------------------------------------------------
 
-const COORD_MAX = 1000;
+const COORDINATE_SPACE = parseCoordinateSpace(process.env.CUA_COORDINATE_SPACE);
+const COORDINATE_DESCRIPTION = coordinateDescription(COORDINATE_SPACE);
 let _screenSize = null;
 
 async function getScreenSize() {
@@ -105,19 +112,19 @@ async function getScreenSize() {
 }
 
 async function toAbsolute(coordinate) {
+  if (COORDINATE_SPACE === "pixel") {
+    return toAbsoluteCoordinate(coordinate, COORDINATE_SPACE);
+  }
   const screen = await getScreenSize();
-  return {
-    x: Math.round((coordinate[0] / COORD_MAX) * screen.width),
-    y: Math.round((coordinate[1] / COORD_MAX) * screen.height),
-  };
+  return toAbsoluteCoordinate(coordinate, COORDINATE_SPACE, screen);
 }
 
 async function toNormalized(absX, absY) {
+  if (COORDINATE_SPACE === "pixel") {
+    return fromAbsoluteCoordinate(absX, absY, COORDINATE_SPACE);
+  }
   const screen = await getScreenSize();
-  return [
-    Math.round((absX / screen.width) * COORD_MAX),
-    Math.round((absY / screen.height) * COORD_MAX),
-  ];
+  return fromAbsoluteCoordinate(absX, absY, COORDINATE_SPACE, screen);
 }
 
 // ------------------------------------------------------------------
@@ -165,9 +172,8 @@ const server = new McpServer({
   version: "0.3.0",
 });
 
-// Zod schema for normalized [0, 1000] coordinate pair
 const zCoordinate = z.array(z.number()).length(2).describe(
-  "(x, y) coordinates normalized to [0, 1000]."
+  COORDINATE_DESCRIPTION
 );
 
 // ================================================================
@@ -275,7 +281,7 @@ server.tool(
   "click",
   "On a desktop, perform mouse click at specified coordinates.",
   {
-    coordinate: zCoordinate.optional().describe("(x, y) coordinates normalized to [0, 1000]."),
+    coordinate: zCoordinate.optional().describe(COORDINATE_DESCRIPTION),
     button: z.enum(["left", "right", "middle"]).default("left").describe("Mouse button to click."),
     clicks: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1).describe(
       "Number of clicks: 1=single, 2=double, 3=triple."
@@ -314,9 +320,9 @@ server.tool(
   "drag",
   "On a desktop, drag the mouse from start to end coordinates. Uses mouse_down + move_cursor + mouse_up for reliable cross-platform dragging.",
   {
-    coordinate: zCoordinate.describe("Ending (x, y) coordinates, normalized to [0, 1000]."),
+    coordinate: zCoordinate.describe(`Ending ${COORDINATE_DESCRIPTION}`),
     start_coordinate: z.array(z.number()).length(2).optional().describe(
-      "Starting (x, y) coordinates, normalized to [0, 1000]."
+      `Starting ${COORDINATE_DESCRIPTION}`
     ),
     button: z.enum(["left", "right", "middle"]).default("left").describe(
       "Mouse button to hold while dragging."
@@ -374,7 +380,7 @@ server.tool(
     direction: z.enum(["up", "down", "left", "right"]).describe("The direction to scroll."),
     amount: z.number().describe("Number of scroll units."),
     coordinate: zCoordinate.optional().describe(
-      "(x, y) coordinates. If provided, cursor moves here before scrolling."
+      `${COORDINATE_DESCRIPTION} If provided, cursor moves here before scrolling.`
     ),
   },
   async ({ direction, amount, coordinate }) => {
@@ -460,8 +466,8 @@ server.tool(
   async () => {
     const result = await client.sendCommand("get_cursor_position");
     const pos = result.position;
-    const norm = await toNormalized(pos.x, pos.y);
-    return textOnly(`Cursor at [${norm[0]}, ${norm[1]}]`);
+    const coordinate = await toNormalized(pos.x, pos.y);
+    return textOnly(`Cursor at [${coordinate[0]}, ${coordinate[1]}]`);
   }
 );
 
@@ -469,9 +475,8 @@ server.registerTool(
   "get_screen_size",
   {
     description:
-      "On a desktop, get the screen size in absolute pixels. Coordinates for the " +
-      "other tools are normalized to [0, 1000]; this reports the underlying pixel " +
-      "dimensions for callers that work in pixel space.",
+      "On a desktop, get the screen size in absolute pixels. Pointer tools use " +
+      `${COORDINATE_SPACE} coordinates.`,
     inputSchema: {},
     outputSchema: { width: z.number().int(), height: z.number().int() },
   },
