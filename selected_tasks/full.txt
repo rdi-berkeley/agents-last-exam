@@ -151,3 +151,6 @@ visual_media/project_migration
 visual_media/skeletal_animation_reproduction
 visual_media/uv_reproduction
 visual_media/video_storyboard_001
+engineering/autocad_drafting_from_reference
+engineering/cad_part_from_drawing_rubric
+engineering/cad_session_brief_recovery

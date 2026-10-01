@@ -149,3 +149,6 @@ visual_media/human_mesh_animation_reproduction
 visual_media/inkscape_cultural_poster_design
 visual_media/uv_reproduction
 visual_media/video_storyboard_001
+engineering/autocad_drafting_from_reference
+engineering/cad_part_from_drawing_rubric
+engineering/cad_session_brief_recovery

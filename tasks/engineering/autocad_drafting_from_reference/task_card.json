@@ -1,0 +1,28 @@
+{
+  "taskId": "engineering/autocad_drafting_from_reference",
+  "title": "Recreate six real AutoCAD drafting jobs as DXF from the drafter's reference material",
+  "summary": "Six 2D drafting jobs taken from recorded AutoCAD sessions (mechanical profiles, a support stand, a kitchen plan and elevation, an arc exercise): brief plus the PDF/photo/print the drafter worked from; deliver one DXF per job, scored by tolerant line-geometry overlap against the drafter's DWG.",
+  "category": "engineering",
+  "software": ["ezdxf", "LibreCAD", "QCAD", "FreeCAD", "Python"],
+  "taskPrompt": "You are a CAD drafter. A client sends you six drafting jobs that were originally done in AutoCAD and needs each drawing recreated as a DXF file.\n\n## Input\n- Six jobs in `input/drawings/d01/` .. `d06/`. Each folder holds `brief.md` (what the drawing must show) and the reference material the drafter worked from: a PDF or photo of the drawing to reproduce and, in most folders, a `reference_*` image that is a print of the expected finished sheet.\n\n## What you must do\n1. Read each brief and study the reference images; measure proportions from the given dimensions.\n2. Draft the drawing in model space with any open-source tool: all outlines, hidden and centre lines, hatches and dimensions of the reference. Text is not scored. Dimensions must be real DIMENSION entities (for example ezdxf `add_linear_dim`, `add_diameter_dim`, `add_radius_dim`); they are scored by count, and plain lines drawn to look like dimensions are not counted.\n3. Save each job as `output/<stem>.dxf` (for example `d01.dxf`), any DXF version, any units.\n\n## Scoring\nEach DXF is rendered to a line raster over its own extents (absolute position and scale do not matter, proportions do) and compared with the reference drawing rendered the same way. Score per drawing is the F1 of line-pixel precision and recall with a tolerance of about 0.6 % of the sheet width. Task score = mean over the six drawings; a missing or unreadable DXF scores 0.",
+  "agentMustDo": [
+    "Read brief.md and the reference PDF/image of each of the 6 jobs.",
+    "Draft every outline, centre line, hatch and dimension line in model space with an open-source DXF tool.",
+    "Write output/<stem>.dxf for d01..d06."
+  ],
+  "inputFiles": [
+    {"name": "drawings/<stem>/brief.md", "format": "Markdown", "path": "input/drawings/", "description": "The drafting brief (objective, description, deliverable) the original drafter received."},
+    {"name": "drawings/<stem>/*.pdf, *.png, *.jpg", "format": "PDF/PNG/JPEG", "path": "input/drawings/", "description": "Reference drawing to reproduce (PDF or photo) and a pipeline-generated print of the expected sheet."},
+    {"name": "README.md", "format": "Markdown", "path": "input/README.md", "description": "Task brief and output contract."}
+  ],
+  "referenceFiles": [
+    {"name": "<stem>/expert.dxf", "format": "DXF", "path": "reference/", "description": "The drafter's delivered DWG converted to DXF with LibreDWG (never staged for the agent)."},
+    {"name": "<stem>/rubrics.json, task_desc.json", "format": "JSON", "path": "reference/", "description": "Original brief and the designer's requirement list, kept for audit."},
+    {"name": "manifest.json", "format": "JSON", "path": "reference/", "description": "Per-drawing source session, expert time and conversion status."}
+  ],
+  "evaluation": "**Hard gate conditions** (drawing score = 0): output/<stem>.dxf missing, unreadable by ezdxf, or with no drawable entity in model space.\n\n**Scoring method:** every drawable entity (lines, polylines, circles, arcs, ellipses, splines, hatches, block inserts, dimension geometry; text excluded) of both drawings is flattened to polylines and drawn 1 px wide into a 1024 x 1024 raster over a square frame around the drawing's own extents (4 % padding). Precision = share of predicted line pixels within 6 px of a reference line pixel; recall = the converse; drawing score = F1. Task score = mean over the six drawings.\n\n- Where does the scoring logic run? host-side: evaluate() copies the DXF files off the VM and scores them with ezdxf + Pillow + SciPy on the host.\n\n**PERFECT output:** the same geometry at any scale or position: F1 above 0.95.\n**WRONG/empty output:** a missing file scores 0; an unrelated drawing scores below 0.3; the reference with all holes and dimensions removed scores about 0.6-0.8, so completeness matters.",
+  "vm": {"machineType": "c4-standard-4", "snapshot": "cpu-free-ubuntu", "timeout": 14400},
+  "taxonomy": {"domain_id": "1", "domain_code": "engineering", "subdomain_id": "1.1", "subdomain_code": "mechanical", "subdomain_name": "Mechanical Engineering & Design"},
+  "requiredSystemPackages": ["python3-ezdxf", "librecad", "qcad", "freecad"],
+  "dataProvenance": {"source": "markov-ai/cad-1000-hours (Hugging Face), six AutoCAD workflows with a single DWG deliverable, 20-60 min of expert time each; reference DWG converted with LibreDWG", "taxonomy_v2_1": "M-CAD / DRAWING-2D + TOOL-TRACE"}
+}

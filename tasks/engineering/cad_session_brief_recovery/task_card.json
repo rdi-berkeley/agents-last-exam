@@ -1,0 +1,28 @@
+{
+  "taskId": "engineering/cad_session_brief_recovery",
+  "title": "Recover the lost design brief from a CAD screen recording",
+  "summary": "Five 13-18 minute screen recordings of engineers working in AutoCAD, SOLIDWORKS and Siemens NX, with the raw mouse/keyboard event log but no brief; the agent must watch the session and write back the brief (application, deliverable, objective, concrete requirements), scored by coverage of the designer's hidden requirement list.",
+  "category": "engineering",
+  "software": ["ffmpeg", "Python", "OpenCV", "Tesseract OCR"],
+  "taskPrompt": "You are auditing a CAD outsourcing team. For five recorded work sessions the written brief has been lost; reconstruct it from the recording.\n\n## Input\n- Five sessions in `input/sessions/s01/` .. `s05/`. Each folder holds `clip.mp4` (screen recording, 13-18 minutes, no audio) and `events.json` (raw mouse/keyboard event log: clicks, key presses, scrolls, active application, with timestamps).\n- ffmpeg is installed for frame extraction.\n\n## What you must do\nFor each session write the brief the engineer was working from, as a JSON file `output/<sid>.json` (for example `s01.json`) with exactly these keys:\n- `application`: the CAD application used (for example \"AutoCAD\", \"SOLIDWORKS\", \"Siemens NX\").\n- `deliverable`: what kind of file or drawing the session produces.\n- `objective`: one or two sentences saying what was to be created.\n- `requirements`: a list of specific, checkable statements about the result: features, counts, arrangements, dimensions, annotations, views, titles. Write what the finished work actually shows, not what the engineer clicked.\n\n## Scoring\nSession score = 0.15 x (application correct) + 0.85 x coverage, where coverage is the fraction of the designer's hidden requirement list that your requirements state (a requirement mentioned without its count, arrangement or dimension counts half). Vague or generic statements earn nothing. Task score = mean over the five sessions; a missing or unparsable JSON scores 0.",
+  "agentMustDo": [
+    "Watch each recording (extract and inspect frames) and read the event log.",
+    "Identify the application, the deliverable and what was drawn or modelled, including counts and dimensions typed or shown.",
+    "Write output/<sid>.json with application, deliverable, objective and a requirements list for s01..s05."
+  ],
+  "inputFiles": [
+    {"name": "sessions/<sid>/clip.mp4", "format": "MP4 (H.264, no audio)", "path": "input/sessions/", "description": "Screen recording of the full session, 13-18 minutes, 18-21 MB."},
+    {"name": "sessions/<sid>/events.json", "format": "JSON Lines", "path": "input/sessions/", "description": "Raw input events (mouse_move, click, key, scroll, active_app, window events) with timestamps and the active application."},
+    {"name": "README.md", "format": "Markdown", "path": "input/README.md", "description": "Task brief and output contract."}
+  ],
+  "referenceFiles": [
+    {"name": "<sid>/task_desc.json", "format": "JSON", "path": "reference/", "description": "The original brief: application, task, description, deliverables."},
+    {"name": "<sid>/rubrics.json", "format": "JSON", "path": "reference/", "description": "The designer's requirement list R1..Rn (5-8 statements); the grading checklist."},
+    {"name": "<sid>/narration.json, metadata.json, manifest.json", "format": "JSON", "path": "reference/", "description": "Expert narration of the session and provenance, kept for audit."}
+  ],
+  "evaluation": "**Hard gate conditions** (session score = 0): output/<sid>.json missing, not a JSON object, or with an empty requirements list.\n\n**Scoring method:** application family is matched deterministically by keyword (AutoCAD / SOLIDWORKS / NX / CATIA ...). A text judge (OpenAI-compatible endpoint, ALE_JUDGE_MODEL, default gpt-5.6-terra) receives the recovered brief and the designer's requirement list and labels each requirement full / partial / none (1 / 0.5 / 0); ALE_JUDGE_VOTES calls (default 3), median per requirement. Session score = 0.15 x application + 0.85 x mean coverage; task score = mean over five sessions.\n\n- Where does the scoring logic run? host-side: evaluate() copies the JSON outputs and hidden briefs off the VM and calls the judge from the host.\n\n**PERFECT output:** the application named and every designer requirement stated with its counts and dimensions: score near 1.0.\n**WRONG/empty output:** missing files score 0; naming the application with generic requirements (\"a 2D drawing with dimensions\") scores about 0.15-0.25.",
+  "vm": {"machineType": "c4-standard-4", "snapshot": "cpu-free-ubuntu", "timeout": 14400},
+  "taxonomy": {"domain_id": "1", "domain_code": "engineering", "subdomain_id": "1.1", "subdomain_code": "mechanical", "subdomain_name": "Mechanical Engineering & Design"},
+  "requiredSystemPackages": ["ffmpeg", "python3-opencv", "tesseract-ocr", "python3-pytesseract"],
+  "dataProvenance": {"source": "markov-ai/cad-1000-hours (Hugging Face), five 12-18 min workflows (2 AutoCAD, 2 SOLIDWORKS, 1 Siemens NX) with the smallest clips in that length band; task_desc and rubrics withheld as reference", "taxonomy_v2_1": "M-CAD / TOOL-TRACE (screen recording + input events)"}
+}
