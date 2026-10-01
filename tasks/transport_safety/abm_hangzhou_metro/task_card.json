@@ -12,14 +12,20 @@
     "numpy",
     "pandas"
   ],
-  "taskPrompt": "You are working on a Linux VM to produce a one-day Hangzhou metro passenger simulation output bundle.\\n\\n## Variant\\n`base`: Hangzhou metro daily AFC simulation bundle\\n\\n## Visible Input Files\\n- task prompt: `base/input/task_prompt.md`\\n- output contract: `base/input/output_contract.json`\\n- AFC demand: `base/input/data/afc_hangzhou.csv`\\n- line GeoJSON: `base/input/gis/hangzhou_lines.json`\\n- station GeoJSON: `base/input/gis/hangzhou_stations.json`\\n- station sequence CSV: `base/input/network_config/station_sequence.csv`\\n- operation parameters JSON: `base/input/network_config/operation_parameters.json`\\n- runtime manifest: `base/input/runtime_env/`\\n\\n## Runtime Entry Points\\n- bootstrap helper: `base/software/bootstrap_uv_env.sh`\\n- python helper: `base/software/python_with_task_deps.sh`\\n\\n## What You Must Do\\n1. Read the staged task prompt and output contract.\\n2. Use the staged AFC, GIS, and network configuration files to simulate metro passenger trips.\\n3. Write `base/output/passenger_records.csv`.\\n4. Write `base/output/validation_report.txt`.\\n5. You may also write `base/output/scatter_plot.png`.\\n\\n## Output Requirements\\n- `passenger_records.csv` columns must be exactly: `card_id,o_station,d_station,start_time,end_time_simulate,transfer_times,end_time_real,duration_simulation,duration_real`\\n- keep trip identity aligned to the visible AFC rows\\n- keep final deliverables at the output-directory root\\n",
+  "taskPrompt": "Produce a one-day Hangzhou metro passenger simulation using the authentic AFC, GIS and network configuration files.\\n\\nRead base/input/task_prompt.md, base/input/output_contract.json and base/input/simulation_contract.md. Implement the public hangzhou-discrete-event-v2 contract: GIS-derived segment running times, NetworkX 3.6.1 route enumeration, seeded multinomial-logit route choice, scheduled directional trains, FIFO entry and platform queues, transfers and capacity conservation. Do not fit to AFC end times.\\n\\nWrite base/output/passenger_records.csv (all and only completed trips, required nine-column schema), base/output/validation_report.txt (truthful finite duration metrics), and base/output/simulation_manifest.json (contract_version and an unsigned 64-bit seed). The scatter plot is optional.\\n\\nDifferent seeds are valid. Evaluation recomputes the public model, not a hidden historical answer table. Do not modify input files.",
   "agentMustDo": [
-    "Read the staged task prompt and output contract from `input/`.",
-    "Build a one-day Hangzhou metro passenger simulation from the AFC, GIS, and network configuration inputs.",
-    "Write `passenger_records.csv` and `validation_report.txt` into `output/` with the required schema.",
+    "Read the staged task prompt, output contract, and simulation_contract.md from `input/`.",
+    "Implement the public v2 seeded model with GIS-derived running times, MNL routes, scheduled trains, FIFO entry/platform queues, transfers and capacity constraints.",
+    "Write `passenger_records.csv`, `validation_report.txt`, and `simulation_manifest.json` into `output/` with the required schema.",
     "Use the staged runtime manifest only if extra Python dependencies are needed."
   ],
   "inputFiles": [
+    {
+      "name": "simulation_contract.md",
+      "format": "Markdown",
+      "path": "input/simulation_contract.md",
+      "description": "Public v2 geometry, routing, RNG, train scheduling, queueing and conservation rules."
+    },
     {
       "name": "afc_hangzhou.csv",
       "format": "CSV",
@@ -59,6 +65,12 @@
   ],
   "referenceFiles": [
     {
+      "name": "simulation_manifest.json",
+      "format": "JSON",
+      "path": "output/simulation_manifest.json",
+      "description": "Required public contract version and solver-selected unsigned 64-bit seed."
+    },
+    {
       "name": "passenger_records.csv",
       "format": "CSV",
       "path": "output/passenger_records.csv",
@@ -71,7 +83,7 @@
       "description": "Required summary-metric report derived from the candidate CSV."
     }
   ],
-  "evaluation": "The evaluator checks that both required files exist, parse, cover enough AFC trips, avoid near-copying visible labels, align to the hidden reference by trip identity, and report truthful metrics. The common positive replay result is `1.0`; the staged negative replay result is `0.0`.",
+  "evaluation": "Recompute the published stochastic discrete-event model from authentic public inputs and the declared seed. Require all completed trips, exact integer dynamics, demand conservation, truthful observed columns and finite report metrics. Historical passenger tables and label-distance anti-copy thresholds are not used. Different seeds are valid. The unchanged 80% coverage floor is a public-model feasibility check, not permission to omit completed trips.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",

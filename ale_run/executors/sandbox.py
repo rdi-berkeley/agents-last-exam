@@ -86,15 +86,11 @@ def _ale_src_root_for(sandbox: SandboxHandle) -> str:
 _GATHER_RETRIES = 3
 _GATHER_BACKOFFS_S = (1.0, 3.0, 9.0)
 
-# Poll loop tuning (matches simprun)
+# Poll loop tuning
 _POLL_INTERVAL_S = 10.0
-# Liveness-probe robustness: a single non-zero return from the alive-check
-# command is NOT proof the agent died — a transient cua/network transport
-# error makes the probe itself return non-zero (rc=-1) without raising. Require
-# this many CONSECUTIVE failed probes (re-probing on a short interval) before
-# declaring the sandbox gone, so one blip can't fail an already-completed run.
-_LIVENESS_MISS_THRESHOLD = 3
+_LIVENESS_PROCESS_MISS_THRESHOLD = 3
 _LIVENESS_REPROBE_S = 5.0
+_LIVENESS_TRANSPORT_GRACE_S = 10 * 60.0
 _PID_WAIT_S = 4.5            # how long to wait for the launcher to write the PID file
 _PID_WAIT_TICK_S = 0.3
 
@@ -259,7 +255,8 @@ class SandboxExecutor(BaseExecutor):
         t0 = time.monotonic()
         deadline = t0 + timeout_s
         marker_hit = False
-        consecutive_misses = 0
+        consecutive_process_misses = 0
+        transport_unavailable_since: float | None = None
         while time.monotonic() < deadline:
             try:
                 if await sb.exists(done_marker):
@@ -276,32 +273,78 @@ class SandboxExecutor(BaseExecutor):
                     '"'
                 )
             )
+            probe_started = time.monotonic()
             alive = await sb.run_command(alive_cmd, timeout=60)
-            if alive.returncode != 0:
+            probe_finished = time.monotonic()
+
+            if alive.returncode < 0:
+                if transport_unavailable_since is None:
+                    transport_unavailable_since = probe_started
+                unavailable_s = probe_finished - transport_unavailable_since
+                consecutive_process_misses = 0
+                logger.warning(
+                    "sandbox: liveness transport unavailable for %.1fs "
+                    "(pid=%s); process state unknown, re-probing",
+                    unavailable_s,
+                    pid,
+                )
+                if unavailable_s >= _LIVENESS_TRANSPORT_GRACE_S:
+                    return AgentRunResult(
+                        status="failed",
+                        pid=pid,
+                        duration_s=probe_finished - t0,
+                        error=(
+                            "sandbox transport unavailable for "
+                            f"{unavailable_s:.1f}s; process state unknown"
+                        ),
+                    )
+                await asyncio.sleep(_LIVENESS_REPROBE_S)
+                continue
+
+            if transport_unavailable_since is not None:
+                logger.info(
+                    "sandbox: liveness transport recovered after %.1fs (pid=%s)",
+                    probe_finished - transport_unavailable_since,
+                    pid,
+                )
+                transport_unavailable_since = None
+
+            if alive.returncode > 0:
                 # Give the marker one more chance (race with disk flush) first.
                 await asyncio.sleep(2)
-                if await sb.exists(done_marker):
-                    marker_hit = True
-                    break
-                consecutive_misses += 1
+                try:
+                    if await sb.exists(done_marker):
+                        marker_hit = True
+                        break
+                except Exception as e:  # noqa: BLE001
+                    logger.debug("done.marker re-probe failed: %s", e)
+                consecutive_process_misses += 1
                 logger.warning(
-                    "sandbox: liveness probe failed (rc=%s) %d/%d consecutive "
-                    "(pid=%s) — transient transport error or process gone; re-probing",
-                    alive.returncode, consecutive_misses, _LIVENESS_MISS_THRESHOLD, pid,
+                    "sandbox: process liveness probe reports pid=%s absent "
+                    "(rc=%s) %d/%d consecutive; re-probing",
+                    pid,
+                    alive.returncode,
+                    consecutive_process_misses,
+                    _LIVENESS_PROCESS_MISS_THRESHOLD,
                 )
-                if consecutive_misses >= _LIVENESS_MISS_THRESHOLD:
+                if (
+                    consecutive_process_misses
+                    >= _LIVENESS_PROCESS_MISS_THRESHOLD
+                ):
                     entry_tail = await self._tail_log(entry_log)
                     return AgentRunResult(
                         status="failed",
                         pid=pid,
                         duration_s=time.monotonic() - t0,
-                        error=f"sandbox process disappeared before done.marker "
-                              f"({_LIVENESS_MISS_THRESHOLD} consecutive probe failures); "
-                              f"entry log tail: {entry_tail}",
+                        error=(
+                            "sandbox process disappeared before done.marker "
+                            f"({_LIVENESS_PROCESS_MISS_THRESHOLD} consecutive "
+                            f"process-missing probes); entry log tail: {entry_tail}"
+                        ),
                     )
                 await asyncio.sleep(_LIVENESS_REPROBE_S)
                 continue
-            consecutive_misses = 0
+            consecutive_process_misses = 0
             await asyncio.sleep(_POLL_INTERVAL_S)
 
         duration_s = time.monotonic() - t0
@@ -525,11 +568,24 @@ class SandboxExecutor(BaseExecutor):
     async def _tail_log(self, entry_log: str, max_bytes: int = 1500) -> str:
         """Tail the in-sandbox entry log for diagnostic messages.
         Returns ``"(unavailable)"`` if read fails."""
-        try:
-            text = await self.sandbox.read_text(entry_log)
-            return text[-max_bytes:] if text else "(empty)"
-        except Exception:                                           # noqa: BLE001
-            return "(unavailable)"
+        paths = [("stdout", entry_log)]
+        if not self.sandbox.is_linux:
+            paths.append(("stderr", f"{entry_log}.err"))
+
+        available = False
+        parts: list[str] = []
+        for label, path in paths:
+            try:
+                text = await self.sandbox.read_text(path)
+                available = True
+            except Exception:                                       # noqa: BLE001
+                continue
+            if text:
+                parts.append(f"[{label}]\n{text}")
+
+        if parts:
+            return "\n".join(parts)[-max_bytes:]
+        return "(empty)" if available else "(unavailable)"
 
 
 def _build_launcher(
@@ -591,7 +647,10 @@ def _build_launcher(
         "  }\n"
         "}\n"
         f"$env:PYTHONPATH = '{src_quoted};' + $env:PYTHONPATH\n"
-        f"$proc = Start-Process -FilePath '{py_quoted}' "
+        f"$python = '{py_quoted}'\n"
+        "$pythonw = Join-Path (Split-Path -Parent $python) 'pythonw.exe'\n"
+        "if (-not (Test-Path -LiteralPath $pythonw)) { $pythonw = $python }\n"
+        "$proc = Start-Process -FilePath $pythonw "
         f"-ArgumentList '-m','ale_run.executors._sandbox_entry','{spec_quoted}' "
         f"-WindowStyle Hidden -PassThru "
         f"-RedirectStandardOutput '{log_quoted}' "

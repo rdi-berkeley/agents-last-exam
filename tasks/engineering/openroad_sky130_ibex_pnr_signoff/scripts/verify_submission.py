@@ -13,6 +13,7 @@ import sys
 import tempfile
 import zipfile
 from dataclasses import asdict, dataclass, field
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 CLOCK_NAME = "clk_i"
@@ -93,6 +94,12 @@ RUBRIC = {
 }
 
 _UNSET_SYNONYMS = ("none", "(unset)", "unset", "(empty)", "empty", "-", "")
+_UNSET_ANNOTATION_RE = re.compile(
+    r"^\s*\(?\s*(?:none|unset|empty|-)\s*"
+    r"(?:;\s*default(?:\s+value)?\s+[-+]?\d+(?:\.\d+)?|"
+    r"\(\s*default(?:\s+value)?\s+[-+]?\d+(?:\.\d+)?\s*\))?\s*\)?\s*$",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -266,31 +273,88 @@ def _pass_index(name: str, prefix: str, suffix: str = "") -> int | None:
         return None
 
 
-def _journal_records_diff(section: str, var: str, before, after) -> bool:
-    def _candidates(value) -> list[str]:
-        if value is None or value == "":
-            return list(_UNSET_SYNONYMS)
-        return [str(value)]
+def _journal_unwrap(value: str) -> str:
+    value = value.strip()
+    wrappers = (("**", "**"), ("__", "__"), ("*", "*"), ("_", "_"),
+                ('"', '"'), ("'", "'"), ("\u201c", "\u201d"), ("\u2018", "\u2019"))
+    while value:
+        code = re.fullmatch(r"(`+)([^`]+)\1", value)
+        if code:
+            return code.group(2).strip()
+        for opening, closing in wrappers:
+            if len(value) >= len(opening) + len(closing) and value.startswith(opening) and value.endswith(closing):
+                value = value[len(opening):-len(closing)].strip()
+                if opening not in {"*", "**", "_", "__"}:
+                    return value
+                break
+        else:
+            return value
+    return value
 
-    arrow = r"(?:->|→|=>)"
-    for before_value in _candidates(before):
-        for after_value in _candidates(after):
-            before_pattern = (
-                re.escape(before_value)
-                if before_value
-                else r"(?:\(unset\)|unset|None|\(empty\)|empty|-|\s|$)"
-            )
-            after_pattern = (
-                re.escape(after_value)
-                if after_value
-                else r"(?:\(unset\)|unset|None|\(empty\)|empty|-|\s|$)"
-            )
-            pattern = re.compile(
-                rf"{re.escape(var)}\s*:\s*{before_pattern}\s*{arrow}\s*{after_pattern}",
-                re.IGNORECASE,
-            )
-            if pattern.search(section):
-                return True
+
+def _journal_lines(text: str):
+    fence = ""
+    for line in text.splitlines():
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+        if marker:
+            if not fence:
+                fence = marker.group(1)
+            elif marker.group(1)[0] == fence[0] and len(marker.group(1)) >= len(fence) and not marker.group(2).strip():
+                fence = ""
+            continue
+        if not fence:
+            yield line
+
+
+def _journal_value_matches(observed: str, expected) -> bool:
+    if not observed.strip():
+        return False
+    literal = _normalize_make_value(observed)
+    if expected is not None and literal == _normalize_make_value(str(expected)):
+        return True
+    observed = _normalize_make_value(_journal_unwrap(observed))
+    if expected is None or expected == "":
+        if not observed:
+            return literal in {'""', "''", "\u201c\u201d", "\u2018\u2019"}
+        return observed.lower() in _UNSET_SYNONYMS or bool(_UNSET_ANNOTATION_RE.fullmatch(observed))
+    expected = _normalize_make_value(str(expected))
+    if observed == expected:
+        return True
+    numeric = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+    if re.fullmatch(numeric, observed) and re.fullmatch(numeric, expected):
+        try:
+            return Decimal(observed) == Decimal(expected)
+        except InvalidOperation:
+            return False
+    return False
+
+
+def _journal_partition_label(line: str) -> tuple[str, str, str]:
+    label, colon, remainder = line.strip().partition(":")
+    for marker in ("**", "__", "*", "_"):
+        if label.startswith(marker) and not label.endswith(marker) and remainder.startswith(marker):
+            label += marker
+            remainder = remainder[len(marker):]
+            break
+    return label, colon, remainder
+
+
+def _journal_records_diff(section: str, var: str, before, after) -> bool:
+    for line in _journal_lines(section):
+        line = re.sub(r"^\s*[-+*]\s+", "", line).strip()
+        variable, colon, values = _journal_partition_label(line)
+        if _journal_unwrap(variable).lower() == "change":
+            variable, colon, values = _journal_partition_label(values)
+        if not colon or _journal_unwrap(variable) != var:
+            continue
+        change = re.split(r"(?:->|\u2192\ufe0f?|=>)", values)
+        if len(change) != 2 or not _journal_value_matches(change[0], before):
+            continue
+        observed_after = change[1].rstrip()
+        if _journal_value_matches(observed_after, after) or (
+            observed_after.endswith(".") and _journal_value_matches(observed_after[:-1], after)
+        ):
+            return True
     return False
 
 
@@ -473,14 +537,22 @@ def gate_g11_journal(submission_dir: Path, starter_dir: Path) -> GateResult:
         return GateResult("G11", RUBRIC["G11"]["name"], weight, 0.0, False, "no config.mk.pass* snapshots")
 
     journal_text = journal.read_text()
-    sections = re.split(r"^## Pass (\d+)", journal_text, flags=re.MULTILINE)
     sections_by_num: dict[int, str] = {}
-    for idx in range(1, len(sections), 2):
-        try:
-            num = int(sections[idx])
-        except ValueError:
-            continue
-        sections_by_num[num] = sections[idx + 1] if idx + 1 < len(sections) else ""
+    section_num = None
+    section_level = 0
+    for line in _journal_lines(journal_text):
+        heading = re.match(r"^ {0,3}(#{1,6})[ \t]+(.+?)\s*$", line)
+        if heading:
+            title = _journal_unwrap(re.sub(r"[ \t]+#+$", "", heading.group(2)))
+            number = re.fullmatch(r"Pass[ \t]+(\d+)(?:[ \t]*:.*)?", title, re.IGNORECASE)
+            if number:
+                section_num = int(number.group(1))
+                section_level = len(heading.group(1))
+                sections_by_num[section_num] = ""
+            elif len(heading.group(1)) <= section_level:
+                section_num = None
+        if section_num is not None:
+            sections_by_num[section_num] += line + "\n"
 
     def _is_stub(section: str) -> bool:
         if not section or not section.strip():

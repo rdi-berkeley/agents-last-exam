@@ -7,8 +7,14 @@ import csv
 import io
 import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
+
+if __package__:
+    from .cm_contract import cm_source_fields
+else:
+    from cm_contract import cm_source_fields
 
 OUTPUT_COLUMNS = [
     "crf_form",
@@ -25,9 +31,7 @@ OUTPUT_COLUMNS = [
 ]
 
 FREE_TEXT_COLUMNS = {"mapping_rule", "notes"}
-EXACT_MATCH_COLUMNS = [
-    column for column in OUTPUT_COLUMNS if column not in FREE_TEXT_COLUMNS
-]
+EXACT_MATCH_COLUMNS = [column for column in OUTPUT_COLUMNS if column not in FREE_TEXT_COLUMNS]
 
 KEY_COLUMNS = [
     "crf_form",
@@ -72,8 +76,83 @@ def normalize_cell(value: object) -> str:
     return re.sub(r"\s+", " ", str(value).strip())
 
 
-def _format_key(row: dict[str, str]) -> tuple[str, str, str]:
+def _format_key(row: dict[str, str]) -> tuple[str, ...]:
     return tuple(normalize_cell(row[column]) for column in KEY_COLUMNS)
+
+
+def _source_text(value: str) -> str:
+    value = unicodedata.normalize("NFKC", value).casefold()
+    value = re.sub(r"\[\s*hidden\s*\]", "", value)
+    return "".join(character for character in value if character.isalnum())
+
+
+CM_SOURCE_ALIASES = {
+    (_source_text(source["form"]), column, _source_text(source[field])): source[
+        "locator"
+    ].casefold()
+    for source in cm_source_fields()
+    for column, field in (
+        ("crf_field_label", "label"),
+        ("crf_item_or_placeholder", "placeholder"),
+    )
+}
+
+
+def _unquote(value: str) -> str:
+    pairs = {'"': '"', "'": "'", "\u201c": "\u201d", "\u2018": "\u2019"}
+    while len(value) >= 2 and value[0] in pairs and value[-1] == pairs[value[0]]:
+        value = value[1:-1].strip()
+    return value
+
+
+def _controlled_values(value: str) -> str:
+    value = value.strip()
+    if not value:
+        return ""
+    scalar = _unquote(value) if ";" not in value else value
+    if scalar.startswith("CL."):
+        return scalar
+    date_forms = {"iso 8601 date/datetime", "iso 8601 datetime", "iso 8601 date/time"}
+    if normalize_cell(scalar).casefold() in date_forms:
+        return "ISO 8601 date/datetime"
+    if scalar.startswith("["):
+        terms = json.loads(scalar)
+        if not isinstance(terms, list) or not all(isinstance(term, str) for term in terms):
+            raise ValueError("expected a JSON array of strings")
+    else:
+        terms = value.split(";")
+    terms = [normalize_cell(_unquote(term.strip())).casefold() for term in terms]
+    if not terms or any(not term for term in terms) or len(terms) != len(set(terms)):
+        raise ValueError("empty or duplicate controlled value")
+    return json.dumps(sorted(terms), ensure_ascii=True)
+
+
+def _normalize_cm_rows(rows: list[dict[str, str]], label: str) -> list[str]:
+    errors = []
+    for number, row in enumerate(rows, 2):
+        form = re.sub(r"^C4591001\s*[-:]?\s*", "", row["crf_form"], flags=re.IGNORECASE)
+        form = re.sub(r"\s*[-:]?\s*Repeating Form\s*$", "", form, flags=re.IGNORECASE)
+        row["crf_form"] = _source_text(form)
+        for column in ("crf_field_label", "crf_item_or_placeholder"):
+            value = _unquote(row[column]).strip()
+            locator = re.fullmatch(
+                r"acrf\s*:\s*(\d+)\s*:\s*(\d+(?:\s*:\s*1)?|header)", value, re.IGNORECASE
+            )
+            if locator:
+                row[column] = re.sub(r"\s+", "", value).casefold()
+            else:
+                source = _source_text(value)
+                row[column] = CM_SOURCE_ALIASES.get((row["crf_form"], column, source), source)
+        row["role"] = re.sub(r"\s+", "", _unquote(row["role"])).casefold()
+        origin = _unquote(row["origin"]).casefold()
+        row["origin"] = "crf" if origin == "acrf" else origin
+        try:
+            row["controlled_terms_or_expected_values"] = _controlled_values(
+                row["controlled_terms_or_expected_values"]
+            )
+        except (ValueError, TypeError) as exc:
+            errors.append(f"{label}: row {number} invalid controlled values: {exc}")
+    return errors
 
 
 def _mentions_target_variable(mapping_rule: str, target_variable: str) -> bool:
@@ -89,16 +168,14 @@ def _mentions_target_variable(mapping_rule: str, target_variable: str) -> bool:
 def _parse_csv(text: str, *, label: str) -> tuple[list[str], list[dict[str, str]], list[str]]:
     errors: list[str] = []
     try:
-        reader = csv.DictReader(io.StringIO(text.lstrip("\ufeff")))
+        reader = csv.DictReader(io.StringIO(text.lstrip("\ufeff")), strict=True)
         fieldnames = reader.fieldnames or []
         rows = list(reader)
     except csv.Error as exc:
         return [], [], [f"{label}: CSV parse error: {exc}"]
 
     if fieldnames != OUTPUT_COLUMNS:
-        errors.append(
-            f"{label}: columns must exactly match expected order; got {fieldnames!r}"
-        )
+        errors.append(f"{label}: columns must exactly match expected order; got {fieldnames!r}")
 
     normalized_rows: list[dict[str, str]] = []
     for row_index, row in enumerate(rows, start=2):
@@ -106,6 +183,9 @@ def _parse_csv(text: str, *, label: str) -> tuple[list[str], list[dict[str, str]
             continue
         if None in row:
             errors.append(f"{label}: row {row_index} has extra unheaded values")
+            continue
+        if any(value is None for value in row.values()):
+            errors.append(f"{label}: row {row_index} has missing cells")
             continue
         normalized_rows.append(
             {column: normalize_cell(row.get(column, "")) for column in OUTPUT_COLUMNS}
@@ -119,9 +199,9 @@ def _parse_csv(text: str, *, label: str) -> tuple[list[str], list[dict[str, str]
 
 def _index_rows(
     rows: list[dict[str, str]], *, label: str, allowed_datasets: tuple[str, str]
-) -> tuple[dict[tuple[str, str, str], dict[str, str]], list[str]]:
+) -> tuple[dict[tuple[str, ...], dict[str, str]], list[str]]:
     errors: list[str] = []
-    indexed: dict[tuple[str, str, str], dict[str, str]] = {}
+    indexed: dict[tuple[str, ...], dict[str, str]] = {}
     primary, suppqual = allowed_datasets
 
     for row_index, row in enumerate(rows, start=2):
@@ -180,6 +260,12 @@ def score_mapping_csv(agent_csv: str, reference_csv: str, *, variant: str) -> Sc
     errors = agent_errors + reference_errors
     if errors:
         return ScoreResult(score=0.0, errors=errors)
+
+    if variant == "base":
+        errors.extend(_normalize_cm_rows(agent_rows, "agent"))
+        errors.extend(_normalize_cm_rows(reference_rows, "reference"))
+        if errors:
+            return ScoreResult(score=0.0, errors=errors)
 
     allowed_datasets = VARIANT_DATASETS[variant]
     agent_index, agent_index_errors = _index_rows(

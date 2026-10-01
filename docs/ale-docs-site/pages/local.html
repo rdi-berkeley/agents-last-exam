@@ -48,7 +48,7 @@
       <li>Docker available to the current user.</li>
       <li>Hardware or nested virtualization exposed as readable and writable <code>/dev/kvm</code>.</li>
       <li>Enough memory for every concurrently active guest.</li>
-      <li>Enough disk for the cached base images and growing per-run overlays. Plan for about 350 GB when caching both published disks.</li>
+      <li>Persistent disk space for the cached base images (about 168 GB for both v1.1 disks), download headroom and growing per-run overlays. Never store these on a memory-backed filesystem.</li>
     </ul>
     <pre><code>docker info
 test -r /dev/kvm &amp;&amp; test -w /dev/kvm
@@ -87,9 +87,11 @@ df -h ~/.cache</code></pre>
       instead use a GCS object or an existing host file:
     </p>
     <pre><code>qemu:
-  disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2
-  # or: gs://ale-data-public/images/ale-win10.qcow2
-  # or: /absolute/path/to/ale-win10.qcow2
+  disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10-v1.1.qcow2
+  # Retain hf_revision from configs/environments/qemu.yaml.
+  # For GCS/local sources, remove hf_revision:
+  # gs://ale-data-public/images/ale-win10-v1.1.qcow2
+  # /absolute/path/to/ale-win10-v1.1.qcow2
   root: ~/.cache/ale/qemu
   runner_image: agentslastexam/ale-qemu:0.2.0
   runner_pull_policy: missing</code></pre>

@@ -107,6 +107,13 @@ Output:
 - The SVG must be valid XML with an `<svg>` root.
 - The SVG should visibly show the hg19 locus labels, the VCF/variant track, and the K562 H3K27ac signal track.
 - Do not save the final answer under any other filename.
+
+Signal track serialization:
+- Encode the actual full-window H3K27ac signal as one x-monotone `<polyline>` or straight-segment `<path>` (M/L/H/V commands, absolute or relative, with optional final Z), a filled `<polygon>` following that contour and closing to a horizontal baseline, or aligned `<rect>` bars sharing a horizontal baseline and the same explicit `stroke` value (`none` is suitable). Bar fill colors may vary. Do not split one signal contour across disconnected paths.
+- Choose sampling resolution and plotting scale that preserve the input signal: at least 12 contour samples or 12 bars, spanning at least 400 units horizontally and 30 vertically, with at least 8 signal heights distinguishable at 0.1-unit precision. These are SVG user units after element/group transforms, not genomic coordinates. Do not invent or alter signal values to meet these presentation requirements.
+- Store finite, unitless numeric geometry directly in `points`, `d`, or rect `x`/`y`/`width`/`height` attributes under the root `<svg>` or nested `<g>` elements. Numeric SVG `transform` attributes are allowed if the resulting contour remains x-monotone and bars remain axis-aligned. Bake nested SVG viewport mappings into the signal coordinates; a root `viewBox` is allowed.
+- Make the signal self-contained and visible using presentation attributes or literal inline `style` declarations on the shapes or their groups. Convert signal encodings that depend on Bezier/arc commands (C/S/Q/T/A), `<use>`/`<symbol>`/`<defs>`, raster images, CSS stylesheets/classes/variables, scripts, filters, masks, clipping, or occlusion into the actual geometry described above. Do not rely on those features to construct or hide part of the signal contour.
+- These serialization restrictions apply only to the H3K27ac signal and its presentation, not to unrelated text, fonts, labels, or other SVG content. Browser/tool choice and GUI workflow remain unrestricted; you may post-process an export to serialize the signal without changing its scientific content.
 """
 
     def to_metadata(self) -> dict[str, Any]:

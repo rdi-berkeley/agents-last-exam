@@ -41,6 +41,8 @@ _HF_DISK_MANIFEST_SUFFIX = ".manifest.json"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _SLOT_CLEANUP_ATTEMPTS = 3
 _SLOT_CLEANUP_RETRY_S = 0.25
+_DEFAULT_GUEST_MTU = 1500
+_MIN_IPV4_MTU = 576
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +96,35 @@ class _HuggingFaceDiskManifest:
 
 def _expand_path(value: str) -> Path:
     return Path(value).expanduser().resolve()
+
+
+def _detect_host_egress_mtu(
+    route_table: Path = Path("/proc/net/route"),
+    network_root: Path = Path("/sys/class/net"),
+) -> int:
+    """Return the MTU of the lowest-metric active IPv4 default route."""
+    try:
+        rows = route_table.read_text(encoding="utf-8").splitlines()[1:]
+    except OSError:
+        return _DEFAULT_GUEST_MTU
+
+    candidates: list[tuple[int, int]] = []
+    for row in rows:
+        fields = row.split()
+        if len(fields) < 8 or fields[1] != "00000000":
+            continue
+        try:
+            flags = int(fields[3], 16)
+            metric = int(fields[6])
+            mtu = int((network_root / fields[0] / "mtu").read_text().strip())
+        except (OSError, ValueError):
+            continue
+        if flags & 0x1 and _MIN_IPV4_MTU <= mtu:
+            candidates.append((metric, mtu))
+
+    if not candidates:
+        return _DEFAULT_GUEST_MTU
+    return min(candidates)[1]
 
 
 def _parse_hf_source(source: str) -> _HuggingFaceSource:
@@ -464,6 +495,7 @@ class QemuProvider(Provider):
         self._image_locks: dict[str, asyncio.Lock] = {}
         self._preflight_lock = asyncio.Lock()
         self._preflight_done = False
+        self._guest_network_mtu = min(_DEFAULT_GUEST_MTU, _detect_host_egress_mtu())
 
     @property
     def config(self) -> QemuProviderConfig:
@@ -582,6 +614,9 @@ class QemuProvider(Provider):
                 **image.sandbox_paths(),
                 metadata=metadata,
             )
+            if sandbox.is_linux and self._guest_network_mtu < _DEFAULT_GUEST_MTU:
+                await self._configure_guest_mtu(sandbox, self._guest_network_mtu)
+                metadata["network_mtu"] = self._guest_network_mtu
             if self._cfg.gcs_sa_key:
                 gcs_key_path, gcs_user_project = await self._inject_gcs_credentials(
                     sandbox,
@@ -612,6 +647,32 @@ class QemuProvider(Provider):
                     slot_root,
                 )
             raise
+
+    @staticmethod
+    async def _configure_guest_mtu(
+        sandbox: SandboxHandle,
+        mtu: int,
+    ) -> None:
+        command = (
+            "set -eu; "
+            "interface=$(ip -4 route show default | "
+            "awk 'NR == 1 {for (i = 1; i <= NF; i++) "
+            'if ($i == "dev") {print $(i + 1); exit}}\'); '
+            'test -n "$interface"; '
+            f'sudo ip link set dev "$interface" mtu {mtu}; '
+            'actual=$(cat "/sys/class/net/$interface/mtu"); '
+            f'test "$actual" = "{mtu}"; '
+            'printf "interface=%s mtu=%s\\n" "$interface" "$actual"'
+        )
+        result = await sandbox.run_command(command, timeout=30)
+        if result.returncode != 0:
+            detail = result.stderr or result.stdout or "unknown error"
+            raise RuntimeError(f"failed to configure QEMU guest MTU: {detail[:500]}")
+        logger.info(
+            "QEMU sandbox %s guest network MTU configured to %d",
+            sandbox.id,
+            mtu,
+        )
 
     @staticmethod
     async def _inject_gcs_credentials(

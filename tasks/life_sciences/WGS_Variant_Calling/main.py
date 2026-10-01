@@ -78,7 +78,7 @@ and `bcftools`, then produce a filtered VCF containing SNP and INDEL calls.
 `{self.input_dir}`
 
 ## Available Environment
-- `bwa`, `samtools`, `bcftools`, FastQC, MultiQC, and RTG Tools are preinstalled on `PATH`.
+- `bwa`, `samtools`, `bcftools`, FastQC, and MultiQC are preinstalled on `PATH`.
 
 ## Required Outputs
 Save all outputs under `{self.remote_output_dir}`:

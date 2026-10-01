@@ -146,6 +146,10 @@ Visible inputs:
 Required workflow:
 1. Work from a writable directory under `{self.remote_output_dir}`.
 2. Create a task-local Python environment from `{self.runtime_env_dir}` so the `rgi` CLI is available.
+   Install any open-source command-line dependencies required by RGI, including
+   making `blastn`, `diamond`, and `prodigal` available on `PATH`. On Ubuntu,
+   use a non-interactive package install, for example:
+   `sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ncbi-blast+ diamond-aligner prodigal`.
 3. Use the staged `{self.card_json}` with `rgi load --local -i ../input/card.json`.
 4. Run RGI in contig mode against `../input/input_contig.fasta` with:
    `rgi main -i ../input/input_contig.fasta -o rgi_result -t contig --local --clean -g PYRODIGAL`

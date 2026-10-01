@@ -146,32 +146,54 @@ Inputs (all under `{self.input_dir}`; treat as read-only):
 Recommended workflow:
 1. Load the starfish Experiment and sanity-check the image and codebook.
 2. Preprocess: high-pass filter or background-subtract, normalize intensity
-   using the provided `scale_factors`, and confirm the pre-registered tiles
+   by dividing each tile by its provided `scale_factor`, and confirm the pre-registered tiles
    are still aligned.
-3. Run starfish BlobDetector on each round/channel and extract 16-bit
-   intensity traces per spot.
-4. Decode with an MHD4-aware decoder (starfish `CheckAll`) with 1-bit error
-   correction; filter by magnitude and distance thresholds.
+3. Extract full 16-component intensity traces, retaining both channels in
+   every round, using spot detection or pixel-based decoding.
+4. Decode against the full binary codewords, for example with starfish
+   `DetectPixels.PixelSpotDecoder` (normalized Euclidean distance), or a
+   full 16-bit Hamming decoder accepting at most one bit error. Filter by
+   magnitude and distance and resolve ambiguous/overlapping detections.
+   Do not use native 8-round `CheckAll`: its channel-argmax representation
+   collapses distinct codewords when a round has zero or two active channels.
 5. Run Cellpose on the DAPI image with a pretrained nuclei model and a
-   diameter appropriate for U2OS (roughly 30-50 px).
-6. Assign decoded transcripts to the nearest segmented cell; mark transcripts
-   outside every cell as extracellular and exclude them from the
-   cell-by-gene matrix.
-7. Build the cell-by-gene count matrix for the 130 real genes (exclude
+   diameter estimated from this image in pixels, not from the cell type
+   alone. Cellpose 3.1.1 `models.Cellpose(model_type='nuclei').eval` with
+   `diameter=None, channels=[0, 0]` estimates the diameter; inspect the
+   resulting masks against the DAPI image.
+6. Assign each decoded transcript to the nucleus whose mask contains its
+   nearest integer pixel; mark transcripts outside every nucleus as
+   extracellular and exclude them from the
+   nucleus-by-gene matrix. The input contains a DAPI nuclear stain but no
+   whole-cell boundary channel, so this is intentionally a nuclear assignment.
+7. Build the nucleus-by-gene count matrix for the 130 real genes (exclude
    blanks) and compute the quality metrics listed in `output_contract.json`.
 
 Outputs must go into `{self.remote_output_dir}`:
 - `decoded_transcripts.csv` with columns `gene, x, y, is_exact, total_magnitude`.
 - `segmentation.tiff` - 2048x2048 `uint16` labeled mask (background=0).
-- `cell_by_gene.csv` - leading `cell_id` column followed by the 130 real genes
-  in codebook order; integer counts.
+- `cell_by_gene.csv` - leading `cell_id` column (the legacy field name for a
+  nucleus label) followed by the 130 real genes in codebook order; integer counts.
 - `quality_metrics.json` - scalar keys `total_decoded_transcripts`,
   `blank_rate`, `exact_match_fraction`, `n_cells`, `assigned_fraction`,
   `mean_transcripts_per_cell`.
 
+The historical `cell` names in these files and metrics refer to nuclei and
+nuclear transcript counts, not inferred whole-cell boundaries.
+
 All coordinates (`x`, `y`) in `decoded_transcripts.csv` must be pixel
 coordinates within the 2048x2048 FOV so they line up with the segmentation
 mask.
+Reference-based decoding comparisons (per-gene correlation, real-transcript
+count and spatial concordance) use only the inclusive interior region
+`40 <= x <= 2008` and `40 <= y <= 2008`, in the original pixel coordinates.
+The supplied benchmark has no labels outside this region; border calls are
+not classified as correct or incorrect by these comparisons. Keep full-frame
+outputs, nuclear assignments, the count matrix, blank rate and reported
+quality metrics; do not crop the mask or translate coordinates.
+Total-count plausibility compares decoded real-gene transcripts with the
+reference real-gene total in that same region, excluding Blank controls from both counts.
+`total_decoded_transcripts` still reports all decoded rows, including blanks.
 """
 
     def to_metadata(self) -> dict[str, Any]:
@@ -250,12 +272,16 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         return [0.0]
 
     if result.hard_failed:
-        logger.info("[%s] hard_fail reason=%s", meta["variant_name"], result.hard_fail_reason)
+        logger.info(
+            "[%s] hard_fail reason=%s",
+            meta.get("variant_name", "unknown"),
+            result.hard_fail_reason,
+        )
         return [0.0]
 
     logger.info(
         "[%s] score=%.4f pearson=%s spatial=%s n_cells_seg=%s assigned=%s",
-        meta["variant_name"],
+        meta.get("variant_name", "unknown"),
         result.score,
         result.pearson_r,
         result.spatial_concordance,

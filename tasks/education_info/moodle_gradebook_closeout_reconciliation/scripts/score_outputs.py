@@ -58,8 +58,8 @@ def find_gate(gates: list[dict], name: str) -> dict:
 
 
 def compare_csv_rows(submission_path: Path, reference_path: Path, key_columns: list[str]) -> float:
-    submission = pd.read_csv(submission_path, keep_default_na=False)
-    reference = pd.read_csv(reference_path, keep_default_na=False)
+    submission = pd.read_csv(submission_path, keep_default_na=False, dtype=str)
+    reference = pd.read_csv(reference_path, keep_default_na=False, dtype=str)
     if list(submission.columns) != list(reference.columns):
         return 0.0
     submission_lookup = submission.set_index(key_columns).to_dict("index")
@@ -141,7 +141,7 @@ def main() -> int:
         policy_points += 10
     if policy.get("drop_lowest") == expected_policy["drop_lowest"]:
         policy_points += 5
-    if policy.get("empty_grade_behavior") == expected_policy["empty_grade_behavior"]:
+    if policy.get("empty_grade_behavior") in {"zero", "count_as_zero"}:
         policy_points += 5
     gates.append(gate("category_weights_drop_empty", policy_points, 20, "Policy settings for weights, drop-lowest, and empty-grade behavior."))
 

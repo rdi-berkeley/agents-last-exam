@@ -176,6 +176,15 @@ Your job is to rebuild the analytic cohort and export exactly these files under 
 Requirements:
 1. Follow the exact cohort construction, variable derivations, and model definitions in `task_spec.txt`.
 2. Use `output_contract.json` for the exact output filenames, column order, formulas, and metadata fields.
+3. In every summary row, report the association for a one-unit increase in `MM_count`:
+   - Fit the stated unweighted logistic model by unpenalized maximum likelihood, with an intercept and model-based (non-robust) covariance.
+   - Let `beta` be the fitted `MM_count` coefficient and `SE` its standard error. `estimate` is the odds ratio `exp(beta)`, not the log-odds coefficient.
+   - `ci_low` and `ci_high` are the 95% Wald confidence limits on the odds-ratio scale: `exp(beta - z * SE)` and `exp(beta + z * SE)`, where `z` is the 97.5th percentile of the standard normal distribution.
+   - `p_value` is the two-sided normal Wald test of `beta = 0`: `2 * Phi(-abs(beta / SE))`, where `Phi` is the standard normal cumulative distribution function.
+   - `n` is the model's participant count and `events` is its count of `ulcer = 1` participants.
+   - Leave `or_change_pct_vs_modelA_subset` blank for both Model A rows. For Model B, use `100 * (OR_B / OR_A_subset - 1)`.
+   - Set `sddsrvyr_values` to `1`. Metadata must identify `LBXHP1`, its `log1p` transform, the listed NSAID keyword-matching rule, and the unweighted fit without survey weights, PSU, or strata.
+   - Preserve numerical precision when exporting; do not round estimates, intervals, or p-values for display. The numeric tolerance is specified in `output_contract.json`.
 4. Write only the required task outputs under `{self.remote_output_dir}`.
 """
 

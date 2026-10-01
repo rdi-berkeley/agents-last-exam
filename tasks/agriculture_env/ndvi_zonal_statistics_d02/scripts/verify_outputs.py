@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
@@ -24,7 +23,7 @@ CSV_ROUNDED_FIELDS = ["mean_ndvi", "median_ndvi"]
 TIFF_FILENAME = "ndvi.tif"
 CSV_FILENAME = "polygon_ndvi_stats.csv"
 TWOPLACES = Decimal("0.01")
-SIX_DECIMAL_PATTERN = re.compile(r"^-?\d+(?:\.\d{6})$")
+SIXPLACES = Decimal("0.000001")
 
 
 def load_csv_strict(path: Path) -> pd.DataFrame:
@@ -48,9 +47,21 @@ def parse_rounded_token(token: Any) -> tuple[str, Any]:
         return ("INVALID", None)
     try:
         dec = Decimal(text)
+        if not dec.is_finite():
+            return ("INVALID", None)
+        return ("NUM", dec.quantize(TWOPLACES, rounding=ROUND_HALF_UP))
     except InvalidOperation:
         return ("INVALID", None)
-    return ("NUM", dec.quantize(TWOPLACES, rounding=ROUND_HALF_UP))
+
+
+def is_six_decimal_value(token: str) -> bool:
+    if token == "NA":
+        return True
+    try:
+        value = Decimal(token)
+        return value.is_finite() and value == value.quantize(SIXPLACES)
+    except InvalidOperation:
+        return False
 
 
 def rounded_series_accuracy(pred: pd.Series, gt: pd.Series) -> float:
@@ -236,7 +247,7 @@ def evaluate_outputs(pred_dir: Path, gt_dir: Path) -> dict[str, Any]:
     format_ok = True
     for field in CSV_ROUNDED_FIELDS:
         values = pred_csv[field].astype(str).str.strip()
-        ok = values.map(lambda value: value == "NA" or bool(SIX_DECIMAL_PATTERN.fullmatch(value)))
+        ok = values.map(is_six_decimal_value)
         if not bool(ok.all()):
             format_ok = False
             break

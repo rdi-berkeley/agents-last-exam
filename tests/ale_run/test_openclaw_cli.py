@@ -44,6 +44,7 @@ def test_write_config_supports_zai_primary_and_direct_openai_vision(
     defaults = openclaw_config["agents"]["defaults"]
     assert defaults["model"]["primary"] == "zai/glm-5.2"
     assert defaults["imageModel"]["primary"] == "openai/gpt-5.4"
+    assert defaults["llm"]["idleTimeoutSeconds"] == 180
     assert defaults["models"]["zai/glm-5.2"]["params"] == cfg.model_params
     assert defaults["models"]["openai/gpt-5.4"] == {}
     assert openclaw_config["tools"]["media"]["image"]["models"] == [
@@ -172,6 +173,95 @@ def test_write_config_supports_custom_primary_and_direct_openai_vision(
             "key": "openai-test-key",
         },
     }
+
+
+def test_write_config_supports_custom_native_vision_model(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cfg = OpenClawCliConfig(
+        model="Kimi 2.7",
+        provider="custom",
+        provider_id="moonshot",
+        model_id="kimi-k2.7-code",
+        base_url="https://api.moonshot.ai/v1",
+        api_key_env="MOONSHOT_API_KEY",
+        model_input_types=("text", "image"),
+        vision_model="kimi-k2.7-code",
+        plugins_allow=("cua", "memory-core"),
+    )
+    executor = SimpleNamespace(
+        config=cfg,
+        env={"MOONSHOT_API_KEY": "moonshot-test-key"},
+        cua_bridge_url=lambda: "http://127.0.0.1:5000",
+    )
+    deployer = OpenClawCliDeployer(executor)
+
+    deployer._write_config(cfg)
+
+    openclaw_config = json.loads(
+        (tmp_path / ".openclaw" / "openclaw.json").read_text()
+    )
+    defaults = openclaw_config["agents"]["defaults"]
+    assert defaults["model"]["primary"] == "moonshot/kimi-k2.7-code"
+    assert defaults["imageModel"]["primary"] == "moonshot/kimi-k2.7-code"
+    assert openclaw_config["tools"]["media"]["image"]["models"] == [
+        {"provider": "moonshot", "model": "kimi-k2.7-code"},
+    ]
+    assert openclaw_config["models"]["providers"] == {
+        "moonshot": {
+            "baseUrl": "https://api.moonshot.ai/v1",
+            "api": "openai-completions",
+            "models": [
+                {
+                    "id": "kimi-k2.7-code",
+                    "name": "Kimi 2.7",
+                    "input": ["text", "image"],
+                    "compat": {
+                        "maxTokensField": "max_completion_tokens",
+                        "supportsUsageInStreaming": True,
+                    },
+                },
+            ],
+        },
+    }
+
+
+def test_custom_primary_compat_proxy_routes_primary_and_vision(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cfg = OpenClawCliConfig(
+        model="Kimi 2.7",
+        provider="custom",
+        provider_id="moonshot",
+        model_id="kimi-k2.7-code",
+        base_url="https://api.moonshot.ai/v1",
+        api_key_env="MOONSHOT_API_KEY",
+        model_input_types=("text", "image"),
+        sanitize_empty_text_blocks=True,
+        vision_model="kimi-k2.7-code",
+        plugins_allow=("cua", "memory-core"),
+    )
+    executor = SimpleNamespace(
+        config=cfg,
+        env={"MOONSHOT_API_KEY": "moonshot-test-key"},
+        cua_bridge_url=lambda: "http://127.0.0.1:5000",
+    )
+    deployer = OpenClawCliDeployer(executor)
+    deployer._primary_compat_proxy_provider = "moonshot"
+    deployer._primary_compat_proxy_url = "http://127.0.0.1:43210/v1"
+
+    deployer._write_config(cfg)
+
+    openclaw_config = json.loads(
+        (tmp_path / ".openclaw" / "openclaw.json").read_text()
+    )
+    provider = openclaw_config["models"]["providers"]["moonshot"]
+    assert provider["baseUrl"] == "http://127.0.0.1:43210/v1"
+    assert provider["request"] == {"allowPrivateNetwork": True}
 
 
 def test_write_config_routes_direct_openai_vision_through_usage_proxy(

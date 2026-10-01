@@ -49,6 +49,7 @@ import csv
 import gzip
 import json
 import logging
+import math
 import re
 import sys
 from dataclasses import dataclass, field
@@ -340,10 +341,22 @@ def gate_qc_json_valid(sub: Path) -> GateResult:
         data = json.loads(qc_path.read_text())
     except json.JSONDecodeError as exc:
         return GateResult("qc_json_valid", False, 0, 0, f"invalid JSON: {exc}")
+    if not isinstance(data, dict):
+        return GateResult("qc_json_valid", False, 0, 0, "expected a flat JSON object")
     missing = [k for k in REQUIRED_QC_KEYS if k not in data]
     if missing:
         return GateResult("qc_json_valid", False, 0, 0,
                           f"missing keys: {missing}")
+    for key in REQUIRED_QC_KEYS:
+        value = data[key]
+        try:
+            valid = type(value) in (int, float) and math.isfinite(value) and value >= 0
+        except OverflowError:
+            valid = False
+        if (not valid or (key == "dup_rate" and value > 1)
+                or (key == "alignment_rate" and value > 100)):
+            return GateResult("qc_json_valid", False, 0, 0,
+                              f"invalid numeric value for {key}")
     return GateResult("qc_json_valid", True, 0, 0,
                       f"all {len(REQUIRED_QC_KEYS)} keys present")
 
@@ -354,7 +367,7 @@ def gate_nextflow_config_present(sub: Path) -> GateResult:
         return GateResult("nextflow_config_present", True, 0, 0,
                           f"{cfg.stat().st_size} B")
     return GateResult("nextflow_config_present", False, 0, 0,
-                      f"missing or empty: pipeline/nextflow.config")
+                      "missing or empty: pipeline/nextflow.config")
 
 
 def gate_vcf_min_variants(sub: Path) -> GateResult:
@@ -451,11 +464,10 @@ def gate_samplesheet_valid(sub: Path) -> GateResult:
     # nf-core/sarek samplesheet orientation: for HG002 germline on chr22
     # we expect a single sample row. We verify sex/lane and that fastq
     # paths are RELATIVE (so the submission bundle is portable). We also
-    # detect R1/R2 swap by filename convention as a quality signal, but
-    # only the sex/lane/relative-path checks are blocking.
+    # detect R1/R2 swaps by basename convention.
     problems = []
     for i, row in enumerate(rows):
-        if row.get("sex", "").upper() not in ("XY", "MALE", "M"):
+        if (row.get("sex") or "").upper() not in ("XY", "MALE", "M"):
             problems.append(f"row {i}: sex={row.get('sex')!r} (expected XY)")
         if not row.get("lane"):
             problems.append(f"row {i}: lane missing")
@@ -470,8 +482,8 @@ def gate_samplesheet_valid(sub: Path) -> GateResult:
                 continue
             paths[col] = val
         if set(paths) == {"fastq_1", "fastq_2"}:
-            f1 = paths["fastq_1"].lower()
-            f2 = paths["fastq_2"].lower()
+            f1 = Path(paths["fastq_1"]).name.lower()
+            f2 = Path(paths["fastq_2"]).name.lower()
             if "_r2" in f1 and "_r1" in f2:
                 problems.append(
                     f"row {i}: fastq_1/fastq_2 appear swapped "
@@ -709,16 +721,19 @@ def gate_vep_annotation_coverage(sub: Path,
                       f"gnomAD={gnomad_frac*100:.1f}% ({with_gnomad}/{total})")
 
 
-def gate_multiqc_sections(sub: Path) -> GateResult:
-    """Require real MultiQC data files, not just keyword-stuffed HTML.
+def _read_qc_tsv(path: Path) -> list[list[str]]:
+    with path.open(encoding="utf-8-sig") as handle:
+        rows = [[cell.strip() for cell in row] for row in csv.reader(handle, delimiter="\t",
+                                                                     strict=True)
+                if row and any(cell.strip() for cell in row)
+                and not row[0].lstrip().startswith("#")]
+    if not rows or len(rows[0]) < 2 or any(len(row) != len(rows[0]) for row in rows):
+        raise ValueError(f"{path.name}: empty or ragged TSV")
+    return rows
 
-    MultiQC always emits `multiqc_data/multiqc_general_stats.txt` (a TSV
-    with one header row of `<module>-<metric>` columns and one data row
-    per sample) and `multiqc_data/multiqc_software_versions.txt` (a
-    module × tool × version matrix). Both are load-bearing evidence
-    that MultiQC actually ran; neither can be trivially fabricated with
-    plausible numbers without knowing the module-specific schema.
-    """
+
+def gate_multiqc_sections(sub: Path) -> GateResult:
+    """Check QC module data and version records, not execution provenance."""
     cfg = GATES["multiqc_sections"]
     reports = sub / "results" / "reports"
     html = reports / "multiqc_report.html"
@@ -727,13 +742,13 @@ def gate_multiqc_sections(sub: Path) -> GateResult:
     versions = data_dir / "multiqc_software_versions.txt"
 
     problems: list[str] = []
-    if not html.exists():
-        problems.append("missing multiqc_report.html")
+    if not html.is_file() or html.stat().st_size == 0:
+        problems.append("missing or empty multiqc_report.html")
     if not data_dir.is_dir():
         problems.append("missing multiqc_data/ directory")
-    if not stats.exists():
+    if not stats.is_file():
         problems.append("missing multiqc_data/multiqc_general_stats.txt")
-    if not versions.exists():
+    if not versions.is_file():
         problems.append("missing multiqc_data/multiqc_software_versions.txt")
 
     if problems:
@@ -742,49 +757,66 @@ def gate_multiqc_sections(sub: Path) -> GateResult:
 
     required = [m.lower() for m in cfg["required"]]
     try:
-        header = stats.read_text(errors="replace").splitlines()[:1]
-        rows = stats.read_text(errors="replace").splitlines()[1:]
-    except OSError as exc:
+        header, *rows = _read_qc_tsv(stats)
+        version_rows = _read_qc_tsv(versions)
+    except (OSError, UnicodeError, csv.Error, ValueError) as exc:
         return GateResult("multiqc_sections", False, 0, cfg["weight"],
-                          f"read error on general_stats: {exc}")
-    if not header or not rows:
+                          f"QC table error: {exc}")
+    if (header[0].lower() != "sample" or not rows or any(not row[0] for row in rows)
+            or len(set(header)) != len(header)):
         return GateResult("multiqc_sections", False, 0, cfg["weight"],
-                          "multiqc_general_stats.txt empty")
+                          "general_stats requires a Sample header and named sample rows")
 
-    header_lc = header[0].lower()
-    # Each required module must appear as a column-name prefix in the
-    # general stats header. These prefixes are stable across MultiQC 1.x.
     prefix_map = {
-        "fastqc": ("fastqc_raw", "fastqc-status-check", "fastqc"),
-        "picard": ("picard", "gatk4_markduplicates"),
+        "fastqc": ("fastqc_raw", "fastqc_status_check", "fastqc"),
+        "picard": ("picard", "gatk4_markduplicates", "gatk_markduplicates"),
         "samtools": ("samtools_flagstat", "samtools_stats", "samtools"),
         "mosdepth": ("mosdepth",),
     }
-    missing = []
-    for mod in required:
-        prefixes = prefix_map.get(mod, (mod,))
-        if not any(p in header_lc for p in prefixes):
-            missing.append(mod)
+    present = set()
+    for index, column in enumerate(header[1:], 1):
+        metric_id = column.lower().rsplit("_mqc-generalstats-", 1)[-1]
+        metric_id = re.sub(r"[ -]", "_", metric_id)
+        for module, prefixes in prefix_map.items():
+            if not any(metric_id.startswith(prefix + "_") for prefix in prefixes):
+                continue
+            for row in rows:
+                try:
+                    if math.isfinite(float(row[index])):
+                        present.add(module)
+                except ValueError:
+                    pass
+    missing = [module for module in required if module not in present]
 
-    # At least one non-empty data row with a real sample name
-    real_rows = [r for r in rows if r.strip() and not r.startswith("#")]
-    if not real_rows:
-        missing.append("no sample rows in general_stats")
-
-    # Versions file must declare at least the tool names we scored
-    try:
-        versions_lc = versions.read_text(errors="replace").lower()
-    except OSError as exc:
-        return GateResult("multiqc_sections", False, 0, cfg["weight"],
-                          f"read error on software_versions: {exc}")
-    for tool in ("gatk4", "samtools", "fastqc", "mosdepth"):
-        if tool not in versions_lc:
-            missing.append(f"software_versions missing '{tool}'")
+    version_header = [cell.lower() for cell in version_rows[0]]
+    if "version" in version_header and any(key in version_header for key in ("software", "tool")):
+        tool_index = next(version_header.index(key) for key in ("software", "tool")
+                          if key in version_header)
+        version_index = version_header.index("version")
+        entries = [(row[tool_index], row[version_index]) for row in version_rows[1:]]
+    elif version_header[0] in ("sample", "group", "module"):
+        entries = [(tool, value) for row in version_rows[1:]
+                   for tool, value in zip(version_rows[0][1:], row[1:])]
+    elif len(version_rows[0]) == 2:
+        entries = [tuple(row) for row in version_rows]
+    else:
+        entries = []
+    recorded = set()
+    for tool, version in entries:
+        name = tool.lower()
+        if re.fullmatch(r"v?\d+(?:\.\d+)*(?:[-+][\w.]+)?", version, re.IGNORECASE):
+            if name in ("gatk", "gatk4") and re.match(r"v?4(?:\.|$)", version, re.IGNORECASE):
+                recorded.add("gatk4")
+            elif name in ("samtools", "fastqc", "mosdepth"):
+                recorded.add(name)
+    missing.extend(f"software_versions missing valid '{tool}' version"
+                   for tool in ("gatk4", "samtools", "fastqc", "mosdepth")
+                   if tool not in recorded)
 
     ok = not missing
     return GateResult("multiqc_sections", ok, cfg["weight"] if ok else 0,
                       cfg["weight"],
-                      f"{len(real_rows)} sample rows; modules verified"
+                      f"{len(rows)} sample rows; module data and versions present"
                       if ok else f"missing: {missing}")
 
 

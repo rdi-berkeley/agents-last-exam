@@ -22,17 +22,24 @@ register in ``_REGISTRY``. SandboxHandle / Providers / deployers never
 hard-code an image-family literal — they consult :func:`get` /
 :func:`registered`.
 
-Currently five families:
+Base families:
 
   ``ale-kasm``             — linux (Docker, trycua/cua-ubuntu)
   ``ale-ubuntu22``         — linux (GCE VM)
   ``ale-ubuntu22-docker``  — linux (Docker, exported from the ale-ubuntu22 VM)
   ``ale-win10``            — windows (GCE VM)
+  ``ale-win10-cpu-licensed`` — windows + licensed software (GCE VM)
+  ``ale-win10-gpu-licensed`` — windows + licensed software + L4 (GCE VM)
   ``ale-win-server``       — windows + L4 GPU (GCE VM, g2 machine types)
+
+Public v1.1 realizations use separate ``-v1-1`` keys. Their registration
+does not change the legacy defaults or establish artifact availability.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import import_module
+from importlib.util import find_spec
 from typing import Literal
 
 
@@ -97,22 +104,18 @@ class Image:
         }
 
 
-# Registry — late imports avoid circular if a family module wants to
-# reference Image (which it does via from-import).
-from .ale_kasm import IMAGE as _ALE_KASM
-from .ale_ubuntu22 import IMAGE as _ALE_UBUNTU22
-from .ale_ubuntu22_docker import IMAGE as _ALE_UBUNTU22_DOCKER
-from .ale_win10 import IMAGE as _ALE_WIN10
-from .ale_win_server import IMAGE as _ALE_WIN_SERVER
+_REGISTRY: dict[str, Image] = {}
+for module_name in (
+    "ale_kasm", "ale_ubuntu22", "ale_ubuntu22_docker", "ale_ubuntu22_docker_v1_1",
+    "ale_ubuntu22_v1_1", "ale_win10", "ale_win10_v1_1", "ale_win_server",
+):
+    registered_image = import_module(f".{module_name}", __name__).IMAGE
+    _REGISTRY[registered_image.name] = registered_image
 
-
-_REGISTRY: dict[str, Image] = {
-    _ALE_KASM.name: _ALE_KASM,
-    _ALE_UBUNTU22.name: _ALE_UBUNTU22,
-    _ALE_UBUNTU22_DOCKER.name: _ALE_UBUNTU22_DOCKER,
-    _ALE_WIN10.name: _ALE_WIN10,
-    _ALE_WIN_SERVER.name: _ALE_WIN_SERVER,
-}
+for module_name in ("ale_win10_cpu_licensed", "ale_win10_gpu_licensed"):
+    if find_spec(f"{__name__}.{module_name}") is not None:
+        registered_image = import_module(f".{module_name}", __name__).IMAGE
+        _REGISTRY[registered_image.name] = registered_image
 
 
 def get(name: str) -> Image:

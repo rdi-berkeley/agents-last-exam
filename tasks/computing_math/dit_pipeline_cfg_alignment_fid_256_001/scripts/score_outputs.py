@@ -65,6 +65,10 @@ class _AutoencoderKL:
         return SimpleNamespace(sample=sample)
 
 
+class _DiTTransformer2DModel:
+    pass
+
+
 class _KarrasDiffusionSchedulers:
     pass
 
@@ -132,6 +136,9 @@ def _diffusers_stubs():
     pipeline_utils = types.ModuleType("diffusers.pipelines.pipeline_utils")
 
     models.AutoencoderKL = _AutoencoderKL
+    models.DiTTransformer2DModel = _DiTTransformer2DModel
+    diffusers.AutoencoderKL = models.AutoencoderKL
+    diffusers.DiTTransformer2DModel = models.DiTTransformer2DModel
     schedulers.KarrasDiffusionSchedulers = _KarrasDiffusionSchedulers
     utils.is_torch_xla_available = lambda: False
     torch_utils.randn_tensor = _randn_tensor
@@ -217,6 +224,7 @@ class _DummyTransformer:
 class _DummyScheduler:
     def __init__(self, *, variance_type: str, has_scale_model_input: bool) -> None:
         self.variance_type = variance_type
+        self.config = SimpleNamespace(variance_type=variance_type)
         if has_scale_model_input:
             self.scale_model_input = self._scale_model_input
 

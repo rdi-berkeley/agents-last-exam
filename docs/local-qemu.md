@@ -20,11 +20,11 @@ normal cleanup.
 
 The published base images are:
 
-- `hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2`
-- `hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22.qcow2`
+- `hf://agents-last-exam/ale-images-qcow2/ale-win10-v1.1.qcow2`
+- `hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22-v1.1.qcow2`
 
 These are logical disk paths. The provider automatically uses a multipart
-manifest when the dataset stores the disk as verified 10 GB parts, or downloads
+manifest when the dataset stores the disk as verified 4 GB parts, or downloads
 the qcow2 directly when it is stored as one object. This packaging is not part
 of the environment configuration.
 
@@ -79,9 +79,10 @@ then creates a small qcow2 overlay under `~/.cache/ale/qemu/runtime/slots/`.
 The base image is mounted read-only into the QEMU container, so concurrent runs
 do not modify it or copy its full contents.
 
-HF sources follow the dataset's `main` branch by default. Advanced users can
-set `hf_revision` to a dataset commit SHA when an immutable artifact revision
-is required.
+The shipped v1.1 profile pins `hf_revision` to an immutable dataset commit.
+Preserve that pin when customizing resources. Removing it selects the dataset's
+mutable `main` branch and can mix task-code and disk versions. GCS and local
+disk sources do not accept `hf_revision`; remove that field when switching sources.
 
 For `gs://` sources, the provider records the object generation, size, ETag,
 and CRC32C in a sidecar next to the cached disk. It checks the remote generation

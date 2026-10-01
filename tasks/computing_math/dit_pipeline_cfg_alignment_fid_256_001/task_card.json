@@ -49,7 +49,7 @@
       "description": "Corrected standalone DiT pipeline submission."
     }
   ],
-  "evaluation": "The evaluator is binary. It reads the submitted `output/pipeline_dit.py` plus the hidden `reference/pipeline_dit.py`, then compares their behavior on deterministic CPU-only hidden tests using benchmark-owned diffusers stubs and real torch tensors. Hard failures include a missing output file, failure to import as a standalone top-level module, missing `DiTPipeline`, or any hidden behavior mismatch. Positive fixture score: `1.0`. Negative fixture score: `0.0`.",
+  "evaluation": "The evaluator reads the submitted `output/pipeline_dit.py` plus the hidden `reference/pipeline_dit.py`, then compares their behavior on five deterministic CPU-only cases using benchmark-owned diffusers stubs and real torch tensors. The score is the fraction of cases that match, from `0.0` to `1.0`; `passed` is true only when all five cases match. Hard failures include a missing output file, failure to import as a standalone top-level module, or missing `DiTPipeline`.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",

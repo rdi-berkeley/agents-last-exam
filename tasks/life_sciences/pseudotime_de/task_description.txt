@@ -1,0 +1,109 @@
+Pseudotime Differential Expression - Bone Marrow scRNA-seq
+
+Goal
+----
+Identify genes with significantly different expression patterns along
+pseudotime between DC and Ery cell-fate lineages on the bone-marrow
+scRNA-seq dataset, using Palantir and tradeSeq.
+
+Estimator and runtime
+---------------------
+Use estimator palantir-tradeseq-v2-20260910, specified in
+input/estimator_contract.json. That file fixes all estimator settings;
+unlisted arguments use the pinned package defaults. Use Python 3.11.15
+and exact versions in input/runtime_env/pyproject.toml, R 4.5.3 and
+input/runtime_env/R-versions.json. Do not silently upgrade packages.
+Set PYTHONHASHSEED=0 before Python, NumPy seed 0, Scanpy n_jobs=1,
+Palantir n_jobs=1, and one BLAS/OMP/Numba thread per worker. Use at most
+four CPU workers and locale C.UTF-8.
+
+Required Palantir setup
+-----------------------
+- Input: input/marrow_sample_scseq_counts.h5ad
+  (4142 cells x 16106 genes, raw counts).
+- Preserve original cell/gene order and counts; no added QC filters,
+  imputation, regression, or unit-variance scaling.
+- On a float64 working copy, normalize_total(target_sum=10000,
+  exclude_highly_expressed=False), natural log1p, then select 1500
+  highly variable genes (flavor='cell_ranger', batch_key=None).
+- PCA on the HVG mask only: 50 components, zero_center=True,
+  svd_solver='arpack', random_state=0, dtype='float64'.
+- Diffusion maps: n_components=5, knn=30, alpha=0, seed=0,
+  kernel_backend='scanpy'. determine_multiscale_space(n_eigs=None).
+- Neighbors on multiscale space: n_neighbors=15, metric='euclidean',
+  method='umap', random_state=0. UMAP: n_components=2, min_dist=0.5,
+  spread=1, init_pos='spectral', random_state=0.
+- Start cell: Run5_164698952452459.
+- Terminal states:
+    DC   = Run5_131097901611291
+    Mono = Run5_134936662236454
+    Ery  = Run4_200562869397916
+- palantir.core.run_palantir(..., num_waypoints=500, knn=30, seed=20,
+  scale_components=True, use_early_cell_as_start=True,
+  max_iterations=25, n_jobs=1).
+- Use returned PResults pseudotime and branch probabilities, including
+  the package's truncation below 0.01. Do not additionally normalize
+  pseudotime. The specified cell is the actual graph start; final
+  iteratively refined pseudotime need not be exactly zero at that cell.
+  500 is the requested count, not the final waypoint cardinality.
+
+Crossing into R
+---------------
+Export the raw-count expression matrix (all genes, not only the 1500
+HVGs), pseudotime, fate probabilities, and UMAP as CSV/MTX under output/.
+Keep cell identifiers aligned across exports. Assemble the exported
+files as a SingleCellExperiment in R. Use the Palantir pseudotime for
+both retained lineages.
+Pass the SCE's raw-count assay and explicit pseudotime/cellWeights to
+fitGAM; its SCE-input method assumes slingshot, not Palantir.
+
+tradeSeq differential expression
+--------------------------------
+- Select DC and Ery by terminal-state identity. They are columns 1 and 3
+  only when the fate-probability columns are ordered DC, Mono, Ery.
+- Drop cells with zero weight in BOTH DC and Ery; renormalize the kept
+  weights so each row sums to 1.
+- Compute edgeR calcNormFactors(method='TMM') on all 16106 genes and
+  retained cells, with pinned defaults. Use log(library_size * factor)
+  as offset; no fallback. Require finite offsets and positive factors
+  and library sizes.
+- Set RNGkind('Mersenne-Twister','Inversion','Rejection') and R seed 27
+  immediately before fitGAM(..., nknots=6, family='nb', sce=TRUE,
+  parallel=FALSE), with default mgcv::gam.control() and no covariates,
+  conditions, or observation weights.
+- Batching is allowed for memory bounds only. Use the same shared
+  full-count TMM offset, cells, seed 27 reset before every fitGAM call,
+  lineage assignments, knots, and design. Fit every original gene
+  exactly once; do not normalize or filter genes separately per batch.
+- patternTest(..., l2fc=log2(1.5), global=TRUE, pairwise=FALSE,
+  nPoints=12, eigenThresh=0.01).
+- A non-TRUE tradeSeq converged flag (which includes fitting warnings),
+  nonfinite coefficients/covariance, or nonfinite test p-value yields
+  effective p=1. Record failures, do not silently drop them. A batch
+  exception is an execution failure to diagnose, not permission to skip
+  a batch or replace all its results with 1.
+- Apply one global BH correction across all tested genes (n=16106) to
+  the effective p-values, never within batches; retain genes with
+  finite padj < 0.05.
+- The effect-size threshold is supplied to patternTest via
+  l2fc=log2(1.5); do not apply a separate absolute logFC or fcMedian filter.
+  This supersedes the earlier brief's additional absolute logFC cutoff.
+
+Required output
+---------------
+Save the selected symbols to output/de_genes.csv.
+
+Format: UTF-8 CSV with exactly one column `gene` containing HGNC symbols. Optional UTF-8 BOM, standard CSV quoting, LF/CRLF line endings, blank lines, row order, and duplicate symbols do not affect scoring. Header case and surrounding whitespace are ignored; symbol case is significant. Symbols must be nonempty and contain no embedded whitespace, control characters, commas, or quotes. Empty gene fields, malformed CSV/UTF-8, extra columns (including a row index), and other headers are invalid.
+
+Scoring: Let A be the deduplicated submitted symbol set, G the hidden reference symbol set, and TP = |A intersect G|. Precision = TP / |A|; recall = TP / |G|. Score is 1.0 only when BOTH precision >= 0.80 AND recall >= 0.80; otherwise 0.0. Missing, empty, or invalid output scores 0.0. Additional nonreference symbols reduce precision; duplicates cannot improve either metric. Metrics are compared before rounding.
+
+Keep scripts, intermediate exports, and task-local environments under
+output/. Do not modify input files or any non-output task directories.
+Do not ask for confirmation. Execute directly.
+
+Dataset citation supplied with the original task
+-----------------------------------------------
+Setty M. et al. "Characterization of cell fate probabilities in
+single-cell data with Palantir." Nature Biotechnology 37(4), 451-460
+(2019). The versioned benchmark reference is a reproducible output of
+the specified estimator, not certified biological ground truth.

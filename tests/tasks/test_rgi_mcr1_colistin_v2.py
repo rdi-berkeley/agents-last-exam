@@ -36,8 +36,7 @@ REFERENCE = json.dumps(
             },
             "percent_identity": {
                 "target": 88.5,
-                "full_credit_tolerance": 0.5,
-                "partial_credit_tolerance": 2.0,
+                "full_credit_tolerance": 0.05,
             },
             "drug_class": {
                 "reference_value": "synthetic class alpha",
@@ -73,6 +72,8 @@ def test_config_uses_canonical_task_path():
     assert config.data_task_dir == expected
     assert config.remote_output_dir == f"{expected}/output"
     assert "amr_contig_annotation_instance_1" not in config.task_description
+    assert "DEBIAN_FRONTEND=noninteractive" in config.task_description
+    assert "diamond-aligner" in config.task_description
 
 
 def test_exact_and_normalized_answers_pass():
@@ -97,10 +98,21 @@ def test_critical_fields_cannot_be_bypassed():
     assert wrong_allele.score == 0.5
     assert not wrong_allele.passed
 
-    old_tolerance_only = score({**EXACT_ANSWER, "percent_identity": 88.56})
-    assert old_tolerance_only.identity_tolerance == 0.05
-    assert old_tolerance_only.score == 0.5
-    assert not old_tolerance_only.passed
+    outside_tolerance = score({**EXACT_ANSWER, "percent_identity": 88.56})
+    assert outside_tolerance.identity_tolerance == 0.05
+    assert outside_tolerance.score == 0.5
+    assert not outside_tolerance.passed
+
+
+def test_reference_cannot_silently_widen_published_identity_tolerance():
+    inconsistent_reference = json.loads(REFERENCE)
+    inconsistent_reference["grading"]["percent_identity"]["full_credit_tolerance"] = 0.5
+
+    with __import__("pytest").raises(ValueError, match="exceeds the published maximum"):
+        SCORER.score_output_payloads(
+            output_json_text=json.dumps(EXACT_ANSWER),
+            reference_json_text=json.dumps(inconsistent_reference),
+        )
 
 
 def test_substring_only_categorical_fields_receive_no_credit():

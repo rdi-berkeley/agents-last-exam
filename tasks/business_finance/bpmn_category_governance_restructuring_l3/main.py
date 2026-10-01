@@ -43,6 +43,8 @@ if __name__ not in sys.modules:
 
 from tasks.business_finance.bpmn_category_governance_restructuring_l3.scripts.score_output_bundle import \
     score_output_bundle
+from tasks.business_finance.bpmn_category_governance_restructuring_l3.scripts.runtime_validation import \
+    evaluate_remote
 from tasks.common_setup import BaseTaskSetup
 from tasks.linux_runtime import LinuxTaskConfig
 
@@ -192,6 +194,15 @@ You may also write `{self.agent_output_dir}/deployment_log.json` as an optional 
 ## Validation Expectations
 Your output must satisfy the structural topology, scenario-summary, compliance, anti-gaming, data-flow, role-coupling, and design-decision requirements described in `{self.task_prompt_file}`.
 
+The evaluator independently deploys your exact BPMN and executes the 55 runtime scenarios, then computes the five structural anti-gaming probes. Passing requires at least 57/60 and all five probes; submitted pass flags are not evidence of execution.
+
+Scenario inputs and task outputs take precedence over ordinary manual-completion defaults. Unless a scenario explicitly requests additional execution feedback, execution produces `out_execution_report="completed"` and `out_execution_needs_replan=false`; a campaign-cadence closeout acknowledges `out_cycle_closed=true`. A compliance-handled acknowledgement follows the scenario's `brandRiskReassessed` outcome when that task completes. These values are assigned only to declared writable form properties, accepting `in_`/`out_` naming variants and explicit Flowable `variable` bindings. Task IDs may differ except for anchored IDs. Other unspecified routing decisions are not guessed from your gateway conditions.
+
+## Coordination and Artifact Contract
+- Merchant readiness and campaign cadence may be separate user tasks or one coordination user task explicitly describing both responsibilities. Execution, coordination, and key decision must still belong to three distinct roles.
+- The a50 no-shadow-task rule also permits required domain work: ad-ratio, A/B-test, free-trial, new-merchant, review-based-promotion, merchant-readiness, campaign-cadence, and merchant-admission tasks. These tasks need not use the scenario manifest's task IDs. Their names, IDs, or documentation must identify the responsibility; spaces, hyphens, and underscores are equivalent separators. Other user tasks must be anchored or covered by the supplied scenario manifest.
+- The 18 design-decision sections may use the documented `chosen_approach`, `rejected_alternatives`, `rationale`, and `trade-off` labels or their spaced Markdown equivalents. Each still requires a nonempty choice, two distinct rejected alternatives, a valid rule citation in the rationale, and a nonempty trade-off.
+
 ## Data Flow Topology Rule
 Every new task's `in_*` form property must have a matching `out_*` producer on a **topological predecessor** in the sequence-flow graph. The evaluator traces BFS paths, not Flowable's global variable scope.
 
@@ -288,6 +299,12 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             await session.read_bytes(meta["output_design_decisions"])
         )
         local_scenarios.write_bytes(await session.read_bytes(meta["starter_scenarios"]))
+        trusted_runtime = await evaluate_remote(
+            session,
+            local_bpmn.read_bytes(),
+            json.loads(local_scenarios.read_text()),
+            lambda receipt: logger.info("bpmn_runtime_evidence=%s", json.dumps(receipt)),
+        )
         result = await asyncio.to_thread(
             score_output_bundle,
             bpmn_path=local_bpmn,
@@ -295,6 +312,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             rules_path=local_rules,
             results_path=local_results,
             scenario_path=local_scenarios,
+            trusted_runtime=trusted_runtime,
         )
 
     logger.info("evaluation=%s", json.dumps(result, sort_keys=True)[:2000])

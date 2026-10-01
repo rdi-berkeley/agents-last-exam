@@ -548,6 +548,26 @@ def _obj_has_uv_text(content: str) -> bool:
     return any(line.startswith("vt ") for line in content.splitlines())
 
 
+async def _resolve_candidate_mtl(
+    session: cb.DesktopSession, output_obj: str, declared_mtl: str | None
+) -> str | None:
+    if declared_mtl and await session.file_exists(declared_mtl):
+        return declared_mtl
+    try:
+        obj_text = await session.read_file(output_obj)
+    except Exception:
+        return declared_mtl
+    obj_parent = str(PureWindowsPath(output_obj).parent)
+    for line in obj_text.splitlines():
+        if not line.startswith("mtllib "):
+            continue
+        name = line.split(None, 1)[1].strip()
+        candidate = _remote_child(obj_parent, name)
+        if await session.file_exists(candidate):
+            return candidate
+    return declared_mtl
+
+
 async def _upload_scripts(session: cb.DesktopSession, remote_scripts_dir: str) -> None:
     await session.interface.create_dir(remote_scripts_dir)
     for name in [
@@ -648,6 +668,9 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         str(meta.get("color_match_gate_threshold", 0.0)),
     ]
     if meta["task_shape"] == "single_part":
+        candidate_mtl = await _resolve_candidate_mtl(
+            session, meta["output_obj"], meta.get("output_mtl")
+        )
         remote_args.extend(
             [
                 "--task-shape",
@@ -663,7 +686,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
                 "--candidate-obj",
                 meta["output_obj"],
                 "--candidate-mtl",
-                meta["output_mtl"],
+                candidate_mtl or meta["output_mtl"],
                 "--candidate-texture-dir",
                 meta["output_texture_dir"],
                 "--renderer-script",

@@ -5,20 +5,16 @@ from __future__ import annotations
 import json
 import logging
 import posixpath
-import sys
-from pathlib import Path
 
 import cua_bench as cb
 from tasks.common_setup import BaseTaskSetup
+from tasks.life_sciences.gene_expression_differential_analysis_functional_enrichment_analysis_1.scripts.score_outputs import (
+    REQUIRED_FILES,
+    score_submission,
+)
 from tasks.linux_runtime import LinuxTaskConfig
 
 _setup = BaseTaskSetup()
-
-SCRIPTS_DIR = Path(__file__).parent / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-from score_outputs import REQUIRED_FILES, score_submission  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -118,12 +114,15 @@ Visible input files:
 - Gene-id to gene-symbol map: `{self.gene_map_file}`
 - Enrichment config: `{self.enrichment_config_file}`
 - Runtime dependency manifest: `{self.runtime_env_dir}/pyproject.toml`
+- Full estimator and public API contract: `{self.runtime_env_dir}/CONTRACT.md`
+- Public numerical package: `{self.runtime_env_dir}/deg_inference/`
+- Transitive dependency constraints: `{self.runtime_env_dir}/constraints.txt`
 - Requirements file: `{self.requirements_file}`
 
 What you must do:
 1. Read the count matrix, metadata, analysis spec, and output contract first.
 2. Use the metadata `condition` column to compare `tumor` against `normal`.
-3. Run differential gene expression analysis with `pydeseq2` using the design formula `~ batch + condition`.
+3. Fit all 17,498 raw-count genes and eight samples using the design formula `~ batch + condition`, PyDESeq2 0.4.12, and the supplied `deg_inference.ObjectivePreservingInference`. Pass this inference instance to BOTH `DeseqDataSet` and `DeseqStats`. Follow the full estimator contract in `{self.runtime_env_dir}/CONTRACT.md`.
 4. Use `{self.gene_map_file}` to populate the required gene-symbol output fields.
 5. Classify each gene as `upregulated`, `downregulated`, or `no significant` using the benchmark rule:
    - `log2FoldChange > 1` and `padj < 0.05` for `upregulated`
@@ -140,9 +139,14 @@ Helpful notes:
 - The first column of the metadata file is `sample_id`.
 - The sample order in the metadata matches the count-matrix sample columns exactly.
 - The benchmark standardizes the enrichment target as `KEGG_2021_Human` on `Human`.
+- Use Python 3.10 and the pinned dependencies. In PyDESeq2 0.4.12 use `design_factors=["batch", "condition"]` and `ref_level=["condition", "normal"]`, not the newer `design=` API.
+- Use `refit_cooks=True`, `cooks_filter=True`, `independent_filter=True`, and `alpha=0.05`. Do not prefilter genes or apply LFC shrinkage. Keep missing adjusted probabilities missing.
+- The public package supplies computation primitives only; implement input handling, the analysis workflow, and output assembly yourself. Make it importable by adding `{self.runtime_env_dir}` to `PYTHONPATH` and set `PYTHONDONTWRITEBYTECODE=1`.
+- Use at most four inference workers and one BLAS thread per worker. The full numerical objective, bounds, regularization and filtering settings are specified in `CONTRACT.md`.
+- For gseapy 1.1.5 use `Enrichr(..., background=None, outdir=None, no_plot=True)`, set the instance's `ENRICHR_URL="https://maayanlab.cloud"`, then call `set_organism()` and `run()`. Do not patch the package. Preserve the normal service background and write all returned terms sorted by adjusted p-value, p-value, then term.
 - Outbound network access to Enrichr is allowed and expected for the enrichment step.
 - You may install the Python dependencies without modifying `input/`, for example:
-  `uv venv .venv && uv pip install --python .venv/bin/python -r {self.requirements_file}`
+  `uv venv --python 3.10 .venv && uv pip install --python .venv/bin/python -r {self.requirements_file} -c {self.runtime_env_dir}/constraints.txt`
 
 Do not modify files under `input/`.
 Do not write outputs anywhere except `{self.remote_output_dir}`.
@@ -198,34 +202,30 @@ async def _read_required_output_files(session: cb.DesktopSession, output_files: 
     payloads: dict[str, bytes] = {}
     missing: list[str] = []
     for name, path in output_files.items():
-        if not (await session.file_exists(path) or await session.directory_exists(path)):
+        if await session.directory_exists(path) or not await session.file_exists(path):
             missing.append(name)
             continue
-        payloads[name] = await session.read_bytes(path)
+        try:
+            payloads[name] = await session.read_bytes(path)
+        except FileNotFoundError:
+            missing.append(name)
     return payloads, missing
 
 
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    try:
-        outputs, missing = await _read_required_output_files(session, meta["output_files"])
-        if missing:
-            logger.info("Missing output files: %s", missing)
-            return [0.0]
-
-        reference_deg = await session.read_bytes(meta["reference_deg_file"])
-        reference_up = await session.read_bytes(meta["reference_up_file"])
-        reference_down = await session.read_bytes(meta["reference_down_file"])
-
-        report = score_submission(
-            output_payloads=outputs,
-            reference_deg_payload=reference_deg,
-            reference_up_payload=reference_up,
-            reference_down_payload=reference_down,
-        )
-        logger.info("Evaluation report: %s", json.dumps(report.to_dict(), sort_keys=True))
-        return [report.score]
-    except Exception as exc:
-        logger.exception("Evaluation failed unexpectedly: %s", exc)
-        return [0.0]
+    reference_deg = await session.read_bytes(meta["reference_deg_file"])
+    reference_up = await session.read_bytes(meta["reference_up_file"])
+    reference_down = await session.read_bytes(meta["reference_down_file"])
+    outputs, missing = await _read_required_output_files(session, meta["output_files"])
+    if missing:
+        logger.info("Missing or non-file outputs: %s", missing)
+    report = score_submission(
+        output_payloads=outputs,
+        reference_deg_payload=reference_deg,
+        reference_up_payload=reference_up,
+        reference_down_payload=reference_down,
+    )
+    logger.info("Evaluation report: %s", json.dumps(report.to_dict(), sort_keys=True))
+    return [report.score]

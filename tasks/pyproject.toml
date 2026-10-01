@@ -18,6 +18,7 @@ dependencies = [
     "pandas>=2.3.3",
     "pillow>=12.2.0",
     "pretty_midi>=0.2.11",
+    "pyparsing>=3.2",
     "python-dotenv>=1.2.2",
     "safetensors>=0.7.0",
     "scikit-image>=0.26.0",

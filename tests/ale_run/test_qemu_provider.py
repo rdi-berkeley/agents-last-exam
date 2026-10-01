@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -138,6 +139,48 @@ def test_provider_rejects_hf_revisions_sharing_one_cache_path(
 
     with pytest.raises(ValueError, match="share cache path"):
         QemuProvider(config)
+
+
+def test_detect_host_egress_mtu_uses_lowest_metric_default_route(
+    tmp_path: Path,
+) -> None:
+    route_table = tmp_path / "route"
+    route_table.write_text(
+        "Iface Destination Gateway Flags RefCnt Use Metric Mask MTU Window IRTT\n"
+        "eth0 00000000 0100000A 0003 0 0 100 00000000 0 0 0\n"
+        "eth1 00000000 0100000B 0003 0 0 200 00000000 0 0 0\n",
+        encoding="utf-8",
+    )
+    network_root = tmp_path / "net"
+    (network_root / "eth0").mkdir(parents=True)
+    (network_root / "eth0" / "mtu").write_text("1460\n", encoding="utf-8")
+    (network_root / "eth1").mkdir(parents=True)
+    (network_root / "eth1" / "mtu").write_text("1500\n", encoding="utf-8")
+
+    assert qemu_module._detect_host_egress_mtu(route_table, network_root) == 1460
+
+
+@pytest.mark.asyncio
+async def test_configure_guest_mtu_updates_default_interface() -> None:
+    commands: list[tuple[str, float]] = []
+
+    class FakeSandbox:
+        id = "ale-qemu-test"
+
+        async def run_command(
+            self,
+            command: str,
+            *,
+            timeout: float = 60,
+        ) -> subprocess.CompletedProcess:
+            commands.append((command, timeout))
+            return subprocess.CompletedProcess(command, 0, "interface=enp0s3 mtu=1460\n", "")
+
+    await QemuProvider._configure_guest_mtu(FakeSandbox(), 1460)
+
+    assert commands[0][1] == 30
+    assert 'sudo ip link set dev "$interface" mtu 1460' in commands[0][0]
+    assert 'test "$actual" = "1460"' in commands[0][0]
 
 
 def test_demo_task_card_resources_reach_qemu_shape(tmp_path: Path) -> None:

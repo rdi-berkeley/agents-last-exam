@@ -1,0 +1,92 @@
+{
+  "rubric_version": "2026-09-18",
+  "grading_policy": [
+    "Grade the four requested parts independently against the intended equations in the problem and solution key. A wrong stencil in 1a does not change the equation being assessed in 1b.",
+    "Add the component credits below; do not invent further deductions. The total is the sum of the four part scores. Tags describe errors and do not subtract additional points.",
+    "Assess the explicit test-space identification in 2b only. A correct weak identity in 2a receives full credit even if the test space is omitted there.",
+    "In 1b, award the numerical-substitution component for correct arithmetic using the student's stated bound, even if that bound is wrong. This error-carried-forward credit does not certify stability or a correct maximum; tag an incorrect reported maximum separately.",
+    "In 2b, a derivative-product integral with only its overall sign wrong retains the stated structural credit. The separate wrong-sign identity in 2a receives zero."
+  ],
+  "problems": {
+    "1a": {
+      "points": 2.0,
+      "description": "Correct explicit update with the second-difference term.",
+      "components": {
+        "euler_structure_and_scaling": {"correct": 1.0, "incorrect_or_missing": 0.0},
+        "centered_second_difference": {"correct": 1.0, "incorrect_or_missing": 0.0}
+      }
+    },
+    "1b": {
+      "points": 3.0,
+      "description": "Sharp stability restriction dt <= dx^2 / (2 kappa) and dt_max = 0.01.",
+      "components": {
+        "sharp_symbolic_restriction": {"correct": 2.0, "incorrect_or_missing": 0.0},
+        "numerical_substitution": {"correct_including_error_carried_forward": 1.0, "incorrect_or_missing": 0.0}
+      }
+    },
+    "2a": {
+      "points": 2.0,
+      "description": "Positive integral u'v' = integral fv after integration by parts.",
+      "components": {
+        "weak_identity": {"correct": 2.0, "incorrect_or_missing": 0.0}
+      }
+    },
+    "2b": {
+      "points": 3.0,
+      "description": "Identify a(u,v), l(v), and H_0^1(0,1) explicitly in this part.",
+      "components": {
+        "bilinear_form": {"correct": 1.5, "derivative_product_with_wrong_overall_sign": 0.5, "otherwise_incorrect_or_missing": 0.0},
+        "linear_functional": {"correct": 0.75, "incorrect_or_missing": 0.0},
+        "test_space": {"correct": 0.75, "incorrect_or_missing": 0.0}
+      }
+    }
+  },
+  "feedback_style": {
+    "max_words_per_student": 70,
+    "tone": "brief, constructive, rubric-based",
+    "coverage": "For each applicable tag, cover its feedback_checks_by_tag concepts once. Explain the correction in context; the listed alternatives are recognition examples, not required sentences. The class summary covers summary_checks.",
+    "matching": "Each check is satisfied by any one any_of group, with every snippet in that group present. Matching is case-insensitive and ignores whitespace, multiplication asterisks, backticks, and braces. Numbers, identifiers, signs, and other punctuation remain distinct tokens. Use one listed formulation for deterministic recognition; unrestricted paraphrase equivalence is not claimed."
+  },
+  "error_tags": {
+    "wrong_discrete_laplacian": "Discrete Laplacian is missing the -2*u_i^n term or has the wrong stencil.",
+    "stability_factor_of_two_error": "The sharp explicit stability bound has a factor-of-two error in either direction: twice or half dx^2/(2*kappa). This includes denominators kappa and 4*kappa; the latter is sufficient but not sharp for the intended stencil.",
+    "wrong_dt_max": "The reported numerical maximum differs from 0.01, whether caused by arithmetic, substitution, or an incorrect symbolic bound. Apply alongside a bound-error tag when both outcomes are wrong; this does not imply a second arithmetic mistake.",
+    "wrong_weak_form_sign": "Weak form has the wrong sign after integration by parts.",
+    "missing_function_space": "Part 2b omits the explicit H_0^1(0,1) test space; generic admissible test functions are insufficient.",
+    "missing_linear_functional": "Part 2b omits or misstates the linear functional l(v).",
+    "wrong_bilinear_form": "The bilinear form a(u,v) is incorrect, including a repeated sign error from 2a."
+  },
+  "feedback_checks_by_tag": {
+    "wrong_discrete_laplacian": ["centered_stencil"],
+    "stability_factor_of_two_error": ["sharp_stability_bound"],
+    "wrong_dt_max": ["numerical_maximum"],
+    "wrong_weak_form_sign": ["positive_weak_form"],
+    "missing_function_space": ["test_space"],
+    "missing_linear_functional": ["linear_functional"],
+    "wrong_bilinear_form": ["positive_weak_form"]
+  },
+  "feedback_checks": {
+    "sharp_stability_bound": {
+      "any_of": [["factor of two"], ["denominator needs 2*kappa"], ["dt <= dx^2/(2*kappa)"], ["kappa*dt/dx^2 <= 1/2"]]
+    },
+    "numerical_maximum": {
+      "any_of": [["dt_max = 0.01"], ["dt_max = 1/100"], ["(0.1)^2/(2*0.5) = 0.01"]]
+    },
+    "centered_stencil": {
+      "any_of": [["-2*u_i^n"], ["stencil", "(1, -2, 1)"]]
+    },
+    "positive_weak_form": {
+      "any_of": [["positive integral u'v'", "a(u,v)"], ["positive sign", "a(u,v)"], ["remove the minus sign from a(u,v)"], ["a(u,v) = integral_0^1 u'(x) v'(x) dx"]]
+    },
+    "test_space": {
+      "any_of": [["H_0^1"], ["H^1_0"]]
+    },
+    "linear_functional": {
+      "any_of": [["linear functional"], ["l(v) = integral_0^1 f(x)v(x) dx"], ["l(v) = integral_0^1 f v dx"]]
+    },
+    "weak_form_summary": {
+      "any_of": [["sign structure in the weak form"], ["spurious minus sign into the weak form"], ["positive bilinear form"], ["integration by parts gives a positive sign"]]
+    }
+  },
+  "summary_checks": ["sharp_stability_bound", "weak_form_summary", "test_space"]
+}

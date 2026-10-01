@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 from pathlib import Path
 
 REQUIRED_OUTPUT_FILES = [
@@ -25,7 +26,18 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
 
 
 def _lower_contains(text: str, phrase: str) -> bool:
-    return phrase.lower() in text.lower()
+    token_pattern = r"\d+(?:\.\d+)?|[a-z_][a-z_0-9]*|<=|>=|[^\s*`{}]"
+    text_tokens = re.findall(token_pattern, text.lower())
+    phrase_tokens = re.findall(token_pattern, phrase.lower())
+    return bool(phrase_tokens) and any(
+        text_tokens[index:index + len(phrase_tokens)] == phrase_tokens
+        for index in range(len(text_tokens) - len(phrase_tokens) + 1)
+    )
+
+
+def _matches_requirement(text: str, requirement: str | dict) -> bool:
+    groups = [[requirement]] if isinstance(requirement, str) else requirement["any_of"]
+    return any(group and all(_lower_contains(text, phrase) for phrase in group) for group in groups)
 
 
 def score_submission(*, submission_dir: Path, reference_dir: Path) -> dict[str, object]:
@@ -86,12 +98,12 @@ def score_submission(*, submission_dir: Path, reference_dir: Path) -> dict[str, 
         if not phrases:
             feedback_coverages.append(1.0)
             continue
-        hits = sum(1 for phrase in phrases if _lower_contains(candidate_text, phrase))
+        hits = sum(1 for requirement in phrases if _matches_requirement(candidate_text, requirement))
         feedback_coverages.append(hits / len(phrases))
     feedback_score = sum(feedback_coverages) / len(feedback_coverages) if feedback_coverages else 1.0
 
     summary_phrases = summary_requirements.get("required_phrases", [])
-    summary_hits = sum(1 for phrase in summary_phrases if _lower_contains(candidate_summary, phrase))
+    summary_hits = sum(1 for requirement in summary_phrases if _matches_requirement(candidate_summary, requirement))
     summary_score = summary_hits / len(summary_phrases) if summary_phrases else 1.0
 
     manifest_hits = sum(1 for key in REQUIRED_MANIFEST_KEYS if key in candidate_manifest)

@@ -3,7 +3,7 @@
 Each ``acquire`` launches a fresh container from the ale-kasm image,
 maps a random host port to the container's cua-server (port 8000),
 waits for the server to become healthy, and returns a SandboxHandle
-whose ``endpoint`` is ``http://localhost:<host_port>``.
+whose ``endpoint`` is ``http://127.0.0.1:<host_port>``.
 
 Concurrent tasks each get their own container + port — no proxy layer
 required. Docker's native port mapping IS the routing mechanism.
@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import random
 import re
@@ -161,6 +162,21 @@ async def _get_host_port(container_name: str, internal_port: int) -> int:
     return int(stdout.strip())
 
 
+async def _get_resource_limits(container_name: str) -> dict[str, int | float]:
+    rc, stdout, stderr = await _run_docker(
+        "inspect", "--format", "{{json .HostConfig}}", container_name,
+    )
+    if rc != 0:
+        raise RuntimeError(
+            f"Failed to inspect container {container_name} limits: {stderr}"
+        )
+    host_config = json.loads(stdout)
+    return {
+        "cpu_quota": host_config["NanoCpus"] / 1_000_000_000,
+        "memory_limit_bytes": host_config["Memory"],
+    }
+
+
 async def _wait_cua_ready(
     cua_url: str,
     timeout: float = _CUA_READY_TIMEOUT,
@@ -223,8 +239,8 @@ class DockerProvider(Provider):
         run_args = [
             "run", "-d",
             "--name", name,
-            "-p", f"0:{cua_internal_port}",
-            "-p", f"0:{_VNC_INTERNAL_PORT}",
+            "-p", f"127.0.0.1:0:{cua_internal_port}",
+            "-p", f"127.0.0.1:0:{_VNC_INTERNAL_PORT}",
             f"--shm-size={self._cfg.shm_size}",
             # Virtual display size for the in-container Xvfb (the entrypoint reads
             # this; falls back to its own default if unset).
@@ -279,7 +295,7 @@ class DockerProvider(Provider):
 
         cua_port = await _get_host_port(name, cua_internal_port)
         vnc_port = await _get_host_port(name, _VNC_INTERNAL_PORT)
-        cua_url = f"http://localhost:{cua_port}"
+        cua_url = f"http://127.0.0.1:{cua_port}"
 
         logger.info(
             "Container %s ports: cua=%d vnc=%d",
@@ -294,6 +310,7 @@ class DockerProvider(Provider):
                 f"CUA server at {cua_url} (container {name}) did not become ready"
             )
 
+        resource_limits = await _get_resource_limits(name)
         gcs_user_project = ""
         if self._cfg.gcs_sa_key:
             await self._inject_gcs_credentials(name, self._cfg.gcs_sa_key)
@@ -318,6 +335,7 @@ class DockerProvider(Provider):
                 "image": self._cfg.image,
                 "snapshot": spec.snapshot,
                 "gcs_user_project": gcs_user_project,
+                "resource_limits": resource_limits,
             },
         )
 

@@ -160,6 +160,7 @@ class HomeworkGradingNumericalPDEsConfig(LinuxTaskConfig):
             f"- Starter scaffold: `{self.starter_project_dir}`\n\n"
             "## Your Task\n"
             "1. Read the grading protocol, rubric, solution key, and the five student submissions.\n"
+            "   Apply the published component credits, error-carried-forward rule, tag definitions, and feedback checklist in `released/rubric.json`.\n"
             "2. Grade each student submission part by part.\n"
             "3. Assign rubric-aligned error tags where appropriate.\n"
             "4. Write concise per-student feedback and a short common-mistakes summary.\n"

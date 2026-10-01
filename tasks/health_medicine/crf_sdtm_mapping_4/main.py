@@ -3,22 +3,18 @@
 import json
 import logging
 import os
-import sys
-from pathlib import Path
 from typing import Any
 
 import cua_bench as cb
 from tasks.common_setup import BaseTaskSetup
+from tasks.health_medicine.crf_sdtm_mapping_4.scripts.score_crf_sdtm_mapping import (
+    ScoreResult,
+    score_mapping_csv,
+)
 from tasks.linux_runtime import LinuxTaskConfig
 
 
 _setup = BaseTaskSetup()
-
-SCRIPTS_DIR = Path(__file__).parent / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-from score_crf_sdtm_mapping import ScoreResult, score_mapping_csv  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +106,13 @@ class CrfSdtmMappingConfig(LinuxTaskConfig):
 
     @property
     def task_description(self) -> str:
+        contract_revision = (
+            "For the AE form, use the source-locator, role, XML-origin, encoded-value and prose "
+            "rules in output_contract.json (revision 20260907-source-verified). Notes are optional "
+            "for every row. Mapping rules must name their target variable."
+            if self.primary_dataset == "AE"
+            else ""
+        )
         flag_description = (
             "`goes_to_suppqual` must mark AE rows as NO and SUPPAE rows as YES."
             if self.flag_column == "goes_to_suppqual"
@@ -140,6 +143,7 @@ Save exactly one CSV file:
 
 The CSV must follow the column order and constraints in `{self.output_contract_file}`.
 {flag_description}
+{contract_revision}
 
 ## Constraints
 - Produce a mapping specification only, not subject-level records or XPT datasets.

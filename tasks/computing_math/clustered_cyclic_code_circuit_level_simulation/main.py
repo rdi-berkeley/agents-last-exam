@@ -51,6 +51,10 @@ class ClusteredCyclicCodeCircuitLevelSimulationConfig(LinuxTaskConfig):
         return f"{self.input_dir}/simulation_grid.csv"
 
     @property
+    def simulation_driver_file(self) -> str:
+        return f"{self.input_dir}/run_simulation.py"
+
+    @property
     def output_requirements_file(self) -> str:
         return f"{self.input_dir}/output_requirements.txt"
 
@@ -77,17 +81,21 @@ You are working on a Linux VM.
 ## Input Files
 - Task notes: `{self.tex_file}`
 - Simulation grid: `{self.simulation_grid_file}`
+- Canonical simulation driver: `{self.simulation_driver_file}`
 - Output requirements: `{self.output_requirements_file}`
 - Python runtime manifest: `{self.runtime_manifest_file}`
 
 ## Your Task
 Reproduce the circuit-level memory-simulation logical failure-rate table for the three clustered-cyclic CSS codes described in the task notes.
 
-Use the staged notes to extract the code construction, QUITS repeated-syndrome-extraction workflow, direction-aware edge-coloring schedule, Stim detector-error-model workflow, BP+OSD decoder settings, and logical failure-rate formulas.
+Use the canonical driver for the fully specified code construction, QUITS cardinal builder with deterministic direction-aware DSATUR edge coloring, Stim detector-error-model workflow, bundled CPU-optimized BP+OSD decoder, deterministic row seeds, and logical failure-rate formulas. The staged notes explain the underlying construction.
 
-Run every row in the simulation grid. For each row, report the logical failure count, total logical failure probability, per-round logical failure rate, and per-logical-qubit per-round logical failure rate.
+Run every row in the simulation grid using exactly the listed 5,000 independent
+shots. For each row, report the logical failure count, total logical failure
+probability, per-round logical failure rate, and per-logical-qubit per-round
+logical failure rate.
 
-You may install the task-specific open-source Python dependencies from `input/runtime_env/pyproject.toml` or `input/requirements.txt`.
+Create the validated task-local runtime with `uv sync --project input/runtime_env --locked`.
 
 ## Output
 Write the final CSV here:
@@ -101,6 +109,7 @@ Write the final CSV here:
                 "variant_label": self.VARIANT_LABEL,
                 "tex_file": self.tex_file,
                 "simulation_grid_file": self.simulation_grid_file,
+                "simulation_driver_file": self.simulation_driver_file,
                 "output_requirements_file": self.output_requirements_file,
                 "runtime_manifest_file": self.runtime_manifest_file,
                 "output_csv": self.output_csv,

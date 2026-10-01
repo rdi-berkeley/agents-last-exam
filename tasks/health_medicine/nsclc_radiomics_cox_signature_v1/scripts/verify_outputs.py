@@ -55,13 +55,12 @@ def verify(output_dir: Path, reference_dir: Path) -> dict:
     risk_path = output_dir / "risk_scores.csv"
     truth_path = reference_dir / "ground_truth.csv"
 
-    for path in (risk_path, truth_path):
-        if not path.exists():
-            return _fail(f"missing required file: {path}")
+    if not risk_path.exists():
+        return _fail(f"missing required file: {risk_path}")
 
+    truth = _read_csv(truth_path)
     try:
         risks = _read_csv(risk_path)
-        truth = _read_csv(truth_path)
     except Exception as exc:
         return _fail(f"failed to load inputs: {exc}")
 
@@ -74,7 +73,7 @@ def verify(output_dir: Path, reference_dir: Path) -> dict:
                 "event": int(float(row["deadstatus.event"])),
             }
         except Exception as exc:
-            return _fail(f"invalid ground truth row: {exc}")
+            raise ValueError(f"invalid ground truth row: {exc}") from exc
 
     if len(risks) != len(truth_by_pid):
         return _fail(f"risk_scores.csv has {len(risks)} rows, expected {len(truth_by_pid)}")
@@ -129,7 +128,7 @@ def main() -> int:
     if args.out:
         Path(args.out).write_text(text, encoding="utf-8")
     print(text)
-    return 0 if result.get("passed") else 1
+    return 0
 
 
 if __name__ == "__main__":

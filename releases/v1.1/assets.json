@@ -1,0 +1,181 @@
+{
+  "version": "1.1",
+  "published_date": "2026-09-19",
+  "selected_task_lists": {
+    "selected_tasks/ale_cli.txt": {
+      "count": 105,
+      "sha256": "915511f62dadea4c0037af270bf649d6b883a84b12201d41ba437b68896536a1"
+    },
+    "selected_tasks/cpu_unlicensed.txt": {
+      "count": 140,
+      "sha256": "ee740ae2f56d04f75ea9efd7abe4b41de148f8497a2f3f6ad53483d19a5a0aca"
+    },
+    "selected_tasks/docker_support.txt": {
+      "count": 99,
+      "sha256": "f1bf3f38b9941c464fb61edc01d7163e0ab53eb730d7f1db6bf6694bc0451ff0"
+    },
+    "selected_tasks/full.txt": {
+      "count": 152,
+      "sha256": "ee7ced3f56a8d05898ae82068903ed0682ebc0d771f227270b07c726f0563f38"
+    },
+    "selected_tasks/full/full-spectrum.txt": {
+      "count": 55,
+      "sha256": "3c2331855fe07c56382ce2becabf951493bca5a220dd80c915ed10f59f984cc2"
+    },
+    "selected_tasks/full/last-exam.txt": {
+      "count": 38,
+      "sha256": "f878d4ca42cbeac9d10dcfd2ad247edb86389f8e432be921b2848baafe30efea"
+    },
+    "selected_tasks/full/near-term.txt": {
+      "count": 67,
+      "sha256": "cd75d88808f06c164b0cbf298c0c66bcbfd66e04ad72299798da38f5a9c32f1c"
+    },
+    "selected_tasks/full/overall.txt": {
+      "count": 152,
+      "sha256": "092fe40192423a5857d967090bb67e64bb44980ca945600472b905c8055e1400"
+    },
+    "selected_tasks/hello_both.txt": {
+      "count": 2,
+      "sha256": "ff0f8bcccd31e24f97672dfb142ebcb372817770983e83b1b33db8aed815975d"
+    },
+    "selected_tasks/licensed.txt": {
+      "count": 7,
+      "sha256": "301b5152c12f245821ee86166630b0f8462143fca691fd0bd2fb61b9be88c965"
+    },
+    "selected_tasks/tool_smoke_both.txt": {
+      "count": 2,
+      "sha256": "abf070c223349717f3d441b9edc597c0515f32ace7a03c49e0de82dd5ef3b949"
+    },
+    "selected_tasks/unlicensed.txt": {
+      "count": 145,
+      "sha256": "3f1a96b93776940feb47ec17aed2c0c1fb011437c6b442b41d0166cb4654438b"
+    },
+    "selected_tasks/unlicensed/full-spectrum.txt": {
+      "count": 50,
+      "sha256": "1f7488c7c595aa1e13c5715c2426f0f0ea867314a70b11e884bcb31ba5347e18"
+    },
+    "selected_tasks/unlicensed/last-exam.txt": {
+      "count": 30,
+      "sha256": "356a2640800d0f9c40d5f0a844aa15ce8d10ca6b3c933a47862be7a9b03e51b7"
+    },
+    "selected_tasks/unlicensed/near-term.txt": {
+      "count": 67,
+      "sha256": "cd75d88808f06c164b0cbf298c0c66bcbfd66e04ad72299798da38f5a9c32f1c"
+    },
+    "selected_tasks/unlicensed/overall.txt": {
+      "count": 141,
+      "sha256": "bf5e2b07fa4acf1b803126d7bc05ae5052407ffae4f44869178af151ee53caaf"
+    }
+  },
+  "huggingface": {
+    "public": {
+      "repo": "agents-last-exam/agents-last-exam-data",
+      "revision": "d93bb510e472dcaa406f09fc800797268567ca5c",
+      "gated": false,
+      "tag": "v1.1"
+    },
+    "reference": {
+      "repo": "agents-last-exam/agents-last-exam-reference",
+      "revision": "cf17f3e4e3af3245558b2eba7d6f1fa094bba641",
+      "gated": "manual",
+      "tag": "v1.1"
+    },
+    "metadata": {
+      "repo": "agents-last-exam/agents-last-exam",
+      "revision": "ea617358e3c2e244d6f4d473c6a6a85d394bf90d",
+      "gated": false,
+      "tag": "v1.1"
+    },
+    "archive": {
+      "repo": "agents-last-exam/agents-last-exam-data-archive",
+      "revision": "dedf6556c88f7dfd4fce891f9fa213e66584c71e",
+      "gated": "manual",
+      "tag": "v1.1"
+    },
+    "images": {
+      "repo": "agents-last-exam/ale-images-qcow2",
+      "revision": "3ace4090971467175656238621cb4bcd0cfb03a4",
+      "gated": false,
+      "tag": "v1.1"
+    }
+  },
+  "images": {
+    "linux": {
+      "filename": "ale-ubuntu22-v1.1.qcow2",
+      "sha256": "ade826005507cd35fd54b53f3653f60c6ef4462a29956f0f1f6014b5b0c76913",
+      "bytes": 88758157312,
+      "hf_manifest": "ale-ubuntu22-v1.1.qcow2.manifest.json",
+      "parts": 23,
+      "gcloud": {
+        "project": "agenthle-488519",
+        "name": "ale-ubuntu22-v1-1",
+        "id": "4206948726041967319"
+      },
+      "gcs": {
+        "uri": "gs://ale-data-public/images/ale-ubuntu22-v1.1.qcow2",
+        "generation": "1789837875660185",
+        "crc32c": "LahEYg=="
+      }
+    },
+    "windows": {
+      "filename": "ale-win10-v1.1.qcow2",
+      "sha256": "c179c61fbac37ae5af163489e118e3cf164d0ef2a495a757a3943776b0b5c2ff",
+      "bytes": 78399209472,
+      "hf_manifest": "ale-win10-v1.1.qcow2.manifest.json",
+      "parts": 20,
+      "gcloud": {
+        "project": "agenthle-488519",
+        "name": "ale-win10-v1-1",
+        "id": "511597167081912808"
+      },
+      "gcs": {
+        "uri": "gs://ale-data-public/images/ale-win10-v1.1.qcow2",
+        "generation": "1789837876119177",
+        "crc32c": "fscDpQ=="
+      }
+    }
+  },
+  "task_data": {
+    "selected_tasks": 152,
+    "logical_members": 85532,
+    "manifest_sha256": "d4ab0921c4c8fb91252b68512fc387a943558b0a890806eab806a74359a3e214",
+    "archive_filename": "ale-tasks-data.tar.gz",
+    "archive_sha256": "74b4f18c2732d361024b9d41766c1a68cdacf9fb823fc25f38e12c4aa15efc7f",
+    "archive_bytes": 48859738286,
+    "public_reference_format": "header-encrypted reference.7z",
+    "gcs_public": {
+      "generation_size_crc32c_match": true,
+      "objects": 68653,
+      "prefix": "gs://ale-data-public/v1.1/"
+    },
+    "public_input_software_objects": 68501,
+    "public_reference_archives": 152,
+    "hf_native_path_transport": "_transport/v1.1/path-compatibility.tar",
+    "hf_public_symlink_transport": "_transport/candidate-postvalidation-20260918-r06/tcga-public-symlinks.tar"
+  },
+  "qemu_runner": {
+    "image": "agentslastexam/ale-qemu:0.2.0",
+    "registry_digest": "sha256:cc3ead471566c27f7c394c8748ff2e69124f310dbe35fce5e4a5177bc947232f",
+    "guest_task_data_included": false
+  },
+  "docker": {
+    "image": "agentslastexam/ale-ubuntu22-docker:v1.1",
+    "pinned_image": "agentslastexam/ale-ubuntu22-docker:v1.1@sha256:0b4d5173e0be38234d97a3b193a70ebbcd766a0983476d4d7c86539d3cb033be",
+    "publication_status": "published",
+    "published_date": "2026-09-20",
+    "registry_digest": "sha256:0b4d5173e0be38234d97a3b193a70ebbcd766a0983476d4d7c86539d3cb033be",
+    "config_digest": "sha256:c44076360b0fe6da4ae11a067d69b8ea09f2421a9926c806303dbf8ad0ffb092",
+    "compressed_layer_bytes": 35571545017,
+    "uncompressed_bytes": 85332499832
+  },
+  "scope": {
+    "original_repaired_tasks": 59,
+    "followup_tasks": [
+      "health_medicine/nsclc_radiomics_cox_signature_v1"
+    ],
+    "excluded": [
+      "AWS",
+      "Aliyun"
+    ]
+  }
+}

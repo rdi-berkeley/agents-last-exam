@@ -103,6 +103,11 @@ SCENE_SPECS: dict[str, SceneSpec] = {
             4. Export a screenshot of the resample settings as resample_settings.png.
             5. Compute the ROI statistics on the resampled mask and save them to scene2_stats.csv.
 
+            Save one ROI row with the required columns `mean,max,voxel_count`.
+            Compute mean and maximum of the statistical map inside the
+            resampled ROI (mask > 0.5), and count those ROI voxels.
+            Column order and additional descriptive columns do not matter.
+
             Required outputs:
             - output/roi_mask_2mm_nn.nii.gz
             - output/resample_settings.png

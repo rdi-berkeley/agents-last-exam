@@ -4,8 +4,13 @@ import json
 import os
 from pathlib import Path
 
+from dotenv import dotenv_values
 from PIL import Image, ImageOps, ImageDraw
-from tasks.utils.evaluation import llm_vision_binary_questions_sync, resolve_llm_judge_model
+from tasks.utils.evaluation import (
+    eval_credentials_dir,
+    llm_vision_binary_questions_sync,
+    resolve_llm_judge_model,
+)
 
 MODEL = resolve_llm_judge_model(
     env_var='BLENDER_TASK_SOFT_EVAL_MODEL',
@@ -14,22 +19,16 @@ MODEL = resolve_llm_judge_model(
 
 
 def _load_api_key() -> str | None:
-    direct = os.environ.get('OPENAI_API_KEY')
-    if direct:
-        return direct
-    repo_env = Path(__file__).resolve().parents[4] / '.env'
-    if not repo_env.exists():
+    evaluator_env = eval_credentials_dir() / "openai.env"
+    if evaluator_env.is_file():
+        value = dotenv_values(evaluator_env).get("OPENAI_API_KEY")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    if os.environ.get("AGENTHLE_EVAL_CREDENTIALS_DIR"):
         return None
-    for line in repo_env.read_text(encoding='utf-8').splitlines():
-        line = line.strip()
-        if not line or line.startswith('#') or not line.startswith('OPENAI_API_KEY='):
-            continue
-        value = line.split('=', 1)[1].strip()
-        if value[:1] == value[-1:] and value[:1] in {'"', "'"}:
-            value = value[1:-1]
-        if value:
-            return value
-    return None
+    repo_env = Path(__file__).resolve().parents[4] / "secret" / ".env"
+    value = dotenv_values(repo_env).get("OPENAI_API_KEY")
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def _pair_sheet(reference_path: Path, candidate_path: Path, label: str, out_path: Path) -> Path:

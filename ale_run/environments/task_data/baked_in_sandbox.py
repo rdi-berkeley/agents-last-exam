@@ -168,11 +168,15 @@ async def stage_reference(
 
     a, t = shell_q(sandbox, archive), shell_q(sandbox, tmp)
     if sandbox.is_linux:
-        cmd = f"7z x -p{shell_q(sandbox, password)} {a} -o{t} -y"
+        cmd = (
+            f"7z t -p{shell_q(sandbox, password)} {a} && "
+            f"7z x -p{shell_q(sandbox, password)} {a} -o{t} -y"
+        )
     else:
         # PowerShell with single-quoted strings (no interpolation).
         cmd = (
             'powershell -NoProfile -Command "'
+            f"7z t -p'{password}' {a}; if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}; "
             f"7z x -p'{password}' {a} -o{t} -y"
             '"'
         )

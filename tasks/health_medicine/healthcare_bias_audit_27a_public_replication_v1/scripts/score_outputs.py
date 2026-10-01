@@ -209,11 +209,11 @@ def _contains_anchor(numbers: list[float], anchors: list[float]) -> bool:
     return False
 
 
-def _check_forbidden_paper_values(lowered: str) -> str | None:
-    sentences = re.split(r"(?<=[.!?])\s+", lowered)
+def _check_forbidden_paper_values(
+    lowered: str, random_bin_black_fraction: float | None
+) -> str | None:
+    sentences = re.split(r"(?<=[.!?])[*_`]*\s+", lowered)
     for sentence in sentences:
-        if "17.7" not in sentence and "46.5" not in sentence and "59%" not in sentence and "59 percent" not in sentence:
-            continue
         allowed_context = (
             "do not" in sentence
             or "don't" in sentence
@@ -221,15 +221,42 @@ def _check_forbidden_paper_values(lowered: str) -> str | None:
             or "private data" in sentence
             or "private-data" in sentence
             or "original paper" in sentence
-            or "graded answer" in sentence
-            or "public synthetic" in sentence
         )
-        if not allowed_context:
-            return sentence
+        if allowed_context:
+            continue
+        for clause in sentence.split(";"):
+            random_bin_context = (
+                re.search(r"\brandom\b", clause)
+                and re.search(r"\bpredicted[ -]+cost\b", clause)
+                and re.search(r"\bbins?\b", clause)
+                and re.search(r"\bblack\b", clause)
+            )
+            for match in re.finditer(
+                r"(?<![\w.])(?P<value>17\.7|46\.5|59)(?![\d.])"
+                r"\s*(?P<unit>%|percent\b)?",
+                clause,
+            ):
+                if match["value"] == "59" and match["unit"] is None:
+                    continue
+                if (
+                    random_bin_context
+                    and match["unit"] is not None
+                    and random_bin_black_fraction is not None
+                    and math.isclose(
+                        float(match["value"]) / 100,
+                        random_bin_black_fraction,
+                        rel_tol=0.0,
+                        abs_tol=NUMERIC_TOLERANCE,
+                    )
+                ):
+                    continue
+                return sentence
     return None
 
 
-def _check_memo(candidate_text: str, reference_answers_text: str) -> ScoreResult | None:
+def _check_memo(
+    candidate_text: str, reference_answers_text: str, reference_table3_text: str
+) -> ScoreResult | None:
     lowered = _normalize(candidate_text)
     if not lowered:
         return _hard_fail("audit_memo.md: empty")
@@ -239,7 +266,15 @@ def _check_memo(candidate_text: str, reference_answers_text: str) -> ScoreResult
     except Exception as exc:
         return _hard_fail("audit_memo.md: bad_reference_answers", {"error": str(exc)})
 
-    forbidden_sentence = _check_forbidden_paper_values(lowered)
+    random_bin_black_fraction = next(
+        (
+            _parse_float(row["frac_black"])
+            for row in csv.DictReader(io.StringIO(reference_table3_text.lstrip("\ufeff")))
+            if row["population"] == "Random, in predicted cost bin"
+        ),
+        None,
+    )
+    forbidden_sentence = _check_forbidden_paper_values(lowered, random_bin_black_fraction)
     if forbidden_sentence is not None:
         return _hard_fail(
             "audit_memo.md: private_paper_value_present_without_context",
@@ -362,6 +397,7 @@ def score_output_bundle(
     failure = _check_memo(
         candidate_files["audit_memo.md"],
         reference_files["audit_answers.json"],
+        reference_files["results/table3.csv"],
     )
     if failure is not None:
         return failure

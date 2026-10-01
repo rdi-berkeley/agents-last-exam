@@ -440,6 +440,11 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
             env.pop("MAX_THINKING_TOKENS", None)
             env["CLAUDE_CODE_DISABLE_THINKING"] = "1"
 
+        if cfg.max_output_tokens is not None:
+            env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(cfg.max_output_tokens)
+        else:
+            env.pop("CLAUDE_CODE_MAX_OUTPUT_TOKENS", None)
+
         # Provider-driven routing (explicit, not key-presence heuristic).
         if cfg.provider == "openrouter":
             # A literal cfg.api_key (travels with the serialized config) takes

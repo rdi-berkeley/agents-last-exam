@@ -44,7 +44,7 @@ snapshots:
 
   cpu-free-ubuntu:            # Linux, no GPU, no license — the bulk of tasks (~110)
     provider: gcloud
-    image: ale-ubuntu22
+    image: ale-ubuntu22-v1-1
     gcloud:
       project: ${env:GCP_PROJECT}
       service_account_key: ${env:GCP_SA_KEY}
@@ -54,7 +54,7 @@ snapshots:
       zones: [us-central1-a, us-east1-b, us-west1-a]
     # TODO: ALTERNATIVE — run Ubuntu tasks in a local Docker container instead:
     #   provider: docker
-    #   image: ale-ubuntu22-docker          # container ref + port (8000) come from the Image entry
+    #   image: ale-ubuntu22-docker-v1-1     # pair with local:task-data-v1.1
     #   docker:                   # docker-only knobs: container sizing
     #     cpus: 4
     #     memory: 16g
@@ -62,7 +62,7 @@ snapshots:
 
   cpu-free:                   # Windows, no GPU, no license
     provider: gcloud
-    image: ale-win10
+    image: ale-win10-v1-1
     resolution: [1024, 768]    # see resolution note above; unsupported mode -> run fails
     gcloud:
       project: ${env:GCP_PROJECT}
@@ -86,7 +86,7 @@ snapshots:
 
   gpu-free:                   # Windows + GPU
     provider: gcloud
-    image: ale-win10
+    image: ale-win10-v1-1
     resolution: [1920, 1080]    # see resolution note above; unsupported mode -> run fails
     gcloud:
       project: ${env:GCP_PROJECT}
@@ -119,11 +119,11 @@ snapshots:
 # ---------------------------------------------------------------------------
 # Task data + output (substrate-coupled: code lives under ale_run/environments/).
 # ---------------------------------------------------------------------------
-# Where to source task data: "baked_in_sandbox" | "gs://ale-data-public" | "hf://<ds> TODO: add hf support".
+# Where to source task data: "baked_in_sandbox" | "gs://ale-data-public/v1.1".
 task_data_source: baked_in_sandbox
 # A gs:// source carries a GCS SA key (host path). The docker provider copies it
 # into each container so gsutil can stage + bill requester-pays buckets; gcloud
-# images already have a baked SA and ignore it.
+# images contain no credentials; GCloud injects the configured key at runtime.
 gcs_sa_key: secret/gcp_key.json
 
 # Output dir after the run: null (skip) | "local" | "gs://<bucket>".

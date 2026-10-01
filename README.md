@@ -50,6 +50,11 @@ harnesses.
 
 ## Quick start
 
+**ALE v1.1:** use the matching task code, versioned images and pinned data
+described in the [release guide](docs/releases/v1.1.md). The selected benchmark
+still contains 152 tasks. See the [task update inventory](docs/releases/v1.1-tasks.md)
+and [asset manifest](releases/v1.1/assets.json) for scope and exact versions.
+
 Choose where ALE should create or attach each task sandbox:
 
 | Provider | Best for | Guide |
