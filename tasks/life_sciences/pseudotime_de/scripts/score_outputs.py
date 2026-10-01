@@ -87,14 +87,12 @@ def score_submission(
     try:
         ref_genes = _parse_gene_set(reference_csv, "x")
     except Exception as exc:
-        return ScoreReport(
-            score=0.0, overlap=0.0, agent_gene_count=0,
-            reference_gene_count=0, intersection_count=0,
-            error=f"Failed to parse reference: {exc}",
-        )
+        raise RuntimeError(f"Failed to parse evaluator reference: {exc}") from exc
+    if not ref_genes:
+        raise RuntimeError("Evaluator reference contains zero genes")
 
     intersection = agent_genes & ref_genes
-    overlap = len(intersection) / len(ref_genes) if ref_genes else 0.0
+    overlap = len(intersection) / len(ref_genes)
     score = 1.0 if overlap >= OVERLAP_THRESHOLD else 0.0
 
     return ScoreReport(

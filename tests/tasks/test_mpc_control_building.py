@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
+from ale_run.tasks.conformance import (
+    GraderConformanceContract,
+    InfrastructureFailureCase,
+    ScoreCase,
+    ScoreExpectation,
+    run_conformance,
+)
 from tasks.engineering.mpc_control_building_v1.main import _parse_verifier_result
 
 
-def test_failed_verifier_json_is_scored_as_candidate_failure() -> None:
-    result = {
+def test_mpc_verifier_conformance() -> None:
+    failed_candidate = {
         "stdout": json.dumps(
             {
                 "score": 0.0,
@@ -19,13 +24,7 @@ def test_failed_verifier_json_is_scored_as_candidate_failure() -> None:
         "stderr": "",
         "return_code": 1,
     }
-
-    assert _parse_verifier_result(result) == 0.0
-
-
-@pytest.mark.parametrize(
-    "result",
-    [
+    evaluator_faults = (
         {"stdout": "", "stderr": "uv failed", "return_code": 1},
         {
             "stdout": json.dumps({"score": 0.0, "passed": False}),
@@ -37,8 +36,27 @@ def test_failed_verifier_json_is_scored_as_candidate_failure() -> None:
             "stderr": "",
             "return_code": 0,
         },
-    ],
-)
-def test_evaluator_failures_are_not_scored_as_candidate_failures(result: dict) -> None:
-    with pytest.raises(RuntimeError, match="MPC verifier failed"):
-        _parse_verifier_result(result)
+    )
+
+    report = run_conformance(
+        GraderConformanceContract(
+            score_cases=(
+                ScoreCase(
+                    "candidate_failure",
+                    lambda: _parse_verifier_result(failed_candidate),
+                    ScoreExpectation.exact(0.0),
+                ),
+            ),
+            infrastructure_failure_cases=tuple(
+                InfrastructureFailureCase(
+                    f"evaluator_fault_{index}",
+                    lambda result=result: _parse_verifier_result(result),
+                    message_substring="MPC verifier failed",
+                )
+                for index, result in enumerate(evaluator_faults)
+            ),
+        )
+    )
+
+    assert report.scores == {"candidate_failure": 0.0}
+    assert report.infrastructure_failure_cases_checked == 3
