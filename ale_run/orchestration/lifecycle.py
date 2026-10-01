@@ -170,16 +170,19 @@ async def run_one_unit(
         model=config.model,
         task_path=unit.task_path,
         variant_index=unit.variant_index,
+        trial_index=unit.trial_index,
     )
-    writer.emit_event(
-        "run_started",
-        agent=unit.agent_id,
-        agent_class=unit.agent_spec.class_,
-        model=config.model,
-        task=unit.task_path,
-        variant_index=unit.variant_index,
-        executor=executor_type,
-    )
+    run_started = {
+        "agent": unit.agent_id,
+        "agent_class": unit.agent_spec.class_,
+        "model": config.model,
+        "task": unit.task_path,
+        "variant_index": unit.variant_index,
+        "executor": executor_type,
+    }
+    if unit.trial_index is not None:
+        run_started["trial_index"] = unit.trial_index
+    writer.emit_event("run_started", **run_started)
 
     env: ALEEnv | None = None
     task_driver: TaskDriver | None = None
@@ -1057,6 +1060,14 @@ def _build_run_meta(
         else None
     )
     cfg_repr = redact_config(dict(unit.agent_spec.config))
+    task_payload = {
+        "slug": slug_task(unit.task_path),
+        "path": f"tasks/{unit.task_path}",
+        "variant_index": unit.variant_index,
+    }
+    if unit.trial_index is not None:
+        task_payload["trial_index"] = unit.trial_index
+
     return {
         "schema_version": 2,
         "run_id": run_id,
@@ -1070,11 +1081,7 @@ def _build_run_meta(
             "executor": executor_type,
             "config_repr": cfg_repr,
         },
-        "task": {
-            "slug": slug_task(unit.task_path),
-            "path": f"tasks/{unit.task_path}",
-            "variant_index": unit.variant_index,
-        },
+        "task": task_payload,
         "status": status,
         "score": score,
         "termination": {

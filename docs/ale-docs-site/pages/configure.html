@@ -53,11 +53,51 @@ cleanup_mode: delete</code></pre>
         <tr><td><code>concurrency</code></td><td>Maximum run units active at once.</td></tr>
         <tr><td><code>wall_time_s</code></td><td>Optional experiment-wide agent time limit. When omitted, each task card supplies its own timeout.</td></tr>
         <tr><td><code>auto_resume</code></td><td>Defaults to <code>true</code>. Skips prior completed/timeout units and retries newly failed units.</td></tr>
-        <tr><td><code>max_attempts</code></td><td>Total attempts per failed unit in one invocation when auto-resume is enabled. Accepts 1 through 3 and defaults to 3.</td></tr>
+        <tr><td><code>max_attempts</code></td><td>Infrastructure attempts per failed unit in one invocation when auto-resume is enabled. Accepts 1 through 3 and defaults to 3.</td></tr>
+        <tr><td><code>reliability</code></td><td>Optional independent repeated-trial policy. Supports fixed repeats or anytime-valid precision stopping without conflating retries with measurements.</td></tr>
         <tr><td><code>cleanup_mode</code></td><td><code>delete</code>, <code>stop</code>, or <code>keep</code> for provider-managed sandboxes.</td></tr>
         <tr><td><code>prompt_suffix</code></td><td>Optional text appended to every task instruction and recorded in the trajectory.</td></tr>
       </tbody>
     </table>
+
+    <h2>Measure repeated-run reliability</h2>
+    <p>
+      A normal ALE run measures each agent × task × variant once. To quantify
+      stochastic agent reliability, add a <code>reliability</code> block:
+    </p>
+    <pre><code>reliability:
+  min_trials: 3
+  max_trials: 3
+  confidence: 0.95
+
+  # Optional precision stopping. Use with a larger max_trials:
+  # target_half_width: 0.20
+
+  # Optional, only when your evaluation defines a pass threshold:
+  pass_threshold: 0.8
+  pass_k: [1, 2, 3]</code></pre>
+    <p>
+      A <strong>trial</strong> is an independent scientific measurement.
+      <code>max_attempts</code> remains an infrastructure-retry budget inside
+      each trial. A failed provision or transport attempt therefore cannot be
+      counted as an additional measurement.
+    </p>
+    <p>
+      When <code>target_half_width</code> is set, ALE reports a time-uniform
+      Hoeffding confidence sequence for the bounded [0, 1] task score and stops
+      only after <code>min_trials</code> when the requested precision is met.
+      The time-uniform construction remains valid under this data-dependent
+      stopping rule. Without <code>target_half_width</code>, ALE runs exactly
+      <code>max_trials</code> trials.
+    </p>
+    <p>
+      Each trial is stored under <code>trial_###/</code>. The parent variant
+      directory receives <code>reliability.json</code> with the mean score,
+      sample standard deviation, completion rate, confidence interval, stopping
+      reason, trial statuses, and optional pass-rate / pass^k estimates.
+      A terminal timeout counts as a failure for pass reliability rather than
+      disappearing from its denominator.
+    </p>
 
     <h2>Choose an environment profile</h2>
     <table>

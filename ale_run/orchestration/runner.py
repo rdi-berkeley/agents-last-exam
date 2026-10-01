@@ -18,11 +18,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Iterable
+from dataclasses import replace
 from pathlib import Path
-from typing import Iterable
 
-from .factory import EnvironmentRouter
 from .experiment_spec import ExperimentSpec, RunUnit, UnitResult
+from .factory import EnvironmentRouter
+from .reliability import (
+    TrialObservation,
+    load_trial_observations,
+    precision_reached,
+    summarize_trials,
+    write_reliability_summary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +77,14 @@ class Runner:
         *,
         max_attempts: int = 1,
     ) -> list[UnitResult]:
-        """Run all units (or a filtered subset). Returns ``list[UnitResult]``.
+        """Run all units (or a filtered subset).
 
-        Failed units are requeued until they succeed or reach ``max_attempts``.
-        Only the final result for each unit is returned; every attempt retains
-        its own run directory on disk.
+        With reliability disabled, behavior is unchanged: each unit is measured
+        once and infrastructure failures may be retried up to max_attempts.
+
+        With reliability enabled, every base unit is expanded into independent
+        scientific trials. Each trial still has its own infrastructure-retry
+        loop, so retries never masquerade as extra measurements.
         """
         from .lifecycle import install_signal_handlers, run_one_unit
 
@@ -92,7 +103,7 @@ class Runner:
         sem = asyncio.Semaphore(n)
         logger.info("runner: %d units, concurrency=%d", len(unit_list), n)
 
-        async def _drive(u: RunUnit) -> UnitResult:
+        async def _run_with_retries(u: RunUnit) -> UnitResult:
             for attempt in range(1, max_attempts + 1):
                 logger.info(
                     "[%s] queued (attempt %d/%d)", u.slug, attempt, max_attempts,
@@ -127,8 +138,101 @@ class Runner:
 
             raise AssertionError("unreachable")
 
-        results = await asyncio.gather(
-            *(_drive(u) for u in unit_list),
+        reliability = self._spec.reliability
+        if not reliability.enabled:
+            results = await asyncio.gather(
+                *(_run_with_retries(u) for u in unit_list),
+                return_exceptions=False,
+            )
+            return list(results)
+
+        async def _drive_reliable(base_unit: RunUnit) -> list[UnitResult]:
+            observations = (
+                load_trial_observations(self._output_root, base_unit)
+                if self._spec.auto_resume
+                else []
+            )
+            by_index = {item.trial_index: item for item in observations}
+            executed: list[UnitResult] = []
+            stop_reason = "max_trials"
+
+            for trial_index in range(reliability.max_trials):
+                current = sorted(
+                    by_index.values(),
+                    key=lambda item: item.trial_index,
+                )
+                terminal_count = sum(
+                    item.status in {"completed", "timeout"}
+                    for item in current
+                )
+                if terminal_count >= reliability.min_trials:
+                    summary = summarize_trials(
+                        current,
+                        confidence=reliability.confidence,
+                        pass_threshold=reliability.pass_threshold,
+                        pass_k=reliability.pass_k,
+                    )
+                    if precision_reached(summary, reliability):
+                        stop_reason = "target_precision"
+                        break
+
+                previous = by_index.get(trial_index)
+                if previous is not None and previous.status in {"completed", "timeout"}:
+                    continue
+
+                trial_unit = replace(base_unit, trial_index=trial_index)
+                result = await _run_with_retries(trial_unit)
+                executed.append(result)
+
+                if result.status in {"completed", "timeout"}:
+                    by_index[trial_index] = TrialObservation(
+                        trial_index=trial_index,
+                        status=result.status,
+                        score=result.score,
+                        run_dir=str(result.run_dir) if result.run_dir is not None else None,
+                    )
+                    continue
+
+                stop_reason = "infrastructure_failure"
+                break
+
+            final_observations = sorted(
+                by_index.values(),
+                key=lambda item: item.trial_index,
+            )
+            if stop_reason == "max_trials" and final_observations:
+                final_summary = summarize_trials(
+                    final_observations,
+                    confidence=reliability.confidence,
+                    pass_threshold=reliability.pass_threshold,
+                    pass_k=reliability.pass_k,
+                )
+                if precision_reached(final_summary, reliability):
+                    stop_reason = "target_precision"
+
+            write_reliability_summary(
+                output_root=self._output_root,
+                unit=base_unit,
+                spec=reliability,
+                observations=final_observations,
+                stop_reason=stop_reason,
+            )
+            logger.info(
+                "[%s] reliability: %d terminal trial(s), stop=%s",
+                base_unit.slug,
+                len(
+                    [
+                        item
+                        for item in final_observations
+                        if item.status in {"completed", "timeout"}
+                    ]
+                ),
+                stop_reason,
+            )
+            return executed
+
+        grouped_results = await asyncio.gather(
+            *(_drive_reliable(u) for u in unit_list),
             return_exceptions=False,
         )
-        return list(results)
+        return [result for group in grouped_results for result in group]

@@ -2,7 +2,8 @@
 
 LOG_SPEC.md is the source of truth; this class is its only writer. Layout:
 
-    <output_root>/<agent_id>/<model_slug>/<task_slug>/v<i>/<YYYYMMDD_HHMMSS>/
+    <output_root>/<agent_id>/<model_slug>/<task_slug>/v<i>/
+        [trial_<NNN>/]<YYYYMMDD_HHMMSS>/
         events.jsonl       append-only, fsync per line
         run.json           schema_version=2, written once at finalize
         trajectory.json    ATIF-v1.0 from Trajectory.model_dump_json(indent=2)
@@ -51,10 +52,19 @@ def slug_agent(agent_name: str) -> str:
     return re.sub(r"[^a-z0-9_]+", "_", s).strip("_") or "unknown"
 
 
-def build_run_id(*, agent_id: str, model: str, task_path: str, variant_index: int, ts: str) -> str:
+def build_run_id(
+    *,
+    agent_id: str,
+    model: str,
+    task_path: str,
+    variant_index: int,
+    ts: str,
+    trial_index: int | None = None,
+) -> str:
+    trial = "" if trial_index is None else f"__trial{trial_index + 1}"
     return (
         f"{slug_agent(agent_id)}__{slug_model(model)}__"
-        f"{slug_task(task_path)}__v{variant_index}__{ts}"
+        f"{slug_task(task_path)}__v{variant_index}{trial}__{ts}"
     )
 
 
@@ -67,6 +77,7 @@ class RunWriter:
         model: str,
         task_path: str,
         variant_index: int,
+        trial_index: int | None = None,
     ):
         base_ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
         self._slug_agent = slug_agent(agent_id)
@@ -81,6 +92,8 @@ class RunWriter:
             / self._slug_task
             / f"v{variant_index}"
         )
+        if trial_index is not None:
+            variant_dir = variant_dir / f"trial_{trial_index + 1:03d}"
         variant_dir.mkdir(parents=True, exist_ok=True)
         for collision_index in range(1000):
             self._ts = (
@@ -107,6 +120,7 @@ class RunWriter:
             task_path=task_path,
             variant_index=variant_index,
             ts=self._ts,
+            trial_index=trial_index,
         )
 
         self._events_path = self._run_dir / "events.jsonl"

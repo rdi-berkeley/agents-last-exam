@@ -121,6 +121,30 @@ class OutputSpec:
     root: str = ".logs/ale"
 
 
+@dataclass(frozen=True)
+class ReliabilitySpec:
+    """Repeated-trial measurement policy.
+
+    Infrastructure retries are controlled separately by max_attempts. These
+    fields describe independent scientific trials of the same agent/task pair.
+    """
+
+    min_trials: int = 1
+    max_trials: int = 1
+    confidence: float = 0.95
+    target_half_width: float | None = None
+    pass_threshold: float | None = None
+    pass_k: tuple[int, ...] = (1, 2, 3)
+
+    @property
+    def enabled(self) -> bool:
+        return (
+            self.max_trials > 1
+            or self.min_trials > 1
+            or self.target_half_width is not None
+        )
+
+
 @dataclass
 class ExperimentSpec:
     name: str
@@ -129,6 +153,7 @@ class ExperimentSpec:
     agents: list[AgentSpec]
     tasks: list[TaskSpec]
     artifacts: ArtifactsSpec = field(default_factory=ArtifactsSpec)
+    reliability: ReliabilitySpec = field(default_factory=ReliabilitySpec)
 
     concurrency: int = 1
     """Max units running simultaneously. ``1`` = sequential. Each unit
@@ -183,10 +208,14 @@ class RunUnit:
     agent_spec: AgentSpec
     task_path: str
     variant_index: int
+    trial_index: int | None = None
 
     @property
     def slug(self) -> str:
-        return f"{self.agent_id}/{self.task_path}/v{self.variant_index}"
+        base = f"{self.agent_id}/{self.task_path}/v{self.variant_index}"
+        if self.trial_index is None:
+            return base
+        return f"{base}/trial{self.trial_index + 1}"
 
 
 @dataclass

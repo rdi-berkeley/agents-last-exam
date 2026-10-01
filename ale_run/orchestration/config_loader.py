@@ -21,7 +21,8 @@ Shape:
   (variant 0); ``.yaml`` → list of ``{path, variants}`` entries. An inline
   list of ``{path, variants}`` is also accepted.
 * Run-level keys live at the experiment top level: ``output``, ``concurrency``,
-  ``auto_resume``, ``max_attempts``, ``cleanup_mode``, ``prompt_suffix``.
+  ``auto_resume``, ``max_attempts``, ``reliability``, ``cleanup_mode``,
+  ``prompt_suffix``, and ``wall_time_s``.
 
 Other behavior:
 
@@ -47,6 +48,7 @@ from .experiment_spec import (
     ExperimentSpec,
     OutputSpec,
     ProviderSpec,
+    ReliabilitySpec,
     TaskSpec,
 )
 
@@ -67,6 +69,7 @@ _TOP_LEVEL_KEYS = frozenset({
     "cleanup_mode",
     "prompt_suffix",
     "wall_time_s",
+    "reliability",
 })
 
 
@@ -213,6 +216,7 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
     if not 1 <= max_attempts <= 3:
         raise ValueError(f"max_attempts must be between 1 and 3, got {max_attempts}")
     cleanup_mode = _build_cleanup_mode(raw)
+    reliability = _build_reliability(raw.get("reliability"))
     prompt_suffix = str(raw.get("prompt_suffix") or "")
     wall_time_s = raw.get("wall_time_s")
     if wall_time_s is not None:
@@ -251,6 +255,7 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
         agents=agents,
         tasks=tasks,
         artifacts=artifacts,
+        reliability=reliability,
         concurrency=concurrency,
         auto_resume=auto_resume,
         max_attempts=max_attempts,
@@ -273,6 +278,87 @@ def _build_concurrency(eff: dict[str, Any]) -> int:
     if n < 1:
         raise ValueError(f"concurrency must be >= 1, got {n}")
     return n
+
+
+def _build_reliability(raw: Any) -> ReliabilitySpec:
+    if raw is None:
+        return ReliabilitySpec()
+    if not isinstance(raw, dict):
+        raise TypeError(
+            f"reliability must be a mapping, got {type(raw).__name__}"
+        )
+
+    allowed = {
+        "min_trials",
+        "max_trials",
+        "confidence",
+        "target_half_width",
+        "pass_threshold",
+        "pass_k",
+    }
+    unknown = set(raw) - allowed
+    if unknown:
+        raise TypeError(f"unknown reliability keys: {sorted(unknown)}")
+
+    min_trials = raw.get("min_trials", 1)
+    max_trials = raw.get("max_trials", min_trials)
+    for name, value in (("min_trials", min_trials), ("max_trials", max_trials)):
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise TypeError(f"reliability.{name} must be an integer")
+        if value < 1:
+            raise ValueError(f"reliability.{name} must be >= 1")
+    if min_trials > max_trials:
+        raise ValueError("reliability.min_trials cannot exceed max_trials")
+
+    confidence = raw.get("confidence", 0.95)
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+        raise TypeError("reliability.confidence must be numeric")
+    confidence = float(confidence)
+    if not 0.0 < confidence < 1.0:
+        raise ValueError("reliability.confidence must be between 0 and 1")
+
+    target_half_width = raw.get("target_half_width")
+    if target_half_width is not None:
+        if isinstance(target_half_width, bool) or not isinstance(
+            target_half_width, (int, float)
+        ):
+            raise TypeError("reliability.target_half_width must be numeric")
+        target_half_width = float(target_half_width)
+        if not 0.0 < target_half_width <= 1.0:
+            raise ValueError(
+                "reliability.target_half_width must be in (0, 1]"
+            )
+
+    pass_threshold = raw.get("pass_threshold")
+    if pass_threshold is not None:
+        if isinstance(pass_threshold, bool) or not isinstance(
+            pass_threshold, (int, float)
+        ):
+            raise TypeError("reliability.pass_threshold must be numeric")
+        pass_threshold = float(pass_threshold)
+        if not 0.0 <= pass_threshold <= 1.0:
+            raise ValueError("reliability.pass_threshold must be in [0, 1]")
+
+    raw_pass_k = raw.get("pass_k", [1, 2, 3])
+    if not isinstance(raw_pass_k, list):
+        raise TypeError("reliability.pass_k must be a list of positive integers")
+    pass_k: list[int] = []
+    for value in raw_pass_k:
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            raise ValueError(
+                "reliability.pass_k must contain only positive integers"
+            )
+        if value not in pass_k:
+            pass_k.append(value)
+
+    return ReliabilitySpec(
+        min_trials=min_trials,
+        max_trials=max_trials,
+        confidence=confidence,
+        target_half_width=target_half_width,
+        pass_threshold=pass_threshold,
+        pass_k=tuple(pass_k),
+    )
 
 
 _VALID_CLEANUP_MODES = frozenset({"delete", "stop", "keep"})

@@ -67,11 +67,13 @@ def main(argv: list[str] | None = None) -> int:
 
 async def _cmd_run(args: argparse.Namespace) -> int:
     spec = load_experiment(args.spec_path)
+    if args.disable_resume:
+        spec.auto_resume = False
     runner = Runner(spec)
     units = _filter_units(runner.enumerate_units(), args)
 
-    auto_resume = spec.auto_resume and not args.disable_resume
-    if auto_resume:
+    auto_resume = spec.auto_resume
+    if auto_resume and not spec.reliability.enabled:
         units = _filter_resume(units, runner.output_root)
 
     if args.dry_run:
@@ -86,6 +88,18 @@ async def _cmd_run(args: argparse.Namespace) -> int:
         print(f"environment: {env_desc}")
         print(f"output:     {runner.output_root}")
         print(f"concurrency: {spec.concurrency}")
+        if spec.reliability.enabled:
+            rel = spec.reliability
+            target = (
+                f", target_half_width={rel.target_half_width}"
+                if rel.target_half_width is not None
+                else ""
+            )
+            print(
+                "reliability: "
+                f"{rel.min_trials}..{rel.max_trials} trials, "
+                f"confidence={rel.confidence}{target}"
+            )
         print(f"units ({len(units)}):")
         for u in units:
             print(f"  {u.agent_id:20s}  {u.task_path:40s}  v{u.variant_index}")
