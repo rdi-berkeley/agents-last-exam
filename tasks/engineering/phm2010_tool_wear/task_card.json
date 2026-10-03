@@ -1,0 +1,27 @@
+{
+  "taskId": "engineering/phm2010_tool_wear",
+  "title": "Milling tool flank-wear prediction from force, vibration and acoustic-emission signals",
+  "summary": "Train on two fully measured cutters (315 cuts each, 7-channel 50 kHz signals plus per-cut flank wear) and predict the per-cut, per-flute flank wear of a third cutter; scored by MAE against the hidden measurements.",
+  "category": "engineering",
+  "software": ["Python (numpy, scipy, pandas, scikit-learn)"],
+  "taskPrompt": "You are a machining process engineer building a tool-condition-monitoring model for a high-speed CNC milling operation.\n\n## Input\n- Training cutters c1 and c6 in `input/train/<cutter>/`: `cuts/cut_001.csv` ... `cut_315.csv` hold the raw signals of one cut each (about 127,000 rows sampled at 50 kHz; columns Fx_N, Fy_N, Fz_N, Vx_g, Vy_g, Vz_g, AE_RMS_V), and `wear.csv` gives the flank wear measured after each cut on the three flutes (cut,flute_1,flute_2,flute_3 in micrometres).\n- Test cutter c4 in `input/test/c4/cuts/`: the same 315 cut files, but no wear file.\n\n## What you must do\n1. Engineer features from the signals and fit a model on c1 and c6.\n2. Predict the flank wear of c4 after every cut for all three flutes.\n3. Write `output/c4_wear_pred.csv` with header `cut,flute_1,flute_2,flute_3` and exactly 315 rows for cuts 1..315, values in micrometres.\n\n## Scoring\nMAE over the 945 predicted values: <= 6 um scores 1.0, >= 24 um scores 0.0, linear in between.",
+  "agentMustDo": [
+    "Read the training signals and wear tables for c1 and c6.",
+    "Build a feature pipeline and a regression model for flank wear.",
+    "Predict all 315 cuts x 3 flutes for c4.",
+    "Write output/c4_wear_pred.csv in the required schema."
+  ],
+  "inputFiles": [
+    {"name": "train/c1, train/c6", "format": "directories of CSV", "path": "input/train/", "description": "315 raw cut files per cutter (7 signal columns, 50 kHz) plus wear.csv with measured flank wear per cut and flute."},
+    {"name": "test/c4/cuts", "format": "directory of CSV", "path": "input/test/c4/cuts/", "description": "315 raw cut files of the test cutter; wear withheld."},
+    {"name": "README.md", "format": "Markdown", "path": "input/README.md", "description": "Task brief, column definitions, output schema."}
+  ],
+  "referenceFiles": [
+    {"name": "c4_wear.csv", "format": "CSV", "path": "reference/c4_wear.csv", "description": "Measured flank wear of c4 after each of the 315 cuts, three flutes, micrometres."}
+  ],
+  "evaluation": "**Hard gate conditions** (score = 0): output/c4_wear_pred.csv missing; not parseable; columns other than cut,flute_1,flute_2,flute_3; any cut missing, duplicated or outside 1..315; any non-numeric, NaN or infinite value.\n\n**Scoring method:** MAE in micrometres over all 945 (cut, flute) values against the hidden reference. score = 1.0 if MAE <= 6; 0.0 if MAE >= 24; linear between. RMSE is logged for diagnostics.\n\n- Where does the scoring logic run? host-side in evaluate(), pure Python; only two file reads touch the VM.\n\n**PERFECT output:** predictions within 6 um MAE of the measurements, score 1.0 (the 2010 challenge leaders reached single-digit MAE).\n**WRONG/empty output:** missing file, malformed CSV, or a constant guess (MAE about 36 um): score 0. Averaging the two training cutters by cut index without touching the signals gives MAE about 18 um, score about 0.3.",
+  "vm": {"machineType": "c4-standard-8", "snapshot": "cpu-free-ubuntu", "timeout": 21600},
+  "taxonomy": {"domain_id": "1", "domain_code": "engineering", "subdomain_id": "1.5", "subdomain_code": "manufacturing", "subdomain_name": "Manufacturing & Industrial Systems"},
+  "requiredSystemPackages": ["python3-numpy", "python3-scipy", "python3-pandas", "python3-sklearn"],
+  "dataProvenance": {"source": "PHM Society 2010 Data Challenge milling dataset (public challenge data; Kaggle mirror labelled CC0)", "taxonomy_v2_1": "M-EXEC / SIGNAL + OUTCOME", "note": "c2, c3, c5 (no public wear labels) are not staged"}
+}

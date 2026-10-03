@@ -1,0 +1,29 @@
+{
+  "taskId": "engineering/mfcadpp_feature_recognition",
+  "title": "Machining-feature labelling of B-rep parts for process planning",
+  "summary": "Label every face of 30 STEP parts with the machining feature it belongs to (24 feature classes plus stock), using five labelled examples; scored by macro-F1 against hidden labels.",
+  "category": "engineering",
+  "software": ["Python", "CadQuery / OCP (python-occ)", "FreeCAD"],
+  "taskPrompt": "You are a manufacturing process-planning engineer. Before a part can be machined, every face of its B-rep model has to be assigned to the machining feature it belongs to (through hole, rectangular pocket, chamfer, ...), or marked as untouched stock.\n\n## Input\n- 30 parts as STEP files in `input/parts/<part_id>.step`. Every face entity is named in file order: ADVANCED_FACE('f000', ...), ADVANCED_FACE('f001', ...), and so on. Use those names as face ids.\n- The class table `input/feature_classes.txt`: ids 0-23 are machining features, 24 is a stock face that belongs to no feature.\n- Five fully labelled example parts in `input/examples/` (a `.step` plus a `.labels.json` each).\n\n## What you must do\n1. Load each part with any open-source B-rep tool and inspect face geometry and topology.\n2. Decide the feature class of every face. Use the examples to calibrate what each class looks like.\n3. Write `output/labels.json` as JSON: {\"<part_id>\": {\"f000\": <class>, \"f001\": <class>, ...}, ...} covering every face of every part. Integer classes only.\n\n## Scoring\nMacro-F1 over the 25 classes across all 966 faces. Unlabelled faces count as wrong.",
+  "agentMustDo": [
+    "Load the 30 staged STEP parts and identify faces by their ADVANCED_FACE names (f000, f001, ...).",
+    "Study the five labelled example parts and the 25-class table.",
+    "Assign a class to every face of every part.",
+    "Write output/labels.json in the required nested JSON shape."
+  ],
+  "inputFiles": [
+    {"name": "parts/<part_id>.step", "format": "STEP AP214 (B-rep)", "path": "input/parts/", "description": "30 synthetic multi-feature parts from the MFCAD++ test split; face names anonymised to f000..fNNN in file order; original label names removed."},
+    {"name": "examples/<part_id>.step + .labels.json", "format": "STEP + JSON", "path": "input/examples/", "description": "Five labelled parts from the training split with the same anonymised face ids."},
+    {"name": "feature_classes.txt", "format": "text", "path": "input/feature_classes.txt", "description": "Class id to feature name table (0-23 features, 24 stock)."},
+    {"name": "README.md", "format": "Markdown", "path": "input/README.md", "description": "Task brief and output schema."}
+  ],
+  "referenceFiles": [
+    {"name": "labels.json", "format": "JSON", "path": "reference/labels.json", "description": "True class of every face of every staged part: {part_id: {face_id: class}}."},
+    {"name": "manifest.json", "format": "JSON", "path": "reference/manifest.json", "description": "Part list, faces per part, example ids, sampling seed."}
+  ],
+  "evaluation": "**Hard gate conditions** (score = 0): output/labels.json missing or not parseable as a JSON object.\n\n**Scoring method:** macro-averaged F1 over the 25 classes present in the reference, computed on all 966 (part, face) pairs. A face that is missing from the prediction counts as a false negative for its true class. Score = macro-F1 clipped to [0, 1]. Per-part accuracy is logged for diagnostics.\n\n- Where does the scoring logic run? host-side in evaluate(), pure Python; only two JSON reads touch the VM.\n\n**PERFECT output:** every face of every part carries its true class; macro-F1 = 1.0.\n**WRONG/empty output:** missing file, or every face labelled stock (class 24): macro-F1 about 0.03.",
+  "vm": {"machineType": "c4-standard-4", "snapshot": "cpu-free-ubuntu", "timeout": 14400},
+  "taxonomy": {"domain_id": "1", "domain_code": "engineering", "subdomain_id": "1.5", "subdomain_code": "manufacturing", "subdomain_name": "Manufacturing & Industrial Systems"},
+  "requiredSystemPackages": ["python3-cadquery", "freecad"],
+  "dataProvenance": {"source": "MFCAD++ (Hierarchical CADNet), CC BY; 30 test-split parts and 5 train-split parts sampled with seed 20260908", "taxonomy_v2_1": "M-CAPP / FEATURE-LABEL / BREP"}
+}

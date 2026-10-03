@@ -143,3 +143,6 @@ business_finance/odoo
 engineering/robotics_blender_tabletop_reconstruction
 visual_media/atlas_outpost_graybox_navigation
 visual_media/human_mesh_animation_reproduction
+engineering/mfcadpp_feature_recognition
+engineering/benchcad_views_to_step
+engineering/phm2010_tool_wear
