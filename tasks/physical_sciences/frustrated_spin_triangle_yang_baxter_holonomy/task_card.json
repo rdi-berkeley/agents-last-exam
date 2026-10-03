@@ -1,0 +1,68 @@
+{
+  "taskId": "physical_sciences/frustrated_spin_triangle_yang_baxter_holonomy",
+  "title": "Constrained Frustrated Spin-Triangle Gate Synthesis",
+  "summary": "Calibrate four local frames per spin and compile bounded, fixed-duration, single-bond pulse schedules for 12 three-qubit targets while cancelling bond-resolved leakage and all first- and second-order coefficients of ten independent noise channels.",
+  "category": "physical_sciences",
+  "software": [
+    "Python 3"
+  ],
+  "taskPrompt": "You are working on a Linux VM.\n\nConstruct local-frame and exchange-drive pulse schedules for 12 frustrated three-spin quantum-device scenarios. The controller uses four calibrated frames per spin, fixed pulse timing, and one active exchange bond per pulse. Cancel bond-resolved leakage and all specified multichannel noise coefficients.\n\nRead `base/input/TASK.md`, `base/input/calculus.md`, `base/input/scenarios.json`, and the standalone forward verifier at `base/input/check.py`.\n\nWrite the pulse schedules to `base/output/answers.json`. Run `python3 base/input/check.py --answers base/output/answers.json` to evaluate your work. When finished, write `base/output/NOTES.md` with a short account of what you tried, what worked, what failed, and any assumptions or ambiguities.\n\nDo not modify files under `base/input`. Write only under `base/output`.\n",
+  "agentMustDo": [
+    "Read the visible task contract, mathematical specification, numerical scenarios, and forward verifier.",
+    "Infer any local spin-gauge information needed from the visible 8 by 8 operators.",
+    "Construct 2 to 96 pulse segments for each of S1 through S12.",
+    "Choose one shared U3 calibration per spin, and select Pauli frame codes for each pulse.",
+    "Use duration 0.25, at most one nonzero bond drive per pulse, and drive magnitudes at most 0.25.",
+    "Choose one shared amplitude magnitude for each bond; use only its positive, negative, or zero value throughout the schedule.",
+    "Cancel all ten linear and 55 quadratic noise coefficients, including mixed-channel terms.",
+    "Drive all three bonds in every scenario with the required minimum integrated action.",
+    "Write output/answers.json and record the attempted method in output/NOTES.md."
+  ],
+  "inputFiles": [
+    {
+      "name": "Task specification",
+      "format": "Markdown",
+      "path": "input/TASK.md",
+      "description": "Visible output schema, constraints, completion-based scoring, and weighted diagnostic."
+    },
+    {
+      "name": "Mathematical specification",
+      "format": "Markdown",
+      "path": "input/calculus.md",
+      "description": "Exact local-frame, propagator, leakage, and Magnus definitions."
+    },
+    {
+      "name": "Quantum-device scenarios",
+      "format": "JSON",
+      "path": "input/scenarios.json",
+      "description": "Twelve sets of laboratory-frame 8 by 8 operators and target unitaries."
+    },
+    {
+      "name": "Forward verifier",
+      "format": "Python",
+      "path": "input/check.py",
+      "description": "Pure-stdlib executable verifier for local iteration."
+    }
+  ],
+  "referenceFiles": [],
+  "evaluation": "The score is the fraction of 12 scenarios whose control constraints, gate infidelity, three bond-resolved leakage norms, ten first-order noise-coefficient norms, and 55 second-order noise-coefficient norms all pass. Each physical threshold is 1e-8. A scenario scores either 1 or 0. The checker separately reports an unscored weighted diagnostic (gate 0.80, leakage 0.08, first order 0.06, second order 0.06). Canonical inputs and the verifier are regenerated host-side.",
+  "vm": {
+    "machineType": "c4-standard-4",
+    "snapshot": "cpu-free-ubuntu",
+    "vcpus": 4,
+    "memory_gb": 16,
+    "disk_gb": 200,
+    "timeout_s": 7200,
+    "network": {
+      "mode": "off"
+    }
+  },
+  "taxonomy": {
+    "domain_id": "2",
+    "domain_code": "physical_sciences",
+    "subdomain_id": "2.1",
+    "subdomain_code": "physics",
+    "subdomain_name": "Physics"
+  },
+  "requiredSystemPackages": []
+}
