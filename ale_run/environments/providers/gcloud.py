@@ -70,6 +70,15 @@ _GCP_RETRYABLE_ZONE = [
     "insufficient", "does not have enough resources",
     "not enough resources", "zone does not have enough",
 ]
+# A machine type simply not offered in a given zone (distinct from capacity):
+# recover by trying the next machine/zone, not by waiting. Newer families like
+# c4 are absent from some zones that the n2 fallback still covers.
+_GCP_MACHINE_UNAVAILABLE = [
+    "does not exist in zone",
+    "machine type with name",
+    "invalid value for field 'resource.machinetype'",
+    "machine type not found",
+]
 
 
 # ============================================================================
@@ -408,6 +417,18 @@ def _is_zone_capacity_error(stderr: str) -> bool:
     return any(pat in lower for pat in _GCP_RETRYABLE_ZONE)
 
 
+def _is_machine_unavailable_error(stderr: str) -> bool:
+    lower = stderr.lower()
+    return any(pat in lower for pat in _GCP_MACHINE_UNAVAILABLE)
+
+
+def _is_retryable_create_error(stderr: str) -> bool:
+    """A create error to recover from by trying the next machine x zone combo
+    (capacity/quota exhaustion, or a machine type not offered in that zone),
+    rather than failing the unit. Anything else is fatal and surfaced at once."""
+    return _is_zone_capacity_error(stderr) or _is_machine_unavailable_error(stderr)
+
+
 def _boot_disk_type(machine_type: str) -> str:
     family = machine_type.split("-")[0].lower()
     if family in ("c4", "m4", "x4"):
@@ -472,7 +493,7 @@ async def _try_create_in_zone(
     zone: str,
     label_str: str,
     project: str,
-) -> tuple[bool, str, str, str]:
+) -> tuple[bool, str, str]:
     args = _build_create_args(
         name=name,
         image=image,
@@ -494,7 +515,7 @@ async def _try_create_in_zone(
         )
         rc, stdout, stderr = await _run_gcloud(*args, project=project)
         if rc == 0:
-            return True, stdout, "", zone
+            return True, stdout, ""
         last_stderr = stderr
 
         if _is_zone_capacity_error(stderr):
@@ -502,7 +523,7 @@ async def _try_create_in_zone(
                 "machine=%s exhausted in %s: %s",
                 machine_type, zone, stderr[:300],
             )
-            return False, "", last_stderr, zone
+            return False, "", last_stderr
 
         if _is_transient_error(stderr):
             # Ambiguous outcome (esp. ConnectionError / RemoteDisconnected): the
@@ -530,8 +551,8 @@ async def _try_create_in_zone(
                 await asyncio.sleep(delay)
                 continue
 
-        return False, "", last_stderr, zone
-    return False, "", last_stderr, zone
+        return False, "", last_stderr
+    return False, "", last_stderr
 
 
 def _extract_external_ip(inst: dict) -> str | None:
@@ -777,7 +798,11 @@ class GcloudProvider(Provider):
             )
 
         is_gpu = snap.gpu is not None
-        zones = snap.zones
+        # Shuffle a copy of the zone list per VM so concurrent units spread across
+        # zones/regions instead of all hammering zones[0]: finds capacity faster
+        # and keeps per-region IP/SSD quota usage from concentrating in one region.
+        zones = list(snap.zones)
+        random.shuffle(zones)
 
         # Machine fallback: task-card override (or default) → N2 (CPU only).
         base_machine = spec.machine_type or (
@@ -807,10 +832,14 @@ class GcloudProvider(Provider):
         used_machine = machines[0]
         stdout = ""
 
-        # machine × zone, in order: each machine tried across all zones first.
-        for machine in machines:
-            for zone in zones:
-                ok, out, stderr, used_zone = await _try_create_in_zone(
+        # zone × machine, in order: try every candidate machine within a zone
+        # before moving on, so the reliable fallback (c* → n2) is reached in the
+        # first zone instead of after crawling the requested machine across every
+        # zone. First success wins; a capacity/quota exhaustion or a machine type
+        # not offered in that zone moves on, anything else is fatal and raised.
+        for zone in zones:
+            for machine in machines:
+                ok, out, stderr = await _try_create_in_zone(
                     name=name,
                     image=snap.image,
                     gpu=snap.gpu,
@@ -824,16 +853,17 @@ class GcloudProvider(Provider):
                 )
                 if ok:
                     stdout = out
+                    used_zone = zone
                     used_machine = machine
                     break
                 last_stderr = stderr
-                if not _is_zone_capacity_error(stderr):
+                if not _is_retryable_create_error(stderr):
                     raise RuntimeError(f"gcloud instances create failed: {stderr}")
             if stdout:
                 break
         else:
             raise RuntimeError(
-                f"gcloud instances create failed for all machines/zones: {last_stderr}"
+                f"gcloud instances create failed for all zones/machines: {last_stderr}"
             )
 
         # VM is now created. Until the SandboxHandle is returned below, ANY

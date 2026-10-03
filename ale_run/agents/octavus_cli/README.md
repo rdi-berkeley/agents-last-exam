@@ -27,9 +27,11 @@ lifecycle.py                              cua-computer-server (:0 desktop)
 budget, so a run that exceeds the budget is reaped. `parse_artifacts()` runs
 host-side: it reads the single `--json` result off stdout, then reads the
 observable thread with the same agent key to attach the transcript, per-run cost,
-tokens, and effective model to the trajectory. Pure stdlib (subprocess / pathlib
-/ json / urllib) plus the shared node bootstrap; no Octavus-internal or admin
-surface.
+tokens, and effective model to the trajectory. With recording on, the video is
+uploaded shortly after the run ends, so the thread is read until the recording is
+`ready` / `failed` / `unavailable` (up to two minutes) before it is attached. Pure
+stdlib (subprocess / pathlib / json / urllib) plus the shared node bootstrap; no
+Octavus-internal or admin surface.
 
 ## Auth
 
