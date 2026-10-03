@@ -75,11 +75,38 @@ class ClaudeCodeConfig:
         OPENROUTER_API_KEY, ANTHROPIC_API_KEY="". Requires OPENROUTER_API_KEY.
       - ``"direct"`` → uses ANTHROPIC_API_KEY against anthropic.com (or
         ``base_url`` if set). Requires ANTHROPIC_API_KEY.
-    Missing the required key for the chosen provider is a hard error."""
+      - ``"bedrock"`` → CLAUDE_CODE_USE_BEDROCK=1 and the CLI calls Claude on
+        Amazon Bedrock via the AWS SDK. Auth is the standard AWS credential
+        chain (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN),
+        resolved on the host and propagated into the sandbox by the framework.
+        ``model`` must be a Bedrock model id / inference-profile id
+        (e.g. ``us.anthropic.claude-fable-5``), NOT an ``anthropic/...`` slug.
+    Missing the required key/credentials for the chosen provider is a hard
+    error."""
 
     base_url: str | None = None
     """Custom Anthropic-compatible base URL. Overrides the provider's
-    default ``ANTHROPIC_BASE_URL``."""
+    default ``ANTHROPIC_BASE_URL``. Ignored for ``provider=bedrock`` (the AWS
+    SDK builds its own endpoint from the region)."""
+
+    aws_region: str | None = None
+    """AWS region for ``provider=bedrock`` (sets ``AWS_REGION``). ``None`` ⇒
+    fall back to whatever ``AWS_REGION`` / ``AWS_DEFAULT_REGION`` the resolved
+    AWS environment already carries. The chosen model id must be available on
+    Bedrock in this region."""
+
+    aws_credential_process_file: str | None = None
+    """``provider=bedrock`` long-run credential refresh. Static SigV4 env
+    creds (from short-lived STS tokens, e.g. ``ada``) freeze into the sandbox
+    at launch and expire mid-run (~1h), 403-ing long agent runs. When this is
+    set to a path, the deployer writes an ``~/.aws/config`` whose ``profile``
+    uses ``credential_process = cat <path>`` and CLEARS the static
+    ``AWS_ACCESS_KEY_ID``/``SECRET_ACCESS_KEY``/``SESSION_TOKEN`` from the
+    agent env (env creds otherwise OVERRIDE credential_process). A host-side
+    sidecar keeps that file refreshed (re-minting the token + ``docker cp``
+    into the running container), so the AWS SDK re-reads always-valid creds on
+    expiry. The path is sandbox-side (e.g. ``/tmp/.ale_aws_creds.json``).
+    ``None`` ⇒ legacy frozen-env behavior (fine for <1h runs)."""
 
     api_key: str | None = None
     """Literal API key, used in place of the provider's env-var key. ``None`` ⇒
@@ -103,6 +130,15 @@ class ClaudeCodeConfig:
     tool arguments/duration, prompts), cumulative metrics, and a summary in
     ``work_dir``. No upstream Claude Code changes are required. Set ``false`` to
     run the CLI with telemetry off."""
+
+    max_output_tokens: int | None = None
+    """Per-response output-token ceiling, passed to the CLI via the
+    ``CLAUDE_CODE_MAX_OUTPUT_TOKENS`` env var. The Claude Code CLI defaults to
+    32000; a single thinking-heavy turn (large ``max_thinking_tokens`` + a long
+    tool result) can exceed it and the CLI aborts the whole run with
+    "response exceeded the N output token maximum". Set this (e.g. 96000) to
+    lift the ceiling on models whose real output limit is higher. ``None`` ⇒
+    leave the CLI default (deployer does not set the env var)."""
 
     max_thinking_tokens: int | None = 31999
     """Extended-thinking token budget, passed to the CLI via the
