@@ -1,0 +1,28 @@
+{
+  "taskId": "computing_math/agentcore_repair",
+  "title": "Repair and complete a tool-calling agent runtime",
+  "summary": "A partially-working Python tool-calling agent runtime (agentcore) is broken or unimplemented across sixteen interacting behaviors (B1-B16): step/retry budgets, argument coercion, error recovery, unknown-tool handling, final-answer hygiene, loop and oscillation detection, batched tool calls, observation truncation, non-idempotent retry safety, budget-accounting corners, and history integrity. The agent must repair the runtime in place so it conforms to the written spec, verified by a hidden conformance suite (SWE-bench-style: the deliverable is the edited package, scored by running hidden tests). The behaviors interact, so a fix for one can regress another.",
+  "category": "computing_math",
+  "software": ["python", "pytest", "uv"],
+  "taskPrompt": "You are given a partially-working Python tool-calling agent runtime in the agentcore/ package (under your task directory), a behavior spec in input/README.md (B0-B16), and a visible subset of tests in input/tests_visible/. The happy path (B0) works, but behaviors B1-B16 are broken or unimplemented. Repair the bugs and implement the missing behaviors so the runtime conforms to input/README.md. Edit the source in place (e.g. agentcore/agent.py and agentcore/tools.py); do NOT change the public API or the exported names. Check progress with: python -m pytest tests_visible/ -q. Your repaired agentcore/ package is the deliverable.",
+  "agentMustDo": [
+    "Read input/README.md (the full behavior spec B0-B16) and input/tests_visible/",
+    "Fix step/retry budgets, strict argument coercion, error recovery, unknown-tool handling, and final-answer hygiene",
+    "Implement loop detection, oscillation detection, batched tool calls, observation truncation, non-idempotent retry safety, budget accounting, and history integrity",
+    "Reconcile the interacting behaviors (a Batch is one action for loop detection; retries don't consume the step budget; truncation is per-call) without regressing B0",
+    "Keep the public API unchanged and ensure 'import agentcore' succeeds"
+  ],
+  "inputFiles": [
+    { "name": "agentcore", "format": "Python package", "path": "input/agentcore", "description": "the partially-working runtime to repair, edited in place" },
+    { "name": "README.md", "format": "Markdown", "path": "input/README.md", "description": "the behavior spec (B0-B16) the runtime must satisfy" },
+    { "name": "tests_visible", "format": "pytest", "path": "input/tests_visible", "description": "a visible subset of behavior tests for the agent's dev loop" }
+  ],
+  "referenceFiles": [
+    { "name": "agentcore", "format": "Python package", "path": "input/agentcore", "description": "the deliverable: the agent's repaired agentcore package (a SWE-bench-style in-place edit, not a new output file). Graded by running a hidden conformance suite against it -- see evaluation." }
+  ],
+  "evaluation": "Deterministic gate-and-score, no model judgment (scripts/score_agentcore_repair.py). The repaired agentcore package is imported in an isolated subprocess and a hidden conformance suite (17 behavior checks B0-B16, each over multiple scenarios incl. adversarial cross-behavior cases; staged only at eval time, never visible to the agent) is run against it. GATE (score 0.0 if it fails): the package imports AND the happy-path regression check B0 still passes. TIERS (equal weight): the 16 behaviors B1-B16. Score equals the fraction of behaviors that conform, in [0,1]. The grader runs its own hidden suite (never tests in the workspace) in a timed subprocess, so hardcoded outputs, a weakened test set, or an unbounded-retry fix all score 0.",
+  "vm": { "machineType": "c4-standard-4", "snapshot": "cpu-free-ubuntu", "timeout": 3600 },
+  "variants": 1,
+  "sourceSubmissionId": "<assigned by the agents-last-exam.org/submit portal>",
+  "taxonomy": {}
+}
