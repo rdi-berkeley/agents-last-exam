@@ -39,8 +39,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tasks.common_setup import BaseTaskSetup
-from tasks.linux_runtime import LinuxTaskConfig  # noqa: E402
-
+from tasks.linux_runtime import LinuxTaskConfig
 
 _setup = BaseTaskSetup()
 
@@ -229,10 +228,32 @@ def load():
 @cb.setup_task(split="train")
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
+    await _ensure_python_runtime(task_cfg, session, phase="setup")
 
 
 def _read_script(name: str) -> str:
     return (SCRIPTS_DIR / name).read_text(encoding="utf-8")
+
+
+async def _ensure_python_runtime(task_cfg, session, *, phase: str) -> dict[str, Any]:
+    meta = task_cfg.metadata
+    tmp_dir = meta["eval_tmp_dir"]
+    await session.interface.create_dir(tmp_dir)
+    script_path = f"{tmp_dir}/ensure_runtime.py"
+    report_path = f"{tmp_dir}/runtime_{phase}.json"
+    await session.write_file(script_path, _read_script("ensure_runtime.py"))
+    command = (
+        f"bash {shlex.quote(meta['matrad_wrapper'])} python -I {shlex.quote(script_path)} "
+        f"--report {shlex.quote(report_path)}"
+    )
+    if phase == "evaluation":
+        command += " --reference " + shlex.quote(meta["reference_dir"] + "/RTDOSE_reference.dcm")
+    await _run_command(session, command, check=True)
+    report = json.loads(_as_text(await session.read_file(report_path)))
+    if not report.get("ok"):
+        raise RuntimeError(f"matRad {phase} runtime preparation failed: {report}")
+    logger.info("[%s] runtime_%s=%s", TASK_NAME, phase, json.dumps(report))
+    return report
 
 
 @cb.evaluate_task(split="train")
@@ -240,8 +261,8 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
     sub_dir = meta["remote_output_dir"]
     ref_dir = meta["reference_dir"]
-    env_name = meta["micromamba_env"]
     tmp_dir = meta["eval_tmp_dir"]
+    await _ensure_python_runtime(task_cfg, session, phase="evaluation")
 
     required_after = [
         f"{sub_dir}/RTPLAN.dcm",
@@ -275,9 +296,8 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     )
 
     inner = (
-        "export MAMBA_ROOT_PREFIX=$HOME/.local/share/micromamba && "
-        f"$HOME/.local/bin/micromamba run -n {shlex.quote(env_name)} "
-        f"python {shlex.quote(tmp_dir + '/evaluate.py')} "
+        f"bash {shlex.quote(meta['matrad_wrapper'])} python -I "
+        f"{shlex.quote(tmp_dir + '/evaluate.py')} "
         f"--submission {shlex.quote(sub_dir)} "
         f"--reference {shlex.quote(ref_dir)} "
         f"--out {shlex.quote(score_path)}"
@@ -345,7 +365,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     if (await session.file_exists(score_path) or await session.directory_exists(score_path)):
         try:
             payload = json.loads(_as_text(await session.read_file(score_path)))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.error("[%s] could not parse score.json: %s", TASK_NAME, exc)
 
     if rc_text != "0":

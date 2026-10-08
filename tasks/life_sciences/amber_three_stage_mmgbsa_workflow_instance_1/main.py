@@ -186,10 +186,15 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             bundle[name] = text
 
     hidden_reference_text = await _read_text_if_exists(session, meta["hidden_reference_results"])
+    input_pdb_text = await _read_text_if_exists(session, f"{meta['input_dir']}/complex_structure.pdb")
     result = evaluate_output_bundle(
         bundle,
         present_files=files,
         hidden_reference_text=hidden_reference_text,
+        input_pdb_text=input_pdb_text,
+        task_dir=meta["task_dir"],
+        input_dir=meta["input_dir"],
+        output_dir=output_dir,
     )
     logger.info(
         "amber_three_stage_mmgbsa_workflow_instance_1 score=%s passed=%s reasons=%s",

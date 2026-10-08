@@ -8,6 +8,11 @@ import re
 from pathlib import Path
 from typing import Mapping
 
+try:
+    from .workflow_split import verify_cross_stage
+except ImportError:
+    from workflow_split import verify_cross_stage
+
 SYSTEM_BASENAME = "GLN_phb2_parl_pgam5_model_0"
 REQUIRED_FILES = (
     "submit_min.sh",
@@ -139,6 +144,10 @@ def evaluate_output_bundle(
     *,
     present_files: list[str] | None = None,
     hidden_reference_text: str | None = None,
+    input_pdb_text: str | None = None,
+    task_dir: str | None = None,
+    input_dir: str | None = None,
+    output_dir: str | None = None,
 ) -> dict:
     reasons: list[str] = []
     visible_files = sorted(name for name in (present_files or files.keys()) if name not in IGNORED_FILENAMES)
@@ -171,6 +180,17 @@ def evaluate_output_bundle(
     if final_results is not None:
         reasons.extend(_check_results(final_results, hidden_reference_text))
 
+    split_reason = "submit_mmgbsa.sh:missing receptor/ligand split logic"
+    split_proof = None
+    if split_reason in reasons and submit_min is not None and submit_mmgbsa is not None:
+        split_proof = verify_cross_stage(
+            files, input_pdb_text, task_dir=task_dir, input_dir=input_dir, output_dir=output_dir
+        )
+        if set(visible_files) != set(REQUIRED_FILES):
+            split_proof = {"verified": False, "reason": "cross-stage recovery requires exactly the four deliverables"}
+        if split_proof["verified"]:
+            reasons.remove(split_reason)
+
     deduped: list[str] = []
     seen = set()
     for reason in reasons:
@@ -187,6 +207,7 @@ def evaluate_output_bundle(
         "reasons": deduped,
         "delta_total": delta_total,
         "hidden_delta_total": hidden_delta,
+        "cross_stage_split": split_proof,
     }
 
 
@@ -205,6 +226,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Verify amber_three_stage_mmgbsa_workflow_instance_1 outputs.")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--hidden-reference", help="Optional hidden reference FINAL_RESULTS_MMGBSA.dat")
+    parser.add_argument("--input-pdb", help="Original input PDB for cross-stage split verification")
+    parser.add_argument("--task-dir", help="Task root; defaults to the output directory parent")
+    parser.add_argument("--input-dir", help="Input directory; defaults to task-dir/input")
     args = parser.parse_args()
 
     files, names = _load_directory(Path(args.output_dir))
@@ -215,6 +239,10 @@ def main() -> None:
         files,
         present_files=names,
         hidden_reference_text=hidden_reference_text,
+        input_pdb_text=Path(args.input_pdb).read_text() if args.input_pdb else None,
+        task_dir=str(Path(args.task_dir).resolve() if args.task_dir else Path(args.output_dir).resolve().parent),
+        input_dir=str(Path(args.input_dir).resolve()) if args.input_dir else None,
+        output_dir=str(Path(args.output_dir).resolve()),
     )
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 

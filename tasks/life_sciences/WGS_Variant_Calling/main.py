@@ -188,7 +188,7 @@ def parse_duplication_rate(metrics_text: str) -> Optional[float]:
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     output_dir = task_cfg.metadata["remote_output_dir"]
-    score = 0.0
+    passed_checkpoints = 0
     vcf_bytes: bytes | None = None
 
     try:
@@ -204,7 +204,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
                 all_exist = False
                 break
         if all_exist:
-            score += 0.10
+            passed_checkpoints += 1
             logger.info("Checkpoint 0 PASSED")
         else:
             logger.info("Checkpoint 0 FAILED")
@@ -215,7 +215,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         flagstat_bytes = await session.read_bytes(f"{output_dir}/{config.FLAGSTAT_FILE}")
         mapping_rate = parse_mapping_rate(flagstat_bytes.decode()) if flagstat_bytes else None
         if mapping_rate is not None and mapping_rate >= task_cfg.metadata["min_mapping_rate"]:
-            score += 0.10
+            passed_checkpoints += 1
             logger.info("Checkpoint 1 PASSED")
         else:
             logger.info("Checkpoint 1 FAILED")
@@ -226,7 +226,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         dup_bytes = await session.read_bytes(f"{output_dir}/{config.DUPLICATION_FILE}")
         dup_rate = parse_duplication_rate(dup_bytes.decode()) if dup_bytes else None
         if dup_rate is not None and dup_rate <= task_cfg.metadata["max_duplication_rate"]:
-            score += 0.10
+            passed_checkpoints += 1
             logger.info("Checkpoint 2 PASSED")
         else:
             logger.info("Checkpoint 2 FAILED")
@@ -244,7 +244,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             and validate_tabix_index(tbi_bytes or b"")
             and validate_summary_csv(summary_bytes or b"")
         ):
-            score += 0.10
+            passed_checkpoints += 1
             logger.info("Checkpoint 3 PASSED")
         else:
             logger.info("Checkpoint 3 FAILED")
@@ -253,7 +253,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
 
     if not vcf_bytes:
         logger.info("Checkpoint 4 FAILED: submitted VCF is missing")
-        return [score]
+        return [passed_checkpoints / 10]
 
     evaluator_data_dir = Path(
         os.environ.get(
@@ -300,7 +300,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         (report.indel.recall, task_cfg.metadata["min_indel_recall"]),
     ]:
         if value >= threshold:
-            score += 0.10
+            passed_checkpoints += 1
     logger.info("Checkpoint 4 independently recomputed metrics=%s", report)
 
-    return [score]
+    return [passed_checkpoints / 10]
