@@ -48,7 +48,7 @@ harnesses.
 
 ---
 
-## Quick start
+## Quick Start
 
 Choose where ALE should create or attach each task sandbox:
 
@@ -83,7 +83,7 @@ Have a question or run into an issue? [**Join our Discord**](https://discord.gg/
 
 ---
 
-## How ALE works
+## How ALE Works
 
 ALE targets **frontier agent systems** — a harness orchestrating a foundation
 model, carrying its own action loop, tools, memory, and sub-agents. Rather than
