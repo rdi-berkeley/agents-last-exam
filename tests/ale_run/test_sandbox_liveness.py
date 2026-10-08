@@ -60,6 +60,9 @@ class _FakeSandbox:
         )
 
     async def read_text(self, path: str) -> str:
+        if path.endswith("_stopped.json"):
+            token = next(value for name, value in self.files.items() if name.endswith("_stop.request"))
+            return json.dumps({"run_token": token, "stopped": True})
         if path.endswith("_result.json"):
             return json.dumps(self.result)
         if path in self.files:

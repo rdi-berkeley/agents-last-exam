@@ -13,9 +13,9 @@
   <article class="article">
     <h1>Build a custom image</h1>
     <p class="lede">
-      ALE boots each sandbox from a named image. The published
-      <code>ale-ubuntu22</code> and <code>ale-win10</code> images already carry
-      the software the public task set needs. Build your own when you add a task
+      ALE boots each sandbox from a named image. The versioned Linux and Windows
+      images in <code>releases/v1.1/assets.json</code> carry the software the
+      selected task set needs. Build your own when you add a task
       that wants software not yet baked in, or when you provision licensed
       Windows applications that the public images omit. The steps below use the
       Google Cloud provider throughout; other providers follow the same
@@ -30,6 +30,13 @@
       and skip this page unless you are adding software or enabling licensed
       tasks.
     </div>
+
+    <p>
+      The October rerelease provides a new Linux image for the six OSS
+      conversions. Windows image bytes and cloud IDs are retained after
+      verification of the unchanged 40-task data projection. Use the matching
+      release manifest and profiles when copying or extending either image.
+    </p>
 
     <h2>The image model</h2>
     <p>
@@ -157,14 +164,16 @@ env/verify_task_env.sh path/to/task_card.json path/to/task_base_dir</code></pre>
       path conventions are already in place. Create a VM from the base image and
       keep it running while you install software:
     </p>
-    <pre><code>gcloud compute instances create ale-builder \
-  --image=ale-ubuntu22 --image-project="$GCP_PROJECT" \
+    <pre><code>BASE_IMAGE=$(jq -r '.images.linux.gcloud.name' releases/v1.1/assets.json)
+gcloud compute instances create ale-builder \
+  --image="$BASE_IMAGE" --image-project="$GCP_PROJECT" \
   --machine-type=e2-standard-4 \
   --zone="$GCP_REGION-a" \
   --tags=ale-run</code></pre>
     <p>
-      For a Windows image, build from <code>ale-win10</code> (or
-      <code>ale-win-server</code> for the GPU family) over RDP.
+      First copy the selected release image into your project. For Windows,
+      use the image named by <code>images.windows.gcloud.name</code> in the
+      manifest and connect over RDP.
     </p>
 
     <h2>2. Install and verify the software</h2>
@@ -258,31 +267,24 @@ uv run python -m ale_run run my_experiment.yaml</code></pre>
   --network=ale-vpc --direction=INGRESS --allow=tcp:8000 \
   --source-ranges="$ALE_CLIENT_CIDR" --target-tags=ale-run</code></pre>
 
-    <h2 id="licensed">Licensed tasks</h2>
+    <h2 id="licensed">Custom licensed applications</h2>
     <p>
-      The public task set splits into an <strong>unlicensed</strong> subset that
-      the published images run as-is, and a small <strong>licensed</strong> subset
-      whose software cannot be redistributed. Of the 152 tasks in
-      <code>selected_tasks/full.txt</code>, 145 are in
-      <code>unlicensed.txt</code>; the remaining 7 are listed in
-      <code>selected_tasks/licensed.txt</code>. Every licensed task today is a
-      Windows task — there are no licensed Linux packages.
+      The 2026-10-08 v1.1 rerelease selects 151 tasks with no licensed application
+      activation requirement. Six formerly licensed tasks use open-source Linux
+      workflows with similar business goals: Blender building modeling,
+      FreeCAD Road alignment, FreeCAD CAM machining with LinuxCNC and CAMotics,
+      Kratos excavation analysis, MuseScore transcription, and Ardour project
+      migration. <code>selected_tasks/licensed.txt</code> is empty.
     </p>
-    <table>
-      <thead><tr><th>Task</th><th>Licensed software</th></tr></thead>
-      <tbody>
-        <tr><td>engineering/2d_drawings_to_3d_building_model</td><td>Autodesk Civil 3D 2024</td></tr>
-        <tr><td>engineering/cailian_road_highway_alignment_2</td><td>Autodesk Civil 3D 2024</td></tr>
-        <tr><td>engineering/gcode</td><td>Autodesk PowerMill 2025</td></tr>
-        <tr><td>engineering/inner_support_elevation_optimization</td><td>PLAXIS 3D 2023.2</td></tr>
-        <tr><td>engineering/mold-flow</td><td>Moldex3D 2025</td></tr>
-        <tr><td>visual_media/music_transcription</td><td>Steinberg Dorico 6 / Cubase 15</td></tr>
-        <tr><td>visual_media/project_migration</td><td>Rhino 8</td></tr>
-      </tbody>
-    </table>
     <p>
-      Their installers and credentials are <strong>not</strong> committed to the
-      repository; keep them outside it. Each licensed package carries a
+      Injection molding is removed because a complete four-cavity
+      fill/pack/cool/demold open-source workflow has not been validated at the
+      original scope. Use matching rerelease code, images and data for the six
+      conversions.
+    </p>
+    <p>
+      For custom tasks that still need licensed applications, keep installers
+      and credentials outside the repository. Each licensed package carries a
       <code>meta.json</code> (pinned version + <code>verify</code> command) and a
       <code>README.md</code> with one reproducible provisioning sequence (for
       example <code>env/packages-win/rhino-8/</code>):
@@ -298,7 +300,7 @@ uv run python -m ale_run run my_experiment.yaml</code></pre>
       Provision the licensed software into your Windows builder alongside the
       unlicensed software — one image carries both — then snapshot and register it
       like any other custom image (steps 4–5). Point your Windows snapshot at that
-      image and run <code>selected_tasks/licensed.txt</code>.
+      image and run your custom task list.
     </p>
 
     <h2>Checklist</h2>

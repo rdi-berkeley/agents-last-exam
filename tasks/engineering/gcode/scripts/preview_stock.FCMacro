@@ -1,0 +1,20 @@
+import json
+import os
+from pathlib import Path
+import sys
+
+
+sys.path.insert(0, str(Path(__file__).parent))
+from native_pipeline import evaluate_native
+
+request = json.loads(Path(os.environ['ALE_CAM_PREVIEW_REQUEST']).read_text())
+result = evaluate_native(
+    request['project'],
+    request['source_document'],
+    request['library_root'],
+    Path(request['output']) / 'replay',
+    interpreter_runtime=request['interpreter_runtime'],
+    collision_python=request['collision_python'],
+    stock_binary=request['stock_binary'],
+)
+os._exit(0 if result['status'] == 'native_replay_complete' else 2)

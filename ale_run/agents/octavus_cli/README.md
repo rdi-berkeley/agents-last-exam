@@ -64,7 +64,7 @@ Reference the preset from an experiment (see `example_exp.yaml` for the shape):
 agents:
   - configs/agents/octavus_cli.yaml
 environment: configs/environments/environment_gcloud.yaml
-tasks: selected_tasks/ale_cli.txt      # 105 cpu-free-ubuntu (Linux) tasks
+tasks: selected_tasks/ale_cli.txt      # 111 cpu-free-ubuntu (Linux) tasks
 ```
 
 ```bash

@@ -1,0 +1,24 @@
+import json
+import os
+from pathlib import Path
+import sys
+import traceback
+
+from PySide import QtCore
+
+request_path = Path(os.environ["CAILIAN_NATIVE_REQUEST"])
+request = json.loads(request_path.read_text())
+sys.path.insert(0, request.get("adapter_dir", str(request_path.parent)))
+try:
+    from native_adapter import run
+
+    result = run(request)
+except Exception:
+    result = {"error": traceback.format_exc()}
+Path(request["receipt"]).write_text(json.dumps(result, indent=2))
+print(json.dumps(result), flush=True)
+import FreeCAD
+
+for document_name in list(FreeCAD.listDocuments()):
+    FreeCAD.closeDocument(document_name)
+QtCore.QTimer.singleShot(100, QtCore.QCoreApplication.quit)

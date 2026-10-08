@@ -1,0 +1,15 @@
+{
+  "task_id": "engineering/2d_drawings_to_3d_building_model",
+  "contract_version": "linux-blender-v1",
+  "output_dir": "Use the output directory in the task prompt",
+  "required_files": [
+    {"filename": "model.obj", "format": "Wavefront OBJ", "purpose": "Complete polygon geometry for rendering"},
+    {"filename": "model.blend", "format": "Blender native", "purpose": "Editable project containing the same evaluated geometry"}
+  ],
+  "coordinate_system": {"anchor": "input/base_model.obj", "units": "millimeters", "x_axis": "east", "y_axis": "north", "z_axis": "up", "ground_floor_z": 0, "horizontal_origin": "Common X/Y translation is allowed; relative component placement is scored"},
+  "native_export_tolerance_mm": 1.0,
+  "mesh_constraints": {"organization": "Multiple objects, modifiers, instances and alternative triangulations are allowed", "geometry": "Finite nonempty polygon surfaces", "materials": "Not scored"},
+  "forbidden_outputs": ["*.dwg"],
+  "scoring_method": {"type": "visual_architectural_comparison", "criteria": ["Hall/Tower proportions", "floor levels", "Tower placement", "solid north Hall facade", "open south structural frame", "Tower curtain-wall mullions", "workshop-module placement", "elevation silhouettes"], "aggregation": "Equal-weight mean of eight binary criteria"},
+  "evaluator_views": ["plan_hall_ground", "plan_hall_first", "plan_hall_second", "plan_tower_typical", "elevation_north", "elevation_south", "elevation_east", "elevation_west", "section_NS", "section_EW", "axon_NE", "axon_NW", "axon_SE", "axon_SW"]
+}

@@ -2,7 +2,7 @@
 #
 # Requirements:
 #   - Linux host with Docker and /dev/kvm
-#   - Persistent disk space for both cached base images (~168 GB) plus overlays
+#   - Persistent disk space for both cached base images (~173 GB) plus overlays
 #
 # Each run creates a small qcow2 overlay; it does not copy the full base image.
 # The host provider downloads each configured base disk before starting Docker.
@@ -51,7 +51,7 @@ snapshots:
     image: ale-ubuntu22-v1-1
     qemu:
       disk_source: hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22-v1.1.qcow2
-      hf_revision: 3ace4090971467175656238621cb4bcd0cfb03a4
+      hf_revision: 49a1afa4fe2aa16c41d72279a0268125c707fe49
       # GCS alternative: gs://ale-data-public/images/ale-ubuntu22-v1.1.qcow2
       root: ~/.cache/ale/qemu
       runner_image: agentslastexam/ale-qemu:0.2.0
@@ -64,7 +64,7 @@ snapshots:
     image: ale-win10-v1-1
     qemu:
       disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10-v1.1.qcow2
-      hf_revision: 3ace4090971467175656238621cb4bcd0cfb03a4
+      hf_revision: 49a1afa4fe2aa16c41d72279a0268125c707fe49
       # GCS alternative: gs://ale-data-public/images/ale-win10-v1.1.qcow2
       root: ~/.cache/ale/qemu
       runner_image: agentslastexam/ale-qemu:0.2.0

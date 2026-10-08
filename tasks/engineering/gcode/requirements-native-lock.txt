@@ -1,0 +1,6 @@
+numpy==2.5.3
+scipy==1.18.1
+trimesh==5.1.0
+shapely==2.1.2
+python-fcl==0.7.0.10
+cython==3.3.0

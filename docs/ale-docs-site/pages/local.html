@@ -21,8 +21,8 @@
     <div class="note">
       <div class="note-title">Supported, CPU-only</div>
       Use <code>configs/environments/qemu.yaml</code> with
-      <code>selected_tasks/cpu_unlicensed.txt</code>. GPU passthrough and licensed
-      tasks are outside the current provider scope.
+      <code>selected_tasks/cpu_unlicensed.txt</code> for 146 selected CPU tasks.
+      GPU passthrough is outside the current provider scope.
     </div>
 
     <h2>Architecture and naming</h2>
@@ -48,7 +48,7 @@
       <li>Docker available to the current user.</li>
       <li>Hardware or nested virtualization exposed as readable and writable <code>/dev/kvm</code>.</li>
       <li>Enough memory for every concurrently active guest.</li>
-      <li>Persistent disk space for the cached base images (about 168 GB for both v1.1 disks), download headroom and growing per-run overlays. Never store these on a memory-backed filesystem.</li>
+      <li>Persistent disk space for the cached base images (about 173 GB for both October v1.1 disks), download headroom and growing per-run overlays. Never store these on a memory-backed filesystem.</li>
     </ul>
     <pre><code>docker info
 test -r /dev/kvm &amp;&amp; test -w /dev/kvm
@@ -79,6 +79,14 @@ df -h ~/.cache</code></pre>
       <code>~/.cache/ale/qemu/runtime/slots</code>. The overlay grows only as the
       guest writes changed blocks and is removed with <code>cleanup_mode:
       delete</code>.
+    </p>
+
+    <p>
+      The October rerelease supplies a new Linux disk for all 111 Linux tasks.
+      The Windows disk is unchanged: its 40-task data projection matches the
+      current release. The older embedded global marker is qualified by the
+      <a href="https://huggingface.co/datasets/agents-last-exam/ale-images-qcow2/blob/v1.1/v1.1-oss-platform-projections.json">platform projection record</a>.
+      Retain the immutable revision in the shipped profile.
     </p>
 
     <h2>Disk sources</h2>
@@ -124,10 +132,10 @@ uv run python -m ale_run run local_vm_demo.yaml</code></pre>
 
     <h2>Task coverage</h2>
     <p>
-      <code>cpu_unlicensed.txt</code> currently contains 140 unlicensed tasks:
-      all 105 <code>cpu-free-ubuntu</code> tasks and 35 <code>cpu-free</code>
-      Windows tasks. Tasks that require GPU execution, licensed software, or a
-      missing application are excluded.
+      <code>cpu_unlicensed.txt</code> currently contains 146 unlicensed tasks:
+      all 111 <code>cpu-free-ubuntu</code> tasks and 35 <code>cpu-free</code>
+      Windows tasks. The five selected Windows GPU tasks require the GCloud
+      GPU profile and are excluded from QEMU.
     </p>
 
     <h2>Resource sizing and concurrency</h2>

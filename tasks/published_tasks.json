@@ -307,7 +307,7 @@
     },
     "visual_media/project_migration": {
       "variants": [
-        "CONTEXT.md"
+        "celeste_symphonic_suite"
       ]
     },
     "life_sciences/zdock_hiv_dimer_interface_scoring_v1": {
@@ -633,11 +633,6 @@
     "business_finance/legal_ma_consistency_audit_01": {
       "variants": [
         "base"
-      ]
-    },
-    "engineering/mold-flow": {
-      "variants": [
-        "220089"
       ]
     },
     "computing_math/cfr_game_theory_equilibrium": {

@@ -60,7 +60,6 @@ engineering/humanoid_velocity_tracking_policy
 engineering/humanoid_wbc_policy_evaluation
 engineering/inner_support_elevation_optimization
 engineering/kicad_navswitch_library_integration_release_002
-engineering/mold-flow
 engineering/mpc_control_building_v1
 engineering/openroad_sky130_ibex_pnr_signoff
 engineering/pcb_layout_kicad_1

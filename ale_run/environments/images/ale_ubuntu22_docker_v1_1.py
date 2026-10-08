@@ -8,6 +8,6 @@ IMAGE = replace(
     name="ale-ubuntu22-docker-v1-1",
     docker_image=(
         "agentslastexam/ale-ubuntu22-docker:v1.1@"
-        "sha256:0b4d5173e0be38234d97a3b193a70ebbcd766a0983476d4d7c86539d3cb033be"
+        "sha256:b0804013b6490eec77d735e3faf256b8d2ac06952061d524b66848f756c64f34"
     ),
 )

@@ -1,59 +1,61 @@
 {
   "taskId": "engineering/gcode",
   "title": "gcode",
-  "summary": "Create machining toolpaths for the staged workpiece in PowerMill and deliver the required NC output.",
+  "summary": "Design safe roughing and finishing toolpaths for the original workpiece using FreeCAD CAM.",
   "category": "engineering",
   "software": [
-    "Autodesk PowerMill 2025",
+    "FreeCAD CAM",
+    "LinuxCNC",
+    "CAMotics",
     "Python"
   ],
-  "taskPrompt": "You are a CAM (Computer-Aided Manufacturing) engineer using Autodesk PowerMill.\n\n## Your Task\nDesign toolpaths to machine workpiece **125162_319** using the provided blank PowerMill project.\n\n## Input Files\n- **PowerMill project** (blank, with pre-configured tools, zero toolpaths):\n  `125162_319\\input\\125162-319-NCFM-T`\n- **Ideal workpiece geometry** (.prt format): `125162_319\\input\\125162_319.prt`\n- **Reference image**: `125162_319\\input\\125162_319.jpg`\n\n## What You Must Do\n1. Copy the PowerMill project from `125162_319\\input\\125162-319-NCFM-T` to `125162_319\\output\\125162-319-NCFM-T`\n   (work on the copy so the original stays intact)\n2. Open PowerMill from `125162_319\\software\\PowerMill 2025.lnk` and load the copied project at:\n   `125162_319\\output\\125162-319-NCFM-T`\n3. Study the ideal workpiece geometry (.prt file) to understand the target shape.\n   The copied PowerMill project already contains the machine, stock, tool library,\n   and workpiece setup; the `.prt` file is an external geometry reference.\n4. Design toolpaths that will machine the workpiece from raw stock:\n   - Use roughing toolpaths to remove bulk material\n   - Use finishing toolpaths for surfaces requiring higher precision\n   - Use the pre-configured tools already in the project (do NOT create new tools)\n5. **Critical**: Ensure each toolpath has NO collisions and NO gouging\n6. Run a stock model simulation to confirm the final result\n7. **Save** the PowerMill project (Ctrl+S)\n\n## Color Coding on the Workpiece\nThe .prt file has faces colored by precision requirement:\n- Tight tolerance faces (e.g., VDI12/15): require finer finish toolpaths\n- Loose tolerance faces (e.g., spray/texture faces): standard finish is acceptable\n\n## Quality Requirements\n- The stock simulation must complete without collisions or gouging\n- The machined geometry must reproduce the supplied `.prt` target accurately\n- Keep critical finished surfaces within 0.3 mm and all modeled surfaces within 2.0 mm\n\n## Important\n- Work ONLY within the project at `125162_319\\output\\125162-319-NCFM-T`\n- Do NOT move or rename the project folder\n- SAVE your project when finished",
+  "taskPrompt": "You are a CAM engineer. Design roughing and finishing toolpaths for workpiece\n**125162_319** using FreeCAD CAM and the supplied original tool library.\n\n## Inputs\n\n- `125162_319/input/blank.FCStd`: original machining surfaces, stock and toolcontrollers,\n  with no machining operations.\n- `125162_319/input/tool-library/`: the original cutters, shanks and holders.\n- `125162_319/input/geometry/`: converted original geometry, face display metadata and\n  source coordinate correspondence. The machining surfaces in the CAM Job are\n  the target; the separately labeled external geometry is a reference. Open\n  machining surfaces are intentional and need not be joined into a closed solid.\n- `125162_319/input/125162_319.jpg`: original workpiece image.\n\n## Work and delivery\n\n1. Copy `blank.FCStd` to `125162_319/output/machining.FCStd`. Work on this copy.\n2. Open it with `python3 125162_319/software/open_cam.py 125162_319/output/machining.FCStd`.\n   This enables the provided bindings for the original tools and native CAM editing.\n3. Choose roughing and finishing strategies, cutting parameters and tool mounting.\n   Use only the supplied original cutters, shanks and holders. Do not change the\n   original target or stock, or introduce a new cutter. Preserve the original tool\n   identities. Holder overhang can be adjusted through `OriginalAssembly.Mount.Overhang`.\n4. Complete the machining without gouging the target, colliding with the shank or\n   holder, or running rapid moves through remaining material. Keep critical surfaces\n   within 0.3 mm and all modeled surfaces within 2.0 mm of the required shape.\n5. Save the calculated, active operations in `125162_319/output/machining.FCStd`.\n6. Check the saved project with:\n\n   `python3 125162_319/software/preview_stock.py 125162_319/output/machining.FCStd 125162_319/output/preview --config 125162_319/software/preview.json`\n\n   Use a new preview directory for each attempt. The result names a remaining-stock\n   STL that you can open in FreeCAD. The bundled FreeCAD voxel preview has a known\n   sloped-cut error; the provided preview uses the same native replay as evaluation.\n\nToolpaths remain your responsibility. Optional OpenCAMLib adaptive sampling is\navailable through `125162_319/software/enable_adaptive.FCMacro` on a selected CAM Surface\noperation; native standard sampling is also allowed. The script supplies no toolpath.\n\n## Evaluation\n\nThe evaluator exports your saved operations with FreeCAD's LinuxCNC postprocessor,\ninterprets their actual movements, checks safety, and simulates cutting with the\noriginal tool geometry. A missing/empty project or a collision/gouge earns zero.\nA submitted STL never substitutes for this replay. Software/environment failures\nare reported as evaluation errors rather than solver scores.\n\nAfter the safety gate, the remaining stock is compared with the hidden reference.\nSurface agreement uses the original 0.3 mm and 2.0 mm bands, weighted 70% and 30%.\nBoth missing and unwanted material count. The machining region, defined from the\noriginal public geometry, is checked separately from the remaining outer surface;\nthe lower region score is used so that untouched exterior cannot hide missing cuts.\nYou do not need to reproduce the author's operation sequence or toolpath.\n",
   "agentMustDo": [
-    "Open the staged blank PowerMill project for the selected workpiece.",
-    "Review the staged `.prt` geometry and `.jpg` visual reference.",
-    "Design roughing and finishing toolpaths using the preconfigured tool library.",
-    "Ensure the toolpaths have no collisions and no gouges.",
-    "Run a stock-model simulation in PowerMill.",
-    "Save the modified project inside `output/`."
+    "Copy the original blank FreeCAD project to output/machining.FCStd.",
+    "Study the original machining surfaces and external geometry reference.",
+    "Design roughing and finishing using the supplied original cutters, shanks and holders.",
+    "Avoid gouging, holder/shank collisions and rapid moves through remaining stock.",
+    "Inspect the saved project's checked native stock preview.",
+    "Save calculated active operations in the submitted project."
   ],
   "inputFiles": [
     {
-      "name": "Blank PowerMill project",
-      "format": "directory",
-      "path": "input/<PM_PROJECT_NAME>/",
-      "description": "cloned from the expert PM project with all toolpaths and stock models removed"
+      "name": "Blank FreeCAD project",
+      "format": ".FCStd",
+      "path": "input/blank.FCStd",
+      "description": "Original stock, machining surfaces and toolcontrollers; zero machining operations"
     },
     {
-      "name": "Ideal workpiece geometry",
-      "format": "`.prt`",
-      "path": "input/<variant_name>.prt",
-      "description": "agent-visible target geometry; colored faces communicate tolerance intent"
+      "name": "Original tool library",
+      "format": "directory",
+      "path": "input/tool-library/",
+      "description": "Converted original cutter/shank/holder geometry and source identities"
+    },
+    {
+      "name": "Original geometry and face metadata",
+      "format": "directory",
+      "path": "input/geometry/",
+      "description": "Converted public geometry, coordinate correspondence and source-derived machining region"
     },
     {
       "name": "Workpiece preview",
-      "format": "`.jpg`",
+      "format": ".jpg",
       "path": "input/<variant_name>.jpg",
-      "description": "visual reference image"
+      "description": "Original public workpiece image"
     }
   ],
   "referenceFiles": [
     {
-      "name": "Modified PowerMill project",
-      "format": "directory",
-      "path": "output/<PM_PROJECT_NAME>/",
-      "description": "working project the agent edits and saves"
-    },
-    {
-      "name": "Simulated stock model",
-      "format": "`.stl`",
-      "path": "output/agent_sim.stl",
-      "description": "generated during evaluation from the agent's saved project"
+      "name": "Expert simulated stock",
+      "format": ".stl",
+      "path": "reference/reference_sim.stl",
+      "description": "Hidden original expert stock, compared only after native safety and cutting replay"
     }
   ],
-  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- any collision is reported\n- any gouge is reported\n- the agent simulation does not produce `output/agent_sim.stl`\n\n**Scoring method:**\nThe evaluator first runs a collision/gouge gate in PowerMill, then simulates the saved agent project to produce `output/agent_sim.stl`, then compares that STL against `reference/reference_sim.stl` with a point-to-mesh distance metric.\n\n- Collision/gouge gate: the evaluator applies PowerMill collision checking to every toolpath and parses the exported setup-sheet collision / gouge columns; any positive flag forces score `0`\n- Mesh comparison: sample `10,000` surface points from the agent STL, measure closest-point distance to the hidden reference STL, then compute `0.70 * ratio_within_0.3_mm + 0.30 * ratio_within_2.0_mm`\n\n- **Where does the main scoring logic run?** on the Windows VM through temp-uploaded scripts\n- **If any scoring step runs on the VM, why is that exception necessary?** collision checking and stock-model simulation require PowerMill itself, and the hidden reference STL already lives next to the staged projects on the VM\n\n**What does a PERFECT output look like?**\nThe agent's saved project simulates cleanly, produces no collisions or gouges, and yields a stock model nearly identical to the expert reference STL. Perfect score = `1.0`.\n\n**What does a WRONG/empty output look like?**\nA project with collisions, gouges, missing simulation output, or a stock model far from the expert result. These cases score near `0.0`.",
+  "evaluation": "Always export the saved FreeCAD project through LinuxCNC, check the complete physical motion stream against the original target, stock, cutters, shanks and holders, and simulate cutting using the pinned CAMotics backend. Missing or empty projects and collision/gouge failures score 0. A submitted STL never skips native replay. Infrastructure or incomplete safety checks raise an evaluation error. After the safety gate, compare both missing and unwanted surface material in the original public machining region and remaining exterior separately. Each region uses 0.3 mm and 2.0 mm tolerance bands weighted 70%/30%; take the lower region score. The operation sequence need not match the author.",
   "vm": {
-    "machineType": "g2-standard-8",
-    "snapshot": "gpu-license",
+    "machineType": "n2-standard-8",
+    "snapshot": "cpu-free-ubuntu",
     "timeout": 7200
   },
   "taxonomy": {
@@ -80,6 +82,11 @@
     }
   },
   "requiredSystemPackages": [
-    "autodesk-powermill-2025"
-  ]
+    "freecad-cam",
+    "linuxcnc-rs274",
+    "camotics-native",
+    "bubblewrap",
+    "xvfb"
+  ],
+  "releaseStatus": "native_controls_and_agent_review_passed"
 }

@@ -1,0 +1,16 @@
+import os
+import sys
+
+import FreeCAD
+
+sys.path.insert(0, os.environ["CAILIAN_SOFTWARE"])
+from road_compat import refresh_profile
+
+document = FreeCAD.ActiveDocument
+document.recompute()
+for frame in document.Objects:
+    if getattr(getattr(frame, "Proxy", None), "Type", None) == "Road::ProfileFrame":
+        frame.Proxy._cailian_signature = None
+        refresh_profile(frame)
+        frame.touch()
+document.recompute()

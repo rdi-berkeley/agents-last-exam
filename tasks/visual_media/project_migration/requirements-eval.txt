@@ -1,0 +1,4 @@
+numpy>=2
+soundfile>=0.13
+mido>=1.3
+httpx>=0.27

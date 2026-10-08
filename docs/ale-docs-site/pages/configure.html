@@ -63,7 +63,7 @@ cleanup_mode: delete</code></pre>
     <table>
       <thead><tr><th>Profile</th><th>Provider routing</th><th>Compatible list</th></tr></thead>
       <tbody>
-        <tr><td><code>configs/environments/environment_gcloud.yaml</code></td><td><a href="/pages/google-cloud.html">Google Cloud VMs</a> for all published snapshots</td><td><code>unlicensed.txt</code>, or <code>full.txt</code> with licensed software activated</td></tr>
+        <tr><td><code>configs/environments/environment_gcloud.yaml</code></td><td><a href="/pages/google-cloud.html">Google Cloud VMs</a> for all published snapshots</td><td><code>unlicensed.txt</code> or <code>full.txt</code></td></tr>
         <tr><td><code>configs/environments/environment_aws.yaml</code></td><td><a href="/pages/aws.html">AWS EC2</a> for the CPU snapshots (no GPU)</td><td><code>cpu_unlicensed.txt</code></td></tr>
         <tr><td><code>configs/environments/environment_aliyun.yaml</code></td><td><a href="/pages/aliyun.html">Alibaba Cloud ECS</a> for the CPU snapshots (no GPU)</td><td><code>cpu_unlicensed.txt</code></td></tr>
         <tr><td><code>configs/environments/docker.yaml</code></td><td><a href="/pages/local-docker.html">Local containers</a> for <code>cpu-free-ubuntu</code></td><td><code>docker_support.txt</code></td></tr>
@@ -96,11 +96,11 @@ cleanup_mode: delete</code></pre>
       <thead><tr><th>List</th><th>Units before agent multiplication</th><th>Purpose</th></tr></thead>
       <tbody>
         <tr><td><code>hello_both.txt</code></td><td>2</td><td>Ubuntu and Windows smoke test</td></tr>
-        <tr><td><code>docker_support.txt</code></td><td>99</td><td>Current local-container allowlist</td></tr>
-        <tr><td><code>ale_cli.txt</code></td><td>105</td><td>All published <code>cpu-free-ubuntu</code> tasks</td></tr>
-        <tr><td><code>cpu_unlicensed.txt</code></td><td>140</td><td>Public CPU-runnable set — shared by QEMU, Alibaba Cloud, and AWS</td></tr>
-        <tr><td><code>unlicensed.txt</code></td><td>145</td><td>All public tasks that do not require licensed software</td></tr>
-        <tr><td><code>full.txt</code></td><td>152</td><td>The complete public release, including seven licensed tasks</td></tr>
+        <tr><td><code>docker_support.txt</code></td><td>102</td><td>Supported local-container subset; historical 99-task paired review plus three added native output checks</td></tr>
+        <tr><td><code>ale_cli.txt</code></td><td>111</td><td>All selected <code>cpu-free-ubuntu</code> tasks, including desktop workflows</td></tr>
+        <tr><td><code>cpu_unlicensed.txt</code></td><td>146</td><td>Public CPU-runnable set; use matching updated images</td></tr>
+        <tr><td><code>unlicensed.txt</code></td><td>151</td><td>All selected tasks require no licensed application activation</td></tr>
+        <tr><td><code>full.txt</code></td><td>151</td><td>The complete selected v1.1 rerelease</td></tr>
       </tbody>
     </table>
     <p>
@@ -163,7 +163,7 @@ GCP_SA_KEY=secret/gcp_key.json</code></pre>
       depends on the sandbox substrate:
     </p>
     <pre><code>task_data_source: baked_in_sandbox
-output_path: local
+output_path: null
 
 # Required when the sandbox reads from or writes to GCS:
 # gcs_sa_key: secret/gcp_key.json</code></pre>

@@ -3,6 +3,7 @@ computing_math/dit_pipeline_cfg_alignment_fid_256_001
 business_finance/ar_full_300
 business_finance/basel_operational_risk_bia_cn
 engineering/aerospace_low_thrust_trajectory
+visual_media/music_transcription
 life_sciences/amber_minimization_script_prep_instance_1
 life_sciences/yeast_colony_detection
 life_sciences/cell_translocation_analysis
@@ -48,3 +49,4 @@ engineering/sumo_urban_am_peak_calibration
 business_finance/equity_research_summary
 computing_math/go_game_reconstruction_1
 computing_math/tris_crackme
+engineering/cailian_road_highway_alignment_2

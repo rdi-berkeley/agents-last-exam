@@ -1,0 +1,24 @@
+import os
+from pathlib import Path
+import sys
+
+import FreeCAD
+import FreeCADGui
+
+
+sys.path.insert(0, os.environ['ALE_CAM_ADAPTER_DIR'])
+FreeCADGui.activateWorkbench('CAMWorkbench')
+from cam_adapter import install
+from native_simulation import install_tool_binding
+from tool_library import register_library, restore_document
+
+install(Path(FreeCAD.getUserCachePath()) / 'ale-cam-scans')
+install_tool_binding()
+library_path = os.environ.get('ALE_CAM_LIBRARY_DIR')
+if library_path:
+    register_library(library_path)
+document_path = os.environ.get('ALE_CAM_DOCUMENT')
+if document_path:
+    document = FreeCAD.openDocument(document_path)
+    if library_path:
+        restore_document(document, library_path)

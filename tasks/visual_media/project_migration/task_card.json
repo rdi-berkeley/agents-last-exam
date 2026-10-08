@@ -1,59 +1,59 @@
 {
   "taskId": "visual_media/project_migration",
-  "title": "Cubase Project Migration",
-  "summary": "Repair a Cubase project that opens with missing plugins by substituting equivalent installed VSTs, then save the migrated session, export stems, and capture a verification screenshot.",
+  "title": "Music Project Migration in Ardour",
+  "summary": "Replace unavailable original instruments and effects in complete source-only Ardour projects, preserve editable music and routing, and deliver the full mix and per-track stems.",
   "category": "visual_media",
   "software": [
-    "Cubase"
+    "Ardour"
   ],
-  "taskPrompt": "Goal: Migrate a Cubase project to this computer by replacing all missing/invalid VST plugins with equivalent ones from the available plugins, then export stems and a mixdown.\n\nSoftware:\n- Cubase: \\software\\Cubase.lnk\n\nInput:\n- Cubase project: \\input\\project.cpr\n\nBefore you begin:\n1. Generate the list of VST3 plugins installed on this VM and save it to `\\output\\available_vsts.txt`. In PowerShell:\n   `$roots = @('C:\\Program Files\\Common Files\\VST3','C:\\Program Files (x86)\\Common Files\\VST3'); $items = @(); foreach ($r in $roots) { if (Test-Path $r) { $items += Get-ChildItem -Path $r -Recurse -Filter *.vst3 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name } }; ($items | Sort-Object -Unique) | Out-File -FilePath '\\output\\available_vsts.txt' -Encoding ascii`\n2. Open the Cubase project at `\\input\\project.cpr` using the Cubase shortcut at `\\software\\Cubase.lnk` (e.g. double-click the .lnk, or `Start-Process '\\software\\Cubase.lnk'`).\n\nSteps:\n1. When the \"Missing Plugins\" dialog appears, note all unavailable VST plugins.\n2. For each track with a missing VST instrument or effect:\n   a. Open the track's instrument or insert slot.\n   b. Replace the missing VST with a functionally equivalent one from the available plugins listed in `\\output\\available_vsts.txt`.\n   c. Choose a preset or patch that best approximates the original sound character (e.g., replace a missing string library with an available string patch).\n3. Play back the project and verify all tracks produce audible, artifact-free audio.\n4. Export stems: for each track/channel as organized in the project (do NOT split or reorganize tracks — export exactly as the project defines them), solo it and export audio mixdown (WAV, 44.1 kHz or higher) to \\output\\stems\\<track_name>.wav\n5. Save the migrated project to \\output\\migrated_project.cpr\n6. Take a screenshot of the Cubase MixConsole or arrange view showing all tracks with their replaced plugins visible:\n   save_milestone_screenshot(path=\"\\output\\overview.png\", description=\"Cubase project with replaced plugins\")\n\nOutput files (all saved to \\output):\n- migrated_project.cpr: Cubase project with all missing VSTs replaced.\n- stems/: Per-track solo WAV exports (one per track).\n- overview.png: Screenshot of MixConsole or arrange view.\n",
+  "taskPrompt": "Repair input/project/project.ardour on Linux. Preserve all original notes, muted editable material, controllers, tempo, meter, track organization and routing. Choose installed open-source replacement instruments/effects that approximate the original reference audio; generic GM assignment is not automatic acceptance. Save output/migrated_project/migrated_project.ardour and all media/plugin state, output/available_plugins.txt, output/overview.png, output/mixdown.wav and full-song solo WAVs in output/stems/<track_name>.wav. Export from time zero at 44.1 kHz or higher. Public rubric: software/rubric.txt. All five original registered variants and full workloads are retained.",
   "agentMustDo": [
-    "Open `input/project.cpr` in Cubase from `software/Cubase.lnk`.",
-    "Replace each missing or invalid VST with a functionally equivalent installed plugin from the agent-generated `output/available_vsts.txt` list.",
-    "Verify the migrated project plays back with audible, artifact-free tracks.",
-    "Export one WAV stem per project-defined track or channel to `output/stems/`.",
-    "Save `output/migrated_project.cpr` and capture `output/overview.png` from Cubase."
+    "Inventory installed plugins and libraries.",
+    "Replace unavailable active instruments/effects without deleting or transposing original music; disabled effects need no replacement.",
+    "Preserve original editable events, controller meaning, tempo/meter and routing; use editable instrument adapters when needed.",
+    "Save a self-contained native Ardour project, full mix, complete original per-track/channel solo stems and overview screenshot."
   ],
   "inputFiles": [
     {
-      "name": "Cubase project",
-      "format": "CPR",
-      "path": "input/project.cpr",
-      "description": "The broken Cubase session that opens with missing plugins on the target VM."
+      "name": "Original-source Ardour project",
+      "format": "Ardour session, MIDI and original plugin state",
+      "path": "input/project/project.ardour",
+      "description": "Verified conversion of original input only. Unavailable plugin placeholders remain unresolved."
     }
   ],
   "referenceFiles": [
     {
-      "name": "Migrated Cubase project",
-      "format": "CPR",
-      "path": "output/migrated_project.cpr",
-      "description": "Saved Cubase project with missing plugins replaced."
+      "name": "Editable migrated project",
+      "format": "Ardour session directory",
+      "path": "output/migrated_project/migrated_project.ardour",
+      "description": "Complete project with replacement plugins and collected media/state."
     },
     {
-      "name": "Exported stems",
-      "format": "WAV directory",
-      "path": "output/stems/",
-      "description": "One WAV export per project-defined track or channel."
+      "name": "Complete audio",
+      "format": "WAV",
+      "path": "output/stems/ and output/mixdown.wav",
+      "description": "Full-length solo stems and mix exported from time zero."
     },
     {
-      "name": "Overview screenshot",
+      "name": "Overview",
       "format": "PNG",
       "path": "output/overview.png",
-      "description": "Cubase screenshot showing the migrated project with tracks and plugin assignments visible."
+      "description": "Ardour tracks and replacement plugins visible."
     }
   ],
-  "evaluation": "**Hard gate conditions:** `output/migrated_project.cpr` must exist; `output/stems/` must contain at least one non-silent WAV stem; and `output/overview.png` must pass a Cubase screenshot gate.\n\n**Weighted scoring when all gates pass:** stem completeness and quality contributes `0.20` (`valid matched stems / expected reference stems`), and timbral similarity contributes `0.80` (mean MFCC-based cosine-similarity score, with `>= 0.70` receiving full credit).\n\n**What does a PERFECT output look like?** A migrated Cubase project, a full set of non-silent unclipped stems matching the reference track inventory, and a valid Cubase screenshot, for a score near `1.0`.\n\n**What does a WRONG or empty output look like?** Missing required files, silent stems, or a non-Cubase screenshot cause an immediate `0.0`; poor plugin substitutions keep the gate passing but reduce the timbral score.",
+  "evaluation": "Native save/reopen and original music/routing, required deliverables and a valid full mix are gates. Score: 20% valid full-length matched stems / all expected stems; 80% fixed audio-semantic rubric, averaged over three reference-selected 12s passages per active stem, then across active stems. Each passage is evaluated for both delivered and freshly native-rendered audio against the reference; the lower rating is used, so copied reference WAVs cannot hide incorrect native playback. Missing or invalid stems get zero in the unchanged denominator. Passage centers are 25/50/75% quantiles of 100ms reference RMS bins above -60dB relative to the loudest reference bin; duplicate windows are merged. Proven decoded PCM identity or one shared positive scalar consistent with analytic integer-PCM quantization bounds earns timbre 1; no lossy-format equality is presumed. Otherwise official gpt-audio-1.5 uses public rubric.txt, ratings 0..4 divided by 4. No MFCC fallback, whitelist or fitted timbre threshold. Effective simple CC state is compared rather than raw counts; native cumulative rounding up to 5 ticks at 1920 PPQ is reported, while bank/program/switch/stateful order remains checked. Runtime, reference, unassessable provider and unsupported-verifier failures are infrastructure errors, not candidate zeros. The judge has measured positive under-scoring; this integration does not establish broad perceptual reliability or accept the private GM diagnostic.",
   "evaluatorCredentials": [
     {
       "type": "openai_api_key",
       "file": "openai.env",
-      "purpose": "OpenAI vision/LLM judge scores the deliverable during evaluate(); sourced from secret/eval_time/openai.env"
+      "purpose": "Official OpenAI audio-semantic judge and overview vision judge; evaluator-only secret/eval_time/openai.env or OPENAI_API_KEY."
     }
   ],
   "vm": {
     "machineType": "c4-standard-4",
-    "snapshot": "cpu-license",
-    "timeout": 7200
+    "snapshot": "cpu-free-ubuntu",
+    "timeout": 7200,
+    "osType": "linux"
   },
   "taxonomy": {
     "domain_id": "8",
@@ -79,6 +79,18 @@
     }
   },
   "requiredSystemPackages": [
-    "steinberg-cubase-15"
+    "ardour",
+    "ffmpeg",
+    "xvfb",
+    "python3-numpy",
+    "python3-soundfile",
+    "python3-mido",
+    "fluid-soundfont-gm"
+  ],
+  "evaluatorDependencies": [
+    "soundfile>=0.13",
+    "mido>=1.3",
+    "numpy>=2",
+    "httpx>=0.27"
   ]
 }

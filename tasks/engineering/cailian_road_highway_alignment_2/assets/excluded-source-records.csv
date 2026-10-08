@@ -1,0 +1,32 @@
+handle,source,layer,northing,easting,elevation,zero_z_review,reason
+557D,zdh_POINT,zdh,-50853.49837999999,-4160.29879,0.0,True,zero-Z feature annotation; no numeric elevation label
+5D8A,zdh_POINT,zdh,-51285.87298,-4744.50159,1.844139999999999,False,explicit water-surface annotation; ground/bed meaning unresolved
+5FB7,zdh_POINT,zdh,-51585.31650999998,-5185.88095,0.0,True,zero-Z feature annotation; no numeric elevation label
+5FB9,zdh_POINT,zdh,-51541.06108,-5123.9988,0.0,True,zero-Z feature annotation; no numeric elevation label
+5FBB,zdh_POINT,zdh,-51492.17177999998,-5055.966999999998,0.0,True,zero-Z feature annotation; no numeric elevation label
+5FBD,zdh_POINT,zdh,-51358.02696,-4869.00652,0.0,True,zero-Z feature annotation; no numeric elevation label
+5FBF,zdh_POINT,zdh,-51306.39205999999,-4797.509409999999,0.0,True,zero-Z feature annotation; no numeric elevation label
+5FC1,zdh_POINT,zdh,-51240.81474999999,-4706.955429999999,0.0,True,zero-Z feature annotation; no numeric elevation label
+5FC3,zdh_POINT,zdh,-51216.62266999999,-4673.005739999998,0.0,True,zero-Z feature annotation; no numeric elevation label
+5FC5,zdh_POINT,zdh,-51171.22743999999,-4608.36243,0.0,True,zero-Z feature annotation; no numeric elevation label
+5FC7,zdh_POINT,zdh,-51126.5107,-4544.88111,0.0,True,zero-Z feature annotation; no numeric elevation label
+5FC9,zdh_POINT,zdh,-51079.84169999999,-4479.0266,0.0,True,zero-Z feature annotation; no numeric elevation label
+5FCB,zdh_POINT,zdh,-50989.85437999998,-4352.585670000001,0.0,True,zero-Z feature annotation; no numeric elevation label
+5FCD,zdh_POINT,zdh,-51769.38809,-5345.105610000001,0.0,True,zero-Z feature annotation; no numeric elevation label
+60D7,zdh_POINT,zdh,-50879.75886,-4145.518350000001,0.0,True,zero-Z feature annotation; no numeric elevation label
+60D9,zdh_POINT,zdh,-50875.76971,-4132.72811,0.0,True,zero-Z feature annotation; no numeric elevation label
+60DB,zdh_POINT,zdh,-50884.15636,-4128.999090000001,0.0,True,zero-Z feature annotation; no numeric elevation label
+60DD,zdh_POINT,zdh,-50864.6872,-4155.29317,0.0,True,zero-Z feature annotation; no numeric elevation label
+60DF,zdh_POINT,zdh,-50872.92149999998,-4150.06739,0.0,True,zero-Z feature annotation; no numeric elevation label
+6340,zdh_POINT,zdh,-51679.5213,-5316.884449999998,0.0,True,zero-Z feature annotation; no numeric elevation label
+6342,zdh_POINT,zdh,-51632.86521,-5252.30414,0.0,True,zero-Z feature annotation; no numeric elevation label
+6344,zdh_POINT,zdh,-51541.14010999999,-5124.0706,0.0,True,zero-Z feature annotation; no numeric elevation label
+6346,zdh_POINT,zdh,-51492.43504,-5056.520400000001,0.0,True,zero-Z feature annotation; no numeric elevation label
+6348,zdh_POINT,zdh,-51446.97876000001,-4993.15463,0.0,True,zero-Z feature annotation; no numeric elevation label
+634A,zdh_POINT,zdh,-51404.78746,-4934.62925,0.0,True,zero-Z feature annotation; no numeric elevation label
+634C,zdh_POINT,zdh,-51036.47460999999,-4417.671519999998,0.0,True,zero-Z feature annotation; no numeric elevation label
+634E,zdh_POINT,zdh,-50943.68926999999,-4286.68354,0.0,True,zero-Z feature annotation; no numeric elevation label
+6350,zdh_POINT,zdh,-50899.68176,-4224.4942,0.0,True,zero-Z feature annotation; no numeric elevation label
+6352,zdh_POINT,zdh,-50853.68246,-4160.220570000001,0.0,True,zero-Z feature annotation; no numeric elevation label
+64EC,zdh_POINT,zdh,-51264.87409,-4771.250939999998,0.0,True,zero-Z feature annotation; no numeric elevation label
+64EE,zdh_POINT,zdh,-50871.98491,-4119.03927,0.0,True,zero-Z feature annotation; no numeric elevation label

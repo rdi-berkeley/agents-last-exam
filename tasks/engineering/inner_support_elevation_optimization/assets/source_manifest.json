@@ -1,0 +1,17 @@
+{
+  "description": "Original public base/input bytes, audited 2026-09-29. Integrity is not FE compliance.",
+  "sha256": {
+    "A_zone_structural_materials_en.md": "e04a4102dcf29da0f6fde107c266dfddd42ccf3d31cb5af53ad57fc8d5555986",
+    "answer_template.json": "38d1785b65fd0a984bebee96ba1ac9036b66216b0cbd5cdb4ce73a3095f9adae",
+    "benchmark_model_spec_en.md": "6be14bc68f6aec352a3b43efda34f1121c2a8ce5b4628c352aea2b69f6d0bbb8",
+    "engineering_assumptions_en.md": "9dd9adb2fef5dae6f2f23a9a63667bddf7d467b81a72e1f95afe6325c0d9ff3d",
+    "figure_2_1_project_site_plan.png": "b8e7cce851acdcfed40541078b9e8811df072ea0d0b4054ad1cf10ebaa74bc8e",
+    "figure_2_3_excavation_zone_plan.png": "70236a5c182f67b46c7b2c24150ed4ee84d2cf1426dd79de9e05580af1b31005",
+    "figure_2_4_2_5_support_layout_and_section.png": "4a9f6c045333553148c7466dab1e4edb0a80153cbadf1dcc55d65b5a561f969c",
+    "figure_2_6_monitoring_layout.png": "325311dcbd71997f5e0c236866f301012185c6936b433b7766bf85049eebc42f",
+    "figure_3_1_plaxis_model_geometry.png": "c70971d274fc5b2866d4032d3ee05b9c4fae9bef5730f3fc71ff3d34c5d6e886",
+    "figure_3_2_mesh_layout.png": "080c9de8b6b15d3fb5dceed3b3c4cb1ae54c51045cd1fbcd6cfed855b51cec83",
+    "figure_index_en.md": "56cc577f1eac04602372a1f1ddff05202f6db432c8aab79611736779fed388aa",
+    "task_specific_brief_en.md": "6ec0e5e71c557c1d8803a67c8b75ed4990de099d4ad65c50fbc7f06d3614640b"
+  }
+}

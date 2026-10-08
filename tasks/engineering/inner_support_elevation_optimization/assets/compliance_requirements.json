@@ -1,0 +1,222 @@
+{
+  "status": "design_only_no_native_validator",
+  "trust_boundary": "Records describe evaluator obligations, not accepted candidate declarations. Only source-bundle integrity and report syntax are implemented.",
+  "requirements": [
+    {
+      "id": "soil_materials",
+      "sources": [
+        "benchmark_model_spec_en.md#6",
+        "engineering_assumptions_en.md#2"
+      ],
+      "kind": "fixed_source_values_with_open_rock_stiffness",
+      "checks": [
+        "Fourteen spatial strata in source order and thickness",
+        "Actual element-to-property binding, MC law, gamma,c,phi,K0,nu,listed Es",
+        "Actual initial stresses and plastic-state evolution"
+      ],
+      "open_choices": [
+        "rock Es, subject to source stiffness requirement",
+        "unspecified dilation/tension/interface options, subject to engineering review"
+      ],
+      "negative_controls": [
+        "elastic replacement",
+        "unused correct material declarations with wrong element bindings",
+        "altered strength or unit conversion"
+      ],
+      "implementation": "pending"
+    },
+    {
+      "id": "structures_and_selfweight",
+      "sources": [
+        "A_zone_structural_materials_en.md#A-B"
+      ],
+      "kind": "fixed_source_values",
+      "checks": [
+        "Actual shell/wall thickness 1.00 and 0.62 m",
+        "Used linear-elastic structural E=30 GPa, nu=0.20, unit weight=25 kN/m3",
+        "Assembled structural body loads and reactions after activation"
+      ],
+      "open_choices": [
+        "undimensioned member sections with justification"
+      ],
+      "negative_controls": [
+        "wrong wall thickness",
+        "zero density",
+        "density present but zero gravity",
+        "rigid support substitution"
+      ],
+      "implementation": "pending"
+    },
+    {
+      "id": "source_geometry_and_topology",
+      "sources": [
+        "benchmark_model_spec_en.md#1-2",
+        "figure_2_3_excavation_zone_plan.png",
+        "figure_2_4_2_5_support_layout_and_section.png",
+        "figure_2_6_monitoring_layout.png",
+        "figure_3_1_plaxis_model_geometry.png",
+        "figure_3_2_mesh_layout.png"
+      ],
+      "kind": "source_interpretation_review",
+      "checks": [
+        "Irregular plan, approximate dimensions and diagonal member connectivity",
+        "Four outer brace levels, one inner level, distinct ring-beam event",
+        "Absolute elevations versus depth datum; distinguish wall top and toe",
+        "Declared inner base -15.10 m and inner wall toe -21.60 m give fixed 6.50 m embedment across all cases"
+      ],
+      "open_choices": [
+        "global placement and orientation",
+        "drawing reconstruction within source resolution"
+      ],
+      "negative_controls": [
+        "regular grid substituted for diagonal topology",
+        "fifth outer cross-pit brace layer",
+        "wall-top datum mistaken for depth datum"
+      ],
+      "implementation": "pending"
+    },
+    {
+      "id": "case_family",
+      "sources": [
+        "task_specific_brief_en.md",
+        "engineering_assumptions_en.md#5"
+      ],
+      "kind": "fixed_study_parameters",
+      "checks": [
+        "Five positions 0..4 m below inner top; beta .30 label with original depths, equivalent thickness .62 m",
+        "Fixed dimensioned inner embedment 6.50 m; n .40 is a rounded legacy label, not an exact-ratio constraint",
+        "Independent histories through final inner excavation",
+        "All other physical choices and monitoring interpretation unchanged"
+      ],
+      "open_choices": [],
+      "negative_controls": [
+        "sequential relocation of a loaded brace",
+        "different material or observations between cases",
+        "case omitted",
+        "inner toe altered by inventing an exact n denominator"
+      ],
+      "implementation": "pending"
+    },
+    {
+      "id": "construction_history",
+      "sources": [
+        "benchmark_model_spec_en.md#5",
+        "A_zone_structural_materials_en.md#A"
+      ],
+      "kind": "ordered_source_events",
+      "checks": [
+        "Replay all nine logical stages including their installation events",
+        "Substeps preserve all source water/excavation milestones and the declared Stage 7/8/9 ordering correction",
+        "Inner wall and crown/ring beam precede the single inner support installed at its exposed case level before further excavation",
+        "Excavation removes loads and stiffness; prior stress/force state survives",
+        "Stress-free installation does not suppress prior movement"
+      ],
+      "open_choices": [
+        "subdivision and convergence controls"
+      ],
+      "negative_controls": [
+        "missing stage",
+        "displacement/state reset",
+        "preinstalled inner support",
+        "excavated elements retain body load"
+      ],
+      "implementation": "pending"
+    },
+    {
+      "id": "groundwater",
+      "sources": [
+        "benchmark_model_spec_en.md#5",
+        "engineering_assumptions_en.md#4"
+      ],
+      "kind": "fixed_levels_open_spatial_treatment",
+      "checks": [
+        "Source initial-water rule and staged water levels in consistent datum",
+        "Actual pore pressures, effective stresses and hydraulic boundary treatment"
+      ],
+      "open_choices": [
+        "reasonable spatial dewatering model",
+        "intermediate substep levels consistent with milestones"
+      ],
+      "negative_controls": [
+        "ignored water update",
+        "invented 20 m formula required by grader",
+        "total/effective stress unit or sign mismatch"
+      ],
+      "implementation": "pending"
+    },
+    {
+      "id": "mesh_and_boundaries",
+      "sources": [
+        "benchmark_model_spec_en.md#3-4"
+      ],
+      "kind": "performance_requirement",
+      "checks": [
+        "Full 3D model and local refinement",
+        "Side-normal restraints, fully fixed bottom, free excavated faces",
+        "Sufficient domain and numerical resolution"
+      ],
+      "open_choices": [
+        "domain dimensions",
+        "mesh topology, element type, element count"
+      ],
+      "negative_controls": [
+        "2D/strip surrogate",
+        "near boundaries dominate response",
+        "inverted or disconnected elements"
+      ],
+      "implementation": "pending"
+    },
+    {
+      "id": "monitoring",
+      "sources": [
+        "benchmark_model_spec_en.md#7",
+        "figure_index_en.md",
+        "figure_2_6_monitoring_layout.png",
+        "task_specific_brief_en.md"
+      ],
+      "kind": "source_interpretation_review",
+      "checks": [
+        "Review all ten DBC stations and all ten CX outer-wall profiles before viewing results",
+        "Interpolate independent native results on source monitoring locations/profiles",
+        "End-of-Stage-1 baseline, positive downward DBC settlement, top-to-toe CX horizontal norm, mm units",
+        "Retain complete native fields for consistency inspection"
+      ],
+      "open_choices": [
+        "mesh-independent interpolation supported by native element shape functions"
+      ],
+      "negative_controls": [
+        "all-node maxima substituted",
+        "selected low-response subset",
+        "inner-wall profile substituted",
+        "fake report/field with matching extrema"
+      ],
+      "implementation": "pending"
+    },
+    {
+      "id": "replay_and_delivery",
+      "sources": [
+        "task_specific_brief_en.md",
+        "engineering_assumptions_en.md#6-7"
+      ],
+      "kind": "trusted_computation",
+      "checks": [
+        "Evaluator-owned native loader, process allowlist and stage runner",
+        "Five complete independently recomputed histories from frozen candidate inputs",
+        "Field/profile agreement before scalar/percentage/minimum comparison",
+        "Original report, native project, table, images and memo"
+      ],
+      "open_choices": [
+        "source organization",
+        "figure style",
+        "justified recommendation"
+      ],
+      "negative_controls": [
+        "forged compliant flag",
+        "invented CSV/NPZ",
+        "execution of candidate callbacks",
+        "hidden answer matched despite noncompliant model"
+      ],
+      "implementation": "pending"
+    }
+  ]
+}

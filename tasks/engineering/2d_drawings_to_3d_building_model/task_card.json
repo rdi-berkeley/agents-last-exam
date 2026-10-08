@@ -1,18 +1,17 @@
 {
   "taskId": "engineering/2d_drawings_to_3d_building_model",
   "title": "Betonwerk Katzenberger 3D Model",
-  "summary": "Build the Betonwerk Katzenberger workshop Hall and residential Tower in Rhino 8 from the supplied drawings, snapshot, and positioning anchor; export model.obj plus model.3dm.",
+  "summary": "Build the Betonwerk Katzenberger workshop Hall and residential Tower in Blender from the original drawings, snapshot and positioning anchor; export consistent model.obj and model.blend files.",
   "category": "engineering",
   "software": [
-    "Rhino 8"
+    "Blender 4.5"
   ],
-  "taskPrompt": "You are a BIM modeler using Rhino 8 to build the Betonwerk Katzenberger building in 3D, given the architectural drawings of the project.\n\nThe building is a Bavarian concrete-plant complex with two main parts:\n  - a wide, low workshop Hall housing three prefabricated workshop modules\n  - a tall narrow residential Tower (Hostel) attached at one end\n\n## Inputs\nAll input materials are under:\n  E:\\agenthle\\engineering\\2d_drawings_to_3d_building_model\\base\\input\n\nRequired files:\n- README.md — natural-language task brief (open this first)\n- output_contract.json — machine-readable spec (file names, formats, coordinate convention, required geometry components)\n- architectural_drawings/*.pdf — 6 drawings (Hall plans + Tower plan + Hostel elevation/section + Diagram)\n- 3D Snapshot.png — rendered preview of the finished building\n- base_model.obj + base_model.3dm — footprint-only positioning anchor (an 11-vertex convex hull at z=0 + axis markers + a north arrow)\n\n## Software\nOpen Rhino 8 via:\n  E:\\agenthle\\engineering\\2d_drawings_to_3d_building_model\\base\\software\\Rhino 8.lnk\n\n## What You Must Do\n1. Read README.md and output_contract.json.\n2. Open the PDFs and base_model.3dm in Rhino. The base_model defines the world coordinate frame — do not move, rotate, or rescale.\n3. Build the geometry: Hall + Tower volumes, north Hall solid wall + metal cladding, south Hall open structural framework, Tower glass curtain wall, three workshop modules inside the Hall, mezzanine slabs, and the Hall ceiling at ~11.82 m.\n4. Export the final geometry to:\n   - E:\\agenthle\\engineering\\2d_drawings_to_3d_building_model\\base\\output\\model.obj (Wavefront OBJ ASCII)\n   - E:\\agenthle\\engineering\\2d_drawings_to_3d_building_model\\base\\output\\model.3dm (Rhino 5.0+ native)\n   Both files must contain the same geometry.\n\n## Hard Constraints\n- Do NOT output any `.dwg` file (evaluator cannot read DWG; forbidden).\n- Units = millimeters. Origin from base_model. +X east, +Y north, +Z up.\n",
+  "taskPrompt": "Reconstruct the complete Betonwerk Katzenberger workshop Hall and residential Tower from the six supplied architectural drawings, 3D snapshot and base_model.obj positioning anchor. Read input/README.md and input/output_contract.json. Use Blender 4.5 on Linux through the GUI or scripts. Preserve millimeter dimensions, axis orientation and ground-floor elevation z=0. A common X/Y translation is allowed; relative building-component placement is scored, not absolute horizontal origin. Model the Hall, its mezzanines and three workshop modules, the solid north wall and open south structure, and the Tower with floor slabs, curtain-wall mullions and circulation core. Export output/model.obj and output/model.blend with the same evaluated geometry within 1 mm, including modifiers and instances. Pack linked geometry. Mesh organization and triangulation are unrestricted. Do not submit DWG files. Evaluation renders 14 architectural views on a CPU and scores eight equally weighted visual criteria disclosed in the input README; materials and textures are not scored.",
   "agentMustDo": [
-    "Read input/README.md and input/output_contract.json to understand the brief, the required filenames, and the coordinate convention.",
-    "Open Rhino 8 via the staged software/Rhino 8.lnk shortcut.",
-    "Open the 6 PDF drawings in input/architectural_drawings/ and the base_model.3dm to study form and lock the world coordinate frame.",
-    "Build the Hall + Tower geometry (mass, mezzanines, modules, glass curtain wall, north solid wall + cladding, south open structural framework) without moving the origin.",
-    "Export the result to output/model.obj (Wavefront OBJ ASCII, >=1000 vertices) and output/model.3dm (Rhino native). Do not produce any .dwg output."
+    "Read the input README, output contract and six original PDF drawings.",
+    "Import the OBJ anchor into Blender with +Y forward and +Z up, retaining millimeter dimensions.",
+    "Build the complete Hall and Tower, including the specified facades, structure, workshop modules and floors.",
+    "Export matching model.obj and model.blend; ensure the native file reopens independently."
   ],
   "inputFiles": [
     {
@@ -25,13 +24,13 @@
       "name": "output_contract.json",
       "format": "JSON",
       "path": "input/output_contract.json",
-      "description": "Machine-readable spec — required filenames, magic-byte gates, coordinate convention, units, forbidden patterns, and the list of evaluator view names."
+      "description": "Required deliverables, coordinate convention, geometry-consistency tolerance and the eight visual scoring criteria."
     },
     {
       "name": "3D Snapshot.png",
       "format": "PNG",
       "path": "input/3D Snapshot.png",
-      "description": "Rendered preview of the finished reference building — use as a form-check reference."
+      "description": "Rendered preview of the finished reference building \u2014 use as a form-check reference."
     },
     {
       "name": "architectural_drawings/Diagram.pdf",
@@ -74,12 +73,6 @@
       "format": "Wavefront OBJ",
       "path": "input/base_model.obj",
       "description": "Positioning anchor only: 11-vertex convex-hull footprint at z=0 + three orthogonal axis lines + north-arrow chevron. Does NOT contain walls, slabs, or any architectural detail."
-    },
-    {
-      "name": "base_model.3dm",
-      "format": "Rhino 3DM",
-      "path": "input/base_model.3dm",
-      "description": "Same positioning anchor in Rhino native format, with three named layers (Site_Footprint, Reference_Axes, North_Arrow)."
     }
   ],
   "referenceFiles": [
@@ -87,13 +80,13 @@
       "name": "eval_config.json",
       "format": "JSON",
       "path": "reference/eval_config.json",
-      "description": "Per-instance LLM-judge configuration — 8 binary YES/NO questions, pass threshold 0.5, render units mm, source up-axis Z, list of 14 view names."
+      "description": "Per-instance LLM-judge configuration \u2014 8 binary YES/NO questions, pass threshold 0.5, render units mm, source up-axis Z, list of 14 view names."
     },
     {
-      "name": "reference_renders_v1/*.png + _meta.json",
+      "name": "reference_renders_linux/*.png",
       "format": "PNG + JSON",
-      "path": "reference/reference_renders_v1/",
-      "description": "14 frozen 2048x2048 reference renders (4 plans + 4 elevations + 2 sections + 4 corner axonometrics) plus a metadata JSON recording render parameters and detected floor elevations."
+      "path": "reference/reference_renders_linux/",
+      "description": "Four plans, four elevations, two sections and four axonometrics, regenerated from the original reference OBJ using the same Linux CPU renderer as submissions."
     },
     {
       "name": "reference_obj/3D Model.{obj,3dm,dwg}",
@@ -104,28 +97,17 @@
   ],
   "evaluation": {
     "type": "image_only_vlm_judge",
-    "description": "Evaluator renders 14 canonical views of the agent's model.obj on the VM with Blender headless (1024px / 32 samples, matching the frozen reference render settings), pulls only the rendered PNGs back to the orchestrator, then submits each of 8 binary YES/NO judge questions to the configured multimodal LLM with all 14 reference/candidate image pairs as context (each image downsampled to <=1024px so the per-request payload stays under the 50 MB API cap). Final score = yes_count / question_count.",
-    "passThreshold": 0.5,
-    "fixtureScores": {
-      "output_test_pos": "1.0 (8/8 YES — the byte-identical reference OBJ as the candidate; reference and candidate are rendered by the identical current render_human_views.py at 1024/32, so a perfect submission reproduces every view exactly)",
-      "output_test_neg": "0.0 (0/8 YES — an up-axis-flattened OBJ producing degenerate silhouettes)"
-    },
+    "description": "Validate that the saved BLEND and submitted OBJ contain equivalent evaluated geometry within 1 mm, render all 14 views using Blender Cycles on a CPU, then score the eight original architectural criteria equally. Reference renders must use the same renderer. Missing or invalid required output, inconsistent geometry and forbidden DWG output score zero.",
     "hardGates": [
-      "output/model.obj missing or 0 bytes -> 0.0",
-      "output/model.obj fewer than 1000 vertices -> 0.0",
-      "output/model.3dm missing or 0 bytes -> 0.0",
-      "output/model.3dm missing the Rhino magic header -> 0.0",
-      "Any *.dwg file present under output/ -> 0.0",
-      "Blender headless renderer fails on the agent's mesh -> 0.0"
+      "Both model.obj and model.blend must be readable and contain finite nonempty polygon surfaces.",
+      "Bidirectional sampled native/OBJ surface distances must not exceed 1 mm.",
+      "No DWG output."
     ]
   },
   "vm": {
-    "snapshot": "gpu-license",
-    "machineType": "g2-standard-16",
-    "project": "agenthle-488519",
-    "zone": "us-east1-c",
-    "name": "agenthle-dev-gpu-licensed",
-    "osType": "windows"
+    "snapshot": "cpu-free-ubuntu",
+    "machineType": "c4-standard-4",
+    "osType": "linux"
   },
   "taxonomy": {
     "domain_id": "1",
@@ -149,6 +131,6 @@
     }
   },
   "requiredSystemPackages": [
-    "rhino-8"
+    "blender"
   ]
 }

@@ -1,10 +1,3 @@
 # Licensed tasks: in full.txt but not in unlicensed.txt
-# Count: 7
-
-engineering/2d_drawings_to_3d_building_model
-engineering/cailian_road_highway_alignment_2
-engineering/gcode
-engineering/inner_support_elevation_optimization
-engineering/mold-flow
-visual_media/music_transcription
-visual_media/project_migration
+# Count: 0
+# The 2026-10-08 v1.1 rerelease converts six tasks to OSS and removes mold-flow.

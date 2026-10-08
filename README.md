@@ -42,29 +42,42 @@ subdomains across 13 industry clusters, with reference to O\*NET / SOC 2018
 </table>
 
 This repository is the **open evaluation framework**: the `ale_run` toolkit that
-provisions sandboxes, runs agents, and grades them, plus around **150 public
-tasks** across all 55 subdomains and reference integrations for several agent
-harnesses.
+provisions sandboxes, runs agents, and grades them, plus task implementations
+across all 55 subdomains and reference integrations for several agent harnesses.
 
 ---
 
 ## Quick start
 
 **ALE v1.1:** use the matching task code, versioned images and pinned data
-described in the [release guide](docs/releases/v1.1.md). The selected benchmark
-still contains 152 tasks. See the [task update inventory](docs/releases/v1.1-tasks.md)
-and [asset manifest](releases/v1.1/assets.json) for scope and exact versions.
+described in the [release guide](docs/releases/v1.1.md). The 2026-10-08 rerelease
+selects **151 tasks**: six formerly licensed tasks now use open-source Linux
+workflows with similar business goals. Injection molding is removed because
+the complete four-cavity fill/pack/cool/demold workflow has not been validated
+with open-source software at the original scope.
+See the [task update inventory](docs/releases/v1.1-tasks.md) and
+[asset manifest](releases/v1.1/assets.json) for scope and exact versions.
 
 Choose where ALE should create or attach each task sandbox:
 
 | Provider | Best for | Guide |
 |---|---|---|
 | **Google Cloud VMs** | Elastic batch runs on published Ubuntu, Windows, and GPU images | [Cloud quick start](docs/quickstart.md) |
-| **AWS (EC2 + S3)** | Elastic batch runs on the published Ubuntu and Windows images | [AWS setup guide](https://agents-last-exam.org/docs?p=pages/aws.html) |
-| **Alibaba Cloud (ECS + OSS)** | Elastic batch runs on the published Ubuntu and Windows images | [Alibaba setup guide](https://agents-last-exam.org/docs?p=pages/aliyun.html) |
+| **AWS (EC2 + S3)** | Existing CPU profiles; verify updated images for the six conversions | [AWS setup guide](https://agents-last-exam.org/docs?p=pages/aws.html) |
+| **Alibaba Cloud (ECS + OSS)** | Existing CPU profiles; verify updated images for the six conversions | [Alibaba setup guide](https://agents-last-exam.org/docs?p=pages/aliyun.html) |
 | **QEMU/KVM VMs** | CPU-compatible Ubuntu and Windows tasks on a Linux host with KVM | [QEMU/KVM guide](https://agents-last-exam.org/docs?p=pages/local.html) |
 | **Local containers (Docker)** | The lighter supported Ubuntu subset | [Local container guide](https://agents-last-exam.org/docs?p=pages/local-docker.html) |
 | **Existing sandbox** | Debugging against a CUA-enabled machine you already operate | [Static provider guide](https://agents-last-exam.org/docs?p=pages/static.html) |
+
+Docker supports **102 tasks**: the historical 99-task subset plus Blender
+building, MuseScore transcription and Ardour migration, each checked for native
+output in the new container. The 99 paired VM/Docker reviews remain September
+evidence; no full 102-task rerun is claimed. G-code, Road and inner-support
+require VM facilities unavailable in the default container; use QEMU for them.
+
+The rerelease supplies a new Linux image. Windows image bytes and cloud IDs are
+retained after verifying its unchanged 40-task data projection. Use the
+matching release profiles and immutable asset pins.
 
 Google Cloud is the recommended production path. The quick start covers the
 one-time project setup, image copy, credentials, demo run, and grading flow.

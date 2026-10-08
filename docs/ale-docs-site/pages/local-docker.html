@@ -22,7 +22,11 @@
       <div class="note-title">Supported Linux subset</div>
       Use <code>configs/environments/docker.yaml</code> with
       <code>selected_tasks/docker_support.txt</code>. The list currently
-      contains 99 tasks.
+      contains 102 supported tasks for the 2026-10-08 v1.1 rerelease. The three
+      added Blender building, MuseScore transcription and Ardour migration
+      workflows pass native output checks in the published container. Use the
+      matching runtime digest and data pins. The paired VM/Docker review covers
+      the historical 99-task subset; no full 102-task rerun is claimed.
     </div>
 
     <h2>What runs where</h2>
@@ -46,7 +50,7 @@
     <h2>Host requirements</h2>
     <ul>
       <li>Docker capable of running Linux amd64 containers. The supported profile targets rootless Docker on a Linux host.</li>
-      <li>Persistent disk space for the runtime (about 86 GB uncompressed), the 49 GB data archive, its extracted contents and per-run files.</li>
+      <li>Persistent disk space for the pinned runtime, data archive, its extracted contents and per-run files.</li>
       <li>Enough CPU and memory for each concurrent task container.</li>
       <li>Approved access to the gated task-data dataset on Hugging Face.</li>
     </ul>
@@ -78,8 +82,9 @@ scripts/fetch_task_data.sh --revision "$REVISION" --sha256 "$SHA256"</code></pre
 tasks: selected_tasks/docker_support.txt</code></pre>
     <p>
       The environment uses <code>task_data_source: local:task-data-v1.1</code>.
-      Set <code>output_path: local</code> to collect output (the default is null).
-      Local task data and collected output both use
+      Keep <code>output_path: null</code> for benchmark runs and inspect artifacts
+      in retained sandboxes. Set <code>output_path: local</code> only when bulk
+      output collection is needed. Local task data and collected output use
       host-side <code>docker cp</code>, avoiding per-file transfer through the
       CUA API.
     </p>
@@ -106,8 +111,9 @@ tasks: selected_tasks/docker_support.txt</code></pre>
     <ul>
       <li>Linux tasks only. Windows and GPU snapshots are not mapped.</li>
       <li>The sandbox shares the host kernel and is not VM-isolated.</li>
-      <li>Six Linux tasks are excluded because they require another container runtime inside the sandbox: four use Docker, and two use Apptainer or Singularity GUI bundles.</li>
-      <li>The shipped profile intentionally remains a simple rootless-Docker path. Use the <a href="/pages/local.html">QEMU/KVM VM provider</a> for those nested-runtime tasks so Docker, Apptainer, or Singularity runs inside a complete Ubuntu guest.</li>
+      <li>Nine Linux tasks are excluded: four require nested Docker, two require Apptainer or Singularity GUI bundles, and three require namespace or systemd/cgroup facilities unavailable in the default profile.</li>
+      <li>G-code requires bubblewrap PID/network namespaces, which the default container denies. Road and inner-support require systemd supervision, while the entrypoint runs the CUA server as PID 1. Inner-support also requires writable delegated cgroups; the container mounts cgroups read-only. AppImage extraction fixes only FreeCAD launching, not these evaluator requirements.</li>
+      <li>Use the <a href="/pages/local.html">QEMU/KVM VM provider</a> for these excluded tasks, preserving their isolation and resource limits.</li>
       <li>Opt-in privileged DinD hooks remain available for custom development setups, but they are not part of the supported default task list and can add substantial I/O at high concurrency.</li>
     </ul>
 

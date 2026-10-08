@@ -1,0 +1,9 @@
+# Tasks in full.txt excluded from the local QEMU CPU allowlist.
+# These retain GPU or application requirements described in cpu_unlicensed.txt.
+# Total: 5 tasks.
+
+engineering/humanoid_velocity_tracking_policy
+visual_media/butterfly_flap_animation
+visual_media/chroma_key_from_reference
+visual_media/compress_3dgs_scene_ply
+visual_media/skeletal_animation_reproduction

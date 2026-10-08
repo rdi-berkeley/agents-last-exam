@@ -1,13 +1,13 @@
 # Public CPU-runnable task allowlist — the unlicensed tasks that run without a
 # GPU, shared by every CPU-only environment (QEMU, Alibaba Cloud, AWS).
-# All 140 use the cpu-free / cpu-free-ubuntu snapshots.
+# All 146 use the cpu-free / cpu-free-ubuntu snapshots.
 # Excludes all licensed tasks and all tasks that require GPU execution.
 # butterfly_flap_animation is also excluded because the image lacks After
 # Effects. skeletal_animation_reproduction remains excluded pending a positive
 # end-to-end CPU evaluation.
 # GPU-required exclusions: humanoid_velocity_tracking_policy,
 # compress_3dgs_scene_ply, and chroma_key_from_reference.
-# Total: 140 tasks.
+# Total: 146 tasks.
 
 agriculture_env/crop_rotation_d02
 agriculture_env/ndvi_zonal_statistics_d02
@@ -59,11 +59,15 @@ education_info/homework_grading_numerical_pdes_instance_02
 education_info/marc_remediation_folio_overlay
 education_info/moodle_gradebook_closeout_reconciliation
 education_info/yi_manuscript_translation_1
+engineering/2d_drawings_to_3d_building_model
 engineering/Analog_Active
 engineering/abb_irb6700_asset_to_urdf_instance_1
 engineering/aerospace_low_thrust_trajectory
+engineering/cailian_road_highway_alignment_2
 engineering/chisel_verilog_alignment_seq_1
+engineering/gcode
 engineering/humanoid_wbc_policy_evaluation
+engineering/inner_support_elevation_optimization
 engineering/kicad_navswitch_library_integration_release_002
 engineering/mpc_control_building_v1
 engineering/openroad_sky130_ibex_pnr_signoff
@@ -147,5 +151,7 @@ visual_media/atlas_outpost_graybox_navigation
 visual_media/blender_character_reconstruction_from_multiview_01
 visual_media/human_mesh_animation_reproduction
 visual_media/inkscape_cultural_poster_design
+visual_media/music_transcription
+visual_media/project_migration
 visual_media/uv_reproduction
 visual_media/video_storyboard_001

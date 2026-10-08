@@ -377,17 +377,25 @@ async def run_one_unit(
                     duration_s=None,
                 )
             finally:
-                if tail_task is not None:
-                    stop_event.set()
-                    try:
-                        reconcile_err = await asyncio.wait_for(tail_task, timeout=120)
-                    except asyncio.TimeoutError:
-                        tail_task.cancel()
-                        reconcile_err = "tail reconcile wait timed out"
-                    if reconcile_err:
-                        writer.emit_event(
-                            "incremental_pull_final_failed", error=reconcile_err,
-                        )
+                try:
+                    env.set_phase("agent_stop")
+                    await executor.stop_deployer()
+                    writer.emit_event("agent_stopped")
+                except BaseException as stop_exc:
+                    writer.emit_event("agent_stop_failed", error=str(stop_exc))
+                    raise
+                finally:
+                    if tail_task is not None:
+                        stop_event.set()
+                        try:
+                            reconcile_err = await asyncio.wait_for(tail_task, timeout=120)
+                        except asyncio.TimeoutError:
+                            tail_task.cancel()
+                            reconcile_err = "tail reconcile wait timed out"
+                        if reconcile_err:
+                            writer.emit_event(
+                                "incremental_pull_final_failed", error=reconcile_err,
+                            )
             writer.emit_event(
                 "agent_finished",
                 status=run_result.status,

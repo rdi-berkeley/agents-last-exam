@@ -1,0 +1,17 @@
+from pathlib import Path
+import os
+import sys
+
+import FreeCAD
+
+sys.path.insert(0, os.environ["CAILIAN_SOFTWARE"])
+from road_compat import export_metrics
+
+document = FreeCAD.ActiveDocument
+alignments = [obj for obj in document.Objects if getattr(getattr(obj, "Proxy", None), "Type", None) == "Road::Alignment"]
+if len(alignments) != 1:
+    raise ValueError("Keep one submitted alignment in the document")
+document.recompute()
+destination = Path(document.FileName).parent / "alignment_metrics.tsv"
+export_metrics(alignments[0], destination)
+FreeCAD.Console.PrintMessage(f"Exported {destination}\n")

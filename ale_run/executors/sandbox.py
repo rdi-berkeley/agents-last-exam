@@ -33,7 +33,8 @@ import json
 import logging
 import shlex
 import time
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -93,6 +94,8 @@ _LIVENESS_REPROBE_S = 5.0
 _LIVENESS_TRANSPORT_GRACE_S = 10 * 60.0
 _PID_WAIT_S = 4.5            # how long to wait for the launcher to write the PID file
 _PID_WAIT_TICK_S = 0.3
+_STOP_TIMEOUT_S = 60.0
+_STOP_POLL_S = 0.2
 
 # Incremental tail tuning
 _TAIL_INTERVAL_S = 60.0
@@ -121,8 +124,25 @@ class SandboxExecutor(BaseExecutor):
     a detached subprocess; host polls until done.marker."""
 
     type: ClassVar[str] = "sandbox"
+    _run_token: str = field(default_factory=lambda: uuid.uuid4().hex, init=False)
+    _spawn_attempted: bool = field(default=False, init=False)
+    _stop_task: asyncio.Task | None = field(default=None, init=False, repr=False)
 
     async def run_deployer(
+        self,
+        *,
+        deployer_cls: type["BaseAgentDeployer"],
+        prompt: str,
+        timeout_s: float,
+    ) -> "AgentRunResult":
+        try:
+            return await self._run_deployer(
+                deployer_cls=deployer_cls, prompt=prompt, timeout_s=timeout_s,
+            )
+        finally:
+            await self.stop_deployer()
+
+    async def _run_deployer(
         self,
         *,
         deployer_cls: type["BaseAgentDeployer"],
@@ -161,7 +181,10 @@ class SandboxExecutor(BaseExecutor):
         await sb.mkdir(self.work_dir)
 
         # 3. Reset stale state from any prior attempt (best-effort)
-        await sb.rm([pid_file, result_path, done_marker, entry_log, secrets_path])
+        await sb.rm([
+            pid_file, result_path, done_marker, entry_log, secrets_path,
+            f"{wd}{sep}_worker_result.json",
+        ])
 
         # 4. Write spec.json into the sandbox's work_dir.
         #    Secrets (api keys etc.) are deliberately KEPT OUT of the spec —
@@ -180,6 +203,7 @@ class SandboxExecutor(BaseExecutor):
             "secrets_file": SECRETS_FILE,
             "prompt": prompt,
             "timeout_s": float(timeout_s),
+            "run_token": self._run_token,
         }
         await sb.write_file(spec_path, json.dumps(spec, indent=2))
 
@@ -211,6 +235,7 @@ class SandboxExecutor(BaseExecutor):
                 f'powershell -NoProfile -ExecutionPolicy Bypass -File '
                 f'"{launcher_path}"'
             )
+        self._spawn_attempted = True
         spawn_res = await sb.run_command(spawn_cmd, timeout=60)
         # The launcher backgrounds the entry via setsid+disown and returns in
         # milliseconds, so a slow cua-server can drop the spawn RPC's SSE
@@ -354,7 +379,7 @@ class SandboxExecutor(BaseExecutor):
             logger.warning(
                 "sandbox: wall budget %.0fs exceeded — killing pid=%s", timeout_s, pid,
             )
-            await self._kill(pid)
+            await self.stop_deployer()
             entry_tail = await self._tail_log(entry_log)
             return AgentRunResult(
                 status="timeout",
@@ -543,27 +568,51 @@ class SandboxExecutor(BaseExecutor):
             await asyncio.sleep(_PID_WAIT_TICK_S)
         return None
 
-    async def _kill(self, pid: int) -> None:
-        """TERM + KILL the in-sandbox pid; idempotent."""
-        sb = self.sandbox
+    async def stop_deployer(self) -> None:
+        """Wait for the guest supervisor to confirm its process tree is empty."""
+        if not self._spawn_attempted:
+            return
+        if self._stop_task is None:
+            self._stop_task = asyncio.create_task(
+                asyncio.wait_for(self._stop_and_verify(), timeout=_STOP_TIMEOUT_S),
+            )
+        cancelled = False
+        while not self._stop_task.done():
+            try:
+                await asyncio.shield(self._stop_task)
+            except asyncio.CancelledError:
+                cancelled = True
+            except Exception:
+                break
         try:
-            if sb.is_linux:
-                await sb.run_command(
-                    f"kill -TERM {pid} 2>/dev/null || true", timeout=30,
-                )
-                await asyncio.sleep(2)
-                await sb.run_command(
-                    f"kill -KILL {pid} 2>/dev/null || true", timeout=30,
-                )
-            else:
-                await sb.run_command(
-                    'powershell -NoProfile -Command "'
-                    f"Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue"
-                    '"',
-                    timeout=30,
-                )
-        except Exception as e:                                      # noqa: BLE001
-            logger.debug("_kill pid=%s failed: %s", pid, e)
+            self._stop_task.result()
+        except Exception as exc:
+            raise RuntimeError("sandbox solver termination unconfirmed; reference blocked") from exc
+        if cancelled:
+            raise asyncio.CancelledError
+
+    async def _stop_and_verify(self) -> None:
+        sep = "/" if self.sandbox.is_linux else "\\"
+        work_dir = self.work_dir.rstrip(sep)
+        stop_path = f"{work_dir}{sep}_stop.request"
+        stopped_path = f"{work_dir}{sep}_stopped.json"
+        requested = False
+        while True:
+            try:
+                if not requested:
+                    await self.sandbox.write_file(stop_path, self._run_token)
+                    requested = True
+                raw = await self.sandbox.read_text(stopped_path)
+                report = json.loads(raw)
+            except (OSError, RuntimeError, ValueError):
+                await asyncio.sleep(_STOP_POLL_S)
+                continue
+            if not isinstance(report, dict) or report.get("run_token") != self._run_token:
+                await asyncio.sleep(_STOP_POLL_S)
+                continue
+            if report.get("stopped") is not True:
+                raise RuntimeError(f"sandbox process cleanup failed: {report.get('error')}")
+            return
 
     async def _tail_log(self, entry_log: str, max_bytes: int = 1500) -> str:
         """Tail the in-sandbox entry log for diagnostic messages.

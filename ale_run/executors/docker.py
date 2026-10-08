@@ -1,6 +1,6 @@
 """DockerExecutor — deployer runs in a fresh container per unit.
 
-Per-unit ``docker run --rm`` with:
+Per-unit ``docker create --rm`` followed by ``docker start --attach``, with:
 
 * ``-v <host_work>:/work``           — work_dir is bind-mounted; reads/
                                        writes go straight to host fs
@@ -104,6 +104,10 @@ class DockerExecutor(BaseExecutor):
     extra_run_args: list[str] = field(default_factory=list)
     """Extra args spliced into the ``docker run`` command (memory limits,
     GPU pass-through, etc.). Free-form — operator's responsibility."""
+    _container_name: str | None = field(default=None, init=False)
+    _create_task: asyncio.Task | None = field(default=None, init=False, repr=False)
+    _start_task: asyncio.Task | None = field(default=None, init=False, repr=False)
+    _stop_task: asyncio.Task | None = field(default=None, init=False, repr=False)
 
     async def run_deployer(
         self,
@@ -182,14 +186,11 @@ class DockerExecutor(BaseExecutor):
                 timeout_s=timeout_s,
             )
         finally:
-            # Remove the env-file tempdir and, defensively, the bind-mounted
-            # secrets sidecar in case the container died before the entry
-            # could read+delete it (so no key reaches the host log dir).
-            shutil.rmtree(env_tmp_dir, ignore_errors=True)
             try:
-                (host_work / SECRETS_FILE).unlink()
-            except OSError:
-                pass
+                await self.stop_deployer()
+            finally:
+                shutil.rmtree(env_tmp_dir, ignore_errors=True)
+                (host_work / SECRETS_FILE).unlink(missing_ok=True)
 
     async def _run_container(
         self,
@@ -203,9 +204,10 @@ class DockerExecutor(BaseExecutor):
 
         # 3. docker run argv
         container_name = f"ale-{deployer_cls.__name__.lower()}-{uuid.uuid4().hex[:8]}"
+        self._container_name = container_name
         host_repo = _host_repo_root()
         docker_argv = [
-            "docker", "run", "--rm",
+            "docker", "create", "--rm",
             "--name", container_name,
             "--network", "host",
             "-v", f"{host_work}:/work:rw",
@@ -225,32 +227,28 @@ class DockerExecutor(BaseExecutor):
         t0 = time.monotonic()
         wall = timeout_s + _DOCKER_SLACK_S
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *docker_argv,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            self._create_task = asyncio.create_task(asyncio.to_thread(
+                subprocess.run, docker_argv, capture_output=True, text=True, timeout=60,
+            ))
+            created = await asyncio.shield(self._create_task)
+            if created.returncode != 0:
+                raise RuntimeError(f"docker create failed: {created.stderr}")
+            self._start_task = asyncio.create_task(asyncio.create_subprocess_exec(
+                "docker", "start", "--attach", container_name,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            ))
+            proc = await asyncio.shield(self._start_task)
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=wall,
-                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=wall)
             except asyncio.TimeoutError:
-                logger.warning("docker: %s wall budget %.0fs exceeded — killing",
-                               container_name, wall)
-                await asyncio.to_thread(
-                    subprocess.run,
-                    ["docker", "rm", "-f", container_name],
-                    capture_output=True,
-                )
+                await self.stop_deployer()
                 return AgentRunResult(
-                    status="timeout",
-                    duration_s=time.monotonic() - t0,
+                    status="timeout", duration_s=time.monotonic() - t0,
                     error=f"docker wall budget {wall:.0f}s exceeded",
                 )
         except Exception as e:                                     # noqa: BLE001
             return AgentRunResult(
-                status="failed",
-                duration_s=time.monotonic() - t0,
+                status="failed", duration_s=time.monotonic() - t0,
                 error=f"docker run transport: {type(e).__name__}: {e}",
             )
 
@@ -296,6 +294,58 @@ class DockerExecutor(BaseExecutor):
             exit_code=out.get("exit_code"),
             duration_s=out.get("duration_s") or duration_s,
         )
+
+    async def stop_deployer(self) -> None:
+        if self._container_name is None:
+            return
+        if self._stop_task is None:
+            self._stop_task = asyncio.create_task(
+                asyncio.wait_for(self._stop_and_verify(), timeout=90),
+            )
+        cancelled = False
+        while not self._stop_task.done():
+            try:
+                await asyncio.shield(self._stop_task)
+            except asyncio.CancelledError:
+                cancelled = True
+            except Exception:
+                break
+        try:
+            self._stop_task.result()
+        except Exception as exc:
+            raise RuntimeError("docker solver termination unconfirmed; reference blocked") from exc
+        if cancelled:
+            raise asyncio.CancelledError
+
+    async def _stop_and_verify(self) -> None:
+        creation_error = None
+        if self._create_task is not None:
+            try:
+                await asyncio.shield(self._create_task)
+            except Exception as exc:
+                creation_error = exc
+        process = None
+        if self._start_task is not None:
+            try:
+                process = await asyncio.shield(self._start_task)
+            except Exception:
+                logger.exception("docker attach did not start; removing created container")
+        await asyncio.to_thread(
+            subprocess.run, ["docker", "rm", "-f", self._container_name],
+            capture_output=True, text=True, timeout=20,
+        )
+        inspected = await asyncio.to_thread(
+            subprocess.run,
+            ["docker", "container", "ls", "--all", "--quiet", "--no-trunc",
+             "--filter", f"name=^/{self._container_name}$"],
+            capture_output=True, text=True, timeout=20,
+        )
+        if inspected.returncode != 0 or inspected.stdout.strip():
+            raise RuntimeError(f"container removal unconfirmed: {inspected.stdout} {inspected.stderr}")
+        if process is not None:
+            await process.communicate()
+        if creation_error is not None:
+            raise RuntimeError("docker creation outcome unknown after removal attempt") from creation_error
 
     async def gather_dir(
         self, *, src: str, dst: Path,

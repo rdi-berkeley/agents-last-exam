@@ -24,8 +24,8 @@ def test_selected_task_lists_match_release(assets):
         tasks = [line.strip() for line in payload.decode().splitlines() if line.strip() and not line.lstrip().startswith("#")]
         assert hashlib.sha256(payload).hexdigest() == entry["sha256"]
         assert len(tasks) == entry["count"]
-    assert assets["selected_task_lists"]["selected_tasks/full.txt"]["count"] == 152
-    assert assets["selected_task_lists"]["selected_tasks/docker_support.txt"]["count"] == 99
+    assert assets["selected_task_lists"]["selected_tasks/full.txt"]["count"] == 151
+    assert assets["selected_task_lists"]["selected_tasks/docker_support.txt"]["count"] == 102
 
 
 @pytest.mark.parametrize("tag,platform", [("cpu-free-ubuntu", "linux"), ("cpu-free", "windows")])
@@ -70,5 +70,5 @@ def test_manifest_preserves_gates_and_has_no_private_paths(assets):
     assert "gcs_all" not in assets["task_data"]
     for forbidden in ("/home/allennie", "private-vm-transfer", "Bearer ", "api_key", "password"):
         assert forbidden not in text
-    assert assets["task_data"]["selected_tasks"] == 152
+    assert assets["task_data"]["selected_tasks"] == 151
     assert assets["task_data"]["public_reference_format"] == "header-encrypted reference.7z"

@@ -1,0 +1,355 @@
+{
+  "contract_id": "A-zone-source-clarification-20260929-draft",
+  "status": "unreleasable_pending_native_compliance_and_replay",
+  "authority": "Original notes and figures with the explicit new task decisions in adaptation_clarifications and corrected stage events below. These decisions control the identified ambiguities, not a recovered historical formula or a prescribed FE model.",
+  "adaptation_clarifications": {
+    "kind": "explicit_new_task_decisions_not_recovered_historical_definitions",
+    "original_source_manifest": "source_manifest.json",
+    "inner_wall_embedment": {
+      "controlling_source": "figure_2_4_2_5_support_layout_and_section.png",
+      "rule": "dimensioned_inner_base_and_bored_pile_toe_control_all_five_cases",
+      "inner_base_absolute_elevation_m": -15.1,
+      "inner_wall_toe_absolute_elevation_m": -21.6,
+      "embedment_below_inner_base_m": 6.5,
+      "toe_depth_below_depth_datum_m": 28.1,
+      "legacy_n_label": 0.4,
+      "legacy_n_role": "rounded_study_label_only_no_exact_ratio_constraint",
+      "recovered_n_denominator": null,
+      "historical_study_toe_proven": false
+    },
+    "inner_support_installation": {
+      "support_absolute_elevations_m": [-10.1, -11.1, -12.1, -13.1, -14.1],
+      "count_per_case": 1,
+      "requires_inner_wall_and_exposed_case_level": true,
+      "requires_equilibrium_before_further_excavation": true,
+      "position_0_installation": "stage_8_after_inner_wall_before_inner_digging",
+      "positions_1_to_4_installation": "stage_9_substeps_at_case_level_before_excavating_below_it",
+      "source_stage_7_event_reassigned": "inner_crown_ring_beam_in_stage_8_and_single_case_support_in_stage_8_or_9"
+    },
+    "monitoring": {
+      "scope": "all_drawn_DBC_stations_and_CX_outer_wall_profiles",
+      "ground_sampling": "DBC_stations_not_unspecified_continuous_transects",
+      "wall_profile_extent": "modeled_outer_wall_top_to_toe",
+      "vertical_axis": "upward_z",
+      "displacement_baseline": "equilibrated_end_of_stage_1_before_construction",
+      "settlement_formula": "max_i(max(0, -u_z(DBC_i)))",
+      "wall_movement_formula": "max_i,max_depth(sqrt(u_x(CX_i,depth)^2 + u_y(CX_i,depth)^2))",
+      "report_units": "mm",
+      "mapping_fixed_before_viewing_results": true,
+      "same_mapping_across_cases": true,
+      "sampling_convergence_required": true,
+      "construction_displacement_resets_allowed": false
+    }
+  },
+  "soil_source": {
+    "file": "benchmark_model_spec_en.md",
+    "section": "6. Soil profile and parameters"
+  },
+  "soil_columns": [
+    "id",
+    "thickness_m",
+    "gamma_kN_m3",
+    "c_kPa",
+    "phi_deg",
+    "K0",
+    "nu",
+    "Es_MPa"
+  ],
+  "soils": [
+    [
+      "1-3",
+      0.5,
+      18,
+      10,
+      13,
+      0.6,
+      0.38,
+      5
+    ],
+    [
+      "1-4",
+      1.74,
+      18.5,
+      15,
+      10,
+      0.58,
+      0.37,
+      4.52
+    ],
+    [
+      "2-1",
+      1.3,
+      18.9,
+      21.5,
+      15,
+      0.5,
+      0.32,
+      5.62
+    ],
+    [
+      "2-2",
+      2.7,
+      18.2,
+      10,
+      23,
+      0.43,
+      0.31,
+      7.43
+    ],
+    [
+      "2-3",
+      3,
+      17.7,
+      13,
+      11.5,
+      0.62,
+      0.38,
+      3.63
+    ],
+    [
+      "2-4",
+      1,
+      18.9,
+      21.5,
+      14.8,
+      0.53,
+      0.34,
+      4.85
+    ],
+    [
+      "3-1",
+      7.3,
+      19.2,
+      44.2,
+      19,
+      0.41,
+      0.29,
+      7.71
+    ],
+    [
+      "3-2",
+      2.2,
+      19,
+      33,
+      17.3,
+      0.44,
+      0.31,
+      6.09
+    ],
+    [
+      "3-3",
+      0.5,
+      19.6,
+      47.5,
+      19.2,
+      0.41,
+      0.3,
+      8.73
+    ],
+    [
+      "3-4",
+      2,
+      19.2,
+      27.5,
+      16.9,
+      0.46,
+      0.32,
+      6.4
+    ],
+    [
+      "3-5",
+      0.5,
+      19.9,
+      2.3,
+      31.2,
+      0.41,
+      0.29,
+      10.51
+    ],
+    [
+      "3-6",
+      0.5,
+      20,
+      1,
+      35,
+      0.33,
+      0.28,
+      46
+    ],
+    [
+      "4-1",
+      4,
+      20.5,
+      30,
+      25,
+      0.35,
+      0.26,
+      null
+    ],
+    [
+      "4-2",
+      11,
+      25,
+      400,
+      37,
+      0.25,
+      0.2,
+      null
+    ]
+  ],
+  "constitutive_model": "Mohr-Coulomb",
+  "unspecified_rock_Es": "Choose significantly stiffer than overlying soils; preserve the listed strength parameters.",
+  "geometry": {
+    "source": "benchmark_model_spec_en.md sections 1-2; task_specific_brief_en.md",
+    "approximate_outer_length_m": 115,
+    "approximate_outer_width_range_m": [
+      36,
+      89
+    ],
+    "approximate_inner_plan_size_m": [
+      92,
+      32
+    ],
+    "outer_excavation_depth_m": 16.6,
+    "inner_excavation_depth_m": 21.6,
+    "additional_inner_depth_m": 5,
+    "depth_ratio_beta": 0.3,
+    "inner_embedment_ratio_n": 0.4,
+    "outer_wall_thickness_m": 1,
+    "inner_equivalent_wall_thickness_m": 0.62,
+    "recommended_domain_dimensions_m": [
+      230,
+      185,
+      60
+    ],
+    "n_denominator": "Undefined in the original sources. The declared adaptation retains n only as a rounded legacy label and uses fixed dimensioned 6.50 m embedment; no denominator is inferred.",
+    "exact_plan_coordinates": null
+  },
+  "structures": {
+    "source": "A_zone_structural_materials_en.md sections A-B",
+    "concrete_grade": "C35",
+    "young_modulus_GPa": 30,
+    "poisson_ratio": 0.2,
+    "unit_weight_kN_m3": 25,
+    "outer_cross_pit_support_levels": 4,
+    "inner_support_levels": 1,
+    "inner_pile_diameter_mm": 800,
+    "inner_pile_spacing_mm": 1600,
+    "beam_sections": "Read dimensioned information from drawings; justify undimensioned choices.",
+    "stage_7_note": "Explicit ordering correction: construct the inner wall and crown/ring beam in Stage 8, then install the sole inner support at its exposed case level in Stage 8 or 9. No fifth outer brace or duplicated inner support."
+  },
+  "section_annotations": {
+    "source": "figure_2_4_2_5_support_layout_and_section.png",
+    "dimension_units": "mm",
+    "elevation_units": "m",
+    "wall_top_absolute_elevation_m": 7,
+    "outer_base_absolute_elevation_m": -10.1,
+    "inner_base_absolute_elevation_m": -15.1,
+    "outer_wall_toe_absolute_elevation_m": -26.5,
+    "outer_support_absolute_elevation_annotations_m": [
+      6.5,
+      0.7,
+      -3.3,
+      -6.6
+    ],
+    "drawn_inner_support_absolute_elevation_m": -10.5,
+    "drawn_inner_pile_toe_absolute_elevation_m": -21.6,
+    "inferred_depth_datum_absolute_elevation_m": 6.5,
+    "inference": "outer base + outer depth = inner base + inner depth = +6.5 m; annotations do not specify beam centroid placement."
+  },
+  "stages": [
+    {
+      "stage": 1,
+      "event": "initial_in_situ_stress"
+    },
+    {
+      "stage": 2,
+      "event": "construct_outer_wall"
+    },
+    {
+      "stage": 3,
+      "event": "construct_first_ring_beam_and_outer_support"
+    },
+    {
+      "stage": 4,
+      "event": "dewater_excavate_construct_second_waler_support",
+      "water_depth_m": 6.3,
+      "excavation_depth_m": 5.8
+    },
+    {
+      "stage": 5,
+      "event": "dewater_excavate_construct_third_waler_support",
+      "water_depth_m": 10.3,
+      "excavation_depth_m": 9.8
+    },
+    {
+      "stage": 6,
+      "event": "dewater_excavate_construct_fourth_waler_support",
+      "water_depth_m": 13.6,
+      "excavation_depth_m": 13.1
+    },
+    {
+      "stage": 7,
+      "event": "dewater_complete_outer_excavation_transition_to_inner_system",
+      "original_event_note": "The original fifth ring beam/support event is explicitly reassigned to dependency-correct Stage 8/9 substeps.",
+      "water_depth_m": 17.1,
+      "excavation_depth_m": 16.6
+    },
+    {
+      "stage": 8,
+      "event": "construct_inner_wall_and_crown_ring_beam_install_position_0_support"
+    },
+    {
+      "stage": 9,
+      "event": "dewater_complete_inner_excavation_with_case_support_installation",
+      "water_depth_m": 22.1,
+      "excavation_depth_m": 21.6
+    }
+  ],
+  "stage_source": "benchmark_model_spec_en.md section 5 supplies all water/depth milestones; events in Stages 7-9 include the explicit ordering correction in model_definition.md. Depths are positive downward from the depth datum.",
+  "initial_water_source": "engineering_assumptions_en.md section 4: existing ground if no initial phreatic surface is visible.",
+  "case_positions_below_inner_top_m": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "observation_source": {
+    "files": [
+      "benchmark_model_spec_en.md",
+      "figure_index_en.md",
+      "figure_2_6_monitoring_layout.png",
+      "task_specific_brief_en.md"
+    ],
+    "drawing_labels": {
+      "ground": [
+        "DBC1",
+        "DBC2",
+        "DBC3",
+        "DBC4",
+        "DBC5",
+        "DBC6",
+        "DBC7",
+        "DBC8",
+        "DBC9",
+        "DBC10"
+      ],
+      "outer_wall": [
+        "CX1",
+        "CX2",
+        "CX3",
+        "CX4",
+        "CX5",
+        "CX6",
+        "CX7",
+        "CX8",
+        "CX9",
+        "CX10"
+      ]
+    },
+    "semantics": "Downward settlement at required ground sections and horizontal movement on required wall/inclinometer profiles; not whole-domain extrema.",
+    "surveyed_coordinates": null,
+    "required_subset": "All ten DBC stations and all ten CX outer-wall profiles by explicit adaptation; see adaptation_clarifications.monitoring."
+  }
+}

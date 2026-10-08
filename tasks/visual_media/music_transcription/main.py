@@ -1,21 +1,18 @@
 """Music Transcription — 6 canonical variants.
 
 Transcribe a recorded piece into sheet music using any music notation software,
-export PDF score and MIDI with correct instrument assignments.
-Evaluation: MIDI pitch/rhythm F1, dynamics correlation, instrument
-assignment accuracy, and LLM-judged score layout quality.
+export consistent MusicXML, PDF and MIDI with correct instrument assignments.
+Evaluation: notation pitch/rhythm F1, relative dynamics, instrument assignment,
+MIDI consistency, and whole-score document review.
 
 Variants: Dorico Prelude, Fugue 16, Iconica, Liebestraume, Triumphant, Unshaken.
 """
 
 import io
-import json
 import logging
-import os
 import sys
+from collections import defaultdict
 from dataclasses import dataclass
-
-import fitz  # PyMuPDF
 
 # Workaround: cua_bench loads main.py via exec_module without registering
 # in sys.modules, which causes @dataclass to fail. Register ourselves.
@@ -23,11 +20,12 @@ if __name__ not in sys.modules:
     sys.modules[__name__] = sys.modules.get(__name__, type(sys)(__name__))
 
 import cua_bench as cb
+import mido
 import pretty_midi
 
-from tasks.common_config import GeneralTaskConfig
 from tasks.common_setup import BaseTaskSetup
-from tasks.utils.evaluation import EvaluationContext, llm_vision_judge
+from tasks.linux_runtime import LinuxTaskConfig
+from tasks.visual_media.music_transcription.verification import evaluate_delivery
 
 _setup = BaseTaskSetup()
 
@@ -44,9 +42,12 @@ TASK_BRIEF_FILE = "task_brief.json"
 REFERENCE_SONG_MP3 = "reference_song.mp3"
 REFERENCE_MIDI_FILE = "reference.mid"
 REFERENCE_SCORE_PDF = "reference_score.pdf"
+REFERENCE_NOTATION = "reference.musicxml"
+REFERENCE_GROUPING = "notation_reference.json"
 
 TRANSCRIPTION_PDF = "transcription.pdf"
 TRANSCRIPTION_MIDI = "transcription.mid"
+TRANSCRIPTION_NOTATION = "transcription.musicxml"
 OVERVIEW_SCREENSHOT = "overview.png"
 
 # ---------------------------------------------------------------------------
@@ -80,13 +81,80 @@ class TrackInfo:
 def _extract_tracks_full(midi_bytes: bytes) -> list[TrackInfo]:
     """Extract all tracks with full metadata from MIDI bytes."""
     try:
-        midi_data = pretty_midi.PrettyMIDI(io.BytesIO(midi_bytes))
+        source = mido.MidiFile(file=io.BytesIO(midi_bytes))
+        if source.type not in (0, 1) or source.ticks_per_beat <= 0:
+            raise ValueError("Expected synchronous MIDI with positive tick resolution")
+        tempo_events = []
+        port_tracks = defaultdict(list)
+        for track in source.tracks:
+            initial_port = 0
+            for event in track:
+                if event.time:
+                    break
+                if event.type == "midi_port":
+                    initial_port = event.port
+                    break
+            port = initial_port
+            tick = 0
+            events_by_port = defaultdict(list)
+            for event in track:
+                tick += event.time
+                if event.type == "midi_port":
+                    port = event.port
+                elif event.type == "set_tempo":
+                    tempo_events.append((tick, event))
+                elif hasattr(event, "channel") or event.type == "sysex":
+                    events_by_port[port].append((tick, event))
+            for port, events in events_by_port.items():
+                converted = mido.MidiTrack([mido.MetaMessage("track_name", name=track.name)])
+                previous_tick = 0
+                for tick, event in events:
+                    converted.append(event.copy(time=tick - previous_tick))
+                    previous_tick = tick
+                converted.append(mido.MetaMessage("end_of_track"))
+                port_tracks[port].append(converted)
+        performances = []
+        for tracks in port_tracks.values():
+            channel_state = []
+            timed_tracks = []
+            for track_index, track in enumerate(tracks):
+                tick = 0
+                notes = []
+                for event_index, event in enumerate(track):
+                    tick += event.time
+                    if event.type in ("program_change", "control_change", "pitchwheel"):
+                        channel_state.append((tick, 0, track_index, event_index, event))
+                    elif event.type in ("note_on", "note_off"):
+                        notes.append((tick, 1, track_index, event_index, event))
+                timed_tracks.append(notes)
+            shared_tracks = []
+            for track, notes in zip(tracks, timed_tracks, strict=True):
+                if not notes:
+                    continue
+                channels = {entry[-1].channel for entry in notes}
+                events = notes + [entry for entry in channel_state if entry[-1].channel in channels]
+                converted = mido.MidiTrack([mido.MetaMessage("track_name", name=track.name)])
+                previous_tick = 0
+                for tick, _, _, _, event in sorted(events, key=lambda entry: entry[:4]):
+                    converted.append(event.copy(time=tick - previous_tick))
+                    previous_tick = tick
+                shared_tracks.append(converted)
+            timeline = mido.MidiTrack()
+            previous_tick = 0
+            for tick, event in sorted(tempo_events, key=lambda entry: entry[0]):
+                timeline.append(event.copy(time=tick - previous_tick))
+                previous_tick = tick
+            isolated = mido.MidiFile(type=1, ticks_per_beat=source.ticks_per_beat)
+            isolated.tracks = [timeline, *shared_tracks]
+            stream = io.BytesIO()
+            isolated.save(file=stream)
+            performances.append(pretty_midi.PrettyMIDI(io.BytesIO(stream.getvalue())))
     except Exception as e:
         logger.warning(f"Failed to parse MIDI: {e}")
         return []
 
     tracks: list[TrackInfo] = []
-    for inst in midi_data.instruments:
+    for inst in (instrument for performance in performances for instrument in performance.instruments):
         name = inst.name.strip() if inst.name else f"Track_{inst.program}"
         if inst.is_drum:
             name = f"Drums_{name}"
@@ -104,13 +172,12 @@ def _extract_tracks_full(midi_bytes: bytes) -> list[TrackInfo]:
 
 def _get_min_duration(midi_bytes: bytes) -> float:
     """Find the shortest note duration in the MIDI file for quantization."""
-    try:
-        midi_data = pretty_midi.PrettyMIDI(io.BytesIO(midi_bytes))
-    except Exception:
+    tracks = _extract_tracks_full(midi_bytes)
+    if not tracks:
         raise ValueError("Failed to parse reference MIDI bytes.")
 
     min_dur = float("inf")
-    for inst in midi_data.instruments:
+    for inst in tracks:
         for note in inst.notes:
             dur = note.end - note.start
             if dur > 0.01 and dur < min_dur:
@@ -122,19 +189,40 @@ def _get_min_duration(midi_bytes: bytes) -> float:
     return min_dur
 
 
-def _quantize(t: float, resolution: float) -> float:
-    """Quantize a time value to the nearest grid step."""
-    return round(t / resolution) * resolution
+def _match_notes(agent_notes, ref_notes, resolution, *, rhythm=False):
+    """Match notes one-to-one within the reference timing resolution."""
+    import numpy as np
+    from scipy.optimize import linear_sum_assignment
 
-
-def _note_set(notes: list[pretty_midi.Note], resolution: float) -> set[tuple[int, float]]:
-    """Convert notes to a set of (pitch, quantized_onset) tuples."""
-    return {(n.pitch, _quantize(n.start, resolution)) for n in notes}
-
-
-def _duration_pairs(notes: list[pretty_midi.Note], resolution: float) -> list[tuple[float, float]]:
-    """Return (quantized_onset, quantized_duration) pairs for rhythm comparison."""
-    return [(_quantize(n.start, resolution), _quantize(n.end - n.start, resolution)) for n in notes]
+    if not agent_notes or not ref_notes:
+        return []
+    if not np.isfinite(resolution) or resolution <= 0:
+        raise ValueError("Timing resolution must be finite and positive")
+    onset_error = abs(
+        np.array([note.start for note in ref_notes])[:, None]
+        - np.array([note.start for note in agent_notes])
+    )
+    if rhythm:
+        duration_error = abs(
+            np.array([note.end - note.start for note in ref_notes])[:, None]
+            - np.array([note.end - note.start for note in agent_notes])
+        )
+        error = np.maximum(onset_error, duration_error)
+        eligible = error <= resolution + 1e-10
+    else:
+        error = onset_error
+        eligible = (error <= resolution + 1e-10) & (
+            np.array([note.pitch for note in ref_notes])[:, None]
+            == np.array([note.pitch for note in agent_notes])
+        )
+    proximity = 1 / (1 + error / resolution)
+    weights = eligible * (1 + proximity / (min(len(ref_notes), len(agent_notes)) + 1))
+    reference_indices, agent_indices = linear_sum_assignment(weights, maximize=True)
+    return [
+        (int(agent_index), int(reference_index))
+        for reference_index, agent_index in zip(reference_indices, agent_indices, strict=True)
+        if eligible[reference_index, agent_index]
+    ]
 
 
 def compute_pitch_f1(
@@ -142,22 +230,14 @@ def compute_pitch_f1(
     ref_notes: list[pretty_midi.Note],
     resolution: float,
 ) -> float:
-    """F1 score on (pitch, quantized_onset) pairs."""
+    """Note-level F1 on pitch and onset within the timing tolerance."""
     if not ref_notes:
         return 1.0 if not agent_notes else 0.0
     if not agent_notes:
         return 0.0
 
-    agent_set = _note_set(agent_notes, resolution)
-    ref_set = _note_set(ref_notes, resolution)
-
-    tp = len(agent_set & ref_set)
-    precision = tp / len(agent_set) if agent_set else 0.0
-    recall = tp / len(ref_set) if ref_set else 0.0
-
-    if precision + recall == 0:
-        return 0.0
-    return 2 * precision * recall / (precision + recall)
+    matched = _match_notes(agent_notes, ref_notes, resolution)
+    return 2 * len(matched) / (len(agent_notes) + len(ref_notes))
 
 
 def compute_rhythm_f1(
@@ -165,22 +245,14 @@ def compute_rhythm_f1(
     ref_notes: list[pretty_midi.Note],
     resolution: float,
 ) -> float:
-    """F1 score on (quantized_onset, quantized_duration) pairs."""
+    """Note-level F1 on onset and duration within the timing tolerance."""
     if not ref_notes:
         return 1.0 if not agent_notes else 0.0
     if not agent_notes:
         return 0.0
 
-    agent_durations = set(_duration_pairs(agent_notes, resolution))
-    ref_durations = set(_duration_pairs(ref_notes, resolution))
-
-    tp = len(agent_durations & ref_durations)
-    precision = tp / len(agent_durations) if agent_durations else 0.0
-    recall = tp / len(ref_durations) if ref_durations else 0.0
-
-    if precision + recall == 0:
-        return 0.0
-    return 2 * precision * recall / (precision + recall)
+    matched = _match_notes(agent_notes, ref_notes, resolution, rhythm=True)
+    return 2 * len(matched) / (len(agent_notes) + len(ref_notes))
 
 
 def _sample_cc_curve(
@@ -213,26 +285,23 @@ def compute_dynamics_correlation(
     import numpy as np
     from scipy.stats import spearmanr
 
+    if not agent_notes:
+        return 1.0 if not ref_notes else 0.0
+
     scores: list[float] = []
 
-    # 1. Velocity rank correlation on matched notes
-    ref_vel_map: dict[tuple[int, float], int] = {}
-    for n in ref_notes:
-        key = (n.pitch, _quantize(n.start, resolution))
-        ref_vel_map[key] = n.velocity
-
-    agent_vels: list[int] = []
-    ref_vels: list[int] = []
-    for n in agent_notes:
-        key = (n.pitch, _quantize(n.start, resolution))
-        if key in ref_vel_map:
-            agent_vels.append(n.velocity)
-            ref_vels.append(ref_vel_map[key])
+    matched = _match_notes(agent_notes, ref_notes, resolution)
+    if not matched:
+        return 0.0
+    agent_vels = [agent_notes[agent_index].velocity for agent_index, _ in matched]
+    ref_vels = [ref_notes[reference_index].velocity for _, reference_index in matched]
 
     if len(agent_vels) >= 3 and len(set(ref_vels)) > 1:
-        corr, _ = spearmanr(agent_vels, ref_vels)
-        if not np.isnan(corr):
-            scores.append(max(0.0, (corr + 1.0) / 2.0))
+        if len(set(agent_vels)) == 1:
+            scores.append(0.0)
+        else:
+            corr, _ = spearmanr(agent_vels, ref_vels)
+            scores.append(0.0 if np.isnan(corr) else max(0.0, (corr + 1.0) / 2.0))
 
     # 2. CC curve correlation (CC7=volume, CC11=expression)
     for cc_num in [7, 11]:
@@ -253,8 +322,7 @@ def compute_dynamics_correlation(
 
             if len(set(ref_vals)) > 1:
                 corr, _ = spearmanr(agent_vals, ref_vals)
-                if not np.isnan(corr):
-                    scores.append(max(0.0, (corr + 1.0) / 2.0))
+                scores.append(0.0 if np.isnan(corr) else max(0.0, (corr + 1.0) / 2.0))
 
     if not scores:
         return 1.0  # No dynamics data — benefit of the doubt
@@ -329,6 +397,11 @@ def compare_midi_unified(
     dynamics_scores: list[float] = []
     instrument_correct = 0
     instrument_total = 0
+    expected_programs = {
+        entry["name"]: entry.get("gm_program")
+        for entry in expected_instruments
+        if "name" in entry
+    }
 
     for ref_track, agent_track, match_pitch_f1 in matched:
         agent_notes = agent_track.notes if agent_track else []
@@ -351,8 +424,8 @@ def compare_midi_unified(
         dynamics_scores.append(dynamics_corr)
 
         ref_idx = ref_tracks.index(ref_track)
-        exp_program = None
-        if ref_idx < len(expected_instruments):
+        exp_program = expected_programs.get(ref_track.name.removeprefix("Drums_"))
+        if not expected_programs and ref_idx < len(expected_instruments):
             exp_program = expected_instruments[ref_idx].get("gm_program")
 
         agent_program = agent_track.program if agent_track else None
@@ -380,7 +453,7 @@ def compare_midi_unified(
 
     avg_pitch = sum(pitch_scores) / len(pitch_scores) if pitch_scores else 0.0
     avg_rhythm = sum(rhythm_scores) / len(rhythm_scores) if rhythm_scores else 0.0
-    avg_dynamics = sum(dynamics_scores) / len(dynamics_scores) if dynamics_scores else 1.0
+    avg_dynamics = sum(dynamics_scores) / len(dynamics_scores) if dynamics_scores else 0.0
     instrument_score = instrument_correct / instrument_total if instrument_total > 0 else 0.0
 
     return avg_pitch, avg_rhythm, avg_dynamics, instrument_score, details
@@ -390,7 +463,7 @@ def compare_midi_unified(
 # Task config
 # ---------------------------------------------------------------------------
 @dataclass
-class TaskConfig(GeneralTaskConfig):
+class TaskConfig(LinuxTaskConfig):
     DOMAIN_NAME: str = "visual_media"
 
     TASK_NAME: str = "music_transcription"
@@ -398,28 +471,44 @@ class TaskConfig(GeneralTaskConfig):
 
     @property
     def input_dir(self) -> str:
-        return rf"{self.task_dir}\input"
+        return f"{self.task_dir}/input"
 
     @property
     def task_brief_path(self) -> str:
-        return rf"{self.input_dir}\{TASK_BRIEF_FILE}"
+        return f"{self.input_dir}/{TASK_BRIEF_FILE}"
 
     @property
     def reference_song_mp3_path(self) -> str:
-        return rf"{self.input_dir}\{REFERENCE_SONG_MP3}"
+        return f"{self.input_dir}/{REFERENCE_SONG_MP3}"
 
     @property
     def reference_midi_path(self) -> str:
-        return rf"{self.reference_dir}\{REFERENCE_MIDI_FILE}"
+        return f"{self.reference_dir}/{REFERENCE_MIDI_FILE}"
 
     @property
     def reference_score_pdf_path(self) -> str:
-        return rf"{self.reference_dir}\{REFERENCE_SCORE_PDF}"
+        return f"{self.reference_dir}/{REFERENCE_SCORE_PDF}"
+
+    @property
+    def reference_notation_path(self) -> str:
+        return f"{self.reference_dir}/{REFERENCE_NOTATION}"
+
+    @property
+    def reference_grouping_path(self) -> str:
+        return f"{self.reference_dir}/{REFERENCE_GROUPING}"
 
     @property
     def task_description(self) -> str:
         return f"""\
 Goal: Transcribe a recorded piece into musical notation, export both a PDF score and a MIDI file with correct instrument assignments. You may use any music notation software available on the system.
+
+MuseScore 3 is installed on Linux; launch it with `musescore3`. You may use the
+editor or scripts. Preserve the complete orchestration, rather than a melody
+reduction. The PDF, MusicXML and MIDI must represent the same complete musical work.
+MusicXML is the machine-readable export of your score, not a separate transcription.
+Alternatively, save the complete MuseScore project as transcription.mscz or
+transcription.mscx instead of MusicXML. The evaluator exports that score itself.
+The evaluator uses .mscz, then .mscx, then MusicXML, in that order.
 
 Read the task specification from task_brief.json at {self.task_brief_path}. It contains:
 - title: the title of the piece
@@ -440,15 +529,84 @@ Steps:
 7. Format the score layout professionally (proper spacing, alignment, readable note density).
 8. Configure playback: assign each instrument to the correct General MIDI (GM) program number as specified in task_brief.json.
 9. Export outputs:
-   - Export a PDF of the full score. Save it as {self.remote_output_dir}\\{TRANSCRIPTION_PDF}
-   - Export MIDI: save as {self.remote_output_dir}\\{TRANSCRIPTION_MIDI}
+   - Export a PDF of the full score. Save it as {self.remote_output_dir}/{TRANSCRIPTION_PDF}
+   - Export MIDI: save as {self.remote_output_dir}/{TRANSCRIPTION_MIDI}
+   - Save the native MuseScore score as {self.remote_output_dir}/transcription.mscz (or .mscx),
+     or export MusicXML (plain or compressed) as {self.remote_output_dir}/{TRANSCRIPTION_NOTATION}
 10. Take ONE final screenshot showing the notation software with the score visible (showing some instrument staves):
-    save_milestone_screenshot(path="{self.remote_output_dir}\\{OVERVIEW_SCREENSHOT}", description="Overview of the transcribed score")
+    save_milestone_screenshot(path="{self.remote_output_dir}/{OVERVIEW_SCREENSHOT}", description="Overview of the transcribed score")
 
 Output files (all saved to {self.remote_output_dir}):
 - {TRANSCRIPTION_PDF}: Exported PDF of the complete score with all parts.
 - {TRANSCRIPTION_MIDI}: Exported MIDI file. Each track must have correct MIDI Program Change messages matching the GM program numbers in task_brief.json.
+- transcription.mscz or transcription.mscx, or {TRANSCRIPTION_NOTATION}: The same complete editable score.
 - {OVERVIEW_SCREENSHOT}: Screenshot of the notation software showing the transcribed score with instrument staves visible.
+
+Evaluation weights are pitch 30%, rhythm 30%, dynamics 20%, instrument assignment
+10%, and score layout 10%. Missing parts lose credit. Track order and names,
+equivalent MIDI encodings, correctly
+transposed notation, and alternative readable page layouts are unrestricted.
+GM program numbers in the brief are zero-based; follow the explicit numbers.
+Pitch and rhythm use one-to-one matching of sounding pitches and performed
+onsets from your MusicXML, with a 40-millisecond tolerance. Extra and missing
+notes reduce F1. Rhythm checks written duration, duration articulations, arpeggios,
+trills, pedal spans, glissando endpoints and legato phrasing.
+Instrument credit includes audible playing techniques such
+as harmonics, muting and pizzicato, with equivalent standard words or symbols.
+Written rhythm is checked
+rather than the synthesizer's note-release length. Measured tremolos and their
+explicit repeated notes are equivalent. Dynamics compares relative written
+loudness and crescendo/diminuendo profiles (80%) and force articulations (20%).
+For a part without written dynamic markings in the source score, the loudness
+profile is assessed from matched MIDI note velocities and volume/expression
+controls against the recording's reference performance. Ornament attacks are
+grouped by their written note, allowing equivalent complete roll rates and
+grace timing without changing the required loudness pattern. Overall volume scaling
+is accepted; missing, flat or reversed expression loses credit. Missing or extra
+performed notes reduce this comparison's coverage.
+The four musical categories are averaged over the brief's logical instruments;
+splitting an instrument across staves or files' MIDI tracks changes no weight.
+MIDI coverage and precision against your own score scale the musical scores by
+their harmonic mean. Wrong MIDI programs also reduce instrument credit.
+For notated arpeggios, MIDI must play every chord pitch in the marked order,
+with its first or last attack within 40 ms of the written onset.
+Grace notes must be played in their written order, with a separate attack for
+each repeated grace pitch. They may precede or delay the principal note: the
+first grace or principal attack must align within 40 ms of its written onset.
+Grace groups and arpeggios stay within their local score passage, bounded by
+the preceding onset and the principal/chord ending or next onset in the
+participating voices. Their timing has no universal duration fraction or
+seconds cap. Ordinary notes retain the same 40 ms accuracy requirement.
+Trills must alternate between the written note and its indicated neighbor,
+either using a trill mark or writing out the complete alternating notes,
+spanning the written duration. Either pitch may start the trill within 40 ms
+of its onset. Playback gaps and the final attack are checked against that
+passage in the reference performance, with the same 40 ms tolerance, rather
+than a universal trill speed. A held note is not a performed trill.
+Glissandi must play intervening pitches in the marked direction, not just their
+endpoints. Complete written-out trills and monotonic glissando runs are
+equivalent to their marks when their endpoints match the source span and
+their written notes connect within 40 ms. Tremolo playback preserves repeated
+pitches and alternating phases. Timing follows local tempo and the written
+subdivisions, using the reference passage's cadence and complete span when
+repeated source attacks are available. Complete alternative roll rates are
+accepted; skipped attacks and incomplete spans lose credit.
+Piano pedal markings apply across the instrument's staves. MIDI sustain
+controllers or equivalent extended note releases must preserve those sustained
+regions; pedal transitions use the same 40 ms tolerance.
+The complete PDF must contain the same score as the MusicXML; different page
+layouts and valid condensed staves are accepted. The screenshot must show a
+notation editor with the score visible. Missing, invalid or inconsistent
+required documents receive zero. A correct but incomplete transcription can
+receive partial musical credit if its submitted exports agree.
+Layout receives full credit for readable professional notation with correct
+identification and no material collisions or clipping, half credit for usable
+notation with specific readability defects, and zero if unusable or unidentified.
+Cover pages, sparse orchestration and alternative spacing are not defects.
+For D.C., D.S., coda and fine, submit your native MuseScore score. The evaluator
+expands playback navigation; you do not need to rewrite repeated passages.
+Ordinary repeats, numbered endings and transposed instruments are supported.
+
 """
 
     def to_metadata(self) -> dict:
@@ -460,6 +618,8 @@ Output files (all saved to {self.remote_output_dir}):
                 "reference_song_mp3_path": self.reference_song_mp3_path,
                 "reference_midi_path": self.reference_midi_path,
                 "reference_score_pdf_path": self.reference_score_pdf_path,
+                "reference_notation_path": self.reference_notation_path,
+                "reference_grouping_path": self.reference_grouping_path,
             }
         )
         return metadata
@@ -495,301 +655,6 @@ async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
 
 
-def _pdf_to_png(pdf_bytes: bytes, page: int = 0, dpi: int = 150) -> bytes:
-    """Convert the first page of a PDF to PNG bytes."""
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    mat = fitz.Matrix(dpi / 72, dpi / 72)
-    pix = doc[page].get_pixmap(matrix=mat)
-    png_bytes = pix.tobytes("png")
-    doc.close()
-    return png_bytes
-
-
-# ---------------------------------------------------------------------------
-# evaluate
-# ---------------------------------------------------------------------------
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
-    """Score: Gates (PDF + screenshot + MIDI exist),
-    then pitch 0.30 + rhythm 0.30 + dynamics 0.20 + instrument 0.10 + layout 0.10."""
-    try:
-        meta = task_cfg.metadata
-        tag = meta["variant_name"]
-        output_dir = meta["remote_output_dir"]
-        task_brief_path = meta["task_brief_path"]
-        reference_midi_path = meta["reference_midi_path"]
-        reference_score_pdf_path = meta["reference_score_pdf_path"]
-
-        # Read task brief. Reference fixtures are pre-staged on the VM
-        # under `reference/` by Stage 1; `evaluate()` does not fetch them.
-        brief_bytes = await session.read_bytes(task_brief_path)
-        brief = json.loads(brief_bytes.decode("utf-8"))
-        instruments = brief["instruments"]
-        song_title = brief.get("title", "")
-        song_composer = brief.get("composer", "")
-
-        if not (await session.file_exists(output_dir) or await session.directory_exists(output_dir)):
-            logger.warning(f"Output directory not found: {output_dir}")
-            return [0.0]
-
-        output_files = await session.list_dir(output_dir)
-
-        async with EvaluationContext(
-            task_tag=tag,
-            mode="custom",
-            output_dir=None,
-            target_path=output_dir,
-        ) as ctx:
-
-            # -----------------------------------------------------------
-            # Gate 1: PDF export
-            # -----------------------------------------------------------
-            if TRANSCRIPTION_PDF not in output_files:
-                logger.warning(f"PDF file {TRANSCRIPTION_PDF} not found — gate fail")
-                ctx.log_evaluation(identifier="gate_pdf", score=0.0, error="PDF not found")
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            pdf_path = os.path.join(output_dir, TRANSCRIPTION_PDF)
-            pdf_bytes = await session.read_bytes(pdf_path)
-            if len(pdf_bytes) < 1024:
-                logger.warning("PDF file too small — likely invalid")
-                ctx.log_evaluation(identifier="gate_pdf", score=0.0, error="PDF too small")
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            ctx.log_evaluation(identifier="gate_pdf", score=1.0)
-
-            # -----------------------------------------------------------
-            # Gate 2: Screenshot shows notation software UI
-            # -----------------------------------------------------------
-            if OVERVIEW_SCREENSHOT not in output_files:
-                logger.warning(f"Screenshot {OVERVIEW_SCREENSHOT} not found — gate fail")
-                ctx.log_evaluation(
-                    identifier="gate_screenshot",
-                    score=0.0,
-                    error="Screenshot not found",
-                )
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            screenshot_path = os.path.join(output_dir, OVERVIEW_SCREENSHOT)
-            screenshot_bytes = await session.read_bytes(screenshot_path)
-
-            prompt_screenshot = (
-                "You are evaluating a music notation software screenshot.\n\n"
-                "Does this image show a music notation software interface with "
-                "professional score notation actively being edited or viewed "
-                "(showing instrument staves with notes)?\n"
-                "(Look for: notation staves with notes, a music notation "
-                "application window, score layout elements like clefs, key "
-                "signatures, time signatures. It does not need to show the "
-                "entire page, just a clear view of the working score)\n"
-                'Answer with ONLY "YES" or "NO".'
-            )
-
-            eval_screenshot = await llm_vision_judge(
-                prompt=prompt_screenshot,
-                image_bytes=screenshot_bytes,
-                reference_image_bytes=None,
-                return_details=True,
-                max_tokens=10,
-                eval_context=ctx,
-                identifier="gate_screenshot",
-            )
-            if eval_screenshot["score"] == 0.0:
-                logger.warning("Screenshot gate failed — does not show notation software")
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            # -----------------------------------------------------------
-            # Gate 3: MIDI file exists
-            # -----------------------------------------------------------
-            if TRANSCRIPTION_MIDI not in output_files:
-                logger.warning(f"MIDI file {TRANSCRIPTION_MIDI} not found")
-                ctx.log_evaluation(identifier="midi_missing", score=0.0, error="MIDI not found")
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            # -----------------------------------------------------------
-            # All gates passed — scoring
-            # -----------------------------------------------------------
-            agent_midi_path = os.path.join(output_dir, TRANSCRIPTION_MIDI)
-            agent_midi_bytes = await session.read_bytes(agent_midi_path)
-
-            ref_midi_bytes = None
-            if (await session.file_exists(reference_midi_path) or await session.directory_exists(reference_midi_path)):
-                ref_midi_bytes = await session.read_bytes(reference_midi_path)
-
-            pitch_score_raw = 0.0
-            rhythm_score_raw = 0.0
-            dynamics_score_raw = 0.0
-            instrument_score_raw = 0.0
-            track_details: list[dict] = []
-
-            if ref_midi_bytes:
-                min_note_sec = _get_min_duration(ref_midi_bytes)
-
-                if "tempo_bpm" not in brief:
-                    raise ValueError("Task brief must contain 'tempo_bpm'")
-                bpm = brief["tempo_bpm"]
-
-                sixteenth_sec = (60.0 / bpm) * 0.25
-                resolution_sec = min(min_note_sec, sixteenth_sec)
-
-                (
-                    avg_pitch_f1,
-                    avg_rhythm_f1,
-                    avg_dynamics,
-                    inst_score,
-                    track_details,
-                ) = compare_midi_unified(
-                    agent_midi_bytes,
-                    ref_midi_bytes,
-                    expected_instruments=instruments,
-                    resolution=resolution_sec,
-                )
-                pitch_score_raw = avg_pitch_f1
-                rhythm_score_raw = avg_rhythm_f1
-                dynamics_score_raw = avg_dynamics
-                instrument_score_raw = inst_score
-
-            # Pitch (0.30)
-            pitch_score = 0.30 * pitch_score_raw
-            ctx.add_score(pitch_score)
-            ctx.log_evaluation(
-                identifier="pitch_accuracy",
-                score=pitch_score,
-                pitch_f1=round(pitch_score_raw, 4),
-            )
-
-            # Rhythm (0.30)
-            rhythm_score = 0.30 * rhythm_score_raw
-            ctx.add_score(rhythm_score)
-            ctx.log_evaluation(
-                identifier="rhythm_accuracy",
-                score=rhythm_score,
-                rhythm_f1=round(rhythm_score_raw, 4),
-            )
-
-            # Dynamics (0.20)
-            dynamics_score = 0.20 * dynamics_score_raw
-            ctx.add_score(dynamics_score)
-            ctx.log_evaluation(
-                identifier="dynamics",
-                score=dynamics_score,
-                dynamics_corr=round(dynamics_score_raw, 4),
-            )
-
-            # Instrument assignment (0.10)
-            instrument_score = 0.10 * instrument_score_raw
-            ctx.add_score(instrument_score)
-            ctx.log_evaluation(
-                identifier="instrument_assignment",
-                score=instrument_score,
-                assignment_rate=round(instrument_score_raw, 4),
-            )
-
-            # Per-track detail logging
-            logger.info(
-                f"MIDI comparison (Hungarian): pitch_f1={pitch_score_raw:.4f} "
-                f"rhythm_f1={rhythm_score_raw:.4f} dynamics={dynamics_score_raw:.4f} "
-                f"instrument_rate={instrument_score_raw:.4f}"
-            )
-            for d in track_details:
-                prog_status = "OK" if d.get("program_correct") else "MISS"
-                logger.info(
-                    f"  [{prog_status}] Ref '{d['ref_track']}' <-> Agent "
-                    f"'{d['agent_track']}': pitch_f1={d['pitch_f1']:.4f}, "
-                    f"rhythm_f1={d['rhythm_f1']:.4f}, dynamics={d['dynamics_corr']:.4f} "
-                    f"(agent:{d['agent_notes']}, ref:{d['ref_notes']}) "
-                    f"program: expected={d['expected_program']} "
-                    f"actual={d['actual_program']}"
-                )
-
-            # Score layout quality (0.10) — LLM vision judge
-            layout_score = 0.0
-            if (await session.file_exists(reference_score_pdf_path) or await session.directory_exists(reference_score_pdf_path)):
-                ref_pdf_bytes = await session.read_bytes(reference_score_pdf_path)
-
-                prompt_layout = (
-                    "You are evaluating a music score PDF.\n\n"
-                    "Compare these two music score images:\n"
-                    "1. First image: The agent's exported PDF score.\n"
-                    "2. Second image: The reference score.\n\n"
-                    "Evaluate the professional engraving quality of the first image:\n"
-                    "- Proper spacing between staves\n"
-                    "- Balanced page layout\n"
-                    "- Readable note density\n"
-                    "- Clean alignment of barlines, notes, and text\n"
-                    "- Appropriate use of clefs, key signatures, and time signatures\n"
-                    f'- The score should contain a title related to "{song_title}" '
-                    f'and a composer related to "{song_composer}" '
-                    f"(variations in formatting, full names, or subtitles are acceptable).\n\n"
-                    "Does the first image show professional-quality score layout "
-                    "comparable to the reference?\n"
-                    'Answer with ONLY "YES" or "NO".'
-                )
-
-                agent_pdf_png = _pdf_to_png(pdf_bytes)
-                ref_pdf_png = _pdf_to_png(ref_pdf_bytes)
-
-                eval_layout = await llm_vision_judge(
-                    prompt=prompt_layout,
-                    image_bytes=agent_pdf_png,
-                    reference_image_bytes=ref_pdf_png,
-                    return_details=True,
-                    max_tokens=10,
-                    eval_context=ctx,
-                    identifier="score_layout",
-                )
-                layout_score = 0.10 * eval_layout["score"]
-            else:
-                prompt_layout_single = (
-                    "You are evaluating a music score PDF.\n\n"
-                    "Does this score show professional engraving quality?\n"
-                    "- Proper spacing between staves\n"
-                    "- Balanced page layout\n"
-                    "- Readable note density\n"
-                    "- Clean alignment of barlines, notes, and text\n"
-                    "- Appropriate clefs, key signatures, and time signatures\n"
-                    f'- The score should contain a title related to "{song_title}" '
-                    f'and a composer related to "{song_composer}" '
-                    f"(variations in formatting, full names, or subtitles are acceptable).\n\n"
-                    "Does it meet professional engraving standards?\n"
-                    'Answer with ONLY "YES" or "NO".'
-                )
-
-                agent_pdf_png_single = _pdf_to_png(pdf_bytes)
-
-                eval_layout = await llm_vision_judge(
-                    prompt=prompt_layout_single,
-                    image_bytes=agent_pdf_png_single,
-                    reference_image_bytes=None,
-                    return_details=True,
-                    max_tokens=10,
-                    eval_context=ctx,
-                    identifier="score_layout",
-                )
-                layout_score = 0.10 * eval_layout["score"]
-
-            ctx.add_score(layout_score)
-
-            # Finalize
-            ctx.finalize(
-                num_instruments=len(instruments),
-                num_output_files=len(output_files),
-            )
-
-            logger.info(
-                f"Final score: {ctx.total_score:.4f} "
-                f"(pitch={pitch_score:.2f} rhythm={rhythm_score:.2f} "
-                f"dynamics={dynamics_score:.2f} instrument={instrument_score:.2f} "
-                f"layout={layout_score:.2f})"
-            )
-            return [ctx.total_score]
-
-    except Exception as e:
-        logger.error(f"Evaluation error: {e}")
-
-    return [0.0]
+    return await evaluate_delivery(task_cfg, session, _extract_tracks_full)

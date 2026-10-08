@@ -1,54 +1,19 @@
-"""Project Migration — 10 variants.
+"""Five complete source-only Ardour migrations, scored at 20% delivery / 80% timbre."""
 
-Given a Cubase project with missing/invalid VST plugins, replace all missing
-VSTs with functionally equivalent ones from the available plugins on the
-target system, then export per-track stems and a full mixdown.
-
-Evaluation: Stem completeness & quality (0.20) + Timbral similarity (0.80).
-"""
-
-import json
-import logging
-import os
-import sys
 from dataclasses import dataclass
+import json
 from pathlib import Path
-
-if __name__ not in sys.modules:
-    sys.modules[__name__] = sys.modules.get(__name__, type(sys)(__name__))
+import shlex
+import uuid
 
 import cua_bench as cb
-from tasks.common_config import GeneralTaskConfig
+
 from tasks.common_setup import BaseTaskSetup
-from tasks.utils.evaluation import EvaluationContext, llm_vision_judge
+from tasks.linux_runtime import LinuxTaskConfig
+from tasks.utils.evaluation import EvaluationContext, JudgeInfrastructureError, llm_vision_judge
+from tasks.visual_media.project_migration.runtime import run_evaluator, stage
 
-logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-PROJECT_FILE = "project.cpr"
-AVAILABLE_VSTS = "available_vsts.txt"
-MIGRATED_PROJECT = "migrated_project.cpr"
-STEMS_DIR = "stems"
-OVERVIEW_SCREENSHOT = "overview.png"
-
-# Scoring weights
-W_STEM_QUALITY = 0.20
-W_TIMBRE = 0.80
-
-# MFCC cosine similarity threshold: >= this -> full credit
-TIMBRE_THRESHOLD = 0.70
-
-# ---------------------------------------------------------------------------
-# Variants — (task_tag,)
-# Each variant has its own input/ and reference/ staged by the framework.
-# ---------------------------------------------------------------------------
-#   Stage 2 decision: only the 5 variants with fully exported reference stems
-#   are registered here. The 5 pending variants (freehold_battle_music,
-#   geralt_of_rivia, kingdoms_will_burn, pokemon_go_medley,
-#   undertale_symphonic_suite) lack reference data and are deferred until
-#   their original VSTs can be sourced to re-render reference stems.
 VARIANTS = [
     ("celeste_symphonic_suite",),
     ("eora",),
@@ -56,351 +21,187 @@ VARIANTS = [
     ("twilight_princess_credits",),
     ("undertale_medley",),
 ]
+W_STEM_QUALITY = 0.20
+W_TIMBRE = 0.80
 
 
-REMOTE_SCORE_SCRIPT = Path(__file__).parent / "scripts" / "score_audio_remote.py"
-
-
-# ---------------------------------------------------------------------------
-# Task config
-# ---------------------------------------------------------------------------
 @dataclass
-class TaskConfig(GeneralTaskConfig):
+class TaskConfig(LinuxTaskConfig):
     DOMAIN_NAME: str = "visual_media"
-
     TASK_NAME: str = "project_migration"
     VARIANT_NAME: str = ""
 
     @property
-    def input_dir(self) -> str:
-        return rf"{self.task_dir}\input"
+    def reference_stems_dir(self):
+        return f"{self.reference_dir}/stems"
 
     @property
-    def reference_stems_dir(self) -> str:
-        return rf"{self.reference_dir}\{STEMS_DIR}"
+    def task_description(self):
+        return f"""Repair this complete original music project in Ardour on Linux.
+Input: {self.input_dir}/project/project.ardour. This is a faithful source-only
+conversion of the original Cubase input, with original notes (including muted
+editable material), tempo, meter, controller state, routing and original plugin
+state in source-state/. Missing plugin placeholders are deliberately unresolved.
+Do not delete, transpose or rearrange music to make an instrument fit.
+Original source clues are in project/conversion-manifest.json (plugin names,
+IDs, route mappings and state-file hashes), source-state/native-dawproject.xml,
+source-state/original-track-archive.xml.gz and source-state/plugins/ (original
+presets/state). These describe the original input, not chosen replacements.
 
-    @property
-    def task_description(self) -> str:
-        return f"""\
-Goal: Migrate a Cubase project to this computer by replacing all missing/invalid VST \
-plugins with equivalent ones from the available plugins, then export stems and a mixdown.
+Inventory installed LV2/LADSPA/VST plugins and sound libraries into
+{self.remote_output_dir}/available_plugins.txt. Replace unavailable active
+instruments/effects with installed open-source equivalents and choose their
+presets, articulations and controller adapters to retain the original sound.
+Disabled effects do not require replacement. No particular plugin or GM program
+is an accepted answer by itself. Evaluation compares timbre against the original
+reference stems, which are provisioned separately for evaluation.
+Functional equivalence does not require the original proprietary library or
+identical waveforms; ordinary library variation is allowed by the public rubric.
+Keep original editable event data and track/channel organization. Instrument
+adapters may translate controls without deleting the original data.
 
-Software:
-- Cubase: {self.software_dir}\\Cubase.lnk
+Save the self-contained editable project and all media/plugin state as
+{self.remote_output_dir}/migrated_project/migrated_project.ardour.
+Export the COMPLETE song from time zero, at 44.1kHz or higher, as
+{self.remote_output_dir}/mixdown.wav and one solo WAV per original reference
+track/channel in {self.remote_output_dir}/stems/<track_name>.wav. The common
+reference/delivery/native stem tap is the instrument channel output with its
+Inserts/Strip (instrument and track insert effects), before downstream group or
+master processing. In Ardour, export that instrument route's audio output ports.
+Keep all original routing and group/master effects in the editable project and
+mixdown.wav; do not remove them to make stems. Preserve complete effect tails
+at each export tap; do not substitute short excerpts. The public native_audio.py
+helper implements this stem tap with full=True on a separate project copy;
+the stock ardour6-export master output is appropriate for the full mix.
+Capture {self.remote_output_dir}/overview.png showing Ardour tracks and plugins.
 
-Input:
-- Cubase project: {self.input_dir}\\{PROJECT_FILE}
-
-Before you begin:
-1. Generate the list of VST3 plugins installed on this VM and save it to \
-`{self.remote_output_dir}\\{AVAILABLE_VSTS}`. In PowerShell:
-   `$roots = @('C:\\Program Files\\Common Files\\VST3','C:\\Program Files (x86)\\Common Files\\VST3'); \
-$items = @(); foreach ($r in $roots) {{ if (Test-Path $r) {{ $items += Get-ChildItem -Path $r -Recurse -Filter *.vst3 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name }} }}; \
-($items | Sort-Object -Unique) | Out-File -FilePath '{self.remote_output_dir}\\{AVAILABLE_VSTS}' -Encoding ascii`
-2. Open the Cubase project at `{self.input_dir}\\{PROJECT_FILE}` using the Cubase shortcut \
-at `{self.software_dir}\\Cubase.lnk` (e.g. double-click the .lnk, or \
-`Start-Process '{self.software_dir}\\Cubase.lnk'`).
-
-Steps:
-1. When the "Missing Plugins" dialog appears, note all unavailable VST plugins.
-2. For each track with a missing VST instrument or effect:
-   a. Open the track's instrument or insert slot.
-   b. Replace the missing VST with a functionally equivalent one from the available \
-plugins listed in `{self.remote_output_dir}\\{AVAILABLE_VSTS}`.
-   c. Choose a preset or patch that best approximates the original sound character \
-(e.g., replace a missing string library with an available string patch).
-3. Play back the project and verify all tracks produce audible, artifact-free audio.
-4. Export stems: for each track/channel as organized in the project (do NOT split or \
-reorganize tracks — export exactly as the project defines them), solo it and export \
-audio mixdown (WAV, 44.1 kHz or higher) to {self.remote_output_dir}\\{STEMS_DIR}\\<track_name>.wav
-5. Save the migrated project to {self.remote_output_dir}\\{MIGRATED_PROJECT}
-6. Take a screenshot of the Cubase MixConsole or arrange view showing all tracks with \
-their replaced plugins visible:
-   save_milestone_screenshot(path="{self.remote_output_dir}\\{OVERVIEW_SCREENSHOT}", \
-description="Cubase project with replaced plugins")
-
-Output files (all saved to {self.remote_output_dir}):
-- {MIGRATED_PROJECT}: Cubase project with all missing VSTs replaced.
-- {STEMS_DIR}/: Per-track solo WAV exports (one per track).
-- {OVERVIEW_SCREENSHOT}: Screenshot of MixConsole or arrange view.
+Evaluation: native save/reopen, original editable music/routing, required files
+and a valid full mix are delivery gates. The score is 20% complete, finite,
+unclipped matched stems plus 80% timbral/performance-character similarity.
+Missing/invalid stems remain in the denominator. Audio is judged against the
+original references using the fixed public rubric at {self.software_dir}/rubric.txt.
+Three 12-second windows are fixed from each reference's active timeline at
+25/50/75% quantiles (100ms RMS bins above -60dB relative to its loudest bin;
+duplicates merged). Windows are averaged per active stem, then across stems.
+Each window compares both your delivered audio and a fresh native solo render of
+your project against the reference in one audio request with one reference
+description and two ratings; its timbre score is the lower of the two.
+Constant overall gain is ignored; changing dynamics and wrong attacks, sustain,
+articulation or instruments are not. Proven PCM equality/common positive gain
+within analytic integer quantization bounds receives full timbre credit.
+Controller setters may lose redundant messages; effective values must remain.
+Native controller rounding up to 5/1920 quarter notes is reported and accepted;
+bank/program, sustain and stateful-message order is retained. Evaluator runtime,
+missing reference or audio-provider failures are unscored infrastructure errors.
 """
 
-    def to_metadata(self) -> dict:
+    def to_metadata(self):
         metadata = super().to_metadata()
-        metadata.pop("software_dir", None)
-        metadata.update(
-            {
-                "input_dir": self.input_dir,
-                "reference_stems_dir": self.reference_stems_dir,
-            }
-        )
+        metadata["reference_stems_dir"] = self.reference_stems_dir
         return metadata
 
 
-# ---------------------------------------------------------------------------
-# load
-# ---------------------------------------------------------------------------
 @cb.tasks_config(split="train")
 def load():
-    """Register all project migration variants."""
     tasks = []
     for (tag,) in VARIANTS:
-        cfg = TaskConfig(VARIANT_NAME=tag)
+        config = TaskConfig(VARIANT_NAME=tag)
         tasks.append(
             cb.Task(
-                description=cfg.task_description,
-                metadata=cfg.to_metadata(),
-                computer={
-                    "provider": "computer",
-                    "setup_config": {"os_type": cfg.OS_TYPE},
-                },
+                description=config.task_description,
+                metadata=config.to_metadata(),
+                computer={"provider": "computer", "setup_config": {"os_type": "linux"}},
             )
         )
     return tasks
 
 
-# ---------------------------------------------------------------------------
-# start
-# ---------------------------------------------------------------------------
 _setup = BaseTaskSetup()
 
 
 @cb.setup_task(split="train")
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
+    await stage(task_cfg.metadata, session)
 
 
-# ---------------------------------------------------------------------------
-# evaluate
-# ---------------------------------------------------------------------------
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
-    """Score: Gates (project + stems + screenshot),
-    then stem completeness & quality (0.20) + timbral similarity (0.80).
-
-    WAV analysis runs on the remote VM via score_audio_remote.py to avoid
-    downloading large audio files.
-    """
     try:
-        meta = task_cfg.metadata
-        tag = meta["variant_name"]
-        output_dir = meta["remote_output_dir"]
-        ref_dir = meta["reference_dir"]
-        reference_stems_dir = meta["reference_stems_dir"]
-
-        if not (await session.file_exists(ref_dir) or await session.directory_exists(ref_dir)):
-            logger.error(f"[{tag}] reference_dir missing: {ref_dir}")
+        from tasks.visual_media.project_migration.audio_judge import score_delivery
+    except ImportError as exc:
+        raise JudgeInfrastructureError(
+            "Install task requirements-eval.txt on the evaluator host"
+        ) from exc
+    meta = task_cfg.metadata
+    destination, software = await stage(meta, session, evaluating=True)
+    evidence = destination + "/evidence"
+    command = shlex.join(
+        [
+            "timeout",
+            "7200",
+            "python3",
+            f"{software}/evaluate_remote.py",
+            "--output",
+            meta["remote_output_dir"],
+            "--baseline",
+            f"{destination}/project/project.ardour",
+            "--references",
+            meta["reference_stems_dir"],
+            "--evidence",
+            evidence,
+        ]
+    )
+    result = await run_evaluator(session, command, evidence)
+    if result.get("return_code", 1):
+        raise JudgeInfrastructureError(
+            "Linux migration evaluator process failed; inspect remote receipt"
+        )
+    assessment = json.loads(await session.read_bytes(evidence + "/assessment.json"))
+    if assessment.get("infrastructure_error"):
+        raise JudgeInfrastructureError(assessment["infrastructure_error"])
+    async with EvaluationContext(
+        task_tag=meta["variant_name"],
+        mode="custom",
+        output_dir=None,
+        target_path=meta["remote_output_dir"],
+    ) as context:
+        context.log_evaluation(
+            identifier="native_and_delivery_gates",
+            score=float(assessment["gate_passed"]),
+            assessment=assessment,
+        )
+        if not assessment["gate_passed"]:
+            context.finalize()
             return [0.0]
-
-        if not (await session.file_exists(output_dir) or await session.directory_exists(output_dir)):
-            logger.warning(f"Output directory not found: {output_dir}")
+        overview = await llm_vision_judge(
+            prompt="Does this screenshot show Ardour with music tracks and plugin assignments visible? Answer only YES or NO. Do not require a particular theme, layout or instrument.",
+            image_bytes=await session.read_bytes(meta["remote_output_dir"] + "/overview.png"),
+            reference_image_bytes=None,
+            return_details=True,
+            max_tokens=10,
+            eval_context=context,
+            identifier="ardour_overview",
+        )
+        if overview["score"] == 0:
+            context.finalize()
             return [0.0]
-
-        output_files = await session.list_dir(output_dir)
-
-        async with EvaluationContext(
-            task_tag=tag,
-            mode="custom",
-            output_dir=None,
-            target_path=output_dir,
-        ) as ctx:
-
-            # -----------------------------------------------------------
-            # Gate 1: migrated_project.cpr exists
-            # -----------------------------------------------------------
-            if MIGRATED_PROJECT not in output_files:
-                logger.warning(f"{MIGRATED_PROJECT} not found — gate fail")
-                ctx.log_evaluation(
-                    identifier="gate_project",
-                    score=0.0,
-                    error=f"{MIGRATED_PROJECT} not found",
-                )
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            ctx.log_evaluation(identifier="gate_project", score=1.0)
-
-            # -----------------------------------------------------------
-            # Gate 2: stems/ directory exists with WAV files
-            # -----------------------------------------------------------
-            stems_output_dir = os.path.join(output_dir, STEMS_DIR)
-            if not (await session.file_exists(stems_output_dir) or await session.directory_exists(stems_output_dir)):
-                logger.warning("stems/ directory not found — gate fail")
-                ctx.log_evaluation(
-                    identifier="gate_stems",
-                    score=0.0,
-                    error="stems/ directory not found",
-                )
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            stem_files_list = await session.list_dir(stems_output_dir)
-            wav_stems = [f for f in stem_files_list if f.lower().endswith(".wav")]
-            if not wav_stems:
-                logger.warning("No WAV stems found — gate fail")
-                ctx.log_evaluation(
-                    identifier="gate_stems",
-                    score=0.0,
-                    error="No WAV files in stems/",
-                )
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            # -----------------------------------------------------------
-            # Gate 3: screenshot shows Cubase project
-            # -----------------------------------------------------------
-            if OVERVIEW_SCREENSHOT not in output_files:
-                logger.warning(f"{OVERVIEW_SCREENSHOT} not found — gate fail")
-                ctx.log_evaluation(
-                    identifier="gate_screenshot",
-                    score=0.0,
-                    error="Screenshot not found",
-                )
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            screenshot_path = os.path.join(output_dir, OVERVIEW_SCREENSHOT)
-            screenshot_bytes = await session.read_bytes(screenshot_path)
-
-            prompt_gate = (
-                "You are evaluating a DAW (Digital Audio Workstation) screenshot.\n\n"
-                "Does this image show a Cubase project (MixConsole or arrange view) "
-                "with audio/instrument tracks visible and VST plugin assignments "
-                "or instrument names shown?\n"
-                "(Look for: track list, instrument/plugin names, mixer channels, "
-                "transport bar, Cubase UI elements)\n"
-                'Answer with ONLY "YES" or "NO".'
-            )
-
-            eval_gate = await llm_vision_judge(
-                prompt=prompt_gate,
-                image_bytes=screenshot_bytes,
-                reference_image_bytes=None,
-                return_details=True,
-                max_tokens=10,
-                eval_context=ctx,
-                identifier="gate_screenshot",
-            )
-            if eval_gate["score"] == 0.0:
-                logger.warning("Screenshot gate failed — does not show Cubase project")
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            # -----------------------------------------------------------
-            # Gate: reference stems exist
-            # -----------------------------------------------------------
-            if not (await session.file_exists(reference_stems_dir) or await session.directory_exists(reference_stems_dir)):
-                logger.error("Reference stems directory not found — cannot score")
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            # -----------------------------------------------------------
-            # Remote scoring: upload script, run on VM, pull JSON result
-            # -----------------------------------------------------------
-            remote_script = rf"{output_dir}\__score_audio_remote.py"
-            remote_result = rf"{output_dir}\__eval_result.json"
-
-            await session.write_bytes(remote_script, REMOTE_SCORE_SCRIPT.read_bytes())
-
-            cmd = (
-                f'python "{remote_script}" '
-                f'--agent-stems-dir "{stems_output_dir}" '
-                f'--ref-stems-dir "{reference_stems_dir}" '
-                f'--result-path "{remote_result}"'
-            )
-            logger.info(f"[{tag}] Running remote scoring: {cmd}")
-            await session.run_command(cmd, timeout=300)
-
-            result_bytes = await session.read_bytes(remote_result)
-            result = json.loads(result_bytes)
-
-            if "error" in result:
-                logger.error(f"Remote scoring error: {result['error']}")
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            # -----------------------------------------------------------
-            # Gate check: non-silent stems from remote result
-            # -----------------------------------------------------------
-            num_non_silent = result["num_non_silent"]
-            if num_non_silent == 0:
-                logger.warning("No non-silent stems found — gate fail")
-                ctx.log_evaluation(
-                    identifier="gate_stems",
-                    score=0.0,
-                    error="No non-silent WAV stems",
-                )
-                ctx.finalize(num_output_files=len(output_files))
-                return [0.0]
-
-            ctx.log_evaluation(
-                identifier="gate_stems",
-                score=1.0,
-                num_stems=num_non_silent,
-            )
-
-            # -----------------------------------------------------------
-            # Score 1: Stem completeness & quality (weight 0.20)
-            # -----------------------------------------------------------
-            num_valid = result["num_valid"]
-            num_expected = result["num_expected"]
-
-            stem_score_raw = num_valid / num_expected if num_expected > 0 else 0.0
-            stem_score = W_STEM_QUALITY * stem_score_raw
-            ctx.add_score(stem_score)
-            ctx.log_evaluation(
-                identifier="stem_completeness_quality",
-                score=stem_score,
-                valid_stems=num_valid,
-                expected_stems=num_expected,
-                raw_score=round(stem_score_raw, 4),
-            )
-            logger.info(
-                f"Stem completeness & quality: {num_valid}/{num_expected} "
-                f"= {stem_score_raw:.4f} (weighted: {stem_score:.4f})"
-            )
-
-            # -----------------------------------------------------------
-            # Score 2: Timbral similarity (weight 0.80)
-            # -----------------------------------------------------------
-            avg_timbre = result["avg_timbre"]
-            timbre_score = W_TIMBRE * avg_timbre
-            ctx.add_score(timbre_score)
-            ctx.log_evaluation(
-                identifier="timbral_similarity",
-                score=timbre_score,
-                avg_similarity=round(avg_timbre, 4),
-                num_pairs=len(result["matches"]),
-            )
-            logger.info(
-                f"Timbral similarity: avg={avg_timbre:.4f} " f"(weighted: {timbre_score:.4f})"
-            )
-
-            for m in result["matches"]:
-                if m["agent"] is None:
-                    logger.info(f"  Timbre: ref='{m['ref']}' — no match")
-                else:
-                    logger.info(
-                        f"  Timbre: ref='{m['ref']}' agent='{m['agent']}' "
-                        f"similarity={m.get('timbre_similarity', 0):.4f}"
-                    )
-
-            # -----------------------------------------------------------
-            # Finalize
-            # -----------------------------------------------------------
-            ctx.finalize(
-                num_agent_stems=num_non_silent,
-                num_ref_stems=num_expected,
-                num_output_files=len(output_files),
-            )
-
-            total = ctx.total_score
-            logger.info(
-                f"Final score: {total:.4f} " f"(stem={stem_score:.3f} timbre={timbre_score:.3f})"
-            )
-            return [total]
-
-    except Exception as e:
-        logger.error(f"Evaluation error: {e}")
-
-    return [0.0]
+        root = Path(__file__).parent / ".evaluation" / uuid.uuid4().hex
+        root.mkdir(parents=True)
+        for stem in assessment["delivery"]["stems"]:
+            for passage in stem["passages"]:
+                for field in ("reference_path", "candidate_path", "native_path"):
+                    if field not in passage:
+                        raise JudgeInfrastructureError("Evaluator-native audio passage is missing")
+                    remote = passage[field]
+                    path = root / Path(remote).name
+                    path.write_bytes(await session.read_bytes(remote))
+                    passage[field] = str(path)
+        scored = await score_delivery(assessment["delivery"], root)
+        context.log_evaluation(
+            identifier="audio_semantic_rubric", score=scored["weighted_score"], result=scored
+        )
+        context.add_score(scored["weighted_score"])
+        await session.write_bytes(evidence + "/scored.json", json.dumps(scored, indent=2).encode())
+        context.finalize()
+        return [context.total_score]

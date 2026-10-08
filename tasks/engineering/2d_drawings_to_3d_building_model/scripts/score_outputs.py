@@ -4,8 +4,8 @@ This scorer NEVER reads the agent's OBJ or 3DM geometry. It compares the
 rendered 14 canonical views (4 plans + 4 elevations + 2 sections + 4 axons)
 of the candidate against the frozen reference renders using a multimodal LLM.
 
-The judge asks N binary YES/NO questions defined in a variant-specific
-`eval_config.json`. Final score = yes_count / question_count.
+The judge asks the eight original binary YES/NO questions using only relevant
+view pairs for each criterion. Final score = yes_count / question_count.
 
 Usage:
     python score_outputs.py \\
@@ -14,13 +14,10 @@ Usage:
         --config <path to variant's eval_config.json> \\
         --output-json <path to write report>
 
-Config schema (per-variant, e.g. tmp/betonwerk/eval_config.json):
-    {
-      "task_description": "human-readable variant description shown in the prompt",
-      "judge_questions": ["yes/no question 1", "yes/no question 2", ...],
-      "pass_threshold": 0.5,
-      "view_names": ["plan_hall_ground", ..., "axon_SE"]   # optional, defaults to standard 14
-    }
+The config retains the original task_description and eight judge_questions.
+view_names defaults to the standard 14; pass_threshold defaults to 0.5.
+Questions map to views by their full text, independently of question order.
+See ../README.md for judge configuration and evidence persistence.
 """
 
 from __future__ import annotations
@@ -28,17 +25,13 @@ from __future__ import annotations
 import argparse
 import base64
 import json
-import sys
+import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-THIS_DIR = Path(__file__).resolve().parent
-# tasks/engineering/<task>/scripts/ → repo root is 4 levels up
-REPO_ROOT = THIS_DIR.parents[3]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from tasks.utils.evaluation import llm_multimodal_binary_questions_sync  # noqa: E402
+from dotenv import dotenv_values
+from openai import OpenAI
 
 
 DEFAULT_VIEW_NAMES: tuple[str, ...] = (
@@ -59,17 +52,58 @@ DEFAULT_VIEW_NAMES: tuple[str, ...] = (
 )
 
 DEFAULT_PASS_THRESHOLD = 0.5
+DEFAULT_JUDGE_MODEL = "gpt-6-astra"
+CRITERION_VIEWS: dict[str, tuple[str, ...]] = {
+    "Does the candidate's overall building massing — relative proportions of the workshop Hall and the residential Tower — match the reference?": (
+        "axon_NE",
+        "axon_SW",
+    ),
+    "Does the candidate have approximately the same number of distinct horizontal floor levels (slabs) as the reference, especially within the Tower zone?": (
+        "section_NS",
+        "section_EW",
+        "elevation_east",
+        "elevation_west",
+    ),
+    "Is the Tower in the candidate located at the correct position (one end of the building) with a similar narrow footprint and tall extrusion?": (
+        "plan_hall_ground",
+        "plan_tower_typical",
+        "axon_NE",
+    ),
+    "Does the candidate's north Hall facade show a continuous solid wall (with vertical metal-panel cladding), rather than an open structural framework?": (
+        "elevation_north",
+        "axon_NW",
+    ),
+    "Does the candidate's south Hall facade show an open structural framework (steel members with the interior visible through), rather than a solid wall?": (
+        "elevation_south",
+        "axon_SE",
+    ),
+    "Does the Tower facade in the candidate show a glass curtain wall with a visible mullion grid (vertical posts plus per-floor horizontal divisions), rather than a featureless solid block?": (
+        "elevation_east",
+        "elevation_west",
+        "axon_NE",
+    ),
+    "Are the workshop module structures inside the Hall ground floor at approximately the same positions and orientations as in the reference?": (
+        "plan_hall_ground",
+    ),
+    "Do the overall elevation silhouettes of the candidate building match the reference reasonably well across the four cardinal directions?": (
+        "elevation_north",
+        "elevation_south",
+        "elevation_east",
+        "elevation_west",
+    ),
+}
 
 
-def _build_prompt_context(task_description: str) -> str:
+def _build_prompt_context(task_description: str, view_names: list[str]) -> str:
     return (
         "You are evaluating a 3D architectural reconstruction benchmark.\n"
         f"{task_description.strip()}\n\n"
-        "You will see 14 paired renders of the building. For each view, the Reference image "
+        f"You will see {len(view_names)} paired renders relevant to this criterion: "
+        f"{', '.join(view_names)}. For each view, the Reference image "
         "(ground truth) is shown first, then the Candidate image (agent submission).\n"
-        "The 14 views are: 4 floor plans, 4 cardinal elevations, 2 vertical sections, and 4 corner axonometrics.\n"
         "Judge each question independently using ONLY the visual evidence in the renders; do not "
         "infer hidden geometry from outside knowledge.\n"
+        "Materials, textures, mesh organization and a common horizontal translation are not scored.\n"
         "Respond with ONLY YES or NO for each question."
     )
 
@@ -82,7 +116,44 @@ def _load_config(config_path: Path) -> dict[str, Any]:
         raise ValueError(f"{config_path}: missing 'task_description'")
     raw.setdefault("view_names", list(DEFAULT_VIEW_NAMES))
     raw.setdefault("pass_threshold", DEFAULT_PASS_THRESHOLD)
+    questions = raw["judge_questions"]
+    if (
+        not isinstance(questions, list)
+        or len(questions) != len(CRITERION_VIEWS)
+        or any(not isinstance(question, str) for question in questions)
+        or set(questions) != set(CRITERION_VIEWS)
+    ):
+        raise ValueError(f"{config_path}: expected the eight original architectural criteria")
+    views = raw["view_names"]
+    if (
+        not isinstance(views, list)
+        or any(view not in DEFAULT_VIEW_NAMES for view in views)
+        or len(set(views)) != len(views)
+        or any(view not in views for selected in CRITERION_VIEWS.values() for view in selected)
+    ):
+        raise ValueError(f"{config_path}: view_names must include every criterion's required views")
+    if not isinstance(raw["pass_threshold"], (int, float)) or not 0 <= raw["pass_threshold"] <= 1:
+        raise ValueError(f"{config_path}: pass_threshold must be between zero and one")
     return raw
+
+
+def _judge_settings(model: str | None = None) -> dict[str, str]:
+    secret_path = Path(__file__).resolve().parents[4] / "secret" / ".env"
+    values = {**dotenv_values(secret_path), **os.environ}
+    api_key = values.get("D2T3B_JUDGE_API_KEY") or values.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("Building judge requires D2T3B_JUDGE_API_KEY or OPENAI_API_KEY")
+    return {
+        "model": model
+        or values.get("D2T3B_JUDGE_MODEL")
+        or values.get("LLM_JUDGE_MODEL")
+        or DEFAULT_JUDGE_MODEL,
+        "base_url": values.get("D2T3B_JUDGE_BASE_URL")
+        or values.get("OPENAI_BASE_URL")
+        or values.get("OPENAI_API_BASE")
+        or "https://api.openai.com/v1",
+        "api_key": api_key,
+    }
 
 
 _JUDGE_MAX_EDGE = 1024
@@ -90,8 +161,6 @@ _JUDGE_MAX_EDGE = 1024
 
 def _image_to_data_url(path: Path) -> str:
     raw = path.read_bytes()
-    # Downscale before base64 so 14-view × 2-image payload stays under the 50 MB OpenAI cap.
-    # Render fidelity stays on disk; only the judge sees the downscaled copy.
     try:
         from PIL import Image
         import io
@@ -140,67 +209,122 @@ def evaluate_renders(
     candidate_render_dir: Path,
     config_path: Path,
     model: str | None = None,
+    report_path: Path | None = None,
+    on_report: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
-    """Run the image-only judge over the per-variant view pairs.
-
-    Returns a dict with:
-      score              : final_score in [0, 1] (yes_count / question_count)
-      passed             : bool (score >= pass_threshold from config)
-      yes_count, no_count, question_count
-      per_question       : list of {question, result, score, raw_response}
-      missing_views      : views without both ref + cand pngs
-      pass_threshold     : float (from config)
-      variant_task_description : echo of the variant config
-    """
+    """Judge eight criteria, checkpointing full replies before validating each answer."""
     config = _load_config(config_path)
     questions = config["judge_questions"]
-    view_names = config["view_names"]
     pass_threshold = config["pass_threshold"]
-
-    content, missing = _build_content(reference_render_dir, candidate_render_dir, view_names)
-    if not content:
-        return {
-            "score": 0.0,
-            "passed": False,
-            "yes_count": 0,
-            "no_count": len(questions),
-            "question_count": len(questions),
-            "per_question": [],
-            "missing_views": missing,
-            "pass_threshold": pass_threshold,
-            "variant_task_description": config["task_description"],
-            "error": "no_renderable_view_pairs",
-        }
-
-    judge_result = llm_multimodal_binary_questions_sync(
-        prompt_context=_build_prompt_context(config["task_description"]),
-        questions=questions,
-        content=content,
-        model=model,
-        max_tokens=32,
-        temperature=0,
-    )
-
-    return {
-        "score": float(judge_result["final_score"]),
-        "passed": judge_result["final_score"] >= pass_threshold,
-        "yes_count": judge_result["yes_count"],
-        "no_count": judge_result["no_count"],
-        "question_count": judge_result["question_count"],
-        "per_question": judge_result["results"],
-        "missing_views": missing,
+    settings = _judge_settings(model)
+    report: dict[str, Any] = {
+        "status": "in_progress",
+        "score": None,
+        "passed": None,
+        "yes_count": 0,
+        "no_count": 0,
+        "question_count": len(questions),
+        "per_question": [],
+        "missing_views": [],
         "pass_threshold": pass_threshold,
         "variant_task_description": config["task_description"],
+        "model": settings["model"],
+        "base_url": settings["base_url"],
     }
+
+    def persist() -> None:
+        if report_path is not None:
+            report_path.write_text(
+                json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        if on_report is not None:
+            on_report(report)
+
+    persist()
+    try:
+        for view in config["view_names"]:
+            for label, directory in (
+                ("reference", reference_render_dir),
+                ("candidate", candidate_render_dir),
+            ):
+                if not (directory / f"{view}.png").is_file():
+                    report["missing_views"].append(f"{label}/{view}.png")
+        if report["missing_views"]:
+            raise RuntimeError("Building judge is missing required render evidence")
+
+        with OpenAI(
+            api_key=settings["api_key"],
+            base_url=settings["base_url"],
+            timeout=120,
+            max_retries=2,
+        ) as client:
+            for index, question in enumerate(questions, start=1):
+                view_names = list(CRITERION_VIEWS[question])
+                content, missing = _build_content(
+                    reference_render_dir,
+                    candidate_render_dir,
+                    view_names,
+                )
+                if missing:
+                    report["missing_views"] = missing
+                    raise RuntimeError("Building judge lost required render evidence")
+                prompt = (
+                    _build_prompt_context(config["task_description"], view_names)
+                    + f"\n\nQuestion {index}/{len(questions)}: {question}"
+                )
+                response = client.chat.completions.create(
+                    model=settings["model"],
+                    messages=[
+                        {"role": "user", "content": [{"type": "text", "text": prompt}, *content]}
+                    ],
+                    max_completion_tokens=2048,
+                )
+                choice = response.choices[0] if response.choices else None
+                raw_response = choice.message.content if choice else None
+                result = {
+                    "question": question,
+                    "question_index": index,
+                    "view_names": view_names,
+                    "result": None,
+                    "score": None,
+                    "raw_response": raw_response,
+                    "response": response.model_dump(mode="json"),
+                }
+                report["per_question"].append(result)
+                persist()
+                answer = (raw_response or "").strip().upper()
+                if choice is None or choice.finish_reason != "stop" or answer not in {"YES", "NO"}:
+                    raise RuntimeError(
+                        f"Building judge returned an incomplete or non-binary reply for Q{index}"
+                    )
+                result.update(result=answer, score=float(answer == "YES"))
+                report["yes_count"] += int(answer == "YES")
+                report["no_count"] += int(answer == "NO")
+                persist()
+    except Exception as error:
+        report.update(status="error", error_type=type(error).__name__)
+        persist()
+        raise
+
+    score = report["yes_count"] / len(questions)
+    report.update(status="completed", score=score, passed=score >= pass_threshold)
+    persist()
+    return report
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Image-only VLM judge for drawings_to_3d_building variants")
+    parser = argparse.ArgumentParser(
+        description="Image-only VLM judge for drawings_to_3d_building variants"
+    )
     parser.add_argument("--reference-render-dir", required=True)
     parser.add_argument("--candidate-render-dir", required=True)
     parser.add_argument("--config", required=True, help="Per-variant eval_config.json")
-    parser.add_argument("--output-json", default=None, help="Optional path to write the JSON report")
-    parser.add_argument("--model", default=None, help="Override the judge model (otherwise resolved from env)")
+    parser.add_argument(
+        "--output-json", default=None, help="Optional path to write the JSON report"
+    )
+    parser.add_argument(
+        "--model", default=None, help="Override the judge model (default: gpt-6-astra)"
+    )
     return parser.parse_args()
 
 
@@ -211,11 +335,10 @@ def main() -> int:
         Path(args.candidate_render_dir).resolve(),
         Path(args.config).resolve(),
         model=args.model,
+        report_path=Path(args.output_json).resolve() if args.output_json else None,
     )
     text = json.dumps(result, ensure_ascii=False, indent=2)
     print(text)
-    if args.output_json:
-        Path(args.output_json).write_text(text, encoding="utf-8")
     return 0
 
 

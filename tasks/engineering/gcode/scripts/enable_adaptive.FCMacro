@@ -1,0 +1,14 @@
+import os
+import sys
+
+import FreeCADGui
+
+
+sys.path.insert(0, os.environ['ALE_CAM_ADAPTER_DIR'])
+from cam_adapter import enable
+
+selected = FreeCADGui.Selection.getSelection()
+if len(selected) != 1 or not hasattr(selected[0], 'SampleInterval'):
+    raise ValueError('Select one CAM Surface operation')
+enable(selected[0])
+selected[0].Document.recompute()

@@ -1,87 +1,152 @@
 {
   "taskId": "engineering/inner_support_elevation_optimization",
   "title": "Inner Support Elevation Optimization",
-  "summary": "Use PLAXIS 3D to compare five inner support elevations for a staged pit-in-pit excavation and report settlement and lateral displacement outcomes with the required engineering deliverables.",
+  "summary": "Compare five inner-support elevations for the A-zone staged pit-in-pit excavation using source-based Kratos models, native displacement extraction and an engineering recommendation.",
   "category": "engineering",
   "software": [
-    "PLAXIS 3D 2023.2"
+    "Kratos Multiphysics 10.4.3"
   ],
-  "taskPrompt": "You are a geotechnical engineer using PLAXIS 3D 2023.2 on Windows.\n\n## Your Task\nEvaluate how the inner support elevation changes settlement and lateral wall movement for the staged A-zone pit-in-pit excavation benchmark.\n\n## Input Files\n- Benchmark model specification: `base\\input\\benchmark_model_spec_en.md`\n- Engineering assumptions: `base\\input\\engineering_assumptions_en.md`\n- Structural materials reference: `base\\input\\A_zone_structural_materials_en.md`\n- Task-specific brief and formulas: `base\\input\\task_specific_brief_en.md`\n- Figure index: `base\\input\\figure_index_en.md`\n- Answer template: `base\\input\\answer_template.json`\n- Reference figures:\n  - `base\\input\\figure_2_1_project_site_plan.png`\n  - `base\\input\\figure_2_3_excavation_zone_plan.png`\n  - `base\\input\\figure_2_4_2_5_support_layout_and_section.png`\n  - `base\\input\\figure_2_6_monitoring_layout.png`\n  - `base\\input\\figure_3_1_plaxis_model_geometry.png`\n  - `base\\input\\figure_3_2_mesh_layout.png`\n\n## Software\n- Launch PLAXIS 3D Input from: `base\\software\\launch_plaxis_3d_input.bat`\n- Launch PLAXIS 3D Output from: `base\\software\\launch_plaxis_3d_output.bat`\n- Launch PLAXIS 3D Output Viewer from: `base\\software\\launch_plaxis_3d_output_viewer.bat`\n\n## What You Must Do\n1. Review the staged benchmark specification, assumptions, figures, and answer template.\n2. Build or duplicate the PLAXIS 3D case family for the tested support elevations `0 m`, `1 m`, `2 m`, `3 m`, and `4 m`.\n3. Run the staged calculations through the final excavation state for each case.\n4. Extract maximum settlement and maximum outer-wall lateral displacement for each case.\n5. Save one or more native PLAXIS project files using the filename prefix:\n   `base\\output\\model_family_support_position`\n6. Save the structured summary table exactly to:\n   `base\\output\\case_summary.csv`\n7. Save the required images exactly to:\n   `base\\output\\pos_0m_output_view.png`\n   `base\\output\\pos_2m_output_view.png`\n   `base\\output\\pos_4m_output_view.png`\n   `base\\output\\settlement_vs_support_position.png`\n   `base\\output\\lateral_disp_vs_support_position.png`\n8. Save the engineering memo exactly to:\n   `base\\output\\support_position_engineering_memo.md`\n9. Save the final machine-readable answer exactly to:\n   `base\\output\\answer.json`\n\n## Output Requirements\n- `answer.json` must use the exact schema from `base\\input\\answer_template.json`\n- Report settlement and displacement as positive magnitudes in millimeters\n- Keep all work products inside `base\\output`\n",
+  "taskPrompt": "You are a geotechnical engineer comparing inner support elevations for the\nA-zone staged three-dimensional pit-in-pit excavation. Build the model from the\noriginal inputs, calculate the five alternative construction histories, and\nexplain how support elevation affects settlement and outer-wall movement.\n\nRead the original files in `base/input`: `benchmark_model_spec_en.md`,\n`engineering_assumptions_en.md`, `A_zone_structural_materials_en.md`,\n`task_specific_brief_en.md`, `figure_index_en.md`, `answer_template.json`, and\nall six figures listed in the index. They remain the engineering sources.\n`model_definition.md` states the explicit task clarifications adopted for this\nadaptation, including the deterministic admissibility rules; they control open\nor ambiguous source wording. The original\nfiles and their hashes are unchanged. `benchmark.json` separates source facts\nfrom these new decisions, without prescribing a solved model.\n\nKratos Multiphysics 10.4.3 with GeoMechanics, StructuralMechanics and LinearSolvers\nis the intended runtime at `/opt/ale-kratos/bin/python`. GUI use is optional.\nUse the supplied support-native-family-1 interface, uniform hydrostatic pressure,\nbonded walls and a common declared non-crown rectangular beam section.\n\nPreserve the fourteen Mohr-Coulomb strata and their supplied parameters; elastic\nC35 walls, supports, ring beams and walers, including their 25 kN/m³ selfweight;\nthe 1.00 m outer and 0.62 m equivalent inner wall thicknesses; the original\nstaged excavation, groundwater levels and construction history; and four outer\nbracing levels plus the one inner support. Interpret the irregular plan and\ndiagonal members from the figures. Distinguish the Stage 7 ring beam from an\nadditional layer of cross-pit outer struts.\n\nKeep beta = 0.30 as the source's rounded depth-ratio label and retain the baseline\nexcavation depths. For all five cases, fix inner-wall embedment at 6.50 m below\nthe inner base: the section's absolute base -15.10 m and toe -21.60 m control.\nRetain n = 0.40 as a rounded legacy study label only; no exact denominator or\nhistorical n formula is recovered or imposed. This precedence is an explicit\nnew task clarification, not a claim that the original study defined it.\nCompare `pos_0m` through `pos_4m`, measured down from the inner-pit top at absolute\n-10.10 m, through each case's final excavation state. Keep all other\nmodeling choices consistent across the cases. Document coordinate datums and\nthe interpretation of source ambiguities. Rock stiffness, mesh, sufficiently\nremote boundaries and other details left open by the sources remain your\nengineering choices. Preserve state through the stages and install each support\nwhen the excavation reaches its installation level. Stage 7 completes outer\nexcavation; Stage 8 constructs the inner wall and crown/ring beam. Install the\nsingle inner support after its wall exists and its case level is exposed, before\nfurther inner excavation. Position 0 can be installed before inner digging;\npositions 1 through 4 require Stage 9 substeps. This explicitly corrects the\nsource's fifth ring/support event ordering, without adding a fifth outer brace\nor duplicating the inner support. All water and final excavation milestones stay.\n\nUse all DBC1 through DBC10 ground stations and all CX1 through CX10 outer-wall\nprofiles, each from wall top to toe. With upward z and displacement u measured\nfrom the end of Stage 1, report settlement as max_i(max(0, -u_z(DBC_i))) and wall\nmovement as max_i,max_depth(sqrt(u_x(CX_i,depth)^2 + u_y(CX_i,depth)^2)), in mm.\nThis new public convention resolves the ambiguous ground-section wording to\nDBC station sampling; it does not invent continuous transects or instrument\nazimuths. Register the approximate source locations before viewing results,\ninterpolate native fields there, and check profile sampling convergence. Keep\nthat mapping and baseline for all five cases, without resetting construction\ndisplacements. Whole-domain maxima and ZQS/ZQC do not replace these observations.\n\nPut all work products under `base/output`:\n\n- `answer.json` with the fourteen fields in the original template;\n- `case_summary.csv` with all five cases;\n- `model_family_support_position/` containing editable native model inputs,\n  meshes, materials, stages, calculation logs, native results for all five cases,\n  and the raw monitoring extraction tables;\n- `pos_0m_output_view.png`, `pos_2m_output_view.png`, `pos_4m_output_view.png`;\n- `settlement_vs_support_position.png`, `lateral_disp_vs_support_position.png`;\n- `support_position_engineering_memo.md` explaining results, percentages,\n  minima, installation tradeoffs, assumptions, limitations and recommendation.\n\nInclude instructions for rerunning and inspecting the native project. There is\nno additional mandatory NPZ export, handwritten project manifest or independent\nquantitative-proof assignment. See `delivery_schema.md` for the delivery details\nand `native_interface.md` for the supplied construction and result-file interface.\n\nThe intended weighting remains 50% numerical and 50% engineering delivery.\nNumerical checking must use independent replay of your source-compliant model,\nwith the original response tolerance max(0.30 mm, 5%), rather than numbers from\nan arbitrarily fixed alternative model. No reference optimum or response-curve\nshape is prescribed. An unavailable replay is an evaluator error, not a zero\nscore or evidence that your engineering solution failed.\n\nEvaluation is entirely deterministic. Run the supplied native_model_contract.py\npreflight before solving. model_definition.md publishes geometric size ranges,\nwall/brace coverage, monitor admissibility, local refinement and solver tolerance\nchecks. These explicit adaptation rules replace subjective source interpretation.\nA violated public check receives zero with its failure recorded. Incomplete\nindependent replay remains evaluator-unavailable, not a solver score.\n\nInclude the support-decision JSON block specified in delivery_schema.md inside\nthe engineering memo. PNG checks cover decoding, minimum dimensions and pixel\nvariation only; they do not grade image content, labels or physical accuracy.\nMemo checks cover native percentages/minima, a valid recommendation position\nand minimum text lengths, without semantic assessment of the narrative.\nImages and memo contribute 10% and 6% of the total score; the remaining delivery\n34% covers schema, completeness, native results and summary/table agreement.\nAll credit requires passing the public model checks and completed independent\nnative replay. No model service grades prose, images, water or member choices.\nAdditional mesh/domain studies are further numerical validation, not mandatory\nextra runs. No hidden optimum, registration, mesh or second five-case study is\nrequired. Document uncertainty and installation tradeoffs in the memo.\n",
   "agentMustDo": [
-    "Review the staged benchmark specification, engineering assumptions, figures, and answer template.",
-    "Build or duplicate the five PLAXIS 3D support-elevation cases for `0 m`, `1 m`, `2 m`, `3 m`, and `4 m`.",
-    "Run the calculations through the final excavation state and extract maximum settlement plus maximum outer-wall lateral displacement for each case.",
-    "Write the required PLAXIS project files, `case_summary.csv`, screenshots/plots, engineering memo, and final `answer.json` into `output/`."
+    "Reconstruct the A-zone model from the unchanged original notes and figures with the declared 6.50 m embedment and corrected inner-support installation ordering; preserve materials, selfweight and structural topology. Retain n=.40 only as a rounded legacy label.",
+    "Calculate the five independent support-elevation cases using consistent reasonable modeling choices, all ten DBC stations and all ten full-wall CX profiles with the declared Stage-1 baseline.",
+    "Deliver the editable native projects/results, raw monitoring extractions, original answer/table, three case views, two plots and engineering memo."
   ],
   "inputFiles": [
     {
-      "name": "benchmark_model_spec_en.md",
-      "format": "md",
-      "path": "input/benchmark_model_spec_en.md",
-      "description": "Full staged excavation benchmark specification for the A-zone pit-in-pit model."
-    },
-    {
-      "name": "engineering_assumptions_en.md",
-      "format": "md",
-      "path": "input/engineering_assumptions_en.md",
-      "description": "Modeling assumptions and interpretation rules for the PLAXIS study."
-    },
-    {
       "name": "A_zone_structural_materials_en.md",
       "format": "md",
-      "path": "input/A_zone_structural_materials_en.md",
-      "description": "Structural and material properties required to rebuild the case family."
-    },
-    {
-      "name": "task_specific_brief_en.md",
-      "format": "md",
-      "path": "input/task_specific_brief_en.md",
-      "description": "Task-specific formulas, reporting instructions, and expected engineering outputs."
-    },
-    {
-      "name": "figure_index_en.md",
-      "format": "md",
-      "path": "input/figure_index_en.md",
-      "description": "Index of the staged reference figures used to reconstruct the model and reporting views."
+      "path": "input/A_zone_structural_materials_en.md"
     },
     {
       "name": "answer_template.json",
       "format": "json",
-      "path": "input/answer_template.json",
-      "description": "Exact machine-readable output schema the agent must fill in."
+      "path": "input/answer_template.json"
+    },
+    {
+      "name": "benchmark_model_spec_en.md",
+      "format": "md",
+      "path": "input/benchmark_model_spec_en.md"
+    },
+    {
+      "name": "engineering_assumptions_en.md",
+      "format": "md",
+      "path": "input/engineering_assumptions_en.md"
+    },
+    {
+      "name": "figure_2_1_project_site_plan.png",
+      "format": "png",
+      "path": "input/figure_2_1_project_site_plan.png"
+    },
+    {
+      "name": "figure_2_3_excavation_zone_plan.png",
+      "format": "png",
+      "path": "input/figure_2_3_excavation_zone_plan.png"
+    },
+    {
+      "name": "figure_2_4_2_5_support_layout_and_section.png",
+      "format": "png",
+      "path": "input/figure_2_4_2_5_support_layout_and_section.png"
+    },
+    {
+      "name": "figure_2_6_monitoring_layout.png",
+      "format": "png",
+      "path": "input/figure_2_6_monitoring_layout.png"
+    },
+    {
+      "name": "figure_3_1_plaxis_model_geometry.png",
+      "format": "png",
+      "path": "input/figure_3_1_plaxis_model_geometry.png"
+    },
+    {
+      "name": "figure_3_2_mesh_layout.png",
+      "format": "png",
+      "path": "input/figure_3_2_mesh_layout.png"
+    },
+    {
+      "name": "figure_index_en.md",
+      "format": "md",
+      "path": "input/figure_index_en.md"
+    },
+    {
+      "name": "task_specific_brief_en.md",
+      "format": "md",
+      "path": "input/task_specific_brief_en.md"
+    },
+    {
+      "name": "model_definition.md",
+      "format": "md",
+      "path": "input/model_definition.md"
+    },
+    {
+      "name": "benchmark.json",
+      "format": "json",
+      "path": "input/benchmark.json"
+    },
+    {
+      "name": "delivery_schema.md",
+      "format": "md",
+      "path": "input/delivery_schema.md"
+    },
+    {
+      "name": "native_interface.md",
+      "format": "md",
+      "path": "input/native_interface.md"
     }
   ],
   "referenceFiles": [
     {
       "name": "answer.json",
-      "format": "json",
       "path": "output/answer.json",
-      "description": "Final structured engineering answer covering all five support positions plus the best-position selections."
+      "description": "Fourteen numerical responses and derived metrics."
     },
     {
       "name": "case_summary.csv",
-      "format": "csv",
       "path": "output/case_summary.csv",
-      "description": "Per-case table containing support position, maximum settlement, and maximum lateral displacement."
+      "description": "Five-case summary matching the reported DBC/CX observations."
+    },
+    {
+      "name": "model_family_support_position/",
+      "path": "output/model_family_support_position/",
+      "description": "Editable native model inputs, all five native result sets and raw monitoring extractions."
     },
     {
       "name": "support_position_engineering_memo.md",
-      "format": "md",
       "path": "output/support_position_engineering_memo.md",
-      "description": "Short engineering memo that explains the observed support-elevation tradeoffs."
+      "description": "Engineering interpretation, assumptions, limitations and recommendation."
     },
     {
-      "name": "model_family_support_position*",
-      "format": "project",
-      "path": "output/model_family_support_position*",
-      "description": "One or more native PLAXIS project files saved with the required filename prefix."
+      "name": "pos_0m_output_view.png",
+      "path": "output/pos_0m_output_view.png",
+      "description": "Original required result view or five-case comparison plot."
+    },
+    {
+      "name": "pos_2m_output_view.png",
+      "path": "output/pos_2m_output_view.png",
+      "description": "Original required result view or five-case comparison plot."
+    },
+    {
+      "name": "pos_4m_output_view.png",
+      "path": "output/pos_4m_output_view.png",
+      "description": "Original required result view or five-case comparison plot."
+    },
+    {
+      "name": "settlement_vs_support_position.png",
+      "path": "output/settlement_vs_support_position.png",
+      "description": "Original required result view or five-case comparison plot."
+    },
+    {
+      "name": "lateral_disp_vs_support_position.png",
+      "path": "output/lateral_disp_vs_support_position.png",
+      "description": "Original required result view or five-case comparison plot."
     }
   ],
-  "evaluation": "- Hard-fail conditions: missing `answer.json`, invalid answer schema, missing required named artifacts, or missing PLAXIS project files with the required prefix.\n- Base rubric: schema validity, evidence-file presence and naming, project-save presence, screenshot/plot presence, CSV parseability, and memo presence contribute the first half of the score.\n- Numeric rubric: 14 answer fields are compared against hidden engineering ground truth.\n- Tolerances: settlement/displacement fields use `max(0.30 mm, 5% relative error)`; percentage fields use `max(0.30 percentage points, 8% relative error)`; best-position fields must match exactly.\n- Expected positive fixture score: `1.0`.\n- Expected realistic negative fixture score: below `1.0`; the committed negative fixture scores `0.5` because it preserves the artifact set while failing the numeric engineering checks.",
+  "evaluation": "Deterministic public model preflight, independent same-model native replay, source-fact/state audit, native tetrahedral/Q4-hexahedral ground and coupled shell/crown profile extraction, and deterministic 50/50 numerical/delivery scoring. Contract violations score zero with the failed check. Incomplete native replay is evaluator-unavailable. Presentation checks and structured memo criteria are explicit in delivery_schema.md. No LLM service, API credential, hidden response curve or subjective source gate.",
   "vm": {
     "machineType": "c4-standard-4",
-    "snapshot": "cpu-license",
-    "timeout": 7200
+    "snapshot": "cpu-free-ubuntu",
+    "osType": "linux",
+    "timeout": 18000
   },
   "taxonomy": {
     "domain_id": "1",
@@ -106,7 +171,7 @@
       "rationale": "The task involves geotechnical engineering and excavation analysis."
     }
   },
-  "requiredSystemPackages": [
-    "plaxis-3d-2023.2"
-  ]
+  "requiredSystemPackages": [],
+  "evaluatorCredentials": [],
+  "releaseStatus": "native_entrypoint_and_agent_review_passed"
 }

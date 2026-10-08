@@ -1,100 +1,104 @@
 {
   "version": "1.1",
-  "published_date": "2026-09-19",
+  "published_date": "2026-10-08",
   "selected_task_lists": {
     "selected_tasks/ale_cli.txt": {
-      "count": 105,
-      "sha256": "915511f62dadea4c0037af270bf649d6b883a84b12201d41ba437b68896536a1"
+      "count": 111,
+      "sha256": "19bd12d116d448cd8953f2746fcc3d0e7bdcb4b1815092d278e1ec51720f0f5d"
     },
     "selected_tasks/cpu_unlicensed.txt": {
-      "count": 140,
-      "sha256": "ee740ae2f56d04f75ea9efd7abe4b41de148f8497a2f3f6ad53483d19a5a0aca"
+      "count": 146,
+      "sha256": "6f97dd291d81ddfa2d30ead801c463c63e1d2f05cb8b9ea3fb8a6a462f80feeb"
     },
     "selected_tasks/docker_support.txt": {
-      "count": 99,
-      "sha256": "f1bf3f38b9941c464fb61edc01d7163e0ab53eb730d7f1db6bf6694bc0451ff0"
+      "count": 102,
+      "sha256": "c888828b1fc6599d5c95bb96731c1fdb9238dd5bc3b1d62e90f9b902d24c3f7a"
     },
     "selected_tasks/full.txt": {
-      "count": 152,
-      "sha256": "ee7ced3f56a8d05898ae82068903ed0682ebc0d771f227270b07c726f0563f38"
+      "count": 151,
+      "sha256": "900698cda895d67ddd6bd291825d5621a57479143052b4ea767b028f93353f7f"
     },
     "selected_tasks/full/full-spectrum.txt": {
-      "count": 55,
-      "sha256": "3c2331855fe07c56382ce2becabf951493bca5a220dd80c915ed10f59f984cc2"
+      "count": 54,
+      "sha256": "2f868e60b904eb253428979e722cf4f482265bf29d4c3e74d6784b3ab81517ab"
     },
     "selected_tasks/full/last-exam.txt": {
-      "count": 38,
-      "sha256": "f878d4ca42cbeac9d10dcfd2ad247edb86389f8e432be921b2848baafe30efea"
+      "count": 37,
+      "sha256": "79a1838fd4f49fda26521c3629a965f9ff014cf215feebc7328db101fcc63f7d"
     },
     "selected_tasks/full/near-term.txt": {
       "count": 67,
       "sha256": "cd75d88808f06c164b0cbf298c0c66bcbfd66e04ad72299798da38f5a9c32f1c"
     },
     "selected_tasks/full/overall.txt": {
-      "count": 152,
-      "sha256": "092fe40192423a5857d967090bb67e64bb44980ca945600472b905c8055e1400"
+      "count": 151,
+      "sha256": "0f8bd5e367c80b73c033647e8461c35b80d7e9dd3bab07550c492f7ffeb61525"
     },
     "selected_tasks/hello_both.txt": {
       "count": 2,
       "sha256": "ff0f8bcccd31e24f97672dfb142ebcb372817770983e83b1b33db8aed815975d"
     },
     "selected_tasks/licensed.txt": {
-      "count": 7,
-      "sha256": "301b5152c12f245821ee86166630b0f8462143fca691fd0bd2fb61b9be88c965"
+      "count": 0,
+      "sha256": "ad4e2247d07ec167d4c319b4ec5d38c496bd8741d5f05adf7c5290e99619f399"
     },
     "selected_tasks/tool_smoke_both.txt": {
       "count": 2,
       "sha256": "abf070c223349717f3d441b9edc597c0515f32ace7a03c49e0de82dd5ef3b949"
     },
     "selected_tasks/unlicensed.txt": {
-      "count": 145,
-      "sha256": "3f1a96b93776940feb47ec17aed2c0c1fb011437c6b442b41d0166cb4654438b"
+      "count": 151,
+      "sha256": "3cceba273d6dca8efc3132208d0421d634e7ee947571dc930a2dfb7c5aca0f44"
     },
     "selected_tasks/unlicensed/full-spectrum.txt": {
-      "count": 50,
-      "sha256": "1f7488c7c595aa1e13c5715c2426f0f0ea867314a70b11e884bcb31ba5347e18"
+      "count": 52,
+      "sha256": "a8732c06b6b5b9e899ba791ab0a0f680f4cac4cc53db932fff5b577f8105997f"
     },
     "selected_tasks/unlicensed/last-exam.txt": {
-      "count": 30,
-      "sha256": "356a2640800d0f9c40d5f0a844aa15ce8d10ca6b3c933a47862be7a9b03e51b7"
+      "count": 34,
+      "sha256": "acdc4723e98b4d2adc6bf704fae06a8487b49218bd644af00a3ef33407b33321"
     },
     "selected_tasks/unlicensed/near-term.txt": {
       "count": 67,
       "sha256": "cd75d88808f06c164b0cbf298c0c66bcbfd66e04ad72299798da38f5a9c32f1c"
     },
     "selected_tasks/unlicensed/overall.txt": {
-      "count": 141,
-      "sha256": "bf5e2b07fa4acf1b803126d7bc05ae5052407ffae4f44869178af151ee53caaf"
+      "count": 147,
+      "sha256": "6f5d42e744e8f8da5669b18910870cdb8b8996968572fbff56448ffa710b4da8"
+    },
+    "selected_tasks/qemu_excluded.txt": {
+      "count": 5,
+      "sha256": "c860975eda1b11b9c3cf9f837b4d17998b4a081a41c2389e8e5566c3eb86aec6"
     }
   },
   "huggingface": {
     "public": {
       "repo": "agents-last-exam/agents-last-exam-data",
-      "revision": "d93bb510e472dcaa406f09fc800797268567ca5c",
+      "revision": "d25238a616965084c0f64317d9b21229980a4263",
       "gated": false,
       "tag": "v1.1"
     },
     "reference": {
       "repo": "agents-last-exam/agents-last-exam-reference",
-      "revision": "cf17f3e4e3af3245558b2eba7d6f1fa094bba641",
+      "revision": "211d01f21bd4b84782ba53ffac5ee833f42f97d2",
       "gated": "manual",
       "tag": "v1.1"
     },
     "metadata": {
       "repo": "agents-last-exam/agents-last-exam",
-      "revision": "ea617358e3c2e244d6f4d473c6a6a85d394bf90d",
+      "revision": "fb4063de19ab2a2cc19be1f466c5aba0bd69a8e1",
       "gated": false,
       "tag": "v1.1"
     },
     "archive": {
       "repo": "agents-last-exam/agents-last-exam-data-archive",
-      "revision": "dedf6556c88f7dfd4fce891f9fa213e66584c71e",
+      "revision": "c5cfd7a8fa41d3c86afbeac23764f47932b2101e",
       "gated": "manual",
       "tag": "v1.1"
     },
     "images": {
       "repo": "agents-last-exam/ale-images-qcow2",
-      "revision": "3ace4090971467175656238621cb4bcd0cfb03a4",
+      "revision": "49a1afa4fe2aa16c41d72279a0268125c707fe49",
       "gated": false,
       "tag": "v1.1"
     }
@@ -102,19 +106,19 @@
   "images": {
     "linux": {
       "filename": "ale-ubuntu22-v1.1.qcow2",
-      "sha256": "ade826005507cd35fd54b53f3653f60c6ef4462a29956f0f1f6014b5b0c76913",
-      "bytes": 88758157312,
+      "sha256": "ad0c2b86860765bafe5bc8156e5ee65736c910ca8da580aee13ca219cc9f3f32",
+      "bytes": 93781164032,
       "hf_manifest": "ale-ubuntu22-v1.1.qcow2.manifest.json",
-      "parts": 23,
+      "parts": 24,
       "gcloud": {
         "project": "agenthle-488519",
         "name": "ale-ubuntu22-v1-1",
-        "id": "4206948726041967319"
+        "id": "3211949664222503562"
       },
       "gcs": {
         "uri": "gs://ale-data-public/images/ale-ubuntu22-v1.1.qcow2",
-        "generation": "1789837875660185",
-        "crc32c": "LahEYg=="
+        "generation": "1791449092086128",
+        "crc32c": "G5S95Q=="
       }
     },
     "windows": {
@@ -132,24 +136,30 @@
         "uri": "gs://ale-data-public/images/ale-win10-v1.1.qcow2",
         "generation": "1789837876119177",
         "crc32c": "fscDpQ=="
+      },
+      "reuse_qualification": {
+        "selected_platform_tasks": 40,
+        "unchanged": true,
+        "hf_proof": "v1.1-oss-platform-projections.json",
+        "logical_projection_sha256": "09a75404c1ac2b30d0cdac3b175f77eb5397e01f913cfe25e80d62fc02252a98"
       }
     }
   },
   "task_data": {
-    "selected_tasks": 152,
-    "logical_members": 85532,
-    "manifest_sha256": "d4ab0921c4c8fb91252b68512fc387a943558b0a890806eab806a74359a3e214",
+    "selected_tasks": 151,
+    "logical_members": 85316,
+    "manifest_sha256": "f4225fe874d32929181e828695f66a31b128b425984d2d0becdfc21ac82ae86e",
     "archive_filename": "ale-tasks-data.tar.gz",
-    "archive_sha256": "74b4f18c2732d361024b9d41766c1a68cdacf9fb823fc25f38e12c4aa15efc7f",
-    "archive_bytes": 48859738286,
+    "archive_sha256": "0bfd0fe8d7d0bb5840097a8db233ec26f46707f4e1e90925692a12cfad7afb6f",
+    "archive_bytes": 47649424424,
     "public_reference_format": "header-encrypted reference.7z",
     "gcs_public": {
       "generation_size_crc32c_match": true,
-      "objects": 68653,
+      "objects": 68640,
       "prefix": "gs://ale-data-public/v1.1/"
     },
-    "public_input_software_objects": 68501,
-    "public_reference_archives": 152,
+    "public_input_software_objects": 68491,
+    "public_reference_archives": 149,
     "hf_native_path_transport": "_transport/v1.1/path-compatibility.tar",
     "hf_public_symlink_transport": "_transport/candidate-postvalidation-20260918-r06/tcga-public-symlinks.tar"
   },
@@ -160,13 +170,13 @@
   },
   "docker": {
     "image": "agentslastexam/ale-ubuntu22-docker:v1.1",
-    "pinned_image": "agentslastexam/ale-ubuntu22-docker:v1.1@sha256:0b4d5173e0be38234d97a3b193a70ebbcd766a0983476d4d7c86539d3cb033be",
+    "pinned_image": "agentslastexam/ale-ubuntu22-docker:v1.1@sha256:b0804013b6490eec77d735e3faf256b8d2ac06952061d524b66848f756c64f34",
     "publication_status": "published",
-    "published_date": "2026-09-20",
-    "registry_digest": "sha256:0b4d5173e0be38234d97a3b193a70ebbcd766a0983476d4d7c86539d3cb033be",
-    "config_digest": "sha256:c44076360b0fe6da4ae11a067d69b8ea09f2421a9926c806303dbf8ad0ffb092",
-    "compressed_layer_bytes": 35571545017,
-    "uncompressed_bytes": 85332499832
+    "published_date": "2026-10-08",
+    "registry_digest": "sha256:b0804013b6490eec77d735e3faf256b8d2ac06952061d524b66848f756c64f34",
+    "config_digest": "sha256:dfb2ca00a5daefd69d7fa48f6af2ebcefce2675913aba0d389aac7ddc708b9ef",
+    "compressed_layer_bytes": 37343471531,
+    "uncompressed_bytes": 88292216874
   },
   "scope": {
     "original_repaired_tasks": 59,
@@ -176,6 +186,18 @@
     "excluded": [
       "AWS",
       "Aliyun"
-    ]
-  }
+    ],
+    "open_source_conversions": [
+      "engineering/2d_drawings_to_3d_building_model",
+      "engineering/cailian_road_highway_alignment_2",
+      "engineering/gcode",
+      "engineering/inner_support_elevation_optimization",
+      "visual_media/music_transcription",
+      "visual_media/project_migration"
+    ],
+    "retired_tasks": {
+      "engineering/mold-flow": "Full four-cavity filling, packing, cooling and demolding was not validated with open-source software at the original scope; original data exists."
+    }
+  },
+  "revision": "oss-20261008"
 }
