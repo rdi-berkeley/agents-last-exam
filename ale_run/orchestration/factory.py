@@ -49,6 +49,7 @@ _AGENT_FQNS: dict[str, str] = {
     "qwen_code": "ale_run.agents.qwen_code.deployer.QwenCodeDeployer",
     "zcode": "ale_run.agents.zcode.deployer.ZCodeDeployer",
     "dummy": "ale_run.agents.dummy.deployer.DummyDeployer",
+    "car": "ale_run.agents.car.deployer.CarDeployer",
 }
 
 
