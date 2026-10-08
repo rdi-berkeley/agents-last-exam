@@ -121,26 +121,20 @@ def score_workbook_bytes(
         total += 1
         text = header["text"]
         norm_text = _normalize(text)
-        found = False
+        matches = []
         for row in ws.iter_rows():
             for cell in row:
-                if cell.value and isinstance(cell.value, str):
-                    if norm_text in _normalize(cell.value):
-                        found = True
-                        ok = True
-                        if header.get("bold") and not (cell.font and cell.font.bold):
-                            reasons.append(f"header_not_bold:{text}")
-                            ok = False
-                        if header.get("fill") and not _has_fill(cell):
-                            reasons.append(f"header_no_fill:{text}")
-                            ok = False
-                        if ok:
-                            passed += 1
-                        break
-            if found:
-                break
-        if not found:
+                if isinstance(cell.value, str) and re.fullmatch(
+                    re.escape(norm_text) + r"(?:\s*\([^()]*\))?", _normalize(cell.value)
+                ):
+                    matches.append(cell)
+        if not matches:
             reasons.append(f"header_missing:{text}")
+        elif any((not header.get("bold") or bool(cell.font and cell.font.bold))
+                 and (not header.get("fill") or _has_fill(cell)) for cell in matches):
+            passed += 1
+        else:
+            reasons.append(f"header_format_invalid:{text}")
 
     for entry in manifest.get("fixed_values", []):
         total += 1

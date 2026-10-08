@@ -603,6 +603,40 @@ class LeducBestResponse:
         )
 
 
+def _normalize_leduc_strategy(strategy):
+    required = count_leduc_info_sets()
+    aliases = {}
+    for key in required:
+        if "/" not in key:
+            continue
+        first, second = key.split("/", 1)
+        rank, history = first.split(":", 1)
+        # The visible specification omits the round-closing call in 1:cr/3:.
+        if history.endswith("c") and "r" in history:
+            aliases[f"{rank}:{history[:-1]}/{second}"] = key
+
+    normalized = {}
+    renamed = 0
+    for key, probabilities in strategy.items():
+        canonical = key if key in required else aliases.get(key)
+        if canonical is None:
+            raise ValueError(f"unknown tier3 information set {key!r}")
+        if canonical in normalized:
+            raise ValueError(f"duplicate tier3 information set {canonical!r}")
+        history = canonical.rsplit(":", 1)[1]
+        action_count = (
+            3 if history.endswith("r") and history.count("r") < LEDUC4_MAX_RAISES else 2
+        )
+        if len(probabilities) != action_count:
+            raise ValueError(f"wrong tier3 action count at {key!r}: expected {action_count}")
+        normalized[canonical] = probabilities
+        renamed += canonical != key
+    missing = required - normalized.keys()
+    if missing:
+        raise ValueError(f"missing {len(missing)} tier3 information sets")
+    return normalized, renamed
+
+
 def _score_tier3(agent_tier):
     result = {"passed": False}
     if not isinstance(agent_tier, dict):
@@ -659,6 +693,12 @@ def _score_tier3(agent_tier):
             return result
         strategy[key] = arr
 
+    try:
+        strategy, normalized_keys = _normalize_leduc_strategy(strategy)
+    except ValueError as exc:
+        result["error"] = str(exc)
+        return result
+
     exploitability = float(LeducBestResponse(strategy).compute_exploitability())
     conditions = {
         "game_params": True,
@@ -668,13 +708,14 @@ def _score_tier3(agent_tier):
         "exploitability": exploitability < TIER3_EXPLOITABILITY_MAX,
         "reported_exploitability_matches": abs(reported_exploitability - exploitability) <= 0.02,
         "reported_exploitability_threshold": reported_exploitability < TIER3_EXPLOITABILITY_MAX,
-        "theoretical_info_sets": len(count_leduc_info_sets()) == 504,
+        "theoretical_info_sets": len(strategy) == 504,
     }
     result.update(
         {
             "n_iterations": n_iterations,
             "exploitability": exploitability,
             "reported_exploitability": reported_exploitability,
+            "normalized_information_set_keys": normalized_keys,
             "conditions": conditions,
             "passed": all(conditions.values()),
         }

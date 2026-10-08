@@ -37,6 +37,7 @@ except ModuleNotFoundError:  # pragma: no cover - local fallback only
 
 from tasks.common_config import GeneralTaskConfig
 from tasks.common_setup import BaseTaskSetup
+from tasks.visual_media.inkscape_cultural_poster_design.scripts.svg_geometry import image_corners_mm
 
 _setup = BaseTaskSetup()
 
@@ -245,8 +246,9 @@ def evaluate_svg_bytes(svg_bytes: bytes, spec: dict[str, Any]) -> tuple[float, d
         and abs(width_mm - spec_width) <= 1.0
         and abs(height_mm - spec_height) <= 1.0
     )
-    svg_orientation_ok = (orientation == "portrait" and height_mm > width_mm) or (
-        orientation == "landscape" and width_mm > height_mm
+    svg_orientation_ok = width_mm is not None and height_mm is not None and (
+        (orientation == "portrait" and height_mm > width_mm)
+        or (orientation == "landscape" and width_mm > height_mm)
     )
     details["canvas_matches"] = bool(dimensions_ok and orientation_ok and svg_orientation_ok)
 
@@ -265,25 +267,18 @@ def evaluate_svg_bytes(svg_bytes: bytes, spec: dict[str, Any]) -> tuple[float, d
         image = image_elements[0]
         preserve = (image.attrib.get("preserveAspectRatio") or "").strip().lower()
         details["preserve_aspect_ratio_ok"] = preserve not in {"", "none"}
-        sx, sy, min_x, min_y = _viewbox_scale(root, width_mm, height_mm)
-        x = _len_to_mm(image.attrib.get("x"), sx)
-        y = _len_to_mm(image.attrib.get("y"), sy)
-        w = _len_to_mm(image.attrib.get("width"), sx)
-        h = _len_to_mm(image.attrib.get("height"), sy)
-        # Shift by the viewBox origin (mm) so non-zero min-x/min-y grids align.
-        x0 = (x - min_x * sx) if x is not None else None
-        y0 = (y - min_y * sy) if y is not None else None
         href = _element_attr(image, "href")
         details["image_href"] = href
-        if None not in {x0, y0, w, h} and w and h and width_mm and height_mm:
-            details["image_inside_canvas"] = (
-                x0 >= -1.0
-                and y0 >= -1.0
-                and w > 0.0
-                and h > 0.0
-                and x0 + w <= width_mm + 1.0
-                and y0 + h <= height_mm + 1.0
-            )
+        if width_mm is not None and height_mm is not None:
+            try:
+                corners = image_corners_mm(root, image, width_mm, height_mm)
+                details["image_corners_mm"] = corners
+                details["image_inside_canvas"] = all(
+                    -1.0 <= x <= width_mm + 1.0 and -1.0 <= y <= height_mm + 1.0
+                    for x, y in corners
+                )
+            except ValueError as exc:
+                details["image_geometry_error"] = str(exc)
 
     passed = all(
         [

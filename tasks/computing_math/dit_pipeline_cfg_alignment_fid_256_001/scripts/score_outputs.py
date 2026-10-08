@@ -69,6 +69,18 @@ class _KarrasDiffusionSchedulers:
     pass
 
 
+class _DiTTransformer2DModel:
+    pass
+
+
+class _SchedulerConfig(dict):
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError as exc:
+            raise AttributeError(name) from exc
+
+
 class _DiffusionPipeline:
     def __init__(self) -> None:
         self._device = torch.device("cpu")
@@ -132,6 +144,9 @@ def _diffusers_stubs():
     pipeline_utils = types.ModuleType("diffusers.pipelines.pipeline_utils")
 
     models.AutoencoderKL = _AutoencoderKL
+    models.DiTTransformer2DModel = _DiTTransformer2DModel
+    diffusers.AutoencoderKL = _AutoencoderKL
+    diffusers.DiTTransformer2DModel = _DiTTransformer2DModel
     schedulers.KarrasDiffusionSchedulers = _KarrasDiffusionSchedulers
     utils.is_torch_xla_available = lambda: False
     torch_utils.randn_tensor = _randn_tensor
@@ -217,6 +232,7 @@ class _DummyTransformer:
 class _DummyScheduler:
     def __init__(self, *, variance_type: str, has_scale_model_input: bool) -> None:
         self.variance_type = variance_type
+        self.config = _SchedulerConfig(variance_type=variance_type)
         if has_scale_model_input:
             self.scale_model_input = self._scale_model_input
 
@@ -306,7 +322,7 @@ def _run_behavior_case(
                 detail=f"numeric mismatch, max_abs_delta={delta}",
             )
         return CaseResult(name=name, passed=True, detail="matched reference behavior")
-    except Exception as exc:  # noqa: BLE001
+    except (Exception, SystemExit) as exc:  # noqa: BLE001
         return CaseResult(name=name, passed=False, detail=f"{type(exc).__name__}: {exc}")
 
 
@@ -319,7 +335,7 @@ def _score_submission_text_in_process(submission_text: str, reference_text: str)
         with _diffusers_stubs():
             try:
                 candidate_module = _load_module_from_text("candidate_pipeline_dit", submission_text, root)
-            except Exception as exc:  # noqa: BLE001
+            except (Exception, SystemExit) as exc:  # noqa: BLE001
                 return ScoreResult(
                     score=0.0,
                     passed=False,
@@ -411,7 +427,9 @@ def _score_submission_text_in_process(submission_text: str, reference_text: str)
     return ScoreResult(score=score, passed=passed, failures=failures, cases=cases)
 
 
-def score_submission_text(submission_text: str, reference_text: str) -> ScoreResult:
+def score_submission_text(
+    submission_text: str, reference_text: str, *, worker_timeout: float = 120
+) -> ScoreResult:
     with tempfile.TemporaryDirectory(prefix="dit_cfg_parent_") as temp_dir:
         root = Path(temp_dir)
         submission_path = root / "submission_pipeline_dit.py"
@@ -432,25 +450,20 @@ def score_submission_text(submission_text: str, reference_text: str) -> ScoreRes
             check=False,
             capture_output=True,
             text=True,
+            timeout=worker_timeout,
         )
         if result.returncode not in {0, 1}:
-            return ScoreResult(
-                score=0.0,
-                passed=False,
-                failures=[
-                    f"scorer worker failed: returncode={result.returncode}, stderr={result.stderr.strip()}"
-                ],
-                cases=[],
+            raise RuntimeError(
+                f"scorer worker failed: returncode={result.returncode}, stderr={result.stderr.strip()}"
             )
         try:
             return ScoreResult.from_dict(json.loads(result.stdout))
         except json.JSONDecodeError as exc:
-            return ScoreResult(
-                score=0.0,
-                passed=False,
-                failures=[f"could not parse scorer worker output: {exc}: {result.stdout!r}"],
-                cases=[],
-            )
+            raise RuntimeError(
+                f"could not parse scorer worker output: {exc}; "
+                f"returncode={result.returncode}, stderr={result.stderr.strip()}, "
+                f"stdout={result.stdout!r}"
+            ) from exc
 
 
 def _parse_args() -> argparse.Namespace:

@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import posixpath
 import re
 from pathlib import Path
 from typing import Mapping
+
+try:
+    from .shell_commands import minimization_commands
+except ImportError:
+    from shell_commands import minimization_commands
 
 SYSTEM_BASENAME = "GLN_phb2_lc3_aurka_model_0"
 REQUIRED_FILES = ("leap.in", "step2_implicit.mini.mdin", "submit_min.sh")
@@ -117,6 +123,7 @@ def _check_mdin(text: str) -> list[str]:
     return errors
 
 
+
 def _check_submit(script: str) -> list[str]:
     errors: list[str] = []
     if not (script.startswith("#!/bin/bash") or script.startswith("#!/usr/bin/env bash")):
@@ -152,20 +159,25 @@ def _check_submit(script: str) -> list[str]:
         errors.append("missing cuda/11.6.2 module load")
     if "tleap" not in script or "if " not in script:
         errors.append("missing conditional tleap build")
-    if not re.search(r"pmemd\.cuda\s+-O", script):
+    commands = minimization_commands(script)
+    if not commands or "-O" not in commands[0]:
         errors.append("missing pmemd.cuda -O")
-    if not re.search(r"-i\s+.*step2_implicit\.mini\.mdin", script):
-        errors.append("missing -i wiring")
-    if not re.search(r"-p\s+.*(?:GLN_phb2_lc3_aurka_model_0|\$?\{?BASE\}?).*\.prmtop", script):
-        errors.append("missing -p wiring")
-    if not re.search(r"-c\s+.*(?:GLN_phb2_lc3_aurka_model_0|\$?\{?BASE\}?).*\.inpcrd", script):
-        errors.append("missing -c wiring")
-    if not re.search(r"-o\s+.*min\.out", script):
-        errors.append("missing -o wiring")
-    if not re.search(r"-r\s+.*min\.rst", script):
-        errors.append("missing -r wiring")
-    if not re.search(r"-ref\s+.*(?:GLN_phb2_lc3_aurka_model_0|\$?\{?BASE\}?).*\.inpcrd", script):
-        errors.append("missing -ref wiring")
+    if len(commands) > 1:
+        errors.append("must invoke pmemd.cuda exactly once")
+    arguments = commands[0] if commands else []
+    expected = {
+        "-i": "step2_implicit.mini.mdin",
+        "-p": f"{SYSTEM_BASENAME}.prmtop",
+        "-c": f"{SYSTEM_BASENAME}.inpcrd",
+        "-o": "min.out",
+        "-r": "min.rst",
+        "-ref": f"{SYSTEM_BASENAME}.inpcrd",
+    }
+    for option, filename in expected.items():
+        indices = [i for i, word in enumerate(arguments) if word == option]
+        if (len(indices) != 1 or indices[0] + 1 >= len(arguments)
+                or posixpath.basename(arguments[indices[0] + 1]) != filename):
+            errors.append(f"missing {option} wiring")
     return errors
 
 

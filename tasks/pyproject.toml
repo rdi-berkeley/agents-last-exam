@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Auto-generated eval dependencies for published tasks."
 requires-python = ">=3.12,<3.14"
 dependencies = [
+    "bashlex>=0.18,<0.19",
     "PyMuPDF>=1.27.2.3",
     "google-api-core>=2.30.3",
     "ltspice>=1.0.6",

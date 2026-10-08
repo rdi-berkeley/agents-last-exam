@@ -167,7 +167,15 @@ def _resample_y_profile(points: list[tuple[float, float]], bins: int) -> list[fl
 
 def _path_points(elem: ET.Element) -> list[tuple[float, float]]:
     tag = _strip_namespace(elem.tag)
-    raw = elem.attrib.get("points" if tag == "polyline" else "d", "")
+    raw = elem.attrib.get("points" if tag in {"polyline", "polygon"} else "d", "")
+    if tag == "polygon":
+        number = r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?"
+        if re.sub(number + r"|[\s,]+", "", raw):
+            return []
+        values = [float(value) for value in re.findall(number, raw)]
+        if len(values) % 2 or not all(math.isfinite(value) for value in values):
+            return []
+        return list(zip(values[0::2], values[1::2]))
     values = _float_values(raw)
     if len(values) < 2:
         return []
@@ -184,13 +192,41 @@ def _has_graphical_evidence(root: ET.Element, reference: dict[str, Any]) -> tupl
     signal_profile = [float(value) for value in reference.get("signal_profile", [])]
     signal_detrended = _linear_detrend(signal_profile)
     signal_deltas = _first_differences(signal_profile)
+    parents = {child: parent for parent in root.iter() for child in parent}
+    dynamic_geometry = any(_strip_namespace(node.tag) in {
+        "style", "script", "animate", "animateTransform", "set"
+    } for node in root.iter())
     for elem in root.iter():
         tag = _strip_namespace(elem.tag)
         if tag not in GRAPHICAL_TAGS:
             continue
         graphical_count += 1
-        if tag not in {"path", "polyline"}:
+        if tag not in {"path", "polyline", "polygon"}:
             continue
+        if tag == "polygon":
+            # New polygon support is limited to visible, untransformed geometry.
+            ancestor = elem
+            unsupported = dynamic_geometry
+            while ancestor is not None:
+                style = dict(re.findall(r"([\w-]+)\s*:\s*([^;]+)", ancestor.get("style", "")))
+                attrs = {**ancestor.attrib, **{k: v.strip() for k, v in style.items()}}
+                if (_strip_namespace(ancestor.tag) in {"defs", "clipPath", "mask", "symbol"}
+                        or any(key in attrs for key in ("transform", "clip-path", "mask", "filter"))
+                        or attrs.get("display") == "none"
+                        or attrs.get("visibility") in {"hidden", "collapse"}
+                        or attrs.get("fill", "").lower() in {"none", "transparent"}
+                        or (_strip_namespace(ancestor.tag) == "svg" and ancestor is not root)):
+                    unsupported = True
+                for key in ("opacity", "fill-opacity"):
+                    try:
+                        value = float(attrs.get(key, "1").rstrip("%"))
+                        if not math.isfinite(value) or value <= 0:
+                            unsupported = True
+                    except ValueError:
+                        unsupported = True
+                ancestor = parents.get(ancestor)
+            if unsupported or elem.get("fill") == "none":
+                continue
         points = _path_points(elem)
         if len(points) < 12:
             continue
@@ -228,7 +264,7 @@ def _has_graphical_evidence(root: ET.Element, reference: dict[str, Any]) -> tupl
         )
 
     return False, (
-        "no signal-like path/polyline matched hidden BigWig profile "
+        "no signal-like path/polyline/polygon matched hidden BigWig profile "
         f"(raw={best_correlation:.3f}, detrended={best_detrended_correlation:.3f}, "
         f"delta={best_delta_correlation:.3f}, graphical elements={graphical_count}, "
         f"signal candidates={signal_candidate_count})"

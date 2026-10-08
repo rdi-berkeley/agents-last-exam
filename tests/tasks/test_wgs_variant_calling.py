@@ -84,7 +84,7 @@ async def test_evaluator_recomputes_metrics_from_submitted_vcf(tmp_path, monkeyp
         FakeSession(_vcf_payload(reference, include_variants=True)),
     )
 
-    assert score == [0.9999999999999999]
+    assert score == [1.0]
 
 
 async def test_perfect_self_report_cannot_replace_variant_calls(tmp_path, monkeypatch):
@@ -114,9 +114,7 @@ async def test_missing_evaluator_bundle_is_not_scored_as_partial_success(tmp_pat
         )
 
 
-async def test_staged_gated_reference_is_used_when_local_bundle_is_absent(
-    tmp_path, monkeypatch
-):
+async def test_staged_gated_reference_is_used_when_local_bundle_is_absent(tmp_path, monkeypatch):
     reference = ("ACGTTGCAAG" * 20)[:200]
     evaluator_dir = tmp_path / "reference"
     evaluator_dir.mkdir()
@@ -132,7 +130,7 @@ async def test_staged_gated_reference_is_used_when_local_bundle_is_absent(
         ),
     )
 
-    assert score == [0.9999999999999999]
+    assert score == [1.0]
 
 
 async def test_start_clears_stale_output():
@@ -142,7 +140,9 @@ async def test_start_clears_stale_output():
     await start(task_cfg, session)
 
     assert session.commands == [
-        "if [ -d '/task path/output' ]; then "
-        "find '/task path/output' -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; "
-        "else mkdir -p -- '/task path/output'; fi"
+        (
+            "if [ -d '/task path/output' ]; then "
+            "find '/task path/output' -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; "
+            "else mkdir -p -- '/task path/output'; fi"
+        )
     ]
