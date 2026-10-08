@@ -405,8 +405,8 @@ class KimiCodeDeployer(BaseAgentDeployer):
                 arguments = event.get("args")
                 active["tool_calls"].append(
                     ToolCall(
-                        id=event.get("toolCallId") or event.get("uuid") or "",
-                        name=event.get("name") or "",
+                        tool_call_id=event.get("toolCallId") or event.get("uuid") or "",
+                        function_name=event.get("name") or "",
                         arguments=arguments
                         if isinstance(arguments, dict)
                         else {"value": arguments},
@@ -432,9 +432,9 @@ class KimiCodeDeployer(BaseAgentDeployer):
             elif event_type == "step.end" and active is not None:
                 usage = event.get("usage") or {}
                 active["metrics"] = StepMetrics(
-                    input_tokens=usage.get("inputOther"),
-                    output_tokens=usage.get("output"),
-                    cache_read_tokens=usage.get("inputCacheRead"),
+                    prompt_tokens=usage.get("inputOther"),
+                    completion_tokens=usage.get("output"),
+                    cached_tokens=usage.get("inputCacheRead"),
                     cache_creation_tokens=usage.get("inputCacheCreation"),
                     duration_ms=(
                         (event.get("llmFirstTokenLatencyMs") or 0)
@@ -476,8 +476,8 @@ class KimiCodeDeployer(BaseAgentDeployer):
                         arguments = {"raw": arguments}
                     tool_calls.append(
                         ToolCall(
-                            id=raw.get("id") or "",
-                            name=function.get("name") or "",
+                            tool_call_id=raw.get("id") or "",
+                            function_name=function.get("name") or "",
                             arguments=arguments,
                         )
                     )
@@ -492,7 +492,7 @@ class KimiCodeDeployer(BaseAgentDeployer):
                     observation=Observation(
                         results=[
                             ToolResult(
-                                tool_call_id=event.get("tool_call_id") or "",
+                                source_call_id=event.get("tool_call_id") or "",
                                 content=cls._content_parts(event.get("content", "")),
                             )
                         ]
@@ -521,7 +521,7 @@ class KimiCodeDeployer(BaseAgentDeployer):
             if isinstance(result.get(key), str) and result[key]:
                 content.append(ContentPart(type="text", text=result[key]))
         return ToolResult(
-            tool_call_id=event.get("toolCallId") or event.get("parentUuid") or "",
+            source_call_id=event.get("toolCallId") or event.get("parentUuid") or "",
             content=content,
             is_error=bool(result.get("isError")),
         )
@@ -562,7 +562,7 @@ class KimiCodeDeployer(BaseAgentDeployer):
                 continue
             image = cls._image_source(url, blobs_dir)
             if image is not None:
-                content.append(ContentPart(type="image", image=image))
+                content.append(ContentPart(type="image", source=image))
         return content
 
     @staticmethod
@@ -611,7 +611,7 @@ class KimiCodeDeployer(BaseAgentDeployer):
             builder.add_step(
                 source="agent",
                 message=text,
-                reasoning=reasoning,
+                reasoning_content=reasoning,
                 tool_calls=active["tool_calls"],
                 metrics=active.get("metrics"),
                 extra=active.get("extra") or {},

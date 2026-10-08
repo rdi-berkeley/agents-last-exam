@@ -615,17 +615,17 @@ class ForgecodeDeployer(BaseAgentDeployer):
         builder.trajectory.extra.setdefault("forgecode", {})["usage"] = usage_summary
 
         # Route the dump-aggregated usage into a StepMetrics so finalize()
-        # sums it. forge's per-message ``usage.prompt_tokens`` is the full
-        # input (cache_read inclusive), so uncached = prompt - cached. Forge
-        # reports cost via usage.cost.
+        # sums it. forge's per-message ``usage.prompt_tokens`` is already the
+        # full input (cache_read inclusive), matching ATIF's prompt_tokens
+        # semantics -- pass it through as-is. Forge reports cost via usage.cost.
         if total_input_tokens or total_output_tokens or cost_seen:
             builder.add_step(
                 source="system",
                 message=None,
                 metrics=StepMetrics(
-                    input_tokens=max(total_input_tokens - total_cached_tokens, 0),
-                    output_tokens=total_output_tokens,
-                    cache_read_tokens=total_cached_tokens or None,
+                    prompt_tokens=total_input_tokens or None,
+                    completion_tokens=total_output_tokens,
+                    cached_tokens=total_cached_tokens or None,
                     cost_usd=total_cost if cost_seen else None,
                 ),
                 extra={"usage_dump": True},
@@ -668,8 +668,8 @@ class ForgecodeDeployer(BaseAgentDeployer):
             builder.add_step(
                 source="agent",
                 tool_calls=[ToolCall(
-                    id=tc.get("call_id") or tc.get("id") or "",
-                    name=str(tc.get("name") or ""),
+                    tool_call_id=tc.get("call_id") or tc.get("id") or "",
+                    function_name=str(tc.get("name") or ""),
                     arguments=tool_input,
                 )],
             )
@@ -699,9 +699,9 @@ class ForgecodeDeployer(BaseAgentDeployer):
                 media_type = header.split(";", 1)[0] or media_type
             return ContentPart(
                 type="image",
-                image=ImageSource(type="base64", media_type=media_type, data=data),
+                source=ImageSource(type="base64", media_type=media_type, data=data),
             )
-        return ContentPart(type="image", image=ImageSource(type="url", url=url))
+        return ContentPart(type="image", source=ImageSource(type="url", url=url))
 
     @classmethod
     def _consume_tool_result(
@@ -738,7 +738,7 @@ class ForgecodeDeployer(BaseAgentDeployer):
             source="environment",
             observation=Observation(results=[
                 ToolResult(
-                    tool_call_id=result.get("call_id") or result.get("id") or "",
+                    source_call_id=result.get("call_id") or result.get("id") or "",
                     content=content,
                     is_error=bool(output.get("is_error")),
                 ),

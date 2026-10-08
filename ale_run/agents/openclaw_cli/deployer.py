@@ -1179,9 +1179,9 @@ class OpenClawCliDeployer(BaseAgentDeployer):
         # call itself); extract it so the trajectory's total_cost_usd is real.
         _cost = (usage.get("cost") or {}).get("total") if isinstance(usage, dict) else None
         metrics = StepMetrics(
-            input_tokens=usage.get("input"),
-            output_tokens=usage.get("output"),
-            cache_read_tokens=usage.get("cacheRead"),
+            prompt_tokens=usage.get("input"),
+            completion_tokens=usage.get("output"),
+            cached_tokens=usage.get("cacheRead"),
             cache_creation_tokens=usage.get("cacheWrite"),
             cost_usd=_cost,
         ) if usage else None
@@ -1206,15 +1206,15 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                         except json.JSONDecodeError:
                             args = {"raw": args}
                     tool_calls.append(ToolCall(
-                        id=block.get("id", ""),
-                        name=name,
+                        tool_call_id=block.get("id", ""),
+                        function_name=name,
                         arguments=args,
                     ))
 
             builder.add_step(
                 source="agent",
                 message="\n".join(p for p in text_parts if p) or None,
-                reasoning="\n".join(p for p in reasoning_parts if p) or None,
+                reasoning_content="\n".join(p for p in reasoning_parts if p) or None,
                 tool_calls=tool_calls,
                 metrics=metrics,
             )
@@ -1243,7 +1243,7 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                                 # them to screenshots/ and rewrite to path refs.
                                 parts.append(ContentPart(
                                     type="image",
-                                    image=ImageSource(
+                                    source=ImageSource(
                                         type="base64",
                                         media_type=c.get("mimeType", "image/png"),
                                         data=c.get("data"),
@@ -1252,7 +1252,7 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                             elif c.get("type") == "image" and c.get("path"):
                                 parts.append(ContentPart(
                                     type="image",
-                                    image=ImageSource(
+                                    source=ImageSource(
                                         type="path",
                                         media_type=c.get(
                                             "mimeType",
@@ -1262,7 +1262,7 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                                     ),
                                 ))
                     results.append(ToolResult(
-                        tool_call_id=block.get("tool_use_id") or block.get("call_id", ""),
+                        source_call_id=block.get("tool_use_id") or block.get("call_id", ""),
                         content=parts,
                         is_error=bool(block.get("is_error")),
                     ))
@@ -1294,7 +1294,7 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                 elif btype == "image" and block.get("data"):
                     parts.append(ContentPart(
                         type="image",
-                        image=ImageSource(
+                        source=ImageSource(
                             type="base64",
                             media_type=block.get("mimeType", "image/png"),
                             data=block.get("data"),
@@ -1303,7 +1303,7 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                 elif btype == "image" and block.get("path"):
                     parts.append(ContentPart(
                         type="image",
-                        image=ImageSource(
+                        source=ImageSource(
                             type="path",
                             media_type=block.get("mimeType", "image/png"),
                             path=block.get("path"),
@@ -1322,7 +1322,7 @@ class OpenClawCliDeployer(BaseAgentDeployer):
                 source="environment",
                 observation=Observation(results=[
                     ToolResult(
-                        tool_call_id=call_id,
+                        source_call_id=call_id,
                         content=parts,
                         is_error=bool(message.get("isError") or event.get("is_error")),
                     ),
@@ -1337,7 +1337,7 @@ class OpenClawCliDeployer(BaseAgentDeployer):
             source="environment",
             observation=Observation(results=[
                 ToolResult(
-                    tool_call_id=call_id,
+                    source_call_id=call_id,
                     content=[ContentPart(type="text", text=str(output))],
                     is_error=bool(event.get("is_error")),
                 ),
@@ -1393,9 +1393,9 @@ def _usage_final_metrics(usage: object) -> dict[str, int]:
     if not isinstance(usage, dict):
         return {}
     field_map = {
-        "input": "total_input_tokens",
-        "output": "total_output_tokens",
-        "cacheRead": "total_cache_read_tokens",
+        "input": "total_prompt_tokens",
+        "output": "total_completion_tokens",
+        "cacheRead": "total_cached_tokens",
         "cacheWrite": "total_cache_creation_tokens",
     }
     totals = {

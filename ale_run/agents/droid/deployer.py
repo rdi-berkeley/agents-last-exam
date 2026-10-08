@@ -378,8 +378,8 @@ class DroidDeployer(BaseAgentDeployer):
         builder.add_step(
             source="agent",
             tool_calls=[ToolCall(
-                id=event.get("id", ""),
-                name=event.get("toolName") or event.get("toolId", ""),
+                tool_call_id=event.get("id", ""),
+                function_name=event.get("toolName") or event.get("toolId", ""),
                 arguments=params if isinstance(params, dict) else {"raw": str(params)},
             )],
         )
@@ -391,7 +391,7 @@ class DroidDeployer(BaseAgentDeployer):
             source="environment",
             observation=Observation(results=[
                 ToolResult(
-                    tool_call_id=event.get("id", ""),
+                    source_call_id=event.get("id", ""),
                     content=[ContentPart(type="text", text=str(value))],
                     is_error=bool(event.get("isError")),
                 ),
@@ -402,9 +402,9 @@ class DroidDeployer(BaseAgentDeployer):
     def _consume_completion(event: dict, builder: TrajectoryBuilder) -> None:
         usage = event.get("usage", {})
         metrics = StepMetrics(
-            input_tokens=usage.get("input_tokens"),
-            output_tokens=usage.get("output_tokens"),
-            cache_read_tokens=usage.get("cache_read_input_tokens"),
+            prompt_tokens=usage.get("input_tokens"),
+            completion_tokens=usage.get("output_tokens"),
+            cached_tokens=usage.get("cache_read_input_tokens"),
             cache_creation_tokens=usage.get("cache_creation_input_tokens"),
         )
         builder.trajectory.extra.setdefault("droid", {})["completion"] = event

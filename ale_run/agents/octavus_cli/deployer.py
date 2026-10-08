@@ -535,8 +535,8 @@ class OctavusCliDeployer(BaseAgentDeployer):
         if usage:
             builder.override_final_metrics(
                 total_cost_usd=usage.get("costUsd"),
-                total_input_tokens=usage.get("inputTokens"),
-                total_output_tokens=usage.get("outputTokens"),
+                total_prompt_tokens=usage.get("inputTokens"),
+                total_completion_tokens=usage.get("outputTokens"),
             )
         run_config = thread.get("runConfig") or {}
         model = run_config.get("model") or config.model
@@ -613,8 +613,8 @@ class OctavusCliDeployer(BaseAgentDeployer):
                 elif ptype == "tool-call":
                     call_id = part.get("toolCallId") or ""
                     tool_calls.append(ToolCall(
-                        id=call_id,
-                        name=part.get("toolName") or "",
+                        tool_call_id=call_id,
+                        function_name=part.get("toolName") or "",
                         arguments=part.get("args") or {},
                     ))
                     payload = part.get("result")
@@ -623,14 +623,14 @@ class OctavusCliDeployer(BaseAgentDeployer):
                     if payload is not None:
                         content = payload if isinstance(payload, str) else json.dumps(payload)
                         results.append(ToolResult(
-                            tool_call_id=call_id,
+                            source_call_id=call_id,
                             content=[ContentPart(type="text", text=content)],
                             is_error=part.get("status") == "error" or bool(part.get("error")),
                         ))
             builder.add_step(
                 source="agent",
                 message="\n".join(t for t in texts if t) or None,
-                reasoning="\n".join(r for r in reasonings if r) or None,
+                reasoning_content="\n".join(r for r in reasonings if r) or None,
                 tool_calls=tool_calls or None,
             )
             if results:

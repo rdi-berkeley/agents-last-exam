@@ -727,8 +727,8 @@ class CodexDeployer(BaseAgentDeployer):
                 builder.add_step(
                     source="agent",
                     tool_calls=[ToolCall(
-                        id=item_id,
-                        name=item.get("tool", ""),
+                        tool_call_id=item_id,
+                        function_name=item.get("tool", ""),
                         arguments=item.get("arguments", {}),
                     )],
                     extra={"server": item.get("server", ""), "status": "incomplete"},
@@ -766,7 +766,7 @@ class CodexDeployer(BaseAgentDeployer):
         elif item_type == "reasoning":
             builder.add_step(
                 source="agent",
-                reasoning=item.get("text", ""),
+                reasoning_content=item.get("text", ""),
                 extra={"item_id": item_id},
             )
 
@@ -778,8 +778,8 @@ class CodexDeployer(BaseAgentDeployer):
             builder.add_step(
                 source="agent",
                 tool_calls=[ToolCall(
-                    id=item_id,
-                    name="shell",
+                    tool_call_id=item_id,
+                    function_name="shell",
                     arguments={"command": cmd},
                 )],
             )
@@ -787,7 +787,7 @@ class CodexDeployer(BaseAgentDeployer):
                 source="environment",
                 observation=Observation(results=[
                     ToolResult(
-                        tool_call_id=item_id,
+                        source_call_id=item_id,
                         content=[ContentPart(type="text", text=output)],
                         is_error=(item.get("exit_code") or 0) != 0,
                     ),
@@ -802,8 +802,8 @@ class CodexDeployer(BaseAgentDeployer):
             builder.add_step(
                 source="agent",
                 tool_calls=[ToolCall(
-                    id=item_id,
-                    name=item.get("tool", ""),
+                    tool_call_id=item_id,
+                    function_name=item.get("tool", ""),
                     arguments=item.get("arguments", {}),
                 )],
                 extra={
@@ -835,7 +835,7 @@ class CodexDeployer(BaseAgentDeployer):
                                 # instead of collapsing to "[image]".
                                 image_parts.append(ContentPart(
                                     type="image",
-                                    image=ImageSource(
+                                    source=ImageSource(
                                         type="base64",
                                         media_type=block.get("mimeType", "image/png"),
                                         data=block.get("data"),
@@ -856,7 +856,7 @@ class CodexDeployer(BaseAgentDeployer):
                     source="environment",
                     observation=Observation(results=[
                         ToolResult(
-                            tool_call_id=item_id,
+                            source_call_id=item_id,
                             content=tr_content,
                             is_error=bool(error_data),
                         ),
@@ -878,8 +878,8 @@ class CodexDeployer(BaseAgentDeployer):
             builder.add_step(
                 source="agent",
                 tool_calls=[ToolCall(
-                    id=item_id,
-                    name="web_search",
+                    tool_call_id=item_id,
+                    function_name="web_search",
                     arguments={"query": item.get("query", "")},
                 )],
                 extra={"item_id": item_id},
@@ -914,9 +914,9 @@ class CodexDeployer(BaseAgentDeployer):
         cached = cached or 0
 
         metrics = StepMetrics(
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cache_read_tokens=cached if cached > 0 else None,
+            prompt_tokens=input_tokens,
+            completion_tokens=output_tokens,
+            cached_tokens=cached if cached > 0 else None,
         )
         # Attach metrics to the most recent agent step if available,
         # otherwise emit a synthetic completion step.

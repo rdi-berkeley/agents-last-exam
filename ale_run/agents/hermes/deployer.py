@@ -769,9 +769,9 @@ disown $CHILD 2>/dev/null || true
                     source="system",
                     message=None,
                     metrics=StepMetrics(
-                        input_tokens=uncached,
-                        output_tokens=output,
-                        cache_read_tokens=cache_read,
+                        prompt_tokens=uncached,
+                        completion_tokens=output,
+                        cached_tokens=cache_read,
                         cache_creation_tokens=cache_write,
                         cost_usd=cost,
                     ),
@@ -801,7 +801,7 @@ disown $CHILD 2>/dev/null || true
             if reasoning:
                 builder.add_step(
                     source="agent",
-                    reasoning=str(reasoning),
+                    reasoning_content=str(reasoning),
                 )
             # Text content
             if isinstance(content, str) and content.strip():
@@ -814,8 +814,8 @@ disown $CHILD 2>/dev/null || true
                         fn.get("arguments") if fn else tc.get("arguments")
                     )
                     tc_list.append(ToolCall(
-                        id=tc.get("id", ""),
-                        name=name,
+                        tool_call_id=tc.get("id", ""),
+                        function_name=name,
                         arguments=args,
                     ))
                 builder.add_step(
@@ -834,8 +834,8 @@ disown $CHILD 2>/dev/null || true
                         fn.get("arguments") if fn else tc.get("arguments")
                     )
                     tc_list.append(ToolCall(
-                        id=tc.get("id", ""),
-                        name=name,
+                        tool_call_id=tc.get("id", ""),
+                        function_name=name,
                         arguments=args,
                     ))
                 if tc_list:
@@ -850,7 +850,7 @@ disown $CHILD 2>/dev/null || true
                 source="environment",
                 observation=Observation(results=[
                     ToolResult(
-                        tool_call_id=tool_call_id or "",
+                        source_call_id=tool_call_id or "",
                         content=[ContentPart(
                             type="text",
                             text=str(content),

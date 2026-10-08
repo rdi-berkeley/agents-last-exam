@@ -103,9 +103,9 @@ def _reconcile_final_metrics(
     if aggregated.get("overall_input_tokens", 0) <= 0:
         return
     builder.override_final_metrics(
-        total_input_tokens=aggregated.get("overall_input_tokens"),
-        total_output_tokens=aggregated.get("output_tokens"),
-        total_cache_read_tokens=aggregated.get("cache_read_input_tokens", 0),
+        total_prompt_tokens=aggregated.get("overall_input_tokens"),
+        total_completion_tokens=aggregated.get("output_tokens"),
+        total_cached_tokens=aggregated.get("cache_read_input_tokens", 0),
         total_cache_creation_tokens=aggregated.get("cache_write_input_tokens", 0),
         # Only override cost when the aggregate has it; else keep per-step sum.
         total_cost_usd=aggregated.get("total_cost_usd"),
@@ -180,8 +180,8 @@ def _consume_message(entry: dict[str, Any], builder: TrajectoryBuilder) -> None:
                 if not isinstance(args, dict):
                     args = {"value": args}
                 tool_calls.append(ToolCall(
-                    id=block.get("id") or "",
-                    name=block.get("name") or "",
+                    tool_call_id=block.get("id") or "",
+                    function_name=block.get("name") or "",
                     arguments=args,
                 ))
 
@@ -193,7 +193,7 @@ def _consume_message(entry: dict[str, Any], builder: TrajectoryBuilder) -> None:
         builder.add_step(
             source="agent",
             message="\n".join(text_parts) if text_parts else None,
-            reasoning="\n".join(reasoning_parts) if reasoning_parts else None,
+            reasoning_content="\n".join(reasoning_parts) if reasoning_parts else None,
             tool_calls=tool_calls,
             metrics=_metrics_from_message_usage(usage),
             extra={"stop_reason": stop_reason} if stop_reason else None,
@@ -210,7 +210,7 @@ def _consume_message(entry: dict[str, Any], builder: TrajectoryBuilder) -> None:
             raw = block.get("content")
             text = _normalize_tool_result_content(raw)
             results.append(ToolResult(
-                tool_call_id=block.get("tool_use_id") or "",
+                source_call_id=block.get("tool_use_id") or "",
                 content=[ContentPart(type="text", text=text)],
                 is_error=bool(block.get("is_error", False)),
             ))
@@ -243,8 +243,8 @@ def _metrics_from_message_usage(usage: dict[str, Any]) -> StepMetrics | None:
     if in_t is None and out_t is None and cost is None:
         return None
     return StepMetrics(
-        input_tokens=int(in_t) if in_t is not None else None,
-        output_tokens=int(out_t) if out_t is not None else None,
+        prompt_tokens=int(in_t) if in_t is not None else None,
+        completion_tokens=int(out_t) if out_t is not None else None,
         cost_usd=float(cost) if cost is not None else None,
     )
 

@@ -458,12 +458,12 @@ class Terminus2Deployer(BaseAgentDeployer):
 
         if source == "agent":
             if reasoning:
-                builder.add_step(source="agent", reasoning=str(reasoning))
+                builder.add_step(source="agent", reasoning_content=str(reasoning))
             tc_list: list[ToolCall] = []
             for tc in tool_calls:
                 tc_list.append(ToolCall(
-                    id=tc.get("tool_call_id") or "",
-                    name=tc.get("function_name") or "",
+                    tool_call_id=tc.get("tool_call_id") or "",
+                    function_name=tc.get("function_name") or "",
                     arguments=cls._decode_args(tc.get("arguments")),
                 ))
             msg_text = _flatten_message(message)
@@ -480,7 +480,7 @@ class Terminus2Deployer(BaseAgentDeployer):
                     source="environment",
                     observation=Observation(results=[
                         ToolResult(
-                            tool_call_id=r.get("source_call_id") or "",
+                            source_call_id=r.get("source_call_id") or "",
                             content=[ContentPart(
                                 type="text",
                                 text=_flatten_message(r.get("content")),
@@ -501,6 +501,9 @@ class Terminus2Deployer(BaseAgentDeployer):
 
     @staticmethod
     def _step_metrics(metrics: dict) -> StepMetrics | None:
+        """terminus_2's own trajectory.json is already real ATIF, so ``prompt_tokens``
+        here is already the full total (cached tokens included) -- pass it through
+        as-is rather than subtracting ``cached_tokens`` back out of it."""
         if not metrics:
             return None
         prompt = metrics.get("prompt_tokens")
@@ -509,13 +512,10 @@ class Terminus2Deployer(BaseAgentDeployer):
         cost = metrics.get("cost_usd")
         if prompt is None and completion is None and cost is None:
             return None
-        uncached = None
-        if prompt is not None:
-            uncached = max(prompt - (cached or 0), 0)
         return StepMetrics(
-            input_tokens=uncached,
-            output_tokens=completion,
-            cache_read_tokens=cached,
+            prompt_tokens=prompt,
+            completion_tokens=completion,
+            cached_tokens=cached,
             cost_usd=cost,
         )
 

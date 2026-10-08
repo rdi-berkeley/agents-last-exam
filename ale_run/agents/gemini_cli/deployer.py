@@ -491,7 +491,7 @@ class GeminiCliDeployer(BaseAgentDeployer):
         msg_type = event.get("messageType", "text")
         text = event.get("content", "")
         if msg_type == "thinking":
-            builder.add_step(source="agent", reasoning=text)
+            builder.add_step(source="agent", reasoning_content=text)
         else:
             builder.add_step(source="agent", message=text)
 
@@ -510,8 +510,8 @@ class GeminiCliDeployer(BaseAgentDeployer):
         builder.add_step(
             source="agent",
             tool_calls=[ToolCall(
-                id=event.get("tool_id", ""),
-                name=event.get("tool_name", ""),
+                tool_call_id=event.get("tool_id", ""),
+                function_name=event.get("tool_name", ""),
                 arguments=params,
             )],
         )
@@ -540,13 +540,13 @@ class GeminiCliDeployer(BaseAgentDeployer):
                 img = ImageSource(type="url", media_type=media_type, url=uri)
             else:
                 continue
-            content.append(ContentPart(type="image", image=img))
+            content.append(ContentPart(type="image", source=img))
 
         builder.add_step(
             source="environment",
             observation=Observation(results=[
                 ToolResult(
-                    tool_call_id=event.get("tool_id", ""),
+                    source_call_id=event.get("tool_id", ""),
                     content=content,
                     is_error=bool(error),
                 ),
@@ -616,10 +616,13 @@ class GeminiCliDeployer(BaseAgentDeployer):
 
         if not saw_any:
             return None
+        # Gemini's own usage metadata reports input_tokens/promptTokenCount as
+        # the full input already inclusive of cached tokens -- pass it through
+        # as-is to match ATIF's prompt_tokens semantics (not uncached-only).
         return StepMetrics(
-            input_tokens=max(input_total - cache_total, 0),
-            output_tokens=output_total,
-            cache_read_tokens=cache_total or None,
+            prompt_tokens=input_total or None,
+            completion_tokens=output_total,
+            cached_tokens=cache_total or None,
         )
 
 

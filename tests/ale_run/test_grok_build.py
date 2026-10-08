@@ -372,18 +372,18 @@ def test_parse_session_preserves_tools_images_and_authoritative_usage(
     trajectory = builder.finalize(reward=1.0)
 
     agent_step, environment_step, final_step = trajectory.steps
-    assert agent_step.reasoning == "Inspect the desktop."
-    assert agent_step.tool_calls[0].name == "cua__screenshot"
+    assert agent_step.reasoning_content == "Inspect the desktop."
+    assert agent_step.tool_calls[0].function_name == "cua__screenshot"
     assert agent_step.tool_calls[0].arguments == {}
     result = environment_step.observation.results[0]
     assert result.content[0].text == "Screenshot captured\n"
-    assert result.content[1].image.type == "base64"
-    assert result.content[1].image.media_type == "image/png"
-    assert result.content[1].image.data == image_data
+    assert result.content[1].source.type == "base64"
+    assert result.content[1].source.media_type == "image/png"
+    assert result.content[1].source.data == image_data
     assert final_step.message == "The code is visible."
-    assert trajectory.final_metrics.total_input_tokens == 795
-    assert trajectory.final_metrics.total_cache_read_tokens == 33792
-    assert trajectory.final_metrics.total_output_tokens == 175
+    assert trajectory.final_metrics.total_prompt_tokens == 795
+    assert trajectory.final_metrics.total_cached_tokens == 33792
+    assert trajectory.final_metrics.total_completion_tokens == 175
     assert trajectory.final_metrics.total_cost_usd == 0.0123
     assert trajectory.extra["grok_build"]["session_id"] == session_id
     assert trajectory.extra["grok_build"]["num_turns"] == 3
@@ -409,7 +409,7 @@ def test_parse_stream_fallback_and_error(tmp_path: Path) -> None:
         builder=builder,
     )
 
-    assert builder.trajectory.steps[0].reasoning == "Checking files."
+    assert builder.trajectory.steps[0].reasoning_content == "Checking files."
     assert builder.trajectory.steps[0].message == "Done"
     assert builder.trajectory.steps[1].message == "late warning"
     assert builder.trajectory.steps[1].extra["grok_build_error"] is True
@@ -449,7 +449,7 @@ def test_parse_session_recovers_image_from_mcp_spill(tmp_path: Path) -> None:
 
     content = builder.trajectory.steps[0].observation.results[0].content
     assert content[0].text == "[MCP output truncated; full output written separately]"
-    assert content[1].image.data == image_data
+    assert content[1].source.data == image_data
 
 
 def test_exported_session_recovers_trajectory_when_session_tree_is_missing(
@@ -535,8 +535,8 @@ def test_exported_session_recovers_trajectory_when_session_tree_is_missing(
     assert (tmp_path / "session_events.jsonl").is_file()
     assert (tmp_path / "session_media.jsonl").is_file()
     assert (tmp_path / "native_telemetry_summary.json").is_file()
-    assert builder.trajectory.steps[0].tool_calls[0].name == "cua__screenshot"
-    image = builder.trajectory.steps[1].observation.results[0].content[1].image
+    assert builder.trajectory.steps[0].tool_calls[0].function_name == "cua__screenshot"
+    image = builder.trajectory.steps[1].observation.results[0].content[1].source
     assert image.data == image_data
     assert builder.trajectory.extra["grok_build"]["session_dir"] is None
     assert builder.trajectory.extra["grok_build"]["events_path"].endswith("session_events.jsonl")

@@ -62,9 +62,9 @@ def test_parse_json_envelope_records_response_and_usage(tmp_path: Path) -> None:
     assert step.source == "agent"
     assert step.message == "finished"
     assert step.metrics is not None
-    assert step.metrics.input_tokens == 120
-    assert step.metrics.output_tokens == 30
-    assert step.metrics.cache_read_tokens == 80
+    assert step.metrics.prompt_tokens == 120
+    assert step.metrics.completion_tokens == 30
+    assert step.metrics.cached_tokens == 80
     assert step.metrics.duration_ms == 1250
     assert step.extra["thinking_tokens"] == 7
     extra = builder.trajectory.extra["antigravity_cli"]
@@ -72,9 +72,9 @@ def test_parse_json_envelope_records_response_and_usage(tmp_path: Path) -> None:
     assert extra["num_turns"] == 3
 
     metrics = builder.finalize(reward=1.0, status="completed").final_metrics
-    assert metrics.total_input_tokens == 120
-    assert metrics.total_output_tokens == 30
-    assert metrics.total_cache_read_tokens == 80
+    assert metrics.total_prompt_tokens == 120
+    assert metrics.total_completion_tokens == 30
+    assert metrics.total_cached_tokens == 80
 
 
 def test_parse_json_error_envelope_adds_system_step(tmp_path: Path) -> None:
@@ -266,9 +266,9 @@ def test_parse_stream_json_builds_metrics_summary(tmp_path: Path) -> None:
     assert not (tmp_path / "otel_requests.jsonl").exists()
 
     metrics = builder.finalize(reward=1.0, status="completed").final_metrics
-    assert metrics.total_input_tokens == 170
-    assert metrics.total_output_tokens == 30
-    assert metrics.total_cache_read_tokens == 110
+    assert metrics.total_prompt_tokens == 170
+    assert metrics.total_completion_tokens == 30
+    assert metrics.total_cached_tokens == 110
 
     trajectory = builder.trajectory
     assert [step.source for step in trajectory.steps] == [
@@ -278,11 +278,11 @@ def test_parse_stream_json_builds_metrics_summary(tmp_path: Path) -> None:
         "agent",
     ]
     tool_step = trajectory.steps[1]
-    assert tool_step.tool_calls[0].id == "agy_step_2"
-    assert tool_step.tool_calls[0].name == "call_mcp_tool__cua__screenshot"
+    assert tool_step.tool_calls[0].tool_call_id == "agy_step_2"
+    assert tool_step.tool_calls[0].function_name == "call_mcp_tool__cua__screenshot"
     result_step = trajectory.steps[2]
     assert result_step.observation is not None
-    assert result_step.observation.results[0].tool_call_id == "agy_step_2"
+    assert result_step.observation.results[0].source_call_id == "agy_step_2"
     assert result_step.observation.results[0].content[0].text == "captured"
     assert trajectory.steps[3].message == "all finished"
 
@@ -343,7 +343,7 @@ def test_incomplete_tool_is_retained_without_fabricated_result(tmp_path: Path) -
         for result in step.observation.results
     ]
     assert len(calls) == 1
-    assert calls[0].name == "run_command"
+    assert calls[0].function_name == "run_command"
     assert results == []
     tool_step = next(step for step in builder.trajectory.steps if step.tool_calls)
     assert tool_step.extra["incomplete"] is True
@@ -648,6 +648,6 @@ def test_partial_stream_without_result_retains_response_and_tool(tmp_path: Path)
 
     assert builder.trajectory.steps[0].message == "partial response"
     assert builder.trajectory.steps[0].extra["incomplete"] is True
-    assert builder.trajectory.steps[1].tool_calls[0].name == "run_command"
+    assert builder.trajectory.steps[1].tool_calls[0].function_name == "run_command"
     assert builder.trajectory.steps[1].extra["incomplete"] is True
     assert all(step.observation is None for step in builder.trajectory.steps)

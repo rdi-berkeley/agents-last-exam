@@ -788,8 +788,8 @@ class GrokBuildDeployer(BaseAgentDeployer):
                         arguments = tool_input if isinstance(tool_input, dict) else {}
                     tool_calls.append(
                         ToolCall(
-                            id=str(raw_call.get("id") or ""),
-                            name=name,
+                            tool_call_id=str(raw_call.get("id") or ""),
+                            function_name=name,
                             arguments=arguments,
                         )
                     )
@@ -800,7 +800,7 @@ class GrokBuildDeployer(BaseAgentDeployer):
                     builder.add_step(
                         source="agent",
                         message=message,
-                        reasoning=reasoning,
+                        reasoning_content=reasoning,
                         tool_calls=tool_calls,
                     )
                     added = True
@@ -823,7 +823,7 @@ class GrokBuildDeployer(BaseAgentDeployer):
                     observation=Observation(
                         results=[
                             ToolResult(
-                                tool_call_id=tool_call_id,
+                                source_call_id=tool_call_id,
                                 content=content,
                                 is_error=tool_errors.get(tool_call_id, False),
                             )
@@ -834,7 +834,7 @@ class GrokBuildDeployer(BaseAgentDeployer):
         if pending_reasoning:
             builder.add_step(
                 source="agent",
-                reasoning="\n".join(pending_reasoning).strip(),
+                reasoning_content="\n".join(pending_reasoning).strip(),
             )
             added = True
         return added
@@ -885,7 +885,7 @@ class GrokBuildDeployer(BaseAgentDeployer):
         message = "".join(text).strip() or None
         thought = "".join(reasoning).strip() or None
         if message is not None or thought is not None:
-            builder.add_step(source="agent", message=message, reasoning=thought)
+            builder.add_step(source="agent", message=message, reasoning_content=thought)
         for error in errors:
             builder.add_step(
                 source="system",
@@ -970,7 +970,7 @@ class GrokBuildDeployer(BaseAgentDeployer):
                     parts.append(
                         ContentPart(
                             type="image",
-                            image=ImageSource(
+                            source=ImageSource(
                                 type="base64",
                                 data=item["data"],
                                 media_type=str(item.get("mimeType") or "image/png"),
@@ -995,7 +995,7 @@ class GrokBuildDeployer(BaseAgentDeployer):
             parts.append(
                 ContentPart(
                     type="image",
-                    image=ImageSource(
+                    source=ImageSource(
                         type="base64",
                         data=match.group(2),
                         media_type=match.group(1),
@@ -1030,9 +1030,9 @@ class GrokBuildDeployer(BaseAgentDeployer):
                 input_tokens = full_input
             output_tokens = usage.get("outputTokens")
         builder.override_final_metrics(
-            total_input_tokens=input_tokens,
-            total_output_tokens=output_tokens,
-            total_cache_read_tokens=cache_read_tokens,
+            total_prompt_tokens=input_tokens,
+            total_completion_tokens=output_tokens,
+            total_cached_tokens=cache_read_tokens,
             total_cost_usd=terminal_event.get("total_cost_usd"),
         )
 

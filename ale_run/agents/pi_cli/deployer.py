@@ -378,8 +378,8 @@ class PiCliDeployer(BaseAgentDeployer):
                 builder.add_step(
                     source="agent",
                     tool_calls=[ToolCall(
-                        id=str(ev.get("toolCallId") or ""),
-                        name=str(ev.get("toolName") or ""),
+                        tool_call_id=str(ev.get("toolCallId") or ""),
+                        function_name=str(ev.get("toolName") or ""),
                         arguments=_as_dict(ev.get("args")),
                     )],
                 )
@@ -390,7 +390,7 @@ class PiCliDeployer(BaseAgentDeployer):
                     source="environment",
                     observation=Observation(results=[
                         ToolResult(
-                            tool_call_id=str(ev.get("toolCallId") or ""),
+                            source_call_id=str(ev.get("toolCallId") or ""),
                             content=content,
                             is_error=bool(ev.get("isError")),
                         ),
@@ -402,9 +402,9 @@ class PiCliDeployer(BaseAgentDeployer):
                 source="system",
                 message=None,
                 metrics=StepMetrics(
-                    input_tokens=total_input or None,
-                    output_tokens=total_output or None,
-                    cache_read_tokens=total_cache_read or None,
+                    prompt_tokens=total_input or None,
+                    completion_tokens=total_output or None,
+                    cached_tokens=total_cache_read or None,
                     cache_creation_tokens=total_cache_write or None,
                     cost_usd=total_cost if cost_seen else None,
                 ),
@@ -500,7 +500,7 @@ def _image_part(block: dict[str, Any]) -> ContentPart | None:
         media_type = header[5:].split(";", 1)[0] or media_type
     return ContentPart(
         type="image",
-        image=ImageSource(type="base64", media_type=media_type, data=data),
+        source=ImageSource(type="base64", media_type=media_type, data=data),
     )
 
 

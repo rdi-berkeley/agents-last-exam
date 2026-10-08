@@ -572,17 +572,17 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
             for s in builder.trajectory.steps:
                 m = s.metrics
                 if m:
-                    si += m.input_tokens or 0
-                    so += m.output_tokens or 0
-                    scr += m.cache_read_tokens or 0
+                    si += m.prompt_tokens or 0
+                    so += m.completion_tokens or 0
+                    scr += m.cached_tokens or 0
                     scc += m.cache_creation_tokens or 0
             builder.add_step(
                 source="system",
                 message=None,
                 metrics=StepMetrics(
-                    input_tokens=max((ru.get("input_tokens") or 0) - si, 0),
-                    output_tokens=max((ru.get("output_tokens") or 0) - so, 0),
-                    cache_read_tokens=max((ru.get("cache_read_input_tokens") or 0) - scr, 0),
+                    prompt_tokens=max((ru.get("input_tokens") or 0) - si, 0),
+                    completion_tokens=max((ru.get("output_tokens") or 0) - so, 0),
+                    cached_tokens=max((ru.get("cache_read_input_tokens") or 0) - scr, 0),
                     cache_creation_tokens=max((ru.get("cache_creation_input_tokens") or 0) - scc, 0),
                     cost_usd=result.get("total_cost_usd"),
                 ),
@@ -622,15 +622,15 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
                 text_parts.append(block.get("text", ""))
             elif btype == "tool_use":
                 tool_calls.append(ToolCall(
-                    id=block.get("id") or "",
-                    name=block.get("name") or "",
+                    tool_call_id=block.get("id") or "",
+                    function_name=block.get("name") or "",
                     arguments=block.get("input") or {},
                 ))
         usage = message.get("usage") or {}
         metrics = StepMetrics(
-            input_tokens=usage.get("input_tokens"),
-            output_tokens=usage.get("output_tokens"),
-            cache_read_tokens=usage.get("cache_read_input_tokens"),
+            prompt_tokens=usage.get("input_tokens"),
+            completion_tokens=usage.get("output_tokens"),
+            cached_tokens=usage.get("cache_read_input_tokens"),
             cache_creation_tokens=usage.get("cache_creation_input_tokens"),
         )
         builder.add_step(
@@ -671,7 +671,7 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
                             if src.get("type") == "base64" and src.get("data"):
                                 parts.append(ContentPart(
                                     type="image",
-                                    image=ImageSource(
+                                    source=ImageSource(
                                         type="base64",
                                         media_type=src.get("media_type", "image/png"),
                                         data=src.get("data"),
@@ -680,10 +680,10 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
                             elif src.get("type") == "url" and src.get("url"):
                                 parts.append(ContentPart(
                                     type="image",
-                                    image=ImageSource(type="url", url=src.get("url")),
+                                    source=ImageSource(type="url", url=src.get("url")),
                                 ))
                 results.append(ToolResult(
-                    tool_call_id=block.get("tool_use_id") or "",
+                    source_call_id=block.get("tool_use_id") or "",
                     content=parts,
                     is_error=bool(block.get("is_error")),
                 ))

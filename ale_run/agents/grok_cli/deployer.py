@@ -544,8 +544,8 @@ class GrokCliDeployer(BaseAgentDeployer):
         builder.add_step(
             source="agent",
             tool_calls=[ToolCall(
-                id=tc.get("id", ""),
-                name=func.get("name", ""),
+                tool_call_id=tc.get("id", ""),
+                function_name=func.get("name", ""),
                 arguments=args,
             )],
         )
@@ -559,7 +559,7 @@ class GrokCliDeployer(BaseAgentDeployer):
                 source="environment",
                 observation=Observation(results=[
                     ToolResult(
-                        tool_call_id=tc.get("id", ""),
+                        source_call_id=tc.get("id", ""),
                         content=[ContentPart(type="text", text=text)],
                         is_error=not tr.get("success", True),
                     ),
@@ -585,8 +585,8 @@ class GrokCliDeployer(BaseAgentDeployer):
             source="system",
             message=None,
             metrics=StepMetrics(
-                input_tokens=usage.get("inputTokens"),
-                output_tokens=usage.get("outputTokens"),
+                prompt_tokens=usage.get("inputTokens"),
+                completion_tokens=usage.get("outputTokens"),
                 cost_usd=(cost_ticks / 1_000_000) if cost_ticks else None,
                 duration_ms=duration_ms,
             ),

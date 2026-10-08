@@ -497,9 +497,9 @@ class OpenHandsCliDeployer(BaseAgentDeployer):
                 source="system",
                 message=None,
                 metrics=StepMetrics(
-                    input_tokens=usage.get("input_tokens"),
-                    output_tokens=usage.get("output_tokens"),
-                    cache_read_tokens=usage.get("cache_read_tokens"),
+                    prompt_tokens=usage.get("input_tokens"),
+                    completion_tokens=usage.get("output_tokens"),
+                    cached_tokens=usage.get("cache_read_tokens"),
                     cache_creation_tokens=usage.get("cache_write_tokens"),
                     cost_usd=usage.get("cost_usd"),
                 ),
@@ -662,9 +662,9 @@ class OpenHandsCliDeployer(BaseAgentDeployer):
         metrics: StepMetrics | None = None
         if usage:
             metrics = StepMetrics(
-                input_tokens=usage.get("input_tokens"),
-                output_tokens=usage.get("output_tokens"),
-                cache_read_tokens=usage.get("cache_read_tokens"),
+                prompt_tokens=usage.get("input_tokens"),
+                completion_tokens=usage.get("output_tokens"),
+                cached_tokens=usage.get("cache_read_tokens"),
                 cache_creation_tokens=usage.get("cache_write_tokens"),
             )
 
@@ -686,14 +686,14 @@ class OpenHandsCliDeployer(BaseAgentDeployer):
         if isinstance(summary, str) and summary.strip():
             builder.add_step(
                 source="agent",
-                reasoning=summary,
+                reasoning_content=summary,
             )
 
         builder.add_step(
             source="agent",
             tool_calls=[ToolCall(
-                id=tool_call_id or f"oh_{tool_name}",
-                name=tool_name,
+                tool_call_id=tool_call_id or f"oh_{tool_name}",
+                function_name=tool_name,
                 arguments=action if isinstance(action, dict) else {"_raw": str(action)},
             )],
         )
@@ -717,7 +717,7 @@ class OpenHandsCliDeployer(BaseAgentDeployer):
             source="environment",
             observation=Observation(results=[
                 ToolResult(
-                    tool_call_id=tool_call_id or f"oh_{tool_name}",
+                    source_call_id=tool_call_id or f"oh_{tool_name}",
                     content=content_parts,
                     is_error=False,
                 ),

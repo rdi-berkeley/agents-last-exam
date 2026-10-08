@@ -391,9 +391,9 @@ class QwenCodeDeployer(BaseAgentDeployer):
             metrics = None
             if usage:
                 metrics = StepMetrics(
-                    input_tokens=usage.get("input_tokens"),
-                    output_tokens=usage.get("output_tokens"),
-                    cache_read_tokens=usage.get("cache_read_input_tokens") or None,
+                    prompt_tokens=usage.get("input_tokens"),
+                    completion_tokens=usage.get("output_tokens"),
+                    cached_tokens=usage.get("cache_read_input_tokens") or None,
                 )
             builder.add_step(
                 source="system",
@@ -475,9 +475,9 @@ class QwenCodeDeployer(BaseAgentDeployer):
         metrics = None
         if usage and (usage.get("input_tokens") or usage.get("output_tokens")):
             metrics = StepMetrics(
-                input_tokens=usage.get("input_tokens"),
-                output_tokens=usage.get("output_tokens"),
-                cache_read_tokens=usage.get("cache_read_input_tokens") or None,
+                prompt_tokens=usage.get("input_tokens"),
+                completion_tokens=usage.get("output_tokens"),
+                cached_tokens=usage.get("cache_read_input_tokens") or None,
             )
 
         text_parts: list[str] = []
@@ -493,8 +493,8 @@ class QwenCodeDeployer(BaseAgentDeployer):
                 reasoning_parts.append(block["thinking"])
             elif btype == "tool_use":
                 tool_calls.append(ToolCall(
-                    id=str(block.get("id") or ""),
-                    name=str(block.get("name") or "unknown"),
+                    tool_call_id=str(block.get("id") or ""),
+                    function_name=str(block.get("name") or "unknown"),
                     arguments=block.get("input") if isinstance(block.get("input"), dict) else {},
                 ))
 
@@ -505,7 +505,7 @@ class QwenCodeDeployer(BaseAgentDeployer):
         builder.add_step(
             source="agent",
             message=text or None,
-            reasoning=reasoning or None,
+            reasoning_content=reasoning or None,
             tool_calls=tool_calls or None,
             metrics=metrics,
         )
@@ -525,7 +525,7 @@ class QwenCodeDeployer(BaseAgentDeployer):
             )
             parts = [ContentPart(type="text", text=text)] if text else []
             results.append(ToolResult(
-                tool_call_id=str(block.get("tool_use_id") or ""),
+                source_call_id=str(block.get("tool_use_id") or ""),
                 content=parts,
                 is_error=bool(block.get("is_error")),
             ))

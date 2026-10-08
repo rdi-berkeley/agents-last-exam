@@ -570,16 +570,16 @@ class CursorCliDeployer(BaseAgentDeployer):
                 text_parts.append(block.get("text", ""))
             elif btype == "tool_use":
                 tool_calls.append(ToolCall(
-                    id=block.get("id") or "",
-                    name=block.get("name") or "",
+                    tool_call_id=block.get("id") or "",
+                    function_name=block.get("name") or "",
                     arguments=block.get("input") or {},
                 ))
         # camelCase usage fields
         usage = event.get("usage") or message.get("usage") or {}
         metrics = StepMetrics(
-            input_tokens=usage.get("inputTokens") or usage.get("input_tokens"),
-            output_tokens=usage.get("outputTokens") or usage.get("output_tokens"),
-            cache_read_tokens=usage.get("cacheReadTokens") or usage.get("cache_read_input_tokens"),
+            prompt_tokens=usage.get("inputTokens") or usage.get("input_tokens"),
+            completion_tokens=usage.get("outputTokens") or usage.get("output_tokens"),
+            cached_tokens=usage.get("cacheReadTokens") or usage.get("cache_read_input_tokens"),
             cache_creation_tokens=usage.get("cacheWriteTokens") or usage.get("cache_creation_input_tokens"),
         )
         builder.add_step(
@@ -618,7 +618,7 @@ class CursorCliDeployer(BaseAgentDeployer):
                             if src.get("type") == "base64" and src.get("data"):
                                 parts.append(ContentPart(
                                     type="image",
-                                    image=ImageSource(
+                                    source=ImageSource(
                                         type="base64",
                                         media_type=src.get("media_type", "image/png"),
                                         data=src.get("data"),
@@ -627,10 +627,10 @@ class CursorCliDeployer(BaseAgentDeployer):
                             elif src.get("type") == "url" and src.get("url"):
                                 parts.append(ContentPart(
                                     type="image",
-                                    image=ImageSource(type="url", url=src.get("url")),
+                                    source=ImageSource(type="url", url=src.get("url")),
                                 ))
                 results.append(ToolResult(
-                    tool_call_id=block.get("tool_use_id") or "",
+                    source_call_id=block.get("tool_use_id") or "",
                     content=parts,
                     is_error=bool(block.get("is_error")),
                 ))
@@ -663,8 +663,8 @@ class CursorCliDeployer(BaseAgentDeployer):
             builder.add_step(
                 source="agent",
                 tool_calls=[ToolCall(
-                    id=call_id,
-                    name=name,
+                    tool_call_id=call_id,
+                    function_name=name,
                     arguments=body.get("args") or {},
                 )],
             )
@@ -679,7 +679,7 @@ class CursorCliDeployer(BaseAgentDeployer):
             builder.add_step(
                 source="environment",
                 observation=Observation(results=[ToolResult(
-                    tool_call_id=call_id,
+                    source_call_id=call_id,
                     content=content,
                     is_error=is_error,
                 )]),
@@ -743,7 +743,7 @@ class CursorCliDeployer(BaseAgentDeployer):
                     if isinstance(img, dict) and img.get("data"):
                         image_parts.append(ContentPart(
                             type="image",
-                            image=ImageSource(
+                            source=ImageSource(
                                 type="base64",
                                 media_type=img.get("mimeType")
                                 or img.get("mime_type")
@@ -779,9 +779,9 @@ class CursorCliDeployer(BaseAgentDeployer):
                 source="system",
                 message=None,
                 metrics=StepMetrics(
-                    input_tokens=usage.get("inputTokens") or usage.get("input_tokens"),
-                    output_tokens=usage.get("outputTokens") or usage.get("output_tokens"),
-                    cache_read_tokens=usage.get("cacheReadTokens") or usage.get("cache_read_input_tokens"),
+                    prompt_tokens=usage.get("inputTokens") or usage.get("input_tokens"),
+                    completion_tokens=usage.get("outputTokens") or usage.get("output_tokens"),
+                    cached_tokens=usage.get("cacheReadTokens") or usage.get("cache_read_input_tokens"),
                     cache_creation_tokens=usage.get("cacheWriteTokens") or usage.get("cache_creation_input_tokens"),
                 ),
                 extra={"usage_reconciliation": True},

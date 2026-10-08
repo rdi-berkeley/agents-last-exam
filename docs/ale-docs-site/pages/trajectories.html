@@ -41,6 +41,12 @@
       <code>final_metrics</code> totals. Every field is specified in
       <a href="/pages/trajectory-schema.html">the trajectory schema</a>.
     </p>
+    <p>
+      That internal model is what deployers populate — the file actually written
+      to disk, <code>trajectory.json</code>, is this converted to real
+      <a href="https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md">ATIF-v1.8</a>,
+      so it's readable by any ATIF-aware tooling, not just ALE's own.
+    </p>
 
     <h2>How the normalization happens</h2>
     <p>
@@ -61,7 +67,7 @@
     <div class="diagram">.logs/&lt;experiment&gt;/&lt;run_id&gt;/&lt;agent&gt;/&lt;model&gt;/&lt;task&gt;/v&lt;variant&gt;/&lt;timestamp&gt;/
 ├── events.jsonl       append-only phase log, flushed per line, survives a kill
 ├── run.json           metadata, final score, termination, usage totals
-├── trajectory.json    the ALE-v1.0 trajectory
+├── trajectory.json    the ATIF-v1.8 trajectory
 ├── screenshots/       images the agent saw, referenced by path from the trajectory
 ├── eval_result.json   grader status, score, duration
 ├── origin_log/        the agent's raw work dir, pulled verbatim from the sandbox
@@ -71,7 +77,7 @@
       <tbody>
         <tr><td><code>events.jsonl</code></td><td>Throughout the run</td><td>One JSON object per phase event. The authoritative trace.</td></tr>
         <tr><td><code>run.json</code></td><td>Once, at the end</td><td>The run's summary: agent/task identity, status, score, why it ended, usage.</td></tr>
-        <tr><td><code>trajectory.json</code></td><td>Once, at the end</td><td>The normalized step-by-step record.</td></tr>
+        <tr><td><code>trajectory.json</code></td><td>Once, at the end</td><td>The normalized step-by-step record, in ATIF-v1.8.</td></tr>
         <tr><td><code>screenshots/</code></td><td>At finalize</td><td>Images the agent saw, moved out of the trajectory and referenced by relative path.</td></tr>
         <tr><td><code>eval_result.json</code></td><td>Once, at the end</td><td>The grader's verdict in isolation.</td></tr>
         <tr><td><code>origin_log/</code></td><td>After the agent finishes</td><td>Unedited native transcripts and scratch files.</td></tr>

@@ -743,9 +743,9 @@ class AntigravityCliDeployer(BaseAgentDeployer):
                     source="agent",
                     message=response,
                     metrics=StepMetrics(
-                        input_tokens=_optional_int(usage.get("input_tokens")),
-                        output_tokens=_optional_int(usage.get("output_tokens")),
-                        cache_read_tokens=_optional_int(usage.get("cache_read_tokens")),
+                        prompt_tokens=_optional_int(usage.get("input_tokens")),
+                        completion_tokens=_optional_int(usage.get("output_tokens")),
+                        cached_tokens=_optional_int(usage.get("cache_read_tokens")),
                         duration_ms=_duration_ms(envelope.get("duration_seconds")),
                     ),
                     extra={"thinking_tokens": _optional_int(usage.get("thinking_tokens"))},
@@ -758,9 +758,9 @@ class AntigravityCliDeployer(BaseAgentDeployer):
                     extra={"reason": "agy_error", "status": envelope.get("status")},
                 )
             builder.override_final_metrics(
-                total_input_tokens=_optional_int(usage.get("input_tokens")),
-                total_output_tokens=_optional_int(usage.get("output_tokens")),
-                total_cache_read_tokens=_optional_int(usage.get("cache_read_tokens")),
+                total_prompt_tokens=_optional_int(usage.get("input_tokens")),
+                total_completion_tokens=_optional_int(usage.get("output_tokens")),
+                total_cached_tokens=_optional_int(usage.get("cache_read_tokens")),
             )
             metadata.update(
                 {
@@ -871,9 +871,9 @@ class AntigravityCliDeployer(BaseAgentDeployer):
                     source="agent",
                     message="".join(chunks) or None,
                     metrics=StepMetrics(
-                        input_tokens=_optional_int(step_usage.get("input_tokens")),
-                        output_tokens=_optional_int(step_usage.get("output_tokens")),
-                        cache_read_tokens=_optional_int(step_usage.get("cache_read_tokens")),
+                        prompt_tokens=_optional_int(step_usage.get("input_tokens")),
+                        completion_tokens=_optional_int(step_usage.get("output_tokens")),
+                        cached_tokens=_optional_int(step_usage.get("cache_read_tokens")),
                         duration_ms=_duration_ms(terminal.get("duration_seconds")),
                     ),
                     extra={
@@ -915,7 +915,7 @@ class AntigravityCliDeployer(BaseAgentDeployer):
         call_id = f"agy_step_{step_index}"
         builder.add_step(
             source="agent",
-            tool_calls=[ToolCall(id=call_id, name=tool_name, arguments=arguments)],
+            tool_calls=[ToolCall(tool_call_id=call_id, function_name=tool_name, arguments=arguments)],
             extra={
                 "agy_step_index": step_index,
                 "state": update.get("state"),
@@ -939,7 +939,7 @@ class AntigravityCliDeployer(BaseAgentDeployer):
             observation=Observation(
                 results=[
                     ToolResult(
-                        tool_call_id=call_id,
+                        source_call_id=call_id,
                         content=content,
                         is_error=update.get("state") == "ERROR" or error is not None,
                     )

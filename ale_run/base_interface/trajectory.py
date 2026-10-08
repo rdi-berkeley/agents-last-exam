@@ -10,8 +10,10 @@ leading ``user``-source Step (the instruction); ``BaseAgentDeployer.
 parse_artifacts`` appends the rest. Sub-agents attach under
 :attr:`Trajectory.subagent_trajectories`.
 
-Storage is the orchestrator's job: ``trajectory.model_dump_json(indent=2)``
-to a file. Screenshots are referenced **by path** (see :class:`ImageSource`)
+Storage is the orchestrator's job: ``RunWriter.write_trajectory`` converts
+the finished :class:`Trajectory` through :func:`ale_run.base_interface.atif.
+to_atif` and writes the result as ``trajectory.json``, a real ATIF-v1.8
+document. Screenshots are referenced **by path** (see :class:`ImageSource`)
 and written separately — never inline base64 in the JSON.
 """
 from __future__ import annotations
@@ -67,7 +69,7 @@ class ContentPart(BaseModel):
 
     type: Literal["text", "image"]
     text: str | None = None
-    image: ImageSource | None = None
+    source: ImageSource | None = None
 
 
 # =============================================================================
@@ -79,8 +81,8 @@ class ToolCall(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id: str = Field(default_factory=lambda: f"call_{uuid.uuid4().hex[:12]}")
-    name: str
+    tool_call_id: str = Field(default_factory=lambda: f"call_{uuid.uuid4().hex[:12]}")
+    function_name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -88,7 +90,7 @@ class Observation(BaseModel):
     """The environment's response to one or more tool calls.
 
     ``results`` aligns with ``tool_calls`` from the **previous** Step
-    (matched by ``tool_call_id``). For a step that is purely an env update
+    (matched by ``source_call_id``). For a step that is purely an env update
     (no preceding tool call), ``results`` may be empty and the message
     carries the content.
     """
@@ -104,7 +106,7 @@ class ToolResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    tool_call_id: str
+    source_call_id: str
     content: list[ContentPart] = Field(default_factory=list)
     is_error: bool = False
 
@@ -118,9 +120,9 @@ class StepMetrics(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    input_tokens: int | None = None
-    output_tokens: int | None = None
-    cache_read_tokens: int | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    cached_tokens: int | None = None
     cache_creation_tokens: int | None = None
     cost_usd: float | None = None
     duration_ms: int | None = None
@@ -132,9 +134,9 @@ class FinalMetrics(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     total_steps: int = 0
-    total_input_tokens: int = 0
-    total_output_tokens: int = 0
-    total_cache_read_tokens: int = 0
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    total_cached_tokens: int = 0
     total_cache_creation_tokens: int = 0
     total_cost_usd: float = 0.0
     total_duration_ms: int = 0
@@ -156,7 +158,7 @@ class Step(BaseModel):
 
     - ``user``        — instruction or human turn. ``message`` set.
     - ``agent``       — model output. Some combination of ``message``,
-                        ``reasoning``, ``tool_calls`` set. ``metrics``
+                        ``reasoning_content``, ``tool_calls`` set. ``metrics``
                         records the LLM call's token/cost.
     - ``environment`` — env response (tool results or state update).
                         ``observation`` set.
@@ -170,7 +172,7 @@ class Step(BaseModel):
     timestamp: str = Field(default_factory=_now_iso)
     source: Source
     message: str | list[ContentPart] | None = None
-    reasoning: str | None = None
+    reasoning_content: str | None = None
     tool_calls: list[ToolCall] = Field(default_factory=list)
     observation: Observation | None = None
     metrics: StepMetrics | None = None
@@ -259,9 +261,9 @@ class TrajectoryBuilder:
 
     #: FinalMetrics fields a deployer may override in :meth:`finalize`.
     _OVERRIDABLE_METRICS = frozenset({
-        "total_input_tokens",
-        "total_output_tokens",
-        "total_cache_read_tokens",
+        "total_prompt_tokens",
+        "total_completion_tokens",
+        "total_cached_tokens",
         "total_cache_creation_tokens",
         "total_cost_usd",
     })
@@ -293,7 +295,7 @@ class TrajectoryBuilder:
         source: Source,
         *,
         message: str | list[ContentPart] | None = None,
-        reasoning: str | None = None,
+        reasoning_content: str | None = None,
         tool_calls: list[ToolCall] | None = None,
         observation: Observation | None = None,
         metrics: StepMetrics | None = None,
@@ -303,7 +305,7 @@ class TrajectoryBuilder:
             step_id=self._next_step_id,
             source=source,
             message=message,
-            reasoning=reasoning,
+            reasoning_content=reasoning_content,
             tool_calls=list(tool_calls or []),
             observation=observation,
             metrics=metrics,
@@ -328,9 +330,9 @@ class TrajectoryBuilder:
         for s in self._traj.steps:
             if s.metrics is None:
                 continue
-            m.total_input_tokens += s.metrics.input_tokens or 0
-            m.total_output_tokens += s.metrics.output_tokens or 0
-            m.total_cache_read_tokens += s.metrics.cache_read_tokens or 0
+            m.total_prompt_tokens += s.metrics.prompt_tokens or 0
+            m.total_completion_tokens += s.metrics.completion_tokens or 0
+            m.total_cached_tokens += s.metrics.cached_tokens or 0
             m.total_cache_creation_tokens += s.metrics.cache_creation_tokens or 0
             if s.metrics.cost_usd is not None:
                 m.total_cost_usd += s.metrics.cost_usd
@@ -436,7 +438,7 @@ def persist_screenshots(trajectory: "Trajectory", run_dir: str | Path) -> int:
         for part in content:
             if not isinstance(part, ContentPart):
                 continue
-            img = part.image
+            img = part.source
             if part.type != "image" or img is None:
                 continue
             if img.data and img.type != "path":

@@ -147,9 +147,9 @@ def test_envelope_usage_overrides_partial_transcript_totals(tmp_path) -> None:
     final_metrics = builder.finalize(reward=1).final_metrics
 
     assert final_metrics is not None
-    assert final_metrics.total_input_tokens == 100
-    assert final_metrics.total_output_tokens == 50
-    assert final_metrics.total_cache_read_tokens == 200
+    assert final_metrics.total_prompt_tokens == 100
+    assert final_metrics.total_completion_tokens == 50
+    assert final_metrics.total_cached_tokens == 200
     assert final_metrics.total_cache_creation_tokens == 20
 
 
@@ -180,7 +180,7 @@ def test_empty_envelope_usage_does_not_erase_step_totals(tmp_path) -> None:
     )
     builder.add_step(
         source="agent",
-        metrics=StepMetrics(input_tokens=10, output_tokens=5),
+        metrics=StepMetrics(prompt_tokens=10, completion_tokens=5),
     )
 
     OpenClawCliDeployer.parse_artifacts(
@@ -199,8 +199,8 @@ def test_empty_envelope_usage_does_not_erase_step_totals(tmp_path) -> None:
     final_metrics = builder.finalize(reward=1).final_metrics
 
     assert final_metrics is not None
-    assert final_metrics.total_input_tokens == 10
-    assert final_metrics.total_output_tokens == 5
+    assert final_metrics.total_prompt_tokens == 10
+    assert final_metrics.total_completion_tokens == 5
 
 
 def test_extract_provider_usage_supports_responses_json_and_sse() -> None:
@@ -444,8 +444,8 @@ def test_parse_keeps_image_usage_in_openclaw_metadata_only(tmp_path) -> None:
         "output_tokens": 9,
     }
     assert trajectory.final_metrics is not None
-    assert trajectory.final_metrics.total_input_tokens == 100
-    assert trajectory.final_metrics.total_output_tokens == 20
+    assert trajectory.final_metrics.total_prompt_tokens == 100
+    assert trajectory.final_metrics.total_completion_tokens == 20
     assert "model_usage" not in trajectory.final_metrics.model_dump()
 
     raw_transcript = (work_dir / "transcript.jsonl").read_text()
@@ -458,9 +458,9 @@ def test_parse_keeps_image_usage_in_openclaw_metadata_only(tmp_path) -> None:
         "screenshots/"
     )
     image_part = trajectory.steps[1].observation.results[0].content[1]
-    assert image_part.image is not None
-    assert image_part.image.type == "path"
-    assert image_part.image.path == trajectory.steps[0].tool_calls[0].arguments[
+    assert image_part.source is not None
+    assert image_part.source.type == "path"
+    assert image_part.source.path == trajectory.steps[0].tool_calls[0].arguments[
         "image"
     ]
 

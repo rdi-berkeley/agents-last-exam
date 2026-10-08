@@ -102,10 +102,10 @@ def test_final_metrics_reconciled_from_aggregate(tmp_path: Path) -> None:
     fm = builder.finalize(reward=1.0, status="completed").final_metrics
 
     # Totals from state.json (both turns), not the single transcript turn (input=100).
-    assert fm.total_input_tokens == 300
-    assert fm.total_output_tokens == 25
+    assert fm.total_prompt_tokens == 300
+    assert fm.total_completion_tokens == 25
     # Cache split from api_result (transcript carried none → would be 0 pre-fix).
-    assert fm.total_cache_read_tokens == 100
+    assert fm.total_cached_tokens == 100
     assert fm.total_cache_creation_tokens == 185  # 90 + 95
     # Cost summed over per-call api_result, incl. the turn missing from transcript.
     # Pre-fix this was 0.001 (transcript-message cost only).
@@ -131,7 +131,7 @@ def test_override_no_op_when_no_aggregate(tmp_path: Path) -> None:
     builder = TrajectoryBuilder(agent_name="ale_claw", task_path="t", variant_index=0)
     parse_transcripts_into(tmp_path / "empty", builder)  # no transcript → system step
     fm = builder.finalize(reward=None, status="failed").final_metrics
-    assert fm.total_input_tokens == 0
+    assert fm.total_prompt_tokens == 0
     assert fm.total_cost_usd == 0.0
 
 
@@ -145,9 +145,9 @@ def test_override_final_metrics_ignores_none_and_beats_step_sum() -> None:
     builder = TrajectoryBuilder(agent_name="x", task_path="t", variant_index=0)
     from ale_run.base_interface import StepMetrics
 
-    builder.add_step("agent", metrics=StepMetrics(input_tokens=10, cost_usd=0.01))
+    builder.add_step("agent", metrics=StepMetrics(prompt_tokens=10, cost_usd=0.01))
     # None → no-op (output stays from step sum); provided keys win.
-    builder.override_final_metrics(total_input_tokens=999, total_output_tokens=None)
+    builder.override_final_metrics(total_prompt_tokens=999, total_completion_tokens=None)
     fm = builder.finalize(reward=None, status="completed").final_metrics
-    assert fm.total_input_tokens == 999  # overridden
+    assert fm.total_prompt_tokens == 999  # overridden
     assert fm.total_cost_usd == pytest.approx(0.01)  # untouched → from step sum

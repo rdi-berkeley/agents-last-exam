@@ -13,11 +13,29 @@
   <article class="article">
     <h1>Trajectory schema (ALE-v1.0)</h1>
     <p class="lede">
-      The canonical record ALE emits for every run. Each agent's deployer
+      The canonical record ALE builds for every run. Each agent's deployer
       translates its native logs into this shape, so every run reads the same way
-      regardless of the harness underneath. This page is the field-by-field
-      specification.
+      regardless of the harness underneath. Field names below already match
+      <a href="https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md">ATIF-v1.8</a>
+      vocabulary (<code>tool_call_id</code>, <code>function_name</code>,
+      <code>reasoning_content</code>, <code>prompt_tokens</code>, ...); this page
+      is the field-by-field specification of ALE's own model.
     </p>
+
+    <div class="note">
+      <div class="note-title">The one thing that still differs on disk</div>
+      <code>trajectory.json</code> is a real ATIF-v1.8 document, converted from
+      this model at serialization time (<code>ale_run/base_interface/atif.py</code>).
+      ALE's own <code>source</code> allows a 4th value, <code>"environment"</code>
+      (a step carrying only an Observation, right after the step with its
+      matching <code>tool_calls</code>) — ATIF has no such source and requires
+      same-step resolution, so the converter merges that result back onto the
+      step that issued the call. Run-context fields that ATIF doesn't define
+      (<code>task_path</code>, <code>variant_index</code>, <code>instruction</code>,
+      <code>started_at</code>, <code>ended_at</code>) move into the top-level
+      <code>extra</code> map, and <code>episode_id</code> becomes both
+      <code>session_id</code> and <code>trajectory_id</code>.
+    </div>
 
     <h2>Conventions</h2>
     <ul>
@@ -70,7 +88,7 @@
         <tr><td><code>timestamp</code></td><td><code>string</code></td><td>no</td><td>When the step occurred (ISO-8601).</td></tr>
         <tr><td><code>source</code></td><td><code>"system" | "user" | "agent" | "environment"</code></td><td>yes</td><td>Who produced the step (see below).</td></tr>
         <tr><td><code>message</code></td><td><code>string</code> | <a href="#contentpart"><code>ContentPart[]</code></a> | null</td><td>no</td><td>Text, or multimodal content.</td></tr>
-        <tr><td><code>reasoning</code></td><td><code>string</code> | null</td><td>no</td><td>The agent's reasoning trace, when exposed.</td></tr>
+        <tr><td><code>reasoning_content</code></td><td><code>string</code> | null</td><td>no</td><td>The agent's reasoning trace, when exposed.</td></tr>
         <tr><td><code>tool_calls</code></td><td><a href="#toolcall"><code>ToolCall[]</code></a></td><td>no</td><td>Tools the agent invoked this step. Default <code>[]</code>.</td></tr>
         <tr><td><code>observation</code></td><td><a href="#observation"><code>Observation</code></a> | null</td><td>no</td><td>The environment's response.</td></tr>
         <tr><td><code>metrics</code></td><td><a href="#stepmetrics"><code>StepMetrics</code></a> | null</td><td>no</td><td>LLM accounting for this step.</td></tr>
@@ -80,7 +98,7 @@
     <p>The four <code>source</code> values carry different fields:</p>
     <ul>
       <li><code>user</code>: an instruction or human turn; <code>message</code> is set.</li>
-      <li><code>agent</code>: model output; some combination of <code>message</code>, <code>reasoning</code>, and <code>tool_calls</code>, with <code>metrics</code> recording the call's tokens and cost.</li>
+      <li><code>agent</code>: model output; some combination of <code>message</code>, <code>reasoning_content</code>, and <code>tool_calls</code>, with <code>metrics</code> recording the call's tokens and cost.</li>
       <li><code>environment</code>: the environment's reply; <code>observation</code> is set (tool results or a state update).</li>
       <li><code>system</code>: a system prompt or framework note (cancellation, timeout, …).</li>
     </ul>
@@ -90,8 +108,8 @@
     <table>
       <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
       <tbody>
-        <tr><td><code>id</code></td><td><code>string</code></td><td>no</td><td>Unique call id; a later <code>ToolResult</code> references it. Auto-generated (<code>call_…</code>) if absent.</td></tr>
-        <tr><td><code>name</code></td><td><code>string</code></td><td>yes</td><td>Tool name.</td></tr>
+        <tr><td><code>tool_call_id</code></td><td><code>string</code></td><td>no</td><td>Unique call id; a later <code>ToolResult</code> references it. Auto-generated (<code>call_…</code>) if absent.</td></tr>
+        <tr><td><code>function_name</code></td><td><code>string</code></td><td>yes</td><td>Tool name.</td></tr>
         <tr><td><code>arguments</code></td><td><code>object</code></td><td>no</td><td>Arguments passed. Default <code>{}</code>.</td></tr>
       </tbody>
     </table>
@@ -115,7 +133,7 @@
     <table>
       <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
       <tbody>
-        <tr><td><code>tool_call_id</code></td><td><code>string</code></td><td>yes</td><td>The <code>ToolCall.id</code> this answers.</td></tr>
+        <tr><td><code>source_call_id</code></td><td><code>string</code></td><td>yes</td><td>The <code>ToolCall.tool_call_id</code> this answers.</td></tr>
         <tr><td><code>content</code></td><td><a href="#contentpart"><code>ContentPart[]</code></a></td><td>no</td><td>The result: text and/or image. Default <code>[]</code>.</td></tr>
         <tr><td><code>is_error</code></td><td><code>boolean</code></td><td>no</td><td>Whether the tool failed. Default <code>false</code>.</td></tr>
       </tbody>
@@ -128,7 +146,7 @@
       <tbody>
         <tr><td><code>type</code></td><td><code>"text" | "image"</code></td><td>yes</td><td>Which kind of content.</td></tr>
         <tr><td><code>text</code></td><td><code>string</code> | null</td><td>cond.</td><td>Set when <code>type = "text"</code>.</td></tr>
-        <tr><td><code>image</code></td><td><a href="#imagesource"><code>ImageSource</code></a> | null</td><td>cond.</td><td>Set when <code>type = "image"</code>.</td></tr>
+        <tr><td><code>source</code></td><td><a href="#imagesource"><code>ImageSource</code></a> | null</td><td>cond.</td><td>Set when <code>type = "image"</code>.</td></tr>
       </tbody>
     </table>
 
@@ -157,9 +175,9 @@
     <table>
       <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
       <tbody>
-        <tr><td><code>input_tokens</code></td><td><code>integer</code> | null</td><td>no</td><td>Prompt tokens.</td></tr>
-        <tr><td><code>output_tokens</code></td><td><code>integer</code> | null</td><td>no</td><td>Generated tokens.</td></tr>
-        <tr><td><code>cache_read_tokens</code></td><td><code>integer</code> | null</td><td>no</td><td>Prompt tokens served from cache.</td></tr>
+        <tr><td><code>prompt_tokens</code></td><td><code>integer</code> | null</td><td>no</td><td>Prompt tokens.</td></tr>
+        <tr><td><code>completion_tokens</code></td><td><code>integer</code> | null</td><td>no</td><td>Generated tokens.</td></tr>
+        <tr><td><code>cached_tokens</code></td><td><code>integer</code> | null</td><td>no</td><td>Prompt tokens served from cache.</td></tr>
         <tr><td><code>cache_creation_tokens</code></td><td><code>integer</code> | null</td><td>no</td><td>Tokens written to cache.</td></tr>
         <tr><td><code>cost_usd</code></td><td><code>float</code> | null</td><td>no</td><td>This step's API cost.</td></tr>
         <tr><td><code>duration_ms</code></td><td><code>integer</code> | null</td><td>no</td><td>Wall-clock for this step.</td></tr>
@@ -177,9 +195,9 @@
       <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Meaning</th></tr></thead>
       <tbody>
         <tr><td><code>total_steps</code></td><td><code>integer</code></td><td>no</td><td>Number of steps. Default <code>0</code>.</td></tr>
-        <tr><td><code>total_input_tokens</code></td><td><code>integer</code></td><td>no</td><td>Sum of step input tokens.</td></tr>
-        <tr><td><code>total_output_tokens</code></td><td><code>integer</code></td><td>no</td><td>Sum of step output tokens.</td></tr>
-        <tr><td><code>total_cache_read_tokens</code></td><td><code>integer</code></td><td>no</td><td>Sum of cache reads.</td></tr>
+        <tr><td><code>total_prompt_tokens</code></td><td><code>integer</code></td><td>no</td><td>Sum of step input tokens.</td></tr>
+        <tr><td><code>total_completion_tokens</code></td><td><code>integer</code></td><td>no</td><td>Sum of step output tokens.</td></tr>
+        <tr><td><code>total_cached_tokens</code></td><td><code>integer</code></td><td>no</td><td>Sum of cache reads.</td></tr>
         <tr><td><code>total_cache_creation_tokens</code></td><td><code>integer</code></td><td>no</td><td>Sum of cache writes.</td></tr>
         <tr><td><code>total_cost_usd</code></td><td><code>float</code></td><td>no</td><td>Sum of step costs. Default <code>0.0</code>.</td></tr>
         <tr><td><code>total_duration_ms</code></td><td><code>integer</code></td><td>no</td><td>Total wall-clock.</td></tr>

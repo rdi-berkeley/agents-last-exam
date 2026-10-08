@@ -568,9 +568,9 @@ class ZCodeDeployer(BaseAgentDeployer):
             metrics = None
             if usage:
                 metrics = StepMetrics(
-                    input_tokens=usage.get("input_tokens") or usage.get("prompt_tokens"),
-                    output_tokens=usage.get("output_tokens") or usage.get("completion_tokens"),
-                    cache_read_tokens=usage.get("cache_read_tokens"),
+                    prompt_tokens=usage.get("input_tokens") or usage.get("prompt_tokens"),
+                    completion_tokens=usage.get("output_tokens") or usage.get("completion_tokens"),
+                    cached_tokens=usage.get("cache_read_tokens"),
                     cache_creation_tokens=usage.get("cache_creation_tokens"),
                     cost_usd=usage.get("cost_usd") or usage.get("cost"),
                 )
@@ -649,8 +649,8 @@ class ZCodeDeployer(BaseAgentDeployer):
                 builder.add_step(
                     source="agent",
                     tool_calls=[ToolCall(
-                        id=tool_call_id or f"zc_{name}",
-                        name=str(name),
+                        tool_call_id=tool_call_id or f"zc_{name}",
+                        function_name=str(name),
                         arguments=args if isinstance(args, dict) else {"_raw": str(args)},
                     )],
                 )
@@ -666,7 +666,7 @@ class ZCodeDeployer(BaseAgentDeployer):
                     source="environment",
                     observation=Observation(results=[
                         ToolResult(
-                            tool_call_id=tool_call_id,
+                            source_call_id=tool_call_id,
                             content=parts,
                             is_error=result.get("success") is False,
                         ),
@@ -695,7 +695,7 @@ class ZCodeDeployer(BaseAgentDeployer):
                     builder.add_step(
                         source="agent",
                         message=text or None,
-                        reasoning=reasoning or None,
+                        reasoning_content=reasoning or None,
                     )
             # start/*_start/*_end/tool_input_*/tool_call: superseded by the
             # tool.updated events above (which carry the resolved arguments,
@@ -711,9 +711,9 @@ class ZCodeDeployer(BaseAgentDeployer):
                         source="system",
                         message=None,
                         metrics=StepMetrics(
-                            input_tokens=usage.get("inputTokens"),
-                            output_tokens=usage.get("outputTokens"),
-                            cache_read_tokens=usage.get("cacheReadTokens") or None,
+                            prompt_tokens=usage.get("inputTokens"),
+                            completion_tokens=usage.get("outputTokens"),
+                            cached_tokens=usage.get("cacheReadTokens") or None,
                             cache_creation_tokens=usage.get("cacheWriteTokens") or None,
                         ),
                         extra={"provider_request_id": payload.get("providerRequestId")},

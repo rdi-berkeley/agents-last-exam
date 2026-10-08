@@ -183,15 +183,15 @@ def test_parse_wire_preserves_tools_images_usage_and_latency(tmp_path: Path) -> 
     builder = _parse(tmp_path)
 
     agent_step, environment_step = builder.trajectory.steps
-    assert agent_step.reasoning == "Inspect the screen."
+    assert agent_step.reasoning_content == "Inspect the screen."
     assert agent_step.message == "The desktop is visible."
-    assert agent_step.tool_calls[0].name == "mcp__cua__screenshot"
-    assert agent_step.metrics.input_tokens == 100
-    assert agent_step.metrics.cache_read_tokens == 200
+    assert agent_step.tool_calls[0].function_name == "mcp__cua__screenshot"
+    assert agent_step.metrics.prompt_tokens == 100
+    assert agent_step.metrics.cached_tokens == 200
     assert agent_step.metrics.cache_creation_tokens == 30
-    assert agent_step.metrics.output_tokens == 40
+    assert agent_step.metrics.completion_tokens == 40
     assert agent_step.metrics.duration_ms == 750
-    image = environment_step.observation.results[0].content[1].image
+    image = environment_step.observation.results[0].content[1].source
     assert image.type == "base64"
     assert image.media_type == "image/png"
     assert image.data == "aW1hZ2U="
@@ -236,7 +236,7 @@ def test_parse_wire_rehydrates_blobref_image(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    image = _parse(tmp_path).trajectory.steps[-1].observation.results[0].content[0].image
+    image = _parse(tmp_path).trajectory.steps[-1].observation.results[0].content[0].source
 
     assert image.type == "base64"
     assert image.data == base64.b64encode(image_bytes).decode("ascii")
@@ -297,7 +297,7 @@ def test_missing_blob_uses_json_string_transcript_image(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    image = _parse(tmp_path).trajectory.steps[-1].observation.results[0].content[0].image
+    image = _parse(tmp_path).trajectory.steps[-1].observation.results[0].content[0].source
 
     assert image.type == "base64"
     assert image.data == inline_image
@@ -328,8 +328,8 @@ def test_transcript_only_json_string_image_is_preserved(tmp_path: Path) -> None:
     content = _parse(tmp_path).trajectory.steps[0].observation.results[0].content
 
     assert content[0].text == "Screenshot captured."
-    assert content[1].image.type == "base64"
-    assert content[1].image.data == inline_image
+    assert content[1].source.type == "base64"
+    assert content[1].source.data == inline_image
 
 
 def test_transcript_blobref_without_blob_directory_is_not_persisted(

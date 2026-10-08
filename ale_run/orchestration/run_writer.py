@@ -5,7 +5,7 @@ LOG_SPEC.md is the source of truth; this class is its only writer. Layout:
     <output_root>/<agent_id>/<model_slug>/<task_slug>/v<i>/<YYYYMMDD_HHMMSS>/
         events.jsonl       append-only, fsync per line
         run.json           schema_version=2, written once at finalize
-        trajectory.json    ATIF-v1.0 from Trajectory.model_dump_json(indent=2)
+        trajectory.json    ATIF-v1.8 (see ale_run.base_interface.atif.to_atif)
         eval_result.json   {eval_status, score, eval_duration_s, error}
         origin_log/<agent_name>/    deployer work_dir pulled from VM
         output/                     agent output, when output_path="local"
@@ -26,6 +26,8 @@ import re
 import time
 from pathlib import Path
 from typing import Any
+
+from ale_run.base_interface.atif import to_atif
 
 logger = logging.getLogger(__name__)
 
@@ -161,9 +163,14 @@ class RunWriter:
     def write_trajectory(self, traj: Any) -> None:
         path = self._run_dir / "trajectory.json"
         try:
-            blob = traj.model_dump_json(indent=2)
-        except AttributeError:
-            blob = json.dumps(traj, indent=2, ensure_ascii=False, default=str)
+            atif = to_atif(traj)
+            blob = json.dumps(atif, indent=2, ensure_ascii=False, default=str)
+        except Exception as e:
+            logger.warning("to_atif conversion failed, writing raw trajectory: %s", e)
+            try:
+                blob = traj.model_dump_json(indent=2)
+            except AttributeError:
+                blob = json.dumps(traj, indent=2, ensure_ascii=False, default=str)
         try:
             path.write_text(blob, encoding="utf-8")
         except OSError as e:
