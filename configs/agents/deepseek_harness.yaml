@@ -1,0 +1,23 @@
+# deepseek_harness - official Python SDK + bundled JSON-RPC runtime.
+# Linux sandbox only. This runtime is unattended and has direct bash/filesystem
+# access inside the disposable ALE VM; it does not support CUA MCP or GUI tasks.
+# Auth: export DEEPSEEK_API_KEY before launching the experiment.
+
+harness: deepseek_harness
+model: deepseek-v4-flash
+
+config:
+  provider: deepseek-official
+  api_key_env: DEEPSEEK_API_KEY
+
+  # Optional OpenAI-compatible DeepSeek endpoint. null uses the official API.
+  base_url: null
+
+  # Optional positive output-token cap. null uses the provider default.
+  max_tokens: null
+
+  # null uses the bundled runtime's default: "You are a coding agent."
+  system_prompt: null
+
+  # Official PyPI SDK. It installs the exact same-version bundled runtime wheel.
+  sdk_version: 0.1.0rc6
