@@ -1,7 +1,7 @@
-# Public CPU-runnable task allowlist — the unlicensed tasks that run without a
-# GPU, shared by every CPU-only environment (QEMU, Alibaba Cloud, AWS).
+# CPU-runnable task allowlist, shared by every CPU-only environment
+# (QEMU, Alibaba Cloud, AWS).
 # All 146 use the cpu-free / cpu-free-ubuntu snapshots.
-# Excludes all licensed tasks and all tasks that require GPU execution.
+# Excludes all tasks that require GPU execution.
 # butterfly_flap_animation is also excluded because the image lacks After
 # Effects. skeletal_animation_reproduction remains excluded pending a positive
 # end-to-end CPU evaluation.

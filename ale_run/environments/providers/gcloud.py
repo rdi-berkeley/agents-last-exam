@@ -269,6 +269,8 @@ class SnapshotConfig:
     to 1920x1440 (e.g. 1024x768, 1280x800, 1920x1080); GPU VMs (nvidia-l4-vws /
     GRID) are a superset up to 7680x4320. 1024x768 and 1920x1080 work on both.
     The operator-facing list lives in the environment yaml comment."""
+    image_revision: str | None = None
+    """Optional expected numeric sourceImageId of the acquired boot disk."""
 
     @property
     def os(self) -> str:
@@ -318,10 +320,16 @@ def _build_snapshot_config(raw: Any) -> SnapshotConfig:
             raise ValueError(
                 f"snapshot {image!r} boot_disk_size_gb must be positive"
             )
+    image_revision = raw.get("image_revision")
+    if image_revision is not None:
+        image_revision = str(image_revision).strip() or None
+    if image_revision is not None and not re.fullmatch(r"[1-9][0-9]*", image_revision):
+        raise ValueError("gcloud image_revision must be a numeric GCE image ID")
     return SnapshotConfig(
         image=str(image), gpu=raw.get("gpu"), zones=zones,
         boot_disk_size_gb=boot_disk_size_gb,
         resolution=_parse_resolution(raw.get("resolution"), image),
+        image_revision=image_revision,
     )
 
 
@@ -580,6 +588,39 @@ async def _poll_for_ip(name: str, zone: str, project: str, timeout: float = 120)
                 pass
         await asyncio.sleep(5)
     raise RuntimeError(f"Timed out waiting for external IP on {name}")
+
+
+async def _get_image_provenance(
+    inst: dict[str, Any], snapshot: SnapshotConfig, *, zone: str, project: str,
+) -> dict[str, Any]:
+    boot_disk = next((disk for disk in inst.get("disks", []) if disk.get("boot")), None)
+    if not boot_disk or not boot_disk.get("source"):
+        raise RuntimeError("GCloud image provenance requires an acquired boot disk")
+    disk_name = boot_disk["source"].rsplit("/", 1)[-1]
+    rc, stdout, stderr = await _run_gcloud(
+        "compute", "disks", "describe", disk_name,
+        f"--zone={zone}", "--format=json(sourceImage,sourceImageId)", project=project,
+    )
+    if rc != 0:
+        raise RuntimeError(f"Failed to inspect GCloud boot disk {disk_name}: {stderr}")
+    try:
+        disk_metadata = json.loads(stdout)
+        image_revision = str(disk_metadata["sourceImageId"])
+    except (ValueError, KeyError, TypeError) as exc:
+        raise RuntimeError(f"GCloud boot disk {disk_name} has no sourceImageId") from exc
+    if not re.fullmatch(r"[1-9][0-9]*", image_revision):
+        raise RuntimeError(f"GCloud boot disk {disk_name} has invalid sourceImageId {image_revision!r}")
+    if snapshot.image_revision is not None and snapshot.image_revision != image_revision:
+        raise RuntimeError(
+            f"GCloud image_revision mismatch: expected {snapshot.image_revision}, "
+            f"acquired {image_revision}"
+        )
+    return {
+        "provider": "gcloud",
+        "image": snapshot.image,
+        "image_revision": image_revision,
+        "source_image": disk_metadata.get("sourceImage"),
+    }
 
 
 def _probe_cua(cua_url: str, payload: dict) -> tuple[bool, str]:
@@ -865,6 +906,9 @@ class GcloudProvider(Provider):
                     f"Failed to parse gcloud output: {e}\nstdout: {stdout[:500]}"
                 ) from e
 
+            image_provenance = await _get_image_provenance(
+                inst, snap, zone=used_zone, project=self._cfg.project,
+            )
             external_ip = _extract_external_ip(inst)
             if not external_ip:
                 external_ip = await _poll_for_ip(
@@ -923,6 +967,7 @@ class GcloudProvider(Provider):
                     "machine_type": used_machine,
                     "external_ip": external_ip,
                     "image": image.name,
+                    "image_provenance": image_provenance,
                     "snapshot": spec.snapshot,
                     "gcs_key_path": gcs_key_path,
                     "gcs_user_project": gcs_user_project,

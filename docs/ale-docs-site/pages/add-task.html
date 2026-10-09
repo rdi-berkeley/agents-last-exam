@@ -29,7 +29,7 @@
       <tbody>
         <tr><td><code>taskId</code></td><td><code>&lt;domain&gt;/&lt;task&gt;</code>, must match the folder path.</td></tr>
         <tr><td><code>category</code></td><td>The top-level domain.</td></tr>
-        <tr><td><code>vm.snapshot</code></td><td>Which image to boot: <code>cpu-free-ubuntu</code> (Linux), <code>cpu-free</code> (Windows), <code>gpu-free</code>, <code>cpu-license</code>, <code>gpu-license</code>.</td></tr>
+        <tr><td><code>vm.snapshot</code></td><td>Which image to boot: <code>cpu-free-ubuntu</code> (Linux CPU), <code>cpu-free</code> (Windows CPU), or <code>gpu-free</code> (Windows GPU).</td></tr>
         <tr><td><code>vm.{vcpus,memory_gb,disk_gb}</code></td><td>Sizing hints, resolved against the snapshot's capacity pool.</td></tr>
         <tr><td><code>vm.timeout_s</code></td><td>Per-variant wall budget (provision + setup + agent + eval). Allow ~2× the agent's time.</td></tr>
       </tbody>

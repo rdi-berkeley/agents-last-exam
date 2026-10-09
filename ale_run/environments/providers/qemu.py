@@ -55,7 +55,7 @@ class QemuSnapshotConfig:
     image_cache_dir: Path
     runner_image: str = _DEFAULT_RUNNER_IMAGE
     runner_pull_policy: RunnerPullPolicy = "missing"
-    hf_revision: str | None = None
+    image_revision: str | None = None
     vcpus: int = 0
     memory_gb: int = 0
     shm_size: str = "2g"
@@ -220,6 +220,11 @@ def _sha256_file(path: Path) -> str:
 
 
 def _build_snapshot_config(raw: dict[str, Any]) -> QemuSnapshotConfig:
+    if "hf_revision" in raw:
+        raise ValueError(
+            "qemu hf_revision is obsolete; rename it to image_revision "
+            "and keep the same pinned Hugging Face revision"
+        )
     disk_source = str(raw.get("disk_source") or "").strip()
     if not disk_source:
         raise KeyError("qemu snapshot config missing required field `disk_source`")
@@ -249,9 +254,9 @@ def _build_snapshot_config(raw: dict[str, Any]) -> QemuSnapshotConfig:
             f"qemu readiness_poll_interval_s must be > 0, got {readiness_poll_interval_s}"
         )
 
-    hf_revision = str(raw.get("hf_revision") or "").strip() or None
-    if hf_revision and not disk_source.startswith("hf://"):
-        raise ValueError("qemu hf_revision is valid only for an hf:// disk_source")
+    image_revision = str(raw.get("image_revision") or "").strip() or None
+    if image_revision and not disk_source.startswith("hf://"):
+        raise ValueError("qemu image_revision is valid only for an hf:// disk_source")
 
     return QemuSnapshotConfig(
         image=str(raw["image"]),
@@ -260,7 +265,7 @@ def _build_snapshot_config(raw: dict[str, Any]) -> QemuSnapshotConfig:
         image_cache_dir=image_cache_dir,
         runner_image=str(raw.get("runner_image") or _DEFAULT_RUNNER_IMAGE),
         runner_pull_policy=cast(RunnerPullPolicy, runner_pull_policy),
-        hf_revision=hf_revision,
+        image_revision=image_revision,
         vcpus=vcpus,
         memory_gb=memory_gb,
         shm_size=str(raw.get("shm_size") or "2g"),
@@ -283,6 +288,11 @@ def _cache_destination(snapshot: QemuSnapshotConfig, source: str) -> Path:
 
 
 def _build_provider_config(raw: dict[str, Any]) -> QemuProviderConfig:
+    if "hf_revision" in raw:
+        raise ValueError(
+            "qemu hf_revision is obsolete; use image_revision in each snapshot "
+            "and keep the same pinned Hugging Face revision"
+        )
     snapshots_raw = raw.get("snapshots")
     if not isinstance(snapshots_raw, dict) or not snapshots_raw:
         raise TypeError("qemu provider config requires a non-empty `snapshots` mapping")
@@ -298,7 +308,7 @@ def _build_provider_config(raw: dict[str, Any]) -> QemuProviderConfig:
         destination = _cache_destination(snapshot, snapshot.disk_source)
         owner = snapshot.disk_source
         if snapshot.disk_source.startswith("hf://"):
-            owner = f"{owner}@{snapshot.hf_revision or 'main'}"
+            owner = f"{owner}@{snapshot.image_revision or 'main'}"
         previous = cache_owners.setdefault(destination, owner)
         if previous != owner:
             raise ValueError(
@@ -529,6 +539,7 @@ class QemuProvider(Provider):
 
         await self._preflight()
         base_qcow2 = await self._resolve_disk(snapshot)
+        image_provenance = self._disk_provenance(snapshot, base_qcow2)
         vcpus, memory_gb = self._resolve_shape(snapshot, spec)
         name = _generate_container_name(spec)
         slot_root = snapshot.runtime_root / "slots" / name
@@ -587,6 +598,9 @@ class QemuProvider(Provider):
                     f"container logs:\n{detail[-4000:]}"
                 )
 
+            _, runner_image_id, _ = await _run_docker("inspect", "--format", "{{.Image}}", name)
+            image_provenance["runner_image"] = snapshot.runner_image
+            image_provenance["runner_image_id"] = runner_image_id
             metadata = {
                 "provider": "qemu",
                 "container_name": name,
@@ -601,6 +615,7 @@ class QemuProvider(Provider):
                 "novnc_port": novnc_port,
                 "novnc_url": f"http://{client_host}:{novnc_port}",
                 "image": image.name,
+                "image_provenance": image_provenance,
                 "snapshot": spec.snapshot,
                 "machine_type": spec.machine_type,
                 "vcpus": vcpus,
@@ -788,6 +803,44 @@ class QemuProvider(Provider):
             raise ValueError(f"QEMU base disk is empty: {path}")
         return path
 
+    @staticmethod
+    def _disk_provenance(snapshot: QemuSnapshotConfig, base_qcow2: Path) -> dict[str, Any]:
+        """Return JSON-serializable disk identity; local paths have only file metadata."""
+        disk_stat = base_qcow2.stat()
+        provenance: dict[str, Any] = {
+            "provider": "qemu",
+            "image": snapshot.image,
+            "image_revision": None,
+            "disk_source": snapshot.disk_source,
+            "base_qcow2": str(base_qcow2),
+            "size_bytes": disk_stat.st_size,
+            "mtime_ns": disk_stat.st_mtime_ns,
+        }
+        if snapshot.disk_source.startswith(("hf://", "gs://")):
+            sidecar = base_qcow2.with_name(f"{base_qcow2.name}.ale-source.json")
+            source_metadata = json.loads(sidecar.read_text(encoding="utf-8"))
+            if (
+                not isinstance(source_metadata, dict)
+                or source_metadata.get("source") != snapshot.disk_source
+                or source_metadata.get("size") not in (None, disk_stat.st_size)
+                or (
+                    snapshot.disk_source.startswith("hf://")
+                    and source_metadata.get("revision") != (snapshot.image_revision or "main")
+                )
+            ):
+                raise RuntimeError(f"QEMU disk provenance does not match resolved disk: {base_qcow2}")
+            revision_key = "commit_hash" if snapshot.disk_source.startswith("hf://") else "generation"
+            provenance["image_revision"] = source_metadata.get(revision_key)
+            provenance["source_metadata"] = {
+                key: source_metadata[key]
+                for key in (
+                    "source", "revision", "artifact", "commit_hash", "generation",
+                    "etag", "crc32c", "size", "sha256",
+                )
+                if key in source_metadata
+            }
+        return provenance
+
     async def _fetch_gcs_disk(self, snapshot: QemuSnapshotConfig) -> Path:
         source = snapshot.disk_source
         destination = _cache_destination(snapshot, source)
@@ -928,7 +981,7 @@ class QemuProvider(Provider):
         parsed = _parse_hf_source(source)
         lock = self._image_locks.setdefault(source, asyncio.Lock())
         async with lock:
-            lock_identity = f"{source}@{snapshot.hf_revision or 'main'}"
+            lock_identity = f"{source}@{snapshot.image_revision or 'main'}"
             lock_path = (
                 snapshot.image_cache_dir
                 / ".locks"
@@ -957,7 +1010,7 @@ class QemuProvider(Provider):
                         repo_id=parsed.repo_id,
                         filename=manifest_filename,
                         repo_type="dataset",
-                        revision=snapshot.hf_revision,
+                        revision=snapshot.image_revision,
                     )
                     try:
                         metadata = get_hf_file_metadata(manifest_url)
@@ -967,7 +1020,7 @@ class QemuProvider(Provider):
                             repo_id=parsed.repo_id,
                             filename=artifact_filename,
                             repo_type="dataset",
-                            revision=snapshot.hf_revision,
+                            revision=snapshot.image_revision,
                         )
                         metadata = get_hf_file_metadata(artifact_url)
                 else:
@@ -975,9 +1028,19 @@ class QemuProvider(Provider):
                         repo_id=parsed.repo_id,
                         filename=artifact_filename,
                         repo_type="dataset",
-                        revision=snapshot.hf_revision,
+                        revision=snapshot.image_revision,
                     )
                     metadata = get_hf_file_metadata(artifact_url)
+
+                if (
+                    snapshot.image_revision
+                    and re.fullmatch(r"[0-9a-fA-F]{40}", snapshot.image_revision)
+                    and (metadata.commit_hash or "").lower() != snapshot.image_revision.lower()
+                ):
+                    raise RuntimeError(
+                        f"QEMU image_revision pin verification failed for {source}: "
+                        f"requested {snapshot.image_revision}, resolved {metadata.commit_hash!r}"
+                    )
 
                 if artifact_filename.endswith(_HF_DISK_MANIFEST_SUFFIX):
                     manifest_path = Path(
@@ -985,7 +1048,7 @@ class QemuProvider(Provider):
                             repo_id=parsed.repo_id,
                             filename=artifact_filename,
                             repo_type="dataset",
-                            revision=snapshot.hf_revision,
+                            revision=metadata.commit_hash or snapshot.image_revision,
                             local_dir=snapshot.image_cache_dir,
                         )
                     )
@@ -1013,7 +1076,7 @@ class QemuProvider(Provider):
                         json.dumps(
                             {
                                 "source": source,
-                                "revision": snapshot.hf_revision or "main",
+                                "revision": snapshot.image_revision or "main",
                                 "artifact": artifact_filename,
                                 "commit_hash": metadata.commit_hash,
                                 "etag": metadata.etag,
@@ -1041,7 +1104,7 @@ class QemuProvider(Provider):
                 ):
                     if (
                         source_metadata.get("source") == source
-                        and source_metadata.get("revision") == (snapshot.hf_revision or "main")
+                        and source_metadata.get("revision") == (snapshot.image_revision or "main")
                         and source_metadata.get("artifact", artifact_filename) == artifact_filename
                         and source_metadata.get("commit_hash") == metadata.commit_hash
                         and source_metadata.get("etag") == metadata.etag
@@ -1064,7 +1127,7 @@ class QemuProvider(Provider):
                 logger.info(
                     "Downloading QEMU base disk %s revision=%s to %s",
                     source,
-                    snapshot.hf_revision or "main",
+                    snapshot.image_revision or "main",
                     destination,
                 )
                 if manifest is not None:
@@ -1084,7 +1147,7 @@ class QemuProvider(Provider):
                         repo_id=parsed.repo_id,
                         filename=artifact_filename,
                         repo_type="dataset",
-                        revision=snapshot.hf_revision,
+                        revision=metadata.commit_hash or snapshot.image_revision,
                         local_dir=snapshot.image_cache_dir,
                         force_download=destination.exists(),
                     )
@@ -1124,7 +1187,7 @@ class QemuProvider(Provider):
         if (
             partial.is_file()
             and state.get("source") == snapshot.disk_source
-            and state.get("revision") == (snapshot.hf_revision or "main")
+            and state.get("revision") == (snapshot.image_revision or "main")
             and state.get("commit_hash") == metadata.commit_hash
             and state.get("manifest_sha256") == manifest.sha256
         ):
@@ -1157,7 +1220,7 @@ class QemuProvider(Provider):
                         repo_id=parsed.repo_id,
                         filename=part.filename,
                         repo_type="dataset",
-                        revision=snapshot.hf_revision,
+                        revision=metadata.commit_hash or snapshot.image_revision,
                         local_dir=snapshot.image_cache_dir,
                     )
                 )
@@ -1172,7 +1235,7 @@ class QemuProvider(Provider):
                             repo_id=parsed.repo_id,
                             filename=part.filename,
                             repo_type="dataset",
-                            revision=snapshot.hf_revision,
+                            revision=metadata.commit_hash or snapshot.image_revision,
                             local_dir=snapshot.image_cache_dir,
                             force_download=True,
                         )
@@ -1194,7 +1257,7 @@ class QemuProvider(Provider):
                     json.dumps(
                         {
                             "source": snapshot.disk_source,
-                            "revision": snapshot.hf_revision or "main",
+                            "revision": snapshot.image_revision or "main",
                             "commit_hash": metadata.commit_hash,
                             "manifest_sha256": manifest.sha256,
                             "completed_parts": index + 1,

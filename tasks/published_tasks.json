@@ -735,11 +735,6 @@
         "base"
       ]
     },
-    "engineering/2d_drawings_to_3d_bridge_model": {
-      "variants": [
-        "base"
-      ]
-    },
     "visual_media/blender_character_reconstruction_from_multiview_01": {
       "variants": [
         "base"

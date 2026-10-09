@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Run and collect results | ALE Docs</title>
+  <title>Run, resume and upgrade | ALE Docs</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -11,7 +11,7 @@
 </head>
 <body>
   <article class="article">
-    <h1>Run and collect results</h1>
+    <h1>Run, resume and upgrade</h1>
     <p class="lede">
       Validate the matrix before provisioning anything, launch the experiment,
       resume interrupted sweeps, and choose how produced files leave the
@@ -46,8 +46,12 @@ max_attempts: 3</code></pre>
     <p>
       Auto-resume is enabled by default. It scans prior <code>run.json</code>
       files under the same experiment name and output root, skips units with
-      status <code>completed</code> or <code>timeout</code>, and immediately
-      requeues newly failed units. <code>max_attempts</code> accepts 1 through 3
+      status <code>completed</code> or <code>timeout</code> only when
+      <code>task.revision</code> matches the current task-folder SHA256. Missing
+      or mismatched hashes rerun. The hash is recorded before setup and covers
+      file names, contents, executable bits, and link targets, ignoring runtime
+      caches.
+      Newly failed units are requeued. <code>max_attempts</code> accepts 1 through 3
       and counts the initial run within that invocation. Every attempt keeps
       its own run directory.
     </p>
@@ -59,6 +63,21 @@ max_attempts: 3</code></pre>
       in the experiment YAML to make that behavior persistent.
     </p>
 
+    <h2 id="upgrade-v1">Upgrade v1 logs</h2>
+    <p>
+      First select the matching <a href="/pages/configure.html#v1-1">v1.1 code,
+      images, data, and task list</a>. In custom QEMU profiles, rename
+      <code>hf_revision</code> to <code>image_revision</code>, keeping the same
+      pin. Stop the experiment before upgrading logs. The helper previews by
+      default; applying removes changed or retired task logs and stamps retained, unmodified legacy
+      logs with the current revision. Back up logs you want to preserve first.
+      Then resume with the same experiment name and <code>output.root</code>:
+    </p>
+    <pre><code>uv run python scripts/upgrade_v1_logs.py LOG_ROOT
+uv run python scripts/upgrade_v1_logs.py LOG_ROOT --apply
+uv run python -m ale_run run my_experiment.yaml</code></pre>
+    <p>For an older or custom v1 baseline, add <code>--from-commit COMMIT</code> to the helper.</p>
+
     <h2 id="output-path">Choose where task output goes</h2>
     <p>
       <code>output.root</code> in the experiment controls the host directory for
@@ -68,11 +87,17 @@ max_attempts: 3</code></pre>
     <table>
       <thead><tr><th>Value</th><th>Behavior</th><th>Use</th></tr></thead>
       <tbody>
-        <tr><td><code>null</code></td><td>Do not copy the task output before cleanup.</td><td>Score-only runs where produced files are unnecessary.</td></tr>
+        <tr><td><code>null</code> (default)</td><td>Leave bulk task output in the sandbox; collect metadata, trajectories, evaluations, and telemetry.</td><td>Benchmark runs; use <code>cleanup_mode: keep</code> to inspect deliverables in the sandbox.</td></tr>
         <tr><td><code>local</code></td><td>Copy into the run's <code>output/</code> directory.</td><td>Local development and outputs you want beside the run record.</td></tr>
         <tr><td><code>gs://&lt;bucket&gt;</code></td><td>Upload from the sandbox to <code>&lt;bucket&gt;/&lt;run_id&gt;/output/</code>.</td><td>Large batch artifacts and centralized storage.</td></tr>
       </tbody>
     </table>
+    <p>
+      With <code>cleanup_mode: delete</code>, sandbox files are removed at
+      cleanup. Retained sandboxes still consume resources; preserve needed
+      evidence, then stop or delete them after inspection. Include running and
+      paused retained VMs in the host memory budget.
+    </p>
     <p>
       Local collection uses the fastest available provider transport: Docker
       uses <code>docker cp</code>, the QEMU provider uses a per-run guest share,
@@ -108,8 +133,10 @@ max_attempts: 3</code></pre>
       Each unit writes a timestamped run directory containing
       <code>events.jsonl</code>, <code>run.json</code>,
       <code>eval_result.json</code>, the normalized trajectory, native agent
-      logs, screenshots, and any locally collected output. See
-      <a href="/pages/trajectories.html">Trajectories &amp; artifacts</a> for the
+      logs, screenshots, and any locally collected output.
+      <code>run.json</code> records the task hash in <code>task.revision</code>
+      and provider image provenance in <code>environment.image_revision</code>.
+      See <a href="/pages/trajectories.html">Trajectories &amp; artifacts</a> for the
       complete layout.
     </p>
   </article>

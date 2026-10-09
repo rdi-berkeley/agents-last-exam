@@ -13,7 +13,7 @@ agents-last-exam/
 │   └── tasks/                  Task discovery + driver
 ├── tasks/                    Task packages, grouped by domain (demo/ has the templates)
 ├── configs/                  Reusable agent + environment configs (referenced by path)
-├── selected_tasks/           Curated task lists (cli, full, unlicensed)
+├── selected_tasks/           Curated task lists (cli, full, cpu)
 ├── secret/                   .env + GCP key + per-judge eval keys (real values gitignored)
 ├── docs/                     Setup/task/extension guides + the docs/ale-docs-site/ HTML site
 ├── example_exp.yaml          The minimal experiment; start here

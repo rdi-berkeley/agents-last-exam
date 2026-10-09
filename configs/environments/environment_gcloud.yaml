@@ -42,7 +42,7 @@
 
 snapshots:
 
-  cpu-free-ubuntu:            # Linux, no GPU, no license — the bulk of tasks (~110)
+  cpu-free-ubuntu:            # Linux, no GPU — the bulk of tasks
     provider: gcloud
     image: ale-ubuntu22-v1-1
     gcloud:
@@ -60,7 +60,7 @@ snapshots:
     #     memory: 16g
     #     shm_size: 1g
 
-  cpu-free:                   # Windows, no GPU, no license
+  cpu-free:                   # Windows, no GPU
     provider: gcloud
     image: ale-win10-v1-1
     resolution: [1024, 768]    # see resolution note above; unsupported mode -> run fails
@@ -72,37 +72,9 @@ snapshots:
       subnet: ale-vpc
       zones: [us-central1-a, us-central1-b, us-east1-b]
 
-  cpu-license:                # Windows requiring a licensed image
-    provider: gcloud
-    image: ale-win10
-    resolution: [1024, 768]    # see resolution note above; unsupported mode -> run fails
-    gcloud:
-      project: ${env:GCP_PROJECT}
-      service_account_key: ${env:GCP_SA_KEY}
-      instance_prefix: ale
-      network: ale-vpc
-      subnet: ale-vpc
-      zones: [us-east1-b, us-central1-a]
-
   gpu-free:                   # Windows + GPU
     provider: gcloud
     image: ale-win10-v1-1
-    resolution: [1920, 1080]    # see resolution note above; unsupported mode -> run fails
-    gcloud:
-      project: ${env:GCP_PROJECT}
-      service_account_key: ${env:GCP_SA_KEY}
-      instance_prefix: ale
-      network: ale-vpc
-      subnet: ale-vpc
-      gpu: nvidia-l4-vws
-      # GPU (nvidia-l4-vws) fallback zones, US-first. L4 capacity is volatile
-      # and often exhausted in a single region; gcloud tries these in order and
-      # skips capacity-exhausted zones, so list several across regions.
-      zones: [us-east1-c, us-central1-a, us-central1-b, us-east1-b, us-east4-a, northamerica-northeast2-a, northamerica-northeast1-c, europe-west1-b, europe-west2-b, asia-east1-a]
-
-  gpu-license:                # Windows + GPU, licensed
-    provider: gcloud
-    image: ale-win10
     resolution: [1920, 1080]    # see resolution note above; unsupported mode -> run fails
     gcloud:
       project: ${env:GCP_PROJECT}

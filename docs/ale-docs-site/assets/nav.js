@@ -28,7 +28,7 @@ window.ALE_NAV = [
         { href: "/pages/static.html",        title: "Existing sandbox" },
       ]},
       { href: "/pages/configure.html", title: "Configure an experiment" },
-      { href: "/pages/run.html",       title: "Run and collect results" },
+      { href: "/pages/run.html",       title: "Run, resume and upgrade" },
     ],
   },
   {

@@ -49,14 +49,18 @@ across all 55 subdomains and reference integrations for several agent harnesses.
 
 ## Quick start
 
-**ALE v1.1:** use the matching task code, versioned images and pinned data
-described in the [release guide](docs/releases/v1.1.md). The 2026-10-08 rerelease
-selects **151 tasks**: six formerly licensed tasks now use open-source Linux
-workflows with similar business goals. Injection molding is removed because
-the complete four-cavity fill/pack/cool/demold workflow has not been validated
-with open-source software at the original scope.
-See the [task update inventory](docs/releases/v1.1-tasks.md) and
-[asset manifest](releases/v1.1/assets.json) for scope and exact versions.
+**ALE v1.1 contains 151 tasks.** Use matching task code, images, and data from
+the [asset manifest](releases/v1.1/assets.json). The compact
+[run and upgrade guide](docs/releases/v1.1.md) covers setup, six workflows moved
+to open-source tools, the removal of `engineering/mold-flow`, and existing logs.
+
+```bash
+git clone git@github.com:rdi-berkeley/agents-last-exam.git
+cd agents-last-exam
+uv sync --all-packages
+cp -n secret/.env.example secret/.env
+cp example_exp.yaml my_experiment.yaml
+```
 
 Choose where ALE should create or attach each task sandbox:
 
@@ -69,18 +73,14 @@ Choose where ALE should create or attach each task sandbox:
 | **Local containers (Docker)** | The lighter supported Ubuntu subset | [Local container guide](https://agents-last-exam.org/docs?p=pages/local-docker.html) |
 | **Existing sandbox** | Debugging against a CUA-enabled machine you already operate | [Static provider guide](https://agents-last-exam.org/docs?p=pages/static.html) |
 
-Docker supports **102 tasks**: the historical 99-task subset plus Blender
-building, MuseScore transcription and Ardour migration, each checked for native
-output in the new container. The 99 paired VM/Docker reviews remain September
-evidence; no full 102-task rerun is claimed. G-code, Road and inner-support
-require VM facilities unavailable in the default container; use QEMU for them.
+Follow the provider guide, fill in `secret/.env`, and select the environment in
+`my_experiment.yaml`. Google Cloud is the recommended production path. Start
+with the demo, then choose a benchmark list below:
 
-The rerelease supplies a new Linux image. Windows image bytes and cloud IDs are
-retained after verifying its unchanged 40-task data projection. Use the
-matching release profiles and immutable asset pins.
-
-Google Cloud is the recommended production path. The quick start covers the
-one-time project setup, image copy, credentials, demo run, and grading flow.
+```bash
+uv run python -m ale_run run my_experiment.yaml --dry-run
+uv run python -m ale_run run my_experiment.yaml
+```
 
 ### Roadmap
 
@@ -93,7 +93,7 @@ Where the framework supports running sandboxes today, and what is coming next:
 | **Local containers (Ubuntu subset)** ([guide](https://agents-last-exam.org/docs?p=pages/local-docker.html)) | ✅ Supported |
 | **QEMU/KVM VMs (CPU-only)** ([guide](https://agents-last-exam.org/docs?p=pages/local.html)) | ✅ Supported |
 | **AWS (EC2 + S3)** ([guide](https://agents-last-exam.org/docs?p=pages/aws.html)) | ✅ Supported |
-| **Custom image build & licensed tasks** ([guide](https://agents-last-exam.org/docs?p=pages/build-image.html)) | ✅ Supported |
+| **Custom image build** ([guide](https://agents-last-exam.org/docs?p=pages/build-image.html)) | ✅ Supported |
 | **Alibaba Cloud (Ali-Yun)** ([guide](https://agents-last-exam.org/docs?p=pages/aliyun.html)) | ✅ Supported |
 | **Local VMware** | 📋 Planned |
 
@@ -160,11 +160,21 @@ and context management alongside. ALE-Claw is the reference:
 
 ## Running the benchmark
 
-Past the demo, ALE ships curated task lists across three difficulty tiers
-(near-term, full-spectrum, last-exam), plus provider-specific and unlicensed
-subsets. A full run is one experiment YAML wiring an agent matrix, an
-environment, and a task list. Outputs can be collected locally or uploaded
-directly to GCS.
+Set `tasks:` in your experiment to a compatible list:
+
+| List | Tasks | Coverage |
+|---|---:|---|
+| `selected_tasks/full.txt` | 151 | Complete benchmark; difficulty lists under `selected_tasks/full/*.txt` |
+| `selected_tasks/cpu.txt` | 146 | Ubuntu and Windows CPU tasks |
+| `selected_tasks/ale_cli.txt` | 111 | Linux tasks, including desktop workflows |
+| `selected_tasks/docker_support.txt` | 102 | Supported local-container subset |
+
+Environment profiles default to `output_path: null`, keeping bulk task output
+in the sandbox while collecting metadata, trajectories, evaluations, and
+telemetry. Set `cleanup_mode: keep` to inspect deliverables there, then release
+the sandbox when finished. Normal resume checks each run's `task.revision`
+against the current task-folder hash; missing or changed revisions rerun.
+For existing v1 logs, follow the [short upgrade steps](docs/releases/v1.1.md#upgrade-existing-logs).
 
 The step-by-step (provider setup, configuring an experiment, choosing task lists)
 is in the docs site under **[Run

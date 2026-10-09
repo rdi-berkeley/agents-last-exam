@@ -1,5 +1,5 @@
 # Tasks in full.txt excluded from the local QEMU CPU allowlist.
-# These retain GPU or application requirements described in cpu_unlicensed.txt.
+# These retain GPU or application requirements described in cpu.txt.
 # Total: 5 tasks.
 
 engineering/humanoid_velocity_tracking_policy

@@ -16,7 +16,7 @@
 #                      task data / output).
 #
 # GPU tasks are NOT supported on Alibaba Cloud, so this profile defines only the
-# CPU snapshots. The public task list (cpu_unlicensed.txt) is exactly the set
+# CPU snapshots. The public task list (cpu.txt) is exactly the set
 # that runs here.
 # ----------------------------------------------------------------------------
 
@@ -43,19 +43,8 @@ snapshots:
       ram_role_name: ale-sandbox
       zones: [cn-hangzhou-j, cn-hangzhou-k]
 
-  cpu-license:                # Windows (licensed-software tasks)
-    provider: aliyun
-    image: ale-win10
-    resolution: [1024, 768]
-    aliyun:
-      region: cn-hangzhou
-      security_group: ale-sandbox
-      instance_prefix: ale
-      ram_role_name: ale-sandbox
-      zones: [cn-hangzhou-j, cn-hangzhou-k]
-
   # No gpu-* snapshots: GPU isn't available on Alibaba, and the public task list
-  # (cpu_unlicensed.txt) has no GPU task. A gpu-* request fails fast with a clear
+  # (cpu.txt) has no GPU task. A gpu-* request fails fast with a clear
   # "snapshot not configured".
 
 # ---------------------------------------------------------------------------

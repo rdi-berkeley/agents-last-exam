@@ -21,7 +21,7 @@
     <div class="note">
       <div class="note-title">Supported, CPU-only</div>
       Use <code>configs/environments/qemu.yaml</code> with
-      <code>selected_tasks/cpu_unlicensed.txt</code> for 146 selected CPU tasks.
+      <code>selected_tasks/cpu.txt</code> for 146 selected CPU tasks.
       GPU passthrough is outside the current provider scope.
     </div>
 
@@ -47,16 +47,23 @@
       <li>A Linux host.</li>
       <li>Docker available to the current user.</li>
       <li>Hardware or nested virtualization exposed as readable and writable <code>/dev/kvm</code>.</li>
-      <li>Enough memory for every concurrently active guest.</li>
-      <li>Persistent disk space for the cached base images (about 173 GB for both October v1.1 disks), download headroom and growing per-run overlays. Never store these on a memory-backed filesystem.</li>
+      <li>Enough memory for every running or paused guest, including retained VMs, with host headroom.</li>
+      <li>Persistent disk space for the pinned base images, download headroom, and growing per-run overlays. Never store these on host <code>/tmp</code>, <code>/dev/shm</code>, or another memory-backed filesystem.</li>
     </ul>
     <pre><code>docker info
 test -r /dev/kvm &amp;&amp; test -w /dev/kvm
-df -h ~/.cache</code></pre>
+mkdir -p ~/.cache/ale/qemu
+readlink -f ~/.cache/ale/qemu
+findmnt -T ~/.cache/ale/qemu
+df -h ~/.cache/ale/qemu
+free -h
+docker ps --format 'table {{.Names}}\t{{.Status}}'
+ps -eo pid,comm,args | rg '[q]emu-system'</code></pre>
     <p>
       If ALE itself runs inside a cloud VM, that host must expose nested
-      virtualization. The provider fails before provisioning when Docker or
-      <code>/dev/kvm</code> is unavailable.
+      virtualization. Check the actual <code>qemu.root</code> filesystem if you
+      override the default above. The provider fails before provisioning when
+      Docker or <code>/dev/kvm</code> is unavailable.
     </p>
 
     <h2>Understand the two downloads</h2>
@@ -82,11 +89,9 @@ df -h ~/.cache</code></pre>
     </p>
 
     <p>
-      The October rerelease supplies a new Linux disk for all 111 Linux tasks.
-      The Windows disk is unchanged: its 40-task data projection matches the
-      current release. The older embedded global marker is qualified by the
-      <a href="https://huggingface.co/datasets/agents-last-exam/ale-images-qcow2/blob/v1.1/v1.1-oss-platform-projections.json">platform projection record</a>.
-      Retain the immutable revision in the shipped profile.
+      Use the v1.1 Linux and Windows disks with matching task code and data.
+      Retain the immutable <code>image_revision</code> in each snapshot of the
+      shipped profile; see <a href="/pages/configure.html#v1-1">release pins</a>.
     </p>
 
     <h2>Disk sources</h2>
@@ -96,8 +101,8 @@ df -h ~/.cache</code></pre>
     </p>
     <pre><code>qemu:
   disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10-v1.1.qcow2
-  # Retain hf_revision from configs/environments/qemu.yaml.
-  # For GCS/local sources, remove hf_revision:
+  # Retain image_revision from configs/environments/qemu.yaml.
+  # For GCS/local sources, remove image_revision:
   # gs://ale-data-public/images/ale-win10-v1.1.qcow2
   # /absolute/path/to/ale-win10-v1.1.qcow2
   root: ~/.cache/ale/qemu
@@ -127,12 +132,13 @@ uv run python -m ale_run run local_vm_demo.yaml</code></pre>
     <p>
       <code>demo/hello</code> boots Ubuntu and <code>demo/hello_win</code> boots
       Windows. Both produce and grade an output file, exercising provisioning,
-      agent execution, output collection, evaluation, and cleanup.
+      agent execution, evaluation, run recording, and cleanup. Bulk task output
+      is not collected with the default <code>output_path: null</code>.
     </p>
 
     <h2>Task coverage</h2>
     <p>
-      <code>cpu_unlicensed.txt</code> currently contains 146 unlicensed tasks:
+      <code>cpu.txt</code> contains 146 CPU tasks:
       all 111 <code>cpu-free-ubuntu</code> tasks and 35 <code>cpu-free</code>
       Windows tasks. The five selected Windows GPU tasks require the GCloud
       GPU profile and are excluded from QEMU.
@@ -154,6 +160,12 @@ uv run python -m ale_run run local_vm_demo.yaml</code></pre>
     </p>
 
     <h2>Output options</h2>
+    <p>
+      Keep the default <code>output_path: null</code> for benchmark runs.
+      Metadata, trajectories, evaluations, and telemetry are still collected.
+      Set <code>cleanup_mode: keep</code> to inspect task files in the guest;
+      preserve needed evidence, then stop or delete the retained VM.
+    </p>
     <p>
       With <code>output_path: local</code>, each guest copies its output through
       a per-run Samba share into the host run directory. CUA remains a fallback,

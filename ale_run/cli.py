@@ -13,6 +13,7 @@ from .orchestration import Runner
 from .orchestration.config_loader import load_experiment
 from .orchestration.experiment_spec import RunUnit
 from .orchestration.run_writer import slug_agent, slug_model, slug_task
+from .tasks.revision import task_revision
 
 logger = logging.getLogger(__name__)
 
@@ -120,15 +121,13 @@ def _filter_units(units: list[RunUnit], args: argparse.Namespace) -> list[RunUni
     return units
 
 
-def _unit_already_done(unit: RunUnit, output_root: Path) -> bool:
-    """True if a prior run of this unit reached a resume-skippable status.
-
-    Mirrors :class:`RunWriter`'s on-disk layout
-    ``<output_root>/<agent>/<model>/<task>/v<i>/<ts>/run.json`` and scans every
-    timestamped run dir; the unit is "done" if ANY of them has a ``status`` in
-    :data:`_RESUME_DONE_STATUSES`. Unreadable / malformed run.json files are
-    ignored (treated as not-done, so the unit re-runs).
-    """
+def _unit_already_done(
+    unit: RunUnit,
+    output_root: Path,
+    *,
+    revisions: dict[str, str] | None = None,
+) -> bool:
+    """Skip only completed/timeout runs whose task-folder revision still matches."""
     model = (unit.agent_spec.config or {}).get("model", "")
     v_dir = (
         output_root
@@ -139,26 +138,39 @@ def _unit_already_done(unit: RunUnit, output_root: Path) -> bool:
     )
     if not v_dir.is_dir():
         return False
+    revisions = revisions if revisions is not None else {}
+    if unit.task_path not in revisions:
+        try:
+            revisions[unit.task_path] = task_revision(Path("tasks") / unit.task_path)
+        except (OSError, ValueError, RuntimeError) as exc:
+            logger.warning("Cannot verify task revision for %s: %s", unit.task_path, exc)
+            return False
     for ts_dir in v_dir.iterdir():
         run_json = ts_dir / "run.json"
         if not run_json.is_file():
             continue
         try:
-            status = json.loads(run_json.read_text(encoding="utf-8")).get("status")
+            record = json.loads(run_json.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if status in _RESUME_DONE_STATUSES:
+        if not isinstance(record, dict) or not isinstance(record.get("task"), dict):
+            continue
+        if (
+            record.get("status") in _RESUME_DONE_STATUSES
+            and record["task"].get("revision") == revisions[unit.task_path]
+        ):
             return True
     return False
 
 
 def _filter_resume(units: list[RunUnit], output_root: Path) -> list[RunUnit]:
-    """Drop units that already have a completed/timeout run on disk."""
-    keep = [u for u in units if not _unit_already_done(u, output_root)]
+    """Drop completed/timeout units only when their task-folder revision matches."""
+    revisions: dict[str, str] = {}
+    keep = [u for u in units if not _unit_already_done(u, output_root, revisions=revisions)]
     skipped = len(units) - len(keep)
     if skipped:
         logger.info(
-            "resume: %d unit(s) already completed/timeout — skipping; running %d",
+            "resume: %d unit(s) completed/timeout at the current task revision; running %d",
             skipped, len(keep),
         )
     else:

@@ -28,8 +28,6 @@ Base families:
   ``ale-ubuntu22``         — linux (GCE VM)
   ``ale-ubuntu22-docker``  — linux (Docker, exported from the ale-ubuntu22 VM)
   ``ale-win10``            — windows (GCE VM)
-  ``ale-win10-cpu-licensed`` — windows + licensed software (GCE VM)
-  ``ale-win10-gpu-licensed`` — windows + licensed software + L4 (GCE VM)
   ``ale-win-server``       — windows + L4 GPU (GCE VM, g2 machine types)
 
 Public v1.1 realizations use separate ``-v1-1`` keys. Their registration
@@ -39,7 +37,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from importlib import import_module
-from importlib.util import find_spec
 from typing import Literal
 
 
@@ -111,11 +108,6 @@ for module_name in (
 ):
     registered_image = import_module(f".{module_name}", __name__).IMAGE
     _REGISTRY[registered_image.name] = registered_image
-
-for module_name in ("ale_win10_cpu_licensed", "ale_win10_gpu_licensed"):
-    if find_spec(f"{__name__}.{module_name}") is not None:
-        registered_image = import_module(f".{module_name}", __name__).IMAGE
-        _REGISTRY[registered_image.name] = registered_image
 
 
 def get(name: str) -> Image:

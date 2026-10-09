@@ -21,12 +21,9 @@
     <div class="note">
       <div class="note-title">Supported Linux subset</div>
       Use <code>configs/environments/docker.yaml</code> with
-      <code>selected_tasks/docker_support.txt</code>. The list currently
-      contains 102 supported tasks for the 2026-10-08 v1.1 rerelease. The three
-      added Blender building, MuseScore transcription and Ardour migration
-      workflows pass native output checks in the published container. Use the
-      matching runtime digest and data pins. The paired VM/Docker review covers
-      the historical 99-task subset; no full 102-task rerun is claimed.
+      <code>selected_tasks/docker_support.txt</code> for 102 v1.1 tasks,
+      including Blender building reconstruction, MuseScore transcription, and
+      Ardour project migration. Use the matching runtime digest and data pins.
     </div>
 
     <h2>What runs where</h2>
@@ -83,7 +80,9 @@ tasks: selected_tasks/docker_support.txt</code></pre>
     <p>
       The environment uses <code>task_data_source: local:task-data-v1.1</code>.
       Keep <code>output_path: null</code> for benchmark runs and inspect artifacts
-      in retained sandboxes. Set <code>output_path: local</code> only when bulk
+      in sandboxes retained with <code>cleanup_mode: keep</code>; release them
+      after inspection. Run metadata, trajectories, evaluations, and telemetry
+      are still collected. Set <code>output_path: local</code> only when bulk
       output collection is needed. Local task data and collected output use
       host-side <code>docker cp</code>, avoiding per-file transfer through the
       CUA API.

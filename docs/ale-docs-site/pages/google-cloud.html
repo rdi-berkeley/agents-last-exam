@@ -128,10 +128,11 @@ gcloud compute firewall-rules create ale-allow-cua \
       firewall documentation</a> for alternative network designs.
     </p>
 
-    <h2 id="results-bucket">5. Create a results bucket</h2>
+    <h2 id="results-bucket">5. Optional results bucket</h2>
     <p>
-      This step is optional when <code>output_path: local</code>. It is
-      recommended for large batch artifacts:
+      Skip this step with the default <code>output_path: null</code>. Run
+      records are still collected; bulk task output stays in the sandbox.
+      Create a bucket only when you choose to upload task output:
     </p>
     <pre><code>gcloud storage buckets create "gs://$GCP_BUCKET" \
   --project="$GCP_PROJECT" \
@@ -148,10 +149,11 @@ gcloud storage buckets add-iam-policy-binding "gs://$GCP_BUCKET" \
 GCP_SA_KEY=secret/gcp_key.json</code></pre>
     <p>
       The shipped <code>configs/environments/environment_gcloud.yaml</code> maps all
-      five task snapshots to Google Cloud. Start with the shipped
+      three task snapshots to the versioned v1.1 images. Preserve the
+      <a href="/pages/configure.html#v1-1">release pins</a>. Start with the shipped
       <code>example_exp.yaml</code> (a <code>demo/hello</code> smoke), then use
-      <code>selected_tasks/unlicensed.txt</code> for the public unlicensed set.
-      Licensed tasks require separately activated software.
+      <code>selected_tasks/full.txt</code> for all 151 tasks, or a difficulty
+      list under <code>selected_tasks/full/</code>.
     </p>
 
     <h2>Capacity and cleanup</h2>
@@ -161,8 +163,10 @@ GCP_SA_KEY=secret/gcp_key.json</code></pre>
       <code>concurrency</code> below your CPU, GPU, external-IP, and LLM limits.
     </p>
     <p>
-      Use <code>cleanup_mode: delete</code> for batch runs. If the host process
-      is terminated before cleanup completes, inspect leftovers by tag:
+      Use <code>cleanup_mode: keep</code> to inspect deliverables in the sandbox,
+      then stop or delete it after preserving needed evidence.
+      <code>cleanup_mode: delete</code> removes sandbox files at cleanup. If the
+      host process is terminated before cleanup completes, inspect leftovers by tag:
     </p>
     <pre><code>gcloud compute instances list --filter="tags.items=ale-run"</code></pre>
 

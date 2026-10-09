@@ -18,6 +18,43 @@
       details stay in reusable config files.
     </p>
 
+    <h2 id="v1-1">Use the v1.1 release</h2>
+    <p>
+      ALE v1.1 contains <strong>151 tasks</strong>. Task instructions, graders,
+      references, and runtime compatibility are updated together. Six formerly
+      licensed tasks keep their IDs and business goals using open-source Linux
+      workflows: Blender building reconstruction, FreeCAD Road alignment,
+      FreeCAD CAM with LinuxCNC and CAMotics, Kratos support analysis, MuseScore
+      transcription, and Ardour project migration. <code>engineering/mold-flow</code>
+      is removed because its full fill/pack/cool/demold workflow has no validated
+      open-source replacement at the original scope.
+    </p>
+    <p>
+      Use the task code, profiles, images, and data together. The
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/releases/v1.1/assets.json">asset manifest</a>
+      records exact versions. For existing logs, follow
+      <a href="/pages/run.html#upgrade-v1">Upgrade v1 logs</a>; the
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/docs/releases/v1.1.md">command guide</a>
+      covers the same setup and upgrade steps.
+    </p>
+    <table>
+      <thead><tr><th>Component</th><th>Pin</th></tr></thead>
+      <tbody>
+        <tr><td>QEMU disks</td><td>Preserve <code>qemu.image_revision</code> in each shipped snapshot. It selects an immutable Hugging Face dataset revision.</td></tr>
+        <tr><td>Google Cloud images</td><td>Copy the named images from <code>images.*.gcloud</code> in the manifest. Optional <code>gcloud.image_revision</code> verifies the numeric <code>sourceImageId</code>. A copy gets a new ID; pin your project's copy, not the publisher's ID.</td></tr>
+        <tr><td>Docker runtime</td><td>The profile uses the digest in <code>docker.pinned_image</code>. Optional <code>docker.image_revision</code> verifies a SHA256 image ID or repository digest.</td></tr>
+        <tr><td>Task data</td><td>Use <code>huggingface.*.revision</code> and <code>task_data.archive_sha256</code>; install the archive into an empty <code>task-data-v1.1</code>.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      These image revision settings belong inside each snapshot's provider block
+      (<code>qemu</code>, <code>gcloud</code>, or <code>docker</code>).
+      <code>run.json</code>'s <code>environment.image_revision</code> records the
+      acquired image identity even without a configured pin. For QEMU remote
+      disks, it is the resolved Hugging Face commit or GCS object generation;
+      the requested Hugging Face pin remains in source metadata.
+    </p>
+
     <h2>Start from the example</h2>
     <pre><code>cp example_exp.yaml my_experiment.yaml</code></pre>
     <pre><code>name: my_experiment
@@ -52,7 +89,7 @@ cleanup_mode: delete</code></pre>
         <tr><td><code>output.root</code></td><td>The host directory for run records. This is separate from the environment's task-output destination.</td></tr>
         <tr><td><code>concurrency</code></td><td>Maximum run units active at once.</td></tr>
         <tr><td><code>wall_time_s</code></td><td>Optional experiment-wide agent time limit. When omitted, each task card supplies its own timeout.</td></tr>
-        <tr><td><code>auto_resume</code></td><td>Defaults to <code>true</code>. Skips prior completed/timeout units and retries newly failed units.</td></tr>
+        <tr><td><code>auto_resume</code></td><td>Defaults to <code>true</code>. Skips completed/timeout units only with a matching task-folder hash; missing or changed hashes rerun. Retries newly failed units.</td></tr>
         <tr><td><code>max_attempts</code></td><td>Total attempts per failed unit in one invocation when auto-resume is enabled. Accepts 1 through 3 and defaults to 3.</td></tr>
         <tr><td><code>cleanup_mode</code></td><td><code>delete</code>, <code>stop</code>, or <code>keep</code> for provider-managed sandboxes.</td></tr>
         <tr><td><code>prompt_suffix</code></td><td>Optional text appended to every task instruction and recorded in the trajectory.</td></tr>
@@ -63,11 +100,11 @@ cleanup_mode: delete</code></pre>
     <table>
       <thead><tr><th>Profile</th><th>Provider routing</th><th>Compatible list</th></tr></thead>
       <tbody>
-        <tr><td><code>configs/environments/environment_gcloud.yaml</code></td><td><a href="/pages/google-cloud.html">Google Cloud VMs</a> for all published snapshots</td><td><code>unlicensed.txt</code> or <code>full.txt</code></td></tr>
-        <tr><td><code>configs/environments/environment_aws.yaml</code></td><td><a href="/pages/aws.html">AWS EC2</a> for the CPU snapshots (no GPU)</td><td><code>cpu_unlicensed.txt</code></td></tr>
-        <tr><td><code>configs/environments/environment_aliyun.yaml</code></td><td><a href="/pages/aliyun.html">Alibaba Cloud ECS</a> for the CPU snapshots (no GPU)</td><td><code>cpu_unlicensed.txt</code></td></tr>
+        <tr><td><code>configs/environments/environment_gcloud.yaml</code></td><td><a href="/pages/google-cloud.html">Google Cloud VMs</a> for all published snapshots</td><td><code>full.txt</code></td></tr>
+        <tr><td><code>configs/environments/environment_aws.yaml</code></td><td><a href="/pages/aws.html">AWS EC2</a> for CPU snapshots; verify matching v1.1 images</td><td><code>cpu.txt</code></td></tr>
+        <tr><td><code>configs/environments/environment_aliyun.yaml</code></td><td><a href="/pages/aliyun.html">Alibaba Cloud ECS</a> for CPU snapshots; verify matching v1.1 images</td><td><code>cpu.txt</code></td></tr>
         <tr><td><code>configs/environments/docker.yaml</code></td><td><a href="/pages/local-docker.html">Local containers</a> for <code>cpu-free-ubuntu</code></td><td><code>docker_support.txt</code></td></tr>
-        <tr><td><code>configs/environments/qemu.yaml</code></td><td><a href="/pages/local.html">QEMU/KVM VMs</a> for CPU-compatible Ubuntu and Windows snapshots</td><td><code>cpu_unlicensed.txt</code></td></tr>
+        <tr><td><code>configs/environments/qemu.yaml</code></td><td><a href="/pages/local.html">QEMU/KVM VMs</a> for CPU-compatible Ubuntu and Windows snapshots</td><td><code>cpu.txt</code></td></tr>
         <tr><td>Your own static profile</td><td><a href="/pages/static.html">Existing sandbox</a> for every selected task</td><td>A narrow list matching that machine</td></tr>
       </tbody>
     </table>
@@ -77,11 +114,9 @@ cleanup_mode: delete</code></pre>
     <table>
       <thead><tr><th>Snapshot</th><th>Environment requirement</th></tr></thead>
       <tbody>
-        <tr><td><code>cpu-free-ubuntu</code></td><td>Ubuntu, no licensed software, no required GPU</td></tr>
-        <tr><td><code>cpu-free</code></td><td>Windows, no licensed software, no required GPU</td></tr>
-        <tr><td><code>gpu-free</code></td><td>Windows task that requires GPU execution — runs on Google Cloud only.</td></tr>
-        <tr><td><code>cpu-license</code></td><td>Windows with user-activated licensed software</td></tr>
-        <tr><td><code>gpu-license</code></td><td>Windows with GPU and user-activated licensed software</td></tr>
+        <tr><td><code>cpu-free-ubuntu</code></td><td>Ubuntu CPU</td></tr>
+        <tr><td><code>cpu-free</code></td><td>Windows CPU</td></tr>
+        <tr><td><code>gpu-free</code></td><td>Windows GPU; use the Google Cloud profile.</td></tr>
       </tbody>
     </table>
     <p>
@@ -96,16 +131,15 @@ cleanup_mode: delete</code></pre>
       <thead><tr><th>List</th><th>Units before agent multiplication</th><th>Purpose</th></tr></thead>
       <tbody>
         <tr><td><code>hello_both.txt</code></td><td>2</td><td>Ubuntu and Windows smoke test</td></tr>
-        <tr><td><code>docker_support.txt</code></td><td>102</td><td>Supported local-container subset; historical 99-task paired review plus three added native output checks</td></tr>
+        <tr><td><code>docker_support.txt</code></td><td>102</td><td>Supported local-container subset</td></tr>
         <tr><td><code>ale_cli.txt</code></td><td>111</td><td>All selected <code>cpu-free-ubuntu</code> tasks, including desktop workflows</td></tr>
-        <tr><td><code>cpu_unlicensed.txt</code></td><td>146</td><td>Public CPU-runnable set; use matching updated images</td></tr>
-        <tr><td><code>unlicensed.txt</code></td><td>151</td><td>All selected tasks require no licensed application activation</td></tr>
-        <tr><td><code>full.txt</code></td><td>151</td><td>The complete selected v1.1 rerelease</td></tr>
+        <tr><td><code>cpu.txt</code></td><td>146</td><td>Ubuntu and Windows CPU tasks</td></tr>
+        <tr><td><code>full.txt</code></td><td>151</td><td>The complete v1.1 benchmark</td></tr>
       </tbody>
     </table>
     <p>
-      Difficulty-specific lists live under <code>selected_tasks/unlicensed/</code>
-      and <code>selected_tasks/full/</code>. A text list contains one task path
+      All lists live under <code>selected_tasks/</code>, with difficulty lists
+      under <code>selected_tasks/full/*.txt</code>. A text list contains one task path
       per line. A YAML list can select explicit variant indices.
     </p>
 
@@ -149,9 +183,9 @@ GCP_SA_KEY=secret/gcp_key.json</code></pre>
       there.
     </p>
     <p>
-      Start by copying <code>secret/.env.example</code> to
-      <code>secret/.env</code>, then fill in the API and provider credentials
-      needed by your run. GCP variables are required only by the Google Cloud
+      On first setup, copy <code>secret/.env.example</code> to
+      <code>secret/.env</code> with <code>cp -n</code>, then fill in the API and
+      provider credentials needed by your run. GCP variables are required only by the Google Cloud
       profile. Local profiles still need whichever API key their agent preset
       uses. Judge-based tasks can also require evaluator keys under
       <code>secret/eval_time/</code>.
@@ -174,14 +208,17 @@ output_path: null
       <li><code>hf://...</code> is accepted by configuration but task-data staging is not implemented yet.</li>
     </ul>
     <p>
-      Output behavior is covered in
-      <a href="/pages/run.html#output-path">Run and collect results</a>.
+      <code>output_path: null</code> is the default. Bulk task output stays in
+      the sandbox; metadata, trajectories, evaluations, and telemetry are still
+      collected. Set <code>cleanup_mode: keep</code> to inspect deliverables in
+      the sandbox, then release it when finished. Output options are covered in
+      <a href="/pages/run.html#output-path">Run, resume and upgrade</a>.
     </p>
 
     <div class="note">
       <div class="note-title">Next</div>
       Validate the resolved matrix and launch it with
-      <a href="/pages/run.html">Run and collect results</a>.
+      <a href="/pages/run.html">Run, resume and upgrade</a>.
     </div>
   </article>
 

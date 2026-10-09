@@ -19,6 +19,15 @@
       else is created once below.
     </p>
 
+    <div class="note">
+      <div class="note-title">v1.1 image compatibility</div>
+      The existing AMIs below are not verified for the six converted workflows.
+      Verify matching v1.1 software and data before running
+      <code>selected_tasks/cpu.txt</code>, or use the published
+      <a href="/pages/local.html">QEMU</a> or
+      <a href="/pages/google-cloud.html">Google Cloud</a> release images.
+    </div>
+
     <h2>Sign in</h2>
     <p>
       Create an <a href="https://aws.amazon.com/">AWS account</a> if you don't
@@ -108,15 +117,13 @@ aws ec2 wait image-available --region us-east-1 --image-ids $new</code></pre>
       Otherwise use <code>ale-win-server</code>.
     </div>
 
-    <h2>③ Keep run output in S3 <span style="font-weight:400">(recommended for real runs)</span></h2>
+    <h2>③ Optional S3 output</h2>
     <p>
-      With <code>output_path: local</code> each run's output is fetched back to
-      your machine over the sandbox's control port — fine for a quick demo, but
-      for large outputs at scale that's slow and flaky and drags down overall
-      throughput. So, exactly as on Google Cloud (where output goes to a GCS
-      bucket), the recommended path is to have the sandbox upload straight to S3.
-      Output is organized by run id, so you can find each run's files afterward.
-      Create the bucket and a role that lets the sandbox upload to it:
+      Keep the default <code>output_path: null</code> to leave bulk task output
+      in the sandbox; metadata, trajectories, evaluations, and telemetry are
+      still collected. Use <code>cleanup_mode: keep</code> to inspect files,
+      then release the instance. To enable output uploads, create a bucket and
+      a role that lets the sandbox write to it:
     </p>
     <pre><code>aws s3api create-bucket --bucket ale-run-results-$ACCOUNT --region us-east-1
 

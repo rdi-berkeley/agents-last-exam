@@ -39,6 +39,7 @@ from ..environments.env import ALEEnv
 from ..executors import DockerExecutor, LocalExecutor, SandboxExecutor
 from ..tasks.loader import TaskLoader
 from ..tasks.driver import TaskDriver
+from ..tasks.revision import task_revision
 from .factory import EnvironmentRouter, build_config, resolve_agent
 from .run_writer import RunWriter, slug_task
 from .experiment_spec import ArtifactsSpec, RunUnit, UnitResult
@@ -222,6 +223,8 @@ async def run_one_unit(
     eval_status = "not_executed"
     eval_duration_s: float | None = None
     eval_error: dict[str, Any] | None = None
+    task_revision_value: str | None = None
+    environment_metadata: dict[str, Any] = {}
     # Execution window timestamps. ``started`` (above) is the ENQUEUE time, so
     # it includes the concurrency-semaphore wait. For the reported per-unit
     # duration we want the actual work window: from when the sem is acquired
@@ -240,6 +243,8 @@ async def run_one_unit(
         exec_started = time.monotonic()
         try:
             task_path = Path("tasks") / unit.task_path
+            task_revision_value = await asyncio.to_thread(task_revision, task_path)
+            writer.emit_event("task_revision", revision=task_revision_value)
             task_meta = TaskLoader(str(task_path)).load(unit.variant_index)
             env_spec = _build_env_spec(task_meta, unit=unit)
             timeout_s = int(wall_time_s or task_meta.get("timeout_s") or _DEFAULT_TIMEOUT_S)
@@ -257,6 +262,8 @@ async def run_one_unit(
             writer.emit_event("provision_started")
             env = ALEEnv(provider=provider, spec=env_spec)
             await env.reset_async()
+            environment_metadata = dict(env.sandbox.metadata.get("image_provenance") or {})
+            environment_metadata["snapshot"] = env_spec.snapshot
             writer.emit_event(
                 "provision_done",
                 env_id=env.sandbox.id,
@@ -629,6 +636,8 @@ async def run_one_unit(
         total_s=total_s,
         trajectory=trajectory,
         category=_category_from_error(error_str),
+        task_revision_value=task_revision_value,
+        environment=environment_metadata,
     )
     writer.write_run_json(run_meta)
 
@@ -1086,6 +1095,8 @@ def _build_run_meta(
     total_s: float,
     trajectory: Trajectory | None,
     category: str | None,
+    task_revision_value: str | None = None,
+    environment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Construct the LOG_SPEC §4 run.json payload."""
     usage = (
@@ -1111,7 +1122,9 @@ def _build_run_meta(
             "slug": slug_task(unit.task_path),
             "path": f"tasks/{unit.task_path}",
             "variant_index": unit.variant_index,
+            "revision": task_revision_value,
         },
+        "environment": environment or {},
         "status": status,
         "score": score,
         "termination": {

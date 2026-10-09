@@ -76,6 +76,7 @@ class DockerProviderConfig:
     image_ref   Override the container ref to boot (default: the Image entry's
                 ``docker_image``). Lets one env config pin a specific tag, e.g.
                 a DinD-capable build, without editing the Image registry.
+    image_revision  Optional expected SHA-256 image ID or repository digest.
     """
 
     image: str = "ale-kasm"
@@ -92,9 +93,15 @@ class DockerProviderConfig:
     # gets ALE_ENABLE_DIND=1; enabling it broadly can add substantial
     # fuse-overlayfs I/O at high concurrency.
     enable_dind: bool = False
+    image_revision: str | None = None
 
 
 def _build_provider_config(raw: dict[str, Any]) -> DockerProviderConfig:
+    image_revision = raw.get("image_revision")
+    if image_revision is not None:
+        image_revision = str(image_revision).strip() or None
+    if image_revision is not None and not re.fullmatch(r"sha256:[0-9a-f]{64}", image_revision):
+        raise ValueError("docker image_revision must be a sha256:<64 lowercase hex digits> digest")
     gcs_sa = raw.get("gcs_sa_key") or ""
     if gcs_sa:
         from pathlib import Path as _P
@@ -112,6 +119,7 @@ def _build_provider_config(raw: dict[str, Any]) -> DockerProviderConfig:
         privileged=bool(raw.get("privileged") or False),
         image_ref=str(raw.get("image_ref") or ""),
         enable_dind=bool(raw.get("enable_dind") or False),
+        image_revision=image_revision,
     )
 
 
@@ -174,6 +182,44 @@ async def _get_resource_limits(container_name: str) -> dict[str, int | float]:
     return {
         "cpu_quota": host_config["NanoCpus"] / 1_000_000_000,
         "memory_limit_bytes": host_config["Memory"],
+    }
+
+
+async def _get_image_provenance(
+    container_name: str, config: DockerProviderConfig, container_ref: str,
+) -> dict[str, Any]:
+    rc, image_id, stderr = await _run_docker("inspect", "--format", "{{.Image}}", container_name)
+    if rc != 0:
+        raise RuntimeError(f"Failed to inspect container {container_name} image: {stderr}")
+    image_id = image_id.strip()
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
+        raise RuntimeError(f"Container {container_name} has invalid image ID {image_id!r}")
+    rc, stdout, stderr = await _run_docker(
+        "image", "inspect", "--format", "{{json .RepoDigests}}", image_id,
+    )
+    if rc != 0:
+        raise RuntimeError(f"Failed to inspect Docker image {image_id} digests: {stderr}")
+    repo_digests = json.loads(stdout) or []
+    if not isinstance(repo_digests, list) or not all(isinstance(ref, str) for ref in repo_digests):
+        raise RuntimeError(f"Docker image {image_id} has invalid RepoDigests")
+    digests = {ref.rsplit("@", 1)[-1] for ref in repo_digests}
+    selected_digest = container_ref.rsplit("@", 1)[-1] if "@" in container_ref else None
+    if selected_digest is not None and selected_digest not in digests:
+        raise RuntimeError(
+            f"Docker selected image digest mismatch: expected {selected_digest}, "
+            f"acquired {image_id} with RepoDigests {repo_digests}"
+        )
+    if config.image_revision is not None and config.image_revision not in {image_id, *digests}:
+        raise RuntimeError(
+            f"Docker image_revision mismatch: expected {config.image_revision}, "
+            f"acquired {image_id} with RepoDigests {repo_digests}"
+        )
+    return {
+        "provider": "docker",
+        "image": config.image,
+        "image_revision": selected_digest or config.image_revision or image_id,
+        "image_ref": container_ref,
+        "image_id": image_id,
     }
 
 
@@ -293,6 +339,17 @@ class DockerProvider(Provider):
             )
         logger.info("Container %s started (id=%s)", name, stdout[:12])
 
+        try:
+            image_provenance = await _get_image_provenance(name, self._cfg, container_ref)
+        except BaseException:
+            try:
+                cleanup_rc, _, cleanup_error = await _run_docker("rm", "-f", name)
+                if cleanup_rc != 0:
+                    logger.error("Failed to remove container %s: %s", name, cleanup_error)
+            except Exception:
+                logger.exception("Failed to remove container %s after image verification", name)
+            raise
+
         cua_port = await _get_host_port(name, cua_internal_port)
         vnc_port = await _get_host_port(name, _VNC_INTERNAL_PORT)
         cua_url = f"http://127.0.0.1:{cua_port}"
@@ -333,6 +390,7 @@ class DockerProvider(Provider):
                 "cua_port": cua_port,
                 "vnc_port": vnc_port,
                 "image": self._cfg.image,
+                "image_provenance": image_provenance,
                 "snapshot": spec.snapshot,
                 "gcs_user_project": gcs_user_project,
                 "resource_limits": resource_limits,

@@ -6,13 +6,13 @@
       "count": 111,
       "sha256": "19bd12d116d448cd8953f2746fcc3d0e7bdcb4b1815092d278e1ec51720f0f5d"
     },
-    "selected_tasks/cpu_unlicensed.txt": {
+    "selected_tasks/cpu.txt": {
       "count": 146,
-      "sha256": "6f97dd291d81ddfa2d30ead801c463c63e1d2f05cb8b9ea3fb8a6a462f80feeb"
+      "sha256": "11003a5d88128fb6a44fd572960839ae34bcaedd3f74fe9ab209d5ffbb3900af"
     },
     "selected_tasks/docker_support.txt": {
       "count": 102,
-      "sha256": "c888828b1fc6599d5c95bb96731c1fdb9238dd5bc3b1d62e90f9b902d24c3f7a"
+      "sha256": "022ea38d858aa1f15574ef89b06e5d8076e2028bcf3dccbabb1f092188e653ab"
     },
     "selected_tasks/full.txt": {
       "count": 151,
@@ -38,37 +38,13 @@
       "count": 2,
       "sha256": "ff0f8bcccd31e24f97672dfb142ebcb372817770983e83b1b33db8aed815975d"
     },
-    "selected_tasks/licensed.txt": {
-      "count": 0,
-      "sha256": "ad4e2247d07ec167d4c319b4ec5d38c496bd8741d5f05adf7c5290e99619f399"
-    },
     "selected_tasks/tool_smoke_both.txt": {
       "count": 2,
       "sha256": "abf070c223349717f3d441b9edc597c0515f32ace7a03c49e0de82dd5ef3b949"
     },
-    "selected_tasks/unlicensed.txt": {
-      "count": 151,
-      "sha256": "3cceba273d6dca8efc3132208d0421d634e7ee947571dc930a2dfb7c5aca0f44"
-    },
-    "selected_tasks/unlicensed/full-spectrum.txt": {
-      "count": 52,
-      "sha256": "a8732c06b6b5b9e899ba791ab0a0f680f4cac4cc53db932fff5b577f8105997f"
-    },
-    "selected_tasks/unlicensed/last-exam.txt": {
-      "count": 34,
-      "sha256": "acdc4723e98b4d2adc6bf704fae06a8487b49218bd644af00a3ef33407b33321"
-    },
-    "selected_tasks/unlicensed/near-term.txt": {
-      "count": 67,
-      "sha256": "cd75d88808f06c164b0cbf298c0c66bcbfd66e04ad72299798da38f5a9c32f1c"
-    },
-    "selected_tasks/unlicensed/overall.txt": {
-      "count": 147,
-      "sha256": "6f5d42e744e8f8da5669b18910870cdb8b8996968572fbff56448ffa710b4da8"
-    },
     "selected_tasks/qemu_excluded.txt": {
       "count": 5,
-      "sha256": "c860975eda1b11b9c3cf9f837b4d17998b4a081a41c2389e8e5566c3eb86aec6"
+      "sha256": "873a691a6d4b036db3dd4ce906d455cb3c63501b25a683d7ab5062970a92f3df"
     }
   },
   "huggingface": {
@@ -179,10 +155,7 @@
     "uncompressed_bytes": 88292216874
   },
   "scope": {
-    "original_repaired_tasks": 59,
-    "followup_tasks": [
-      "health_medicine/nsclc_radiomics_cox_signature_v1"
-    ],
+    "updated_tasks": 66,
     "excluded": [
       "AWS",
       "Aliyun"
@@ -198,6 +171,5 @@
     "retired_tasks": {
       "engineering/mold-flow": "Full four-cavity filling, packing, cooling and demolding was not validated with open-source software at the original scope; original data exists."
     }
-  },
-  "revision": "oss-20261008"
+  }
 }

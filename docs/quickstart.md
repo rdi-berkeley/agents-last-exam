@@ -84,8 +84,8 @@ for image in ale-ubuntu22-v1-1 ale-win10-v1-1; do
 done
 ```
 
-These names match the v1.1 environment profiles. Do not substitute the older
-unversioned images. Licensed applications require separately provisioned images.
+These names match the v1.1 environment profiles. Keep the matching code and
+data pins from the [release guide](releases/v1.1.md).
 
 ## 5. Create restricted network access
 
@@ -112,7 +112,10 @@ gcloud compute firewall-rules update ale-allow-cua \
 
 ## 6. Create an optional results bucket
 
-Skip this section if you will keep `output_path: local`.
+Skip this section with the default `output_path: null`. It leaves bulk task
+output in the sandbox while still collecting metadata, trajectories,
+evaluations, and telemetry. Use `cleanup_mode: keep` to inspect deliverables
+there, then stop or delete retained sandboxes when finished.
 
 ```bash
 gcloud storage buckets create "gs://$GCP_BUCKET" \
@@ -138,7 +141,7 @@ default is `null`, which skips bulk output collection.
 ## 7. Configure secrets
 
 ```bash
-cp secret/.env.example secret/.env
+cp -n secret/.env.example secret/.env
 ```
 
 Set the agent API key required by your chosen preset and the Google Cloud
@@ -175,23 +178,25 @@ Windows VMs.
 
 ## 9. Continue to a benchmark task list
 
-Use `selected_tasks/unlicensed.txt` for the complete public set that does not
-require licensed software. The environment profile maps CPU, GPU, Ubuntu, and
-Windows snapshots to their corresponding images and zones.
+Use `selected_tasks/full.txt` for all 151 tasks, or a difficulty list under
+`selected_tasks/full/`. The environment profile maps the three snapshot IDs
+(`cpu-free-ubuntu`, `cpu-free`, `gpu-free`) to their images and zones.
 
 ```yaml
-tasks: selected_tasks/unlicensed.txt
+tasks: selected_tasks/full.txt
 concurrency: 8
 auto_resume: true
 max_attempts: 3
-cleanup_mode: delete
+cleanup_mode: keep
 ```
 
 Choose concurrency according to project quota, GPU availability, LLM rate
-limits, and budget. Auto-resume is enabled by default: prior `completed` and
-`timeout` units are skipped, and failed units are automatically requeued up to
-`max_attempts`. Use `--disable-resume` for a one-off run of every selected unit
-with no retries.
+limits, and budget, including retained sandboxes. Auto-resume skips prior
+`completed` and `timeout` units only when `run.json`'s `task.revision` matches
+the current task-folder SHA256. Missing or changed hashes rerun; see the
+[v1 log upgrade helper](releases/v1.1.md#upgrade-existing-logs) for legacy logs.
+Failed units retry up to `max_attempts`. Use `--disable-resume` to run every
+selected unit once without retries.
 
 ## Cleanup and recovery
 

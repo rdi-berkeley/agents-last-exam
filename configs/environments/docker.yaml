@@ -1,4 +1,4 @@
-# Docker provider for the cpu-free-ubuntu (Linux, no-GPU, no-license) tasks —
+# Docker provider for the cpu-free-ubuntu (Linux, no-GPU) tasks —
 # boots the versioned `agentslastexam/ale-ubuntu22-docker:v1.1` image as a
 # local container instead of one GCE VM per task.
 #

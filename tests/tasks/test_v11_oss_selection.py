@@ -60,8 +60,9 @@ def test_release_selection_matches_task_routing(selections):
     full = set(selections["full.txt"])
     assert len(full) == 151
     assert full == set(selections["full/overall.txt"])
-    assert full == set(selections["unlicensed.txt"])
-    assert not selections["licensed.txt"]
+    published = json.loads((ROOT / "tasks/published_tasks.json").read_text())["published"]
+    assert full == set(published)
+    assert all("licensed" not in name for name in selections)
 
     snapshots = {
         task_id: json.loads((ROOT / "tasks" / task_id / "task_card.json").read_text())["vm"][
@@ -75,22 +76,66 @@ def test_release_selection_matches_task_routing(selections):
     assert set(selections["ale_cli.txt"]) == linux
     assert set(selections["docker_support.txt"]) == linux - DOCKER_EXCLUSIONS
     assert len(selections["docker_support.txt"]) == 102
-    assert set(selections["cpu_unlicensed.txt"]) == full - CPU_EXCLUSIONS
-    assert len(selections["cpu_unlicensed.txt"]) == 146
+    assert set(selections["cpu.txt"]) == full - CPU_EXCLUSIONS
+    assert len(selections["cpu.txt"]) == 146
     assert set(selections["qemu_excluded.txt"]) == CPU_EXCLUSIONS
-    for name in ("cpu_unlicensed.txt", "unlicensed.txt", "ale_cli.txt"):
+    for name in ("cpu.txt", "full.txt", "ale_cli.txt"):
         assert OSS_VARIANTS.keys() <= set(selections[name]), name
     assert set(selections["docker_support.txt"]) & OSS_VARIANTS.keys() == (
         OSS_VARIANTS.keys() - DOCKER_EXCLUSIONS
     )
 
 
-@pytest.mark.parametrize("track", ["overall", "near-term", "full-spectrum", "last-exam"])
-def test_oss_conversions_keep_existing_difficulty_assignments(selections, track):
-    full = set(selections[f"full/{track}.txt"])
-    unlicensed = set(selections[f"unlicensed/{track}.txt"])
-    assert full & OSS_VARIANTS.keys() == unlicensed & OSS_VARIANTS.keys()
-    assert unlicensed <= full
+@pytest.mark.parametrize(
+    "track,count,variants",
+    [
+        ("overall", 151, set(OSS_VARIANTS)),
+        ("near-term", 67, set()),
+        (
+            "full-spectrum",
+            54,
+            {"engineering/cailian_road_highway_alignment_2", "visual_media/music_transcription"},
+        ),
+        (
+            "last-exam",
+            37,
+            {
+                "engineering/2d_drawings_to_3d_building_model",
+                "engineering/gcode",
+                "engineering/inner_support_elevation_optimization",
+                "visual_media/project_migration",
+            },
+        ),
+    ],
+)
+def test_release_tracks_keep_existing_difficulty_assignments(selections, track, count, variants):
+    tasks = set(selections[f"full/{track}.txt"])
+    assert len(tasks) == count
+    assert tasks <= set(selections["full.txt"])
+    assert tasks & OSS_VARIANTS.keys() == variants
+
+
+def test_difficulty_tracks_cover_complete_release(selections):
+    tracks = ("near-term", "full-spectrum", "last-exam")
+    assert set.union(*(set(selections[f"full/{track}.txt"]) for track in tracks)) == set(
+        selections["full.txt"]
+    )
+
+
+@pytest.mark.parametrize(
+    "task_id,track",
+    [
+        ("business_finance/odoo", "full-spectrum"),
+        ("visual_media/inkscape_cultural_poster_design", "full-spectrum"),
+        ("engineering/robotics_blender_tabletop_reconstruction", "last-exam"),
+        ("visual_media/atlas_outpost_graybox_navigation", "last-exam"),
+        ("visual_media/human_mesh_animation_reproduction", "last-exam"),
+    ],
+)
+def test_canonical_tracks_keep_all_assigned_tasks(selections, task_id, track):
+    assert task_id in selections[f"full/{track}.txt"]
+    assert task_id in selections["full/overall.txt"]
+    assert task_id in selections["full.txt"]
 
 
 @pytest.mark.parametrize("task_id,variant", OSS_VARIANTS.items())

@@ -1,26 +1,27 @@
 # ale-ubuntu22-docker image build
 
-The container form of the `ale-ubuntu22` Linux sandbox, so the `cpu-free-ubuntu`
-(no-GPU, no-license) tasks run under the **docker provider** on one host instead
-of one GCE VM each. The **data-less** v1.1 release is published at
+The container form of the `ale-ubuntu22` Linux sandbox. The **docker provider**
+runs the 102 tasks in `selected_tasks/docker_support.txt` on one host.
+The **data-less** v1.1 release is published at
 `agentslastexam/ale-ubuntu22-docker:v1.1`. Pair it with the pinned v1.1 archive,
-not an old `task-data` directory. Publication status and exact pins are in
-`releases/v1.1/assets.json` and `docs/releases/v1.1.md`.
+not an old `task-data` directory. Exact pins are in
+`releases/v1.1/assets.json`; see the [release guide](../../../../docs/releases/v1.1.md).
 
 The versioned image registry entry pins the published image by digest.
 
-To *run* it you need none of this — pull the image and fetch the data
-(`scripts/fetch_task_data.sh`); see the **Local Docker** docs page. This
-directory is how the maintainers rebuild the image.
+To run it, follow the [Local containers tutorial](https://agents-last-exam.org/docs?p=pages/local-docker.html).
+Keep `output_path: null` and use `cleanup_mode: keep` to inspect task files in
+the container. Metadata, trajectories, evaluations, and telemetry are collected
+locally. Release retained containers after inspection. This directory describes
+how maintainers rebuild the image.
 
 ## Local QCOW2 build
 
 `build.sh` requires an explicit, sanitized, sealed **standalone local QCOW2**.
 There is no GCloud prerequisite, default dev VM, default output tag, push, or
-image pruning. The historical cloud-only orchestration is replaced, while the
-original userspace export, Docker import, cleanup, commit and desktop entrypoint
-approach remains. This is not a new Ubuntu Dockerfile or a scientific-runtime
-reinstallation. Task data is staged separately at runtime by the `local:` source.
+image pruning. It exports the VM userspace, imports it into Docker, applies
+cleanup, and installs the desktop entrypoint. Task data is staged separately
+at runtime by the `local:` source.
 
 Requirements: the repository's uv environment, Linux with `/dev/kvm` available
 to the existing Docker daemon, `qemu-img` for source inspection, OpenSSH,
@@ -197,15 +198,14 @@ The smoke requires two HTTP 200 JSON `status: ok` responses plus an X socket,
 window manager, panel and display probe. Containers are bounded, nonprivileged,
 with DinD disabled; smoke success is not release acceptance.
 
-### Remaining release gates
+### Validate a candidate
 
 The builder emits a candidate image ID and receipts, **not** a release-ready
 claim. Before publication, audit actual source content and every final layer
 (including metadata) for secrets/data, review desktop package additions, check
 scientific inventories and execute official rootless-provider GUI/tool/agent
-smokes, cold starts, data/reference staging and evaluator fixtures. Complete all
-99 supported task runs and their same-release VM comparisons as specified in
-the release validation plan. A path policy cannot identify arbitrary secrets
+smokes, cold starts, data/reference staging and evaluator fixtures against
+`selected_tasks/docker_support.txt`. A path policy cannot identify arbitrary secrets
 or task outputs deliberately stored under unexpected runtime filenames. A
 later deletion cannot repair sensitive bytes already imported into a layer.
 

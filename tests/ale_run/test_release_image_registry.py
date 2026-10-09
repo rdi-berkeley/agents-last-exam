@@ -34,6 +34,13 @@ def test_unknown_release_does_not_fall_back():
         get("ale-ubuntu22-v99-0")
 
 
+@pytest.mark.parametrize("name", ["ale-win10-cpu-licensed", "ale-win10-gpu-licensed"])
+def test_private_image_modules_are_not_registered(name):
+    assert name not in registered()
+    with pytest.raises(KeyError, match="unknown image family"):
+        get(name)
+
+
 @pytest.mark.parametrize("provider", ["qemu", "gcloud", "docker"])
 def test_loader_preserves_explicit_release_selection(tmp_path, provider):
     image = "ale-ubuntu22-docker-v1-1" if provider == "docker" else "ale-ubuntu22-v1-1"

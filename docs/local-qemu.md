@@ -1,8 +1,8 @@
 # Local QEMU/KVM provider
 
-For installation and run instructions, see the
-[QEMU/KVM VMs website guide](https://agents-last-exam.org/docs?p=pages/local.html).
-This document records implementation details for maintainers.
+Run the 146 CPU tasks in `selected_tasks/cpu.txt` using the v1.1 profile.
+The [website tutorial](https://agents-last-exam.org/docs?p=pages/local.html)
+explains the provider; the commands and maintainer details follow here.
 
 The `qemu` provider runs a complete Ubuntu or Windows guest with QEMU inside a
 Docker container. It provisions one VM for each ALE run and deletes it during
@@ -28,7 +28,46 @@ manifest when the dataset stores the disk as verified 4 GB parts, or downloads
 the qcow2 directly when it is stored as one object. This packaging is not part
 of the environment configuration.
 
-Use `configs/environments/qemu.yaml` as the starting configuration.
+Use `configs/environments/qemu.yaml` as the starting configuration, preserving
+each snapshot's `image_revision` pin from the [release manifest](../releases/v1.1/assets.json).
+
+## Check capacity and run
+
+Resolve and check the configured cache/runtime root before downloading or
+launching. For the default root:
+
+```bash
+mkdir -p ~/.cache/ale/qemu
+readlink -f ~/.cache/ale/qemu
+findmnt -T ~/.cache/ale/qemu
+df -h ~/.cache/ale/qemu
+free -h
+docker ps --format 'table {{.Names}}\t{{.Status}}'
+ps -eo pid,comm,args | rg '[q]emu-system'
+test -r /dev/kvm && test -w /dev/kvm
+```
+
+Use a persistent disk-backed `qemu.root`, never host `/tmp`, `/dev/shm`, or
+another memory-backed filesystem. Budget for base disks, download headroom,
+growing overlays, and all running or paused guests, including retained VMs.
+
+Copy `example_exp.yaml` to `my_experiment.yaml` and set:
+
+```yaml
+environment: configs/environments/qemu.yaml
+tasks: selected_tasks/cpu.txt
+concurrency: 1
+cleanup_mode: keep
+```
+
+Keep the profile's `output_path: null`. Metadata, trajectories, evaluations,
+and telemetry are collected; inspect task files in the retained sandbox and
+release it afterward. Start with `selected_tasks/hello_both.txt` for a smoke.
+
+```bash
+uv run python -m ale_run run my_experiment.yaml --dry-run
+uv run python -m ale_run run my_experiment.yaml
+```
 
 ## Docker, Dockur, and the guest disk
 
@@ -79,10 +118,10 @@ then creates a small qcow2 overlay under `~/.cache/ale/qemu/runtime/slots/`.
 The base image is mounted read-only into the QEMU container, so concurrent runs
 do not modify it or copy its full contents.
 
-The shipped v1.1 profile pins `hf_revision` to an immutable dataset commit.
+The shipped v1.1 profile pins `image_revision` to an immutable dataset commit.
 Preserve that pin when customizing resources. Removing it selects the dataset's
 mutable `main` branch and can mix task-code and disk versions. GCS and local
-disk sources do not accept `hf_revision`; remove that field when switching sources.
+disk sources do not accept `image_revision`; remove that field when switching sources.
 
 For `gs://` sources, the provider records the object generation, size, ETag,
 and CRC32C in a sidecar next to the cached disk. It checks the remote generation
@@ -96,7 +135,7 @@ changes, so replacing an object at the same URI does not leave a stale cache.
 3. Run `qemu-img` from the runner image to create a per-run backing overlay.
 4. Start the runner with KVM, `NET_ADMIN`, dynamic loopback ports, and task shape.
 5. Wait for CUA readiness while also monitoring early container exit.
-6. Copy local outputs through the VM's per-run Samba share.
+6. Collect run records; copy task output only if explicitly enabled.
 7. Remove the container, overlay, and exchange directory on delete cleanup.
 
 For `output_path: local`, the provider bind-mounts an empty per-run exchange

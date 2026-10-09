@@ -309,9 +309,16 @@ async def test_late_launcher_cannot_restart_stopped_solver(disk_executor):
 
 @pytest.mark.parametrize("mode", ["completed", "hang", "failed", "cancel", "unconfirmed"])
 async def test_lifecycle_stops_before_reference_and_evaluation(tmp_path, monkeypatch, mode):
+    monkeypatch.chdir(tmp_path)
+    task_directory = tmp_path / "tasks" / "demo" / "test"
+    task_directory.mkdir(parents=True)
+    (task_directory / "main.py").write_text("value = 1\n")
+    expected_revision = lifecycle.task_revision(task_directory)
     events = []
     started = asyncio.Event()
-    sandbox = SimpleNamespace(id="fake", metadata={}, os="linux")
+    sandbox = SimpleNamespace(id="fake", metadata={"image_provenance": {
+        "provider": "qemu", "image_revision": "test-image",
+    }}, os="linux")
     env = SimpleNamespace(sandbox=sandbox, session=None, current_phase=None,
                           reset_async=AsyncMock(), close_async=AsyncMock(), reset_session=Mock())
     env.set_phase = lambda phase: setattr(env, "current_phase", phase)
@@ -370,6 +377,9 @@ async def test_lifecycle_stops_before_reference_and_evaluation(tmp_path, monkeyp
         assert executor.stopped
     else:
         result = await asyncio.wait_for(operation, 5)
+        metadata = json.loads((result.run_dir / "run.json").read_text())
+        assert metadata["task"]["revision"] == expected_revision
+        assert metadata["environment"]["image_revision"] == "test-image"
         if mode == "unconfirmed":
             assert result.status == "failed"
             assert result.eval_status == "not_executed"

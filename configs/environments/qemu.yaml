@@ -13,7 +13,7 @@
 # Field reference:
 #   snapshots.<tag>
 #     Logical snapshot requested by task_card.json. Only the CPU snapshots are
-#     defined; the curated task list is selected_tasks/cpu_unlicensed.txt.
+#     defined; the curated task list is selected_tasks/cpu.txt.
 #   provider
 #     Selects the local QEMU provider for this snapshot.
 #   image
@@ -51,7 +51,7 @@ snapshots:
     image: ale-ubuntu22-v1-1
     qemu:
       disk_source: hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22-v1.1.qcow2
-      hf_revision: 49a1afa4fe2aa16c41d72279a0268125c707fe49
+      image_revision: 49a1afa4fe2aa16c41d72279a0268125c707fe49
       # GCS alternative: gs://ale-data-public/images/ale-ubuntu22-v1.1.qcow2
       root: ~/.cache/ale/qemu
       runner_image: agentslastexam/ale-qemu:0.2.0
@@ -64,7 +64,7 @@ snapshots:
     image: ale-win10-v1-1
     qemu:
       disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10-v1.1.qcow2
-      hf_revision: 49a1afa4fe2aa16c41d72279a0268125c707fe49
+      image_revision: 49a1afa4fe2aa16c41d72279a0268125c707fe49
       # GCS alternative: gs://ale-data-public/images/ale-win10-v1.1.qcow2
       root: ~/.cache/ale/qemu
       runner_image: agentslastexam/ale-qemu:0.2.0
@@ -73,7 +73,7 @@ snapshots:
       ready_timeout_s: 900
 
   # No gpu-* snapshots: QEMU runs on CPU only, and the CPU task list
-  # (cpu_unlicensed.txt) contains no GPU-requiring task.
+  # (cpu.txt) contains no GPU-requiring task.
 
 task_data_source: baked_in_sandbox
 # Uncomment when task_data_source or output_path uses gs://.

@@ -19,6 +19,9 @@ signals correctly.
 
 From the repository root:
 
+Check Docker's data root with `docker info --format '{{.DockerRootDir}}'`,
+`findmnt -T` and `df -h` before building. Keep image storage on persistent disk.
+
 ```bash
 docker build \
   -f ale_run/environments/images/ale_qemu/Dockerfile \
@@ -77,8 +80,15 @@ snapshots:
       disk_source: hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22-v1.1.qcow2
 ```
 
-Retain the immutable `hf_revision` from `configs/environments/qemu.yaml` in both
-snapshot blocks. See `releases/v1.1/assets.json` for checksums and GCS mirrors.
+Retain the immutable `image_revision` from `configs/environments/qemu.yaml` in
+both snapshot blocks. Use `selected_tasks/cpu.txt` for the 146 CPU tasks. See
+[the release guide](../../../../docs/releases/v1.1.md) for checksums, image pins,
+and the log upgrade command. `run.json` records provider image provenance in
+`environment.image_revision`.
+
+The profile defaults to `output_path: null`. Use `cleanup_mode: keep` to
+inspect task files in the sandbox, then stop or delete it after collecting
+needed evidence. Run records and trajectories are still collected locally.
 
 The provider automatically discovers the multipart manifest, downloads and
 verifies each part, reconstructs the selected qcow2 in the host cache, verifies

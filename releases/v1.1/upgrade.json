@@ -1,0 +1,877 @@
+{
+  "schema_version": 1,
+  "release": "v1.1",
+  "baseline_commit": "2d4d2205c255e2f7dcf568baa1f0c108dfaa3d73",
+  "release_commit": "a057e47acefc2db081a107b151983da211ee471f",
+  "baseline_policy": "Task repairs, data updates and open-source conversions since v1 snapshot 2d4d220. Use --from-commit for older snapshots. Retention records reuse eligibility, not original run provenance.",
+  "hash_policy": "Complete tracked v1.1 task folders, including final task-card edits, executable modes and symlink targets, hashed by ale_run.tasks.revision.task_revision. Generated caches and untracked local files are excluded from this fixed release map.",
+  "tasks": {
+    "agriculture_env/crop_rotation_d02": {
+      "action": "retain",
+      "revision": "sha256:369c6753e94b837347e9efdd9f5e6498b8f1cfdf2b2740fa1fa6cd0b4478f25c"
+    },
+    "agriculture_env/ndvi_zonal_statistics_d02": {
+      "action": "rerun",
+      "revision": "sha256:b7be09e0cb3e67f40f1b842f97634f1df769062b7c422c2b9129dcf72c5be617",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "business_finance/american_option_pricing_ls": {
+      "action": "retain",
+      "revision": "sha256:5adce02b6281ef9fc66479b6bd9cfd837f20c12cbf0ad64798e80f7c585575f4"
+    },
+    "business_finance/ar_full_1500": {
+      "action": "retain",
+      "revision": "sha256:ae31b2ae735eb247d1287d4d70d17ad7495907c62ffb74e30303b8d43d4b61e9"
+    },
+    "business_finance/ar_full_300": {
+      "action": "retain",
+      "revision": "sha256:5837672f600fc7fbb40cf25e690b6c6b6dc463d325436c3b28331368471d4443"
+    },
+    "business_finance/basel_operational_risk_bia_cn": {
+      "action": "retain",
+      "revision": "sha256:2a04dab06c174569befe433e55c1edcab02c294714a6290bf635444379b272bc"
+    },
+    "business_finance/bpmn_category_governance_restructuring_l3": {
+      "action": "rerun",
+      "revision": "sha256:31ab5caa03e65bb588f185560eb19fbee510a6f3d57cfdbfd575b699295ba1a2",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "business_finance/bpmn_supply_disruption_l3": {
+      "action": "retain",
+      "revision": "sha256:31217e41dabe4a9ee1936f94d893ece15b658835ba893ac700ab8629ca10072b"
+    },
+    "business_finance/digital_marketing_ab_test_analysis_1": {
+      "action": "rerun",
+      "revision": "sha256:ef35659e5ba8cf9c625c1101204bb1212158bee5dcda9ad8735a22e4cb0fb415",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "business_finance/digital_marketing_audience_segmentation_1": {
+      "action": "retain",
+      "revision": "sha256:fdd7e74b498fb92ae723bb8caef3289fe92c9978563e22ca59aaf6d753d61e84"
+    },
+    "business_finance/equity_research_summary": {
+      "action": "retain",
+      "revision": "sha256:8bc3b8cc630d149253fd93164a98d69856c64639a7c41615fcc63bf7d97f7a9c"
+    },
+    "business_finance/ff5_public_reconstruction": {
+      "action": "retain",
+      "revision": "sha256:78f6cf5016b6f2d13ad7dd8332577a4b3c6320e04e6a48c984f8c18e196f8e29"
+    },
+    "business_finance/financial_stmt_reconstruction_aapl_fy2024": {
+      "action": "retain",
+      "revision": "sha256:38fa928ff92849ee1f63ccafa752207b763d1551fa2add01baf43f7d2766efe1"
+    },
+    "business_finance/internal_employee_agent_instance_1": {
+      "action": "retain",
+      "revision": "sha256:4766d7bafdfc1d89b124dcb7586867eb88e902778fbff02bc679ad707cd6c544"
+    },
+    "business_finance/legal_ma_consistency_audit_01": {
+      "action": "retain",
+      "revision": "sha256:9154958e3e67d6c7b80d45e0e0bd86a3b95a8fac474e806bca9635004d8cd465"
+    },
+    "business_finance/llm_ecosystem_privacy_audit_realdata_1": {
+      "action": "retain",
+      "revision": "sha256:c2bbb5b1757e8ac04ae66109f306e9ff00fa35dc372d7ca04b88d1719e6c04dc"
+    },
+    "business_finance/metabase_bi_dashboard_01": {
+      "action": "retain",
+      "revision": "sha256:b737613ef172011e09502120da443bed317d987242f438f6c5558b2acb6fcd1c"
+    },
+    "business_finance/odoo": {
+      "action": "retain",
+      "revision": "sha256:ea4f5caaa9895b6cafa9c970b014b45c65550e4321f3ae2ccf92b0ae95e73b55"
+    },
+    "business_finance/pe_screening_memo_1": {
+      "action": "retain",
+      "revision": "sha256:579147c5b88eb7c1cd205bc81466a7a6b87b311043416e0a9f6aed9da0566664"
+    },
+    "business_finance/saas_onepager_brand_refresh_instance_1": {
+      "action": "retain",
+      "revision": "sha256:b966fc010e3ef91d3aeb4ae0ba64558bc63a23a78bcf36649fbca4b5c72087ea"
+    },
+    "business_finance/sec_10k_financial_parsing": {
+      "action": "retain",
+      "revision": "sha256:7672156f6901c6b510271751d3e7cd2093dfe481f98c8c2261b48cd6a90232ed"
+    },
+    "business_finance/sse_northbound_programmatic_trading_01": {
+      "action": "retain",
+      "revision": "sha256:bf5d0b4ab58837117d731b0b17c451a3a9ed30eddc5a081c1f774ba5e9451f87"
+    },
+    "business_finance/taxform_4_1": {
+      "action": "retain",
+      "revision": "sha256:b3c2fbaaa459446af67423a850e36760a911bfc184a8de0a923b7f4d5bafac0e"
+    },
+    "computing_math/branch_bound_atsp": {
+      "action": "retain",
+      "revision": "sha256:c64b0707495cb2cc14a41e3be054dc9a2229f837845f040c470a922a3facd2ad"
+    },
+    "computing_math/cfr_game_theory_equilibrium": {
+      "action": "retain",
+      "revision": "sha256:33b6d9f71797a4c925680669407a9eb38d833abb18cfe655e04b09b0dcd2f1a1"
+    },
+    "computing_math/clustered_cyclic_code_circuit_level_simulation": {
+      "action": "rerun",
+      "revision": "sha256:2e71bff829d202d4e73c98d515c949573aaa815459993cb81560ac60c52222cc",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "computing_math/cost_optimization_1": {
+      "action": "retain",
+      "revision": "sha256:38bdf3744b8310236a962ddf2cd66616259f35ca6d2f9448a0a1c900e3f74aed"
+    },
+    "computing_math/cp_test_gen_1": {
+      "action": "retain",
+      "revision": "sha256:be64154edeb305f86d78a67d8f5ba5740ce92ba1e1690d6881d980433daadad9"
+    },
+    "computing_math/data_pipeline_etl_instance_1": {
+      "action": "retain",
+      "revision": "sha256:3390c7d7c5615bac00219dfcb12f0ec1c56f7b8117ccc3478c55d14f9eda4b31"
+    },
+    "computing_math/dit_pipeline_cfg_alignment_fid_256_001": {
+      "action": "rerun",
+      "revision": "sha256:281afc9eb3de681c673724a4c9e0680de309da0776fd0d227bb43e4b333109f4",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "computing_math/ghidra_malware_config_extraction_01": {
+      "action": "retain",
+      "revision": "sha256:b944c9f20ff0cbd1df91e789fe0964b138b8a1ca32cb96ac3650e7b724c1b6d8"
+    },
+    "computing_math/go_game_reconstruction_1": {
+      "action": "rerun",
+      "revision": "sha256:706bd90aee58503988763139734543668a06bd1cafba1367bf967c9a6ecff419",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "computing_math/ising_post_measurement_1": {
+      "action": "rerun",
+      "revision": "sha256:f80dfe6b222cca331b7107b702c373c5920b7c62e731d22b05b722f85ca65904",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion"
+      ]
+    },
+    "computing_math/k3_abelian_extensions": {
+      "action": "retain",
+      "revision": "sha256:f6283b9170fe5f699adeee7d21b8a955b66d3f0ab523142388206a5ab96f19c6"
+    },
+    "computing_math/k8s_migration_1": {
+      "action": "retain",
+      "revision": "sha256:17b3c309ef67afc44031cfe8fea7359a68b517e2faf8123e338778159c712d0b"
+    },
+    "computing_math/k8s_payment_api_root_cause_analysis": {
+      "action": "retain",
+      "revision": "sha256:09b889a7e37c23aa6da011afe5506f2f466c68c9775fd9f601b555b9b07b6c19"
+    },
+    "computing_math/mp_checkpoint_consolidation_v2": {
+      "action": "rerun",
+      "revision": "sha256:ff72423ff000c3e30949430a48693b6916c013dccd8c3c65d44ca98b2cc1fe66",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion"
+      ]
+    },
+    "computing_math/newyear_keygen2": {
+      "action": "retain",
+      "revision": "sha256:939c04f10b5946ec68316c43473425afdfc29c6cd31a181a6960dfad5262c52a"
+    },
+    "computing_math/os_log_permission_guard_v1": {
+      "action": "rerun",
+      "revision": "sha256:8740652a5e3fc5960d9e89eec814cf117d838209d6557255a16d27d0c6a9b41c",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion"
+      ]
+    },
+    "computing_math/paper_reproduction_instance_1": {
+      "action": "retain",
+      "revision": "sha256:81f85c06f76ab0358826f2ff75be801bae6e3804fb58917a05f16ce44950cd3d"
+    },
+    "computing_math/particle_filter_nonlinear_tracking": {
+      "action": "retain",
+      "revision": "sha256:71eb6b951f66e1ca9e1e539dcd74ddd580bd52b13e4cd28d113e4bedd9111da6"
+    },
+    "computing_math/pcap_enterprise_triage_01": {
+      "action": "retain",
+      "revision": "sha256:d3979011abb21cdfbd541d450999d9e7ce1cf8dea620ac52f380f2ab0bf1e296"
+    },
+    "computing_math/ranking_node_feature_parity_recovery_instance_1": {
+      "action": "retain",
+      "revision": "sha256:1afeadcc5f5c8b3b04db50bc60ff6b576226d2b77943e534d59edde952e18028"
+    },
+    "computing_math/recsys_cold_start_instance_1": {
+      "action": "retain",
+      "revision": "sha256:766f9244f9b2b1e48753c44e0d81eefeef1095fe85ed8f3262e1e82cdbcaaf7d"
+    },
+    "computing_math/synthetic_causal_structure_inference": {
+      "action": "retain",
+      "revision": "sha256:9e52e64436299baa50473ba31f9109e952a05c8f7393314ce6e55da119246187"
+    },
+    "computing_math/tris_crackme": {
+      "action": "retain",
+      "revision": "sha256:fed1afde58046dc6d19cb645337e47bf9d597b77d331ebbf6a3735b0278ef6fe"
+    },
+    "education_info/homework_grading_numerical_pdes_instance_02": {
+      "action": "rerun",
+      "revision": "sha256:462d3f3c07e079b362238bb19ab003cca90b92ccf8ac76785520c43eb167a1f5",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "education_info/marc_remediation_folio_overlay": {
+      "action": "rerun",
+      "revision": "sha256:7176110ecebaf650ebfafe685e643fa720d739c4214831f3d07bc9b705526dbc",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "education_info/moodle_gradebook_closeout_reconciliation": {
+      "action": "rerun",
+      "revision": "sha256:c56a2189a27867f6f132b879a3787c00540c8110eb04cb14d8acf6af08991dce",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "education_info/yi_manuscript_translation_1": {
+      "action": "retain",
+      "revision": "sha256:e0c82534d1c634da00e125c0ee3ab041e4f4b18fc40f61fcb0c9f6f0e29b0af7"
+    },
+    "engineering/2d_drawings_to_3d_building_model": {
+      "action": "rerun",
+      "revision": "sha256:dfdb67eefe700a27d898ab38ac5161a3d8951a8a19c5239b3fd5e38c8dbab4cb",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "engineering/Analog_Active": {
+      "action": "retain",
+      "revision": "sha256:b39a44103ada7e338878ae9253ffc6c43ce4fa7f8c82155a2c12d8abe60105b4"
+    },
+    "engineering/abb_irb6700_asset_to_urdf_instance_1": {
+      "action": "rerun",
+      "revision": "sha256:ef44765f70ba1283adb919ff5feeb03fa2f79dda9ac1dd9fd9eaeecc972c5e47",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "engineering/aerospace_low_thrust_trajectory": {
+      "action": "rerun",
+      "revision": "sha256:ae91d82b56a2054775c0ac36183d523a9178db57be0abf81f9e5a470f6183bbc",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "engineering/cailian_road_highway_alignment_2": {
+      "action": "rerun",
+      "revision": "sha256:80d9ab1fc41a30370a0e2d0bb4b29620dbbc62dc9fc3a3959bf6e70fafc8048c",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "engineering/chisel_verilog_alignment_seq_1": {
+      "action": "rerun",
+      "revision": "sha256:14413f946ffe305fb9e1047792f15e5646c53a47088dca39337be5e2fba43b4e",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "engineering/gcode": {
+      "action": "rerun",
+      "revision": "sha256:242227b49948379a2d59794eee6d7037b465d6952fc95738a1f7a3c3056403ff",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "engineering/humanoid_velocity_tracking_policy": {
+      "action": "retain",
+      "revision": "sha256:998097205766dc097a12b266634dd0ae2ae56596d287c48ef0eb8c3480f6874d"
+    },
+    "engineering/humanoid_wbc_policy_evaluation": {
+      "action": "rerun",
+      "revision": "sha256:9c38b139dbbbb9dbad4138e8f77a038aeaed09e2b2d12e5f463e03bb445b1a1b",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "engineering/inner_support_elevation_optimization": {
+      "action": "rerun",
+      "revision": "sha256:854727e09094f44b9a968738685dbac17b6d4d8e747688f411edf6e14b3ebdd3",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "engineering/kicad_navswitch_library_integration_release_002": {
+      "action": "retain",
+      "revision": "sha256:5310401f611d01d0e239ebf212caefc61a42db7c7b80b7d2f4a02f3edc3c5b7e"
+    },
+    "engineering/mpc_control_building_v1": {
+      "action": "rerun",
+      "revision": "sha256:a2338aaccc144f96c92b709590eb50060e374c1d7978d49dec54c004a54cc866",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "engineering/openroad_sky130_ibex_pnr_signoff": {
+      "action": "rerun",
+      "revision": "sha256:616932c14573ec579218ea27ddf6972a58681f6ac09439c0e877cf6883d1c177",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "engineering/pcb_layout_kicad_1": {
+      "action": "retain",
+      "revision": "sha256:8221182e4692f870dd2d203907be18d8b3e1871b486f57334a210653e3361849"
+    },
+    "engineering/power_10kv_feeder_reliability_001": {
+      "action": "rerun",
+      "revision": "sha256:9f64bd8c03a8a00a78327a8501715a6f9b0777c422016b8a8400740b7079c53f",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "engineering/robotics_blender_tabletop_reconstruction": {
+      "action": "retain",
+      "revision": "sha256:471623b2f72f31b32b86f3d4a02f338199d1e16947c4dc483a88ac73d7945bfc"
+    },
+    "engineering/sanding_performance_scoring_instance_1": {
+      "action": "retain",
+      "revision": "sha256:16f07f6f917c7e43331281f54ce0c61fc3597bb2c40fd20d5058dc7ae11bec8d"
+    },
+    "engineering/sumo_urban_am_peak_calibration": {
+      "action": "rerun",
+      "revision": "sha256:c8e203309a86fdc1b0d153488f1d407f1bd68f95dee02ea8aff5df95a2ddcc50",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "health_medicine/Clinical_Variant_Annotation": {
+      "action": "rerun",
+      "revision": "sha256:1dfc4edec16d94a2586d9c308b7bc7b0c00c9a8cdc6a91ce020f2948cbb920c7",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "health_medicine/causal_ihdp_ite_estimation_6a_v1": {
+      "action": "rerun",
+      "revision": "sha256:f513e86e2ace8af89e5eaa98d501a29ce4d195242ec7c99c042f615d9dec70b5",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion"
+      ]
+    },
+    "health_medicine/crf_sdtm_mapping_1": {
+      "action": "rerun",
+      "revision": "sha256:5cb56fa39163e62ed4f23864fdd5c2a7ad4c0098ef1bb4203e79c721d4ee3981",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "health_medicine/crf_sdtm_mapping_4": {
+      "action": "rerun",
+      "revision": "sha256:e74d77dbed9ab135be891e1a32f994ba7b0e2d9ffa25ea845ee45bd2119cd9fc",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "health_medicine/ct_geometry_calibration_catphan": {
+      "action": "retain",
+      "revision": "sha256:b85fb9d3dfdd8c3f163e337f08826dd8f9610a8c79f66b4b1a0f90e97e2924df"
+    },
+    "health_medicine/ecg_rhythm_conduction_ptbxl": {
+      "action": "retain",
+      "revision": "sha256:27c91760e70319a4bb907e4655f97a54ffd2059ab1b41a46e9d22055b24b49f2"
+    },
+    "health_medicine/ecg_superclass_ptbxl": {
+      "action": "retain",
+      "revision": "sha256:73cc31193113e37e9e0136c9cb5f2aa05b267fd45c3f96208ebddd5971e646db"
+    },
+    "health_medicine/epidemiology_forecast": {
+      "action": "retain",
+      "revision": "sha256:24e81c51a77384073b3aceca1ab63799219ba4192b7ace378df9bb1285b1edb4"
+    },
+    "health_medicine/flusight_offline_hosp_forecast_2024_12_14": {
+      "action": "rerun",
+      "revision": "sha256:a0fd69d2a7f8ff16acd5db67d6e640e090abe7dd4c56dae98fb167b352a9130a",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion"
+      ]
+    },
+    "health_medicine/healthcare_bias_audit_27a_public_replication_v1": {
+      "action": "rerun",
+      "revision": "sha256:b29256f31294aac6383a80a5aeb786ffa7711fb8b30abbcd577a1d3ccfda1538",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "health_medicine/healthcare_sap_group_sequential_nsclc": {
+      "action": "retain",
+      "revision": "sha256:a9a01c2d66a4e40a915f9858b848054f8a5b2f975896c380ccf7016259991c0e"
+    },
+    "health_medicine/healthcare_tcga_luad_survival_kras": {
+      "action": "retain",
+      "revision": "sha256:05ee4c294d41144ae928165843096ebb7198bb19db59b63adfcd4836dfb1cc3b"
+    },
+    "health_medicine/healthcare_variant_annotation_pipeline": {
+      "action": "retain",
+      "revision": "sha256:892af4f6acbaddfbbf1d96b4ba39e58db7526e0f9e6c7c8dd3ba621d2b97651f"
+    },
+    "health_medicine/limited_angle_ct_dps_reconstruction": {
+      "action": "retain",
+      "revision": "sha256:c7fd40ab66dd44eba6b8cd4674476cf7558466f494602bc988adb96e8fcd2fad"
+    },
+    "health_medicine/ltmle_targeted_bootstrap_simulation_study": {
+      "action": "rerun",
+      "revision": "sha256:0c6dee000888055d311a5cc41f4b451ab47315ace5122608bcfce664e0cc987f",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "health_medicine/microdicom_nih_cxr_reader_adjudication": {
+      "action": "retain",
+      "revision": "sha256:b1e5c07f9d251be0a0a11d42ce099b5fb3bf5af159e6aa6ee03b32fddf62bea6"
+    },
+    "health_medicine/nhanes_confounder_sensitivity_analysis": {
+      "action": "rerun",
+      "revision": "sha256:dd6663e24f1912b1248de0a84e3541eb414633854dab01e939d384520eb559ab",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "health_medicine/nsclc_radiomics_cox_signature_v1": {
+      "action": "rerun",
+      "revision": "sha256:a6de533f3af8d0457ba458c98eff2a73d0e240fd2c2d547e135f0927b7130e02",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "health_medicine/obermeyer_bias_reproduction": {
+      "action": "rerun",
+      "revision": "sha256:6539f4532c5ea3f3e414a9ca562b1ceb1844796b2d2f6a248625eeeb00655e36",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "health_medicine/prostate_imrt_matrad_reproduction": {
+      "action": "rerun",
+      "revision": "sha256:01bf7f96563397bfe39e1165a315ececcf68a148bd884a0a7f89b9955801ef1d",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "health_medicine/public_health_mask_mandate_ratio": {
+      "action": "retain",
+      "revision": "sha256:19fad544165c69200cc01950a716e5e14a673b6b8e1b72f0de6b4204f033a3fa"
+    },
+    "health_medicine/replicate_paper_1": {
+      "action": "retain",
+      "revision": "sha256:77ea1ad36685468f8aea579e9ae757ac9f8b7ed40c26686e1cc8c320d31b9794"
+    },
+    "health_medicine/sa_aki_phenotyping": {
+      "action": "retain",
+      "revision": "sha256:7cc6f2f67ba1520a216edf2072d6ee4ce6d96cb7cdf26971ac23d7dc6f9f41d5"
+    },
+    "health_medicine/scene3_skullstrip_qc": {
+      "action": "retain",
+      "revision": "sha256:3dac5ee322bad95f4a087f6efae183357d3550d55c7b54199b42262e3ace43e4"
+    },
+    "health_medicine/simglucose_safe_basal_control_instance_1": {
+      "action": "rerun",
+      "revision": "sha256:97a1055425749966a16ea6acbd66886279e22139c44fb28d8f760ea7ba4c34b7",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "health_medicine/wsi_tumor_localization_1": {
+      "action": "rerun",
+      "revision": "sha256:c263a86dc2314ff191bcbde80726c3af7e935fcd5fd91e2f2fe579c6204d59a0",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "legal/agora_governance_classify_instance_1": {
+      "action": "retain",
+      "revision": "sha256:9c190f58eb90b36ec2c1b80958059df5c065c82db249c297d7bfec0b7215969b"
+    },
+    "legal/legal_dr_fees_01": {
+      "action": "retain",
+      "revision": "sha256:8c26a3b502667a363c86ec2f59a2133fa5d2aec77acadde27fb09f673e5f3bd7"
+    },
+    "life_sciences/WGS_Variant_Calling": {
+      "action": "rerun",
+      "revision": "sha256:c30ee94c3f8ed6e7c478c590bcaa6b877311ede60f3554a9fab8c9f3be79fe48",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/amber_minimization_script_prep_instance_1": {
+      "action": "rerun",
+      "revision": "sha256:15b8d19dc8d0676e97318a983764deba1d6af337883eed07ad55ec2a99a8a36c",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/amber_three_stage_mmgbsa_workflow_instance_1": {
+      "action": "rerun",
+      "revision": "sha256:1e8214aced95e76cd5024eea066eee3e5cafd986920388ec22aa1ab902cd4d90",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/cell_tracking_instance_1": {
+      "action": "retain",
+      "revision": "sha256:f66e38b85cf2a6198758d3583065959ff836bed46cc56e72ec8d153f575d33fc"
+    },
+    "life_sciences/cell_translocation_analysis": {
+      "action": "retain",
+      "revision": "sha256:ecd9e3b8224b16c6813bb267e284c91e108dcd2f6e2130527d38ad727e6acdc2"
+    },
+    "life_sciences/gene_expression_differential_analysis_functional_enrichment_analysis_1": {
+      "action": "rerun",
+      "revision": "sha256:36f392c9a6d708dc442d9c7778a0a685758059b0b84493743f9278c27d7cf08c",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/genomic_interval_processing_1": {
+      "action": "rerun",
+      "revision": "sha256:f4940869398a0687affed2c013e327933367ad948d9f6c678a4d64854b0703c4",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/hg002_chr22_germline_variant_pipeline": {
+      "action": "rerun",
+      "revision": "sha256:efa962f3b31b84e4709039a1ad980602e73d640cee9ae5569567cd12ab242d03",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/idp_ensemble_scoring": {
+      "action": "rerun",
+      "revision": "sha256:979393b04546ee84f28411af6352b01a81ba7d64b4482df98450d6636ff621ec",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/merfish_image_decoding_segmentation_1": {
+      "action": "rerun",
+      "revision": "sha256:61f1c4f74065e49e5ac984cbbf7559e688b2ed14641d5a735421762fd1a608dc",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/protein_function_annotation_instance_1": {
+      "action": "retain",
+      "revision": "sha256:e42c3a1a61eef4baaa6eff875007a37135acdea8873e68027e0aea496b58cca6"
+    },
+    "life_sciences/pseudotime_de": {
+      "action": "rerun",
+      "revision": "sha256:ccb6c9260f8b4869c8a944480ff56e739fcd4430edd10ae38313d17a1d77fd51",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/rgi_mcr1_colistin_v2": {
+      "action": "rerun",
+      "revision": "sha256:bc3f2f073522f08fadceffc2df151dfe020114106c509fd2783d6c9b6ba1f9c9",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/spatial_transcriptomics_spatial_domain_identification": {
+      "action": "rerun",
+      "revision": "sha256:a768401e2784942a544015e0b06c1d9730dbe499f7e171e190d04324257f2095",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/tcga_brca_deg_analysis": {
+      "action": "retain",
+      "revision": "sha256:4fcbb9fec4d7717c608be1745962173fbb6b3efbbf356311d2f04c9787b2bc99"
+    },
+    "life_sciences/tms_marrow_cell_type_annotation_instance_1": {
+      "action": "rerun",
+      "revision": "sha256:a57203815b68740e1a3920e761ed12032c6ad5b3b5882942760b2dcc6dc89d10",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/tp53_locus_variant_histone_browser_svg": {
+      "action": "rerun",
+      "revision": "sha256:4f5f98ea796ea2d56a6c4c3832a0a847aa0b41ea615c0ada3656d8cc9fc5bfd2",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "life_sciences/yeast_colony_detection": {
+      "action": "retain",
+      "revision": "sha256:100c42b31cbb2240875fa3ec48a631260ddf33708fbfb0f6fcc5c17c92fe9dd9"
+    },
+    "life_sciences/zdock_hiv_dimer_interface_scoring_v1": {
+      "action": "rerun",
+      "revision": "sha256:3ced41ffea9dd0c3c72529adc7306efd11a6a8e2a3d139836ad43af2de1c3fcb",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion"
+      ]
+    },
+    "other/aerobics_wc2026_portugal_trio_difficulty_scoring": {
+      "action": "retain",
+      "revision": "sha256:38fb0851a81041ada8d115c19ab2b660f3d1185b66aa322f758c5fcdee5ff395"
+    },
+    "other/mota_exploration": {
+      "action": "retain",
+      "revision": "sha256:f0394a9916342cec6b5638eed8bb45366db97323b9c8fd139c4edb2d56823d51"
+    },
+    "physical_sciences/adapt_vqe_molecular_energy": {
+      "action": "rerun",
+      "revision": "sha256:ccb6465494ac55b343671d00b16ca9abeff43607e6ece4094ffabd2c9fc76fbf",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "physical_sciences/climate_prediction": {
+      "action": "rerun",
+      "revision": "sha256:454eb7c2e1e5bd0e979aacb37afbe2a46851d3d2b7e7b6555666e24b87ba1010",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "physical_sciences/computational_materials_science": {
+      "action": "retain",
+      "revision": "sha256:187ac2c83bbf558d0dbfaff2338c2bff85fa9751b8613257e65ed8f4e5774fd7"
+    },
+    "physical_sciences/egt710_table1_smiles_extraction": {
+      "action": "rerun",
+      "revision": "sha256:11d820fbff81536533cc1f7f31b86cd2868c9c95ba30b09d64ff7be126cb291f",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "physical_sciences/exact_diag_heisenberg_j1j2": {
+      "action": "retain",
+      "revision": "sha256:74e26ba251e5eacaa19f9bf028bc240db00e2b2d819a410a0ab039be1552fb85"
+    },
+    "physical_sciences/gillespie_gene_regulatory_network": {
+      "action": "retain",
+      "revision": "sha256:fad8f19db5353d5c333003546f389fd9c6103c72d4cd74dd665f4e055b6c68e6"
+    },
+    "physical_sciences/glm_lake_calibration": {
+      "action": "retain",
+      "revision": "sha256:8abb6491430e9c9695b36a6dc00a769b8cfefac54bbc96adb959fd1d986bdd20"
+    },
+    "physical_sciences/hst_acs_wfc_visit_reduction": {
+      "action": "rerun",
+      "revision": "sha256:a078fbb397131f3680d32920c49b0e4febe399d774839a63331f6755a4c75d86",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "physical_sciences/ketcher_smiles_reproduction": {
+      "action": "rerun",
+      "revision": "sha256:8a4d86422769eaa0bbcaa31014a051fe687eedce2a2bf2849b0292db855a0559",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "physical_sciences/lenacapavir_sar_table2_extraction": {
+      "action": "rerun",
+      "revision": "sha256:efd8d426c2e7872fe12481c5e0b572d4c25352d2977ad480c4d61009c00760ef",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion"
+      ]
+    },
+    "physical_sciences/molecular_structure_plausibility": {
+      "action": "retain",
+      "revision": "sha256:e242b39677b387c8a6ee29111c036b0867c2545674486e9236a0c57cbd9e30fa"
+    },
+    "physical_sciences/mose2_bse_absorption_soc": {
+      "action": "rerun",
+      "revision": "sha256:62fc4f94e0cbe2b80b29c35cd6cb73542a6a8f0d84d5779dd0dda638bd9116b7",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "physical_sciences/phonon_dispersion_thermodynamics": {
+      "action": "retain",
+      "revision": "sha256:e7b757375d391386970264333673f5ce3b9fe8ef9b42435987734e5b21df58ec"
+    },
+    "physical_sciences/qm9_mmff94_forcefield_survey_1": {
+      "action": "retain",
+      "revision": "sha256:6a26936a8313861378f85814bcaceb11e3929510aa8dc3e587883dcb617d115c"
+    },
+    "physical_sciences/silicon_bse_absorption": {
+      "action": "rerun",
+      "revision": "sha256:9c6ef2533d2d6a6a4bb3d9f950a07e150859ba91191034d0cf7aaf1a8c1c9358",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "psychology_neuro/celegans_neuron_tracking": {
+      "action": "retain",
+      "revision": "sha256:e02e7ac13e883f287f0a79fae792fbfdb894b8b1840346843b544137ce38c53a"
+    },
+    "psychology_neuro/reddit_ai_post_codebook_boolean_coding": {
+      "action": "retain",
+      "revision": "sha256:13efdf4c18b06237325ebf6e0b28b7b1dc3db80e56c27fbb1b30a53d631434c1"
+    },
+    "psychology_neuro/scene2_resample": {
+      "action": "rerun",
+      "revision": "sha256:4575bbdd5dede9fb9989931640256ea66be71b4166e7e3d304a09c80189c7bfe",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "social_sciences/atwood_2022_measles_vaccine_reproduction": {
+      "action": "retain",
+      "revision": "sha256:99fa79e41ef282741388dabcb168e42ccb5ba2329c527fd60656e2d3e61b9e76"
+    },
+    "transport_safety/abm_hangzhou_metro": {
+      "action": "rerun",
+      "revision": "sha256:87640ae179273daacc8a97004e85411d8b44f1deb2161ce2426078e4b6316725",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "transport_safety/capacitated_vehicle_routing_problems": {
+      "action": "retain",
+      "revision": "sha256:397db474866e015e4e890742c5db6044cb6b796eba6846955ad272cf9d249083"
+    },
+    "transport_safety/fds_single_compartment_detector_reconstruction": {
+      "action": "retain",
+      "revision": "sha256:49db67c3b580d33af1b88bce4d29a2082db5bd844bbe56ac8ca4c24549be8b81"
+    },
+    "visual_media/atlas_outpost_graybox_navigation": {
+      "action": "retain",
+      "revision": "sha256:e6f9c86d0a20ac82c46f00f7cece957f615b5f66e85d129a9324fa332d0050fd",
+      "retention_note": "Only an unused task-card tag was removed; task and evaluation behavior are unchanged."
+    },
+    "visual_media/blender_character_reconstruction_from_multiview_01": {
+      "action": "retain",
+      "revision": "sha256:c81545d2f91afcb2f5a5ffa35fc23c82864d54d37ce613be21484493ed35476d"
+    },
+    "visual_media/butterfly_flap_animation": {
+      "action": "retain",
+      "revision": "sha256:f8566e51259e2841580014e318d8c27c5eb3414a7be6dff2516ccb2a04f2f578"
+    },
+    "visual_media/chroma_key_from_reference": {
+      "action": "retain",
+      "revision": "sha256:6d45e47813e2b958f2140c2a6f1caf46f0670cf983e610f8cb9e8bd0b9d0c4e8"
+    },
+    "visual_media/compress_3dgs_scene_ply": {
+      "action": "rerun",
+      "revision": "sha256:a82f7a5f8f0b5ae7715e29f70d11998709be75a51c975747dc9d3022ca3495bd",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion"
+      ]
+    },
+    "visual_media/human_mesh_animation_reproduction": {
+      "action": "retain",
+      "revision": "sha256:eb53d827dd42d180b54ae1cca7bde9730c48bb612f278db4026b736499cc1295"
+    },
+    "visual_media/inkscape_cultural_poster_design": {
+      "action": "retain",
+      "revision": "sha256:d5dec7083b22f822cd9d55e072563b28b54e50bdbc5ff4651db2f01c9a281bb3"
+    },
+    "visual_media/music_transcription": {
+      "action": "rerun",
+      "revision": "sha256:08fcd21c2e3a938ee1db5c68183ec28b817b42651fb868e255b186faa4a61894",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "visual_media/project_migration": {
+      "action": "rerun",
+      "revision": "sha256:13f76f8d524ca196fa89792f27d534d205fa0218581d36bcd9df1103a6ca7440",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "visual_media/skeletal_animation_reproduction": {
+      "action": "rerun",
+      "revision": "sha256:2bf574f7845cbf67a286952ffda9291c4df97f4d1fa2b15fcfe3c26b90bb53c4",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "visual_media/uv_reproduction": {
+      "action": "rerun",
+      "revision": "sha256:b6ae919aa07143b17579c05091572fd6d4f001e01e4f91b2d6937aacef500f74",
+      "reasons": [
+        "task-repair-data-update-or-oss-conversion",
+        "source-diff-from-v1-baseline"
+      ]
+    },
+    "visual_media/video_storyboard_001": {
+      "action": "retain",
+      "revision": "sha256:2c32198cfa6b38e2c3929ef4d612217ce9e832510a628955a4142c5f7a4bac3c"
+    },
+    "engineering/mold-flow": {
+      "action": "retire",
+      "reasons": [
+        "removed-from-v1.1"
+      ]
+    }
+  }
+}

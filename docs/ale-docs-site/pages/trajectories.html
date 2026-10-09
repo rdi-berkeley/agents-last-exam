@@ -58,7 +58,7 @@
       Each run lands in a timestamped directory under the output root, keyed by
       agent, model, and task:
     </p>
-    <div class="diagram">.logs/&lt;experiment&gt;/&lt;run_id&gt;/&lt;agent&gt;/&lt;model&gt;/&lt;task&gt;/v&lt;variant&gt;/&lt;timestamp&gt;/
+    <div class="diagram">&lt;output.root&gt;/&lt;experiment&gt;/&lt;agent&gt;/&lt;model&gt;/&lt;task&gt;/v&lt;variant&gt;/&lt;timestamp&gt;/
 ├── events.jsonl       append-only phase log, flushed per line, survives a kill
 ├── run.json           metadata, final score, termination, usage totals
 ├── trajectory.json    the ALE-v1.0 trajectory
@@ -70,7 +70,7 @@
       <thead><tr><th>File</th><th>Written</th><th>Holds</th></tr></thead>
       <tbody>
         <tr><td><code>events.jsonl</code></td><td>Throughout the run</td><td>One JSON object per phase event. The authoritative trace.</td></tr>
-        <tr><td><code>run.json</code></td><td>Once, at the end</td><td>The run's summary: agent/task identity, status, score, why it ended, usage.</td></tr>
+        <tr><td><code>run.json</code></td><td>At finalization</td><td>Agent/task identity, <code>task.revision</code>, <code>environment.image_revision</code>, status, score, termination, and usage.</td></tr>
         <tr><td><code>trajectory.json</code></td><td>Once, at the end</td><td>The normalized step-by-step record.</td></tr>
         <tr><td><code>screenshots/</code></td><td>At finalize</td><td>Images the agent saw, moved out of the trajectory and referenced by relative path.</td></tr>
         <tr><td><code>eval_result.json</code></td><td>Once, at the end</td><td>The grader's verdict in isolation.</td></tr>
@@ -80,13 +80,22 @@
     </table>
 
     <p>
+      <code>task.revision</code> is captured before setup: a deterministic SHA256
+      of the task folder's file names, contents, executable bits, and link
+      targets, with runtime caches ignored. <code>environment.image_revision</code> records
+      provider image provenance. Resume skips completed or timeout units only
+      when the task hash matches; missing or changed hashes rerun. See
+      <a href="/pages/run.html#upgrade-v1">Upgrade v1 logs</a> for legacy records.
+    </p>
+    <p>
       Whether <code>output/</code> is collected, and how, is set by the
       environment's <code>output_path</code> (see
-      <a href="/pages/run.html#output-path">Run and collect results</a>).
-      Set it to <code>local</code> and ALE copies the output into this run
-      directory using the provider's local transport. Point it at a
-      <code>gs://</code> bucket and a credentialed sandbox uploads the folder
-      directly to Cloud Storage, which is preferable for large batch artifacts.
+      <a href="/pages/run.html#output-path">Run, resume and upgrade</a>).
+      The default <code>null</code> leaves bulk task output in the sandbox while
+      still collecting metadata, trajectories, evaluations, and telemetry.
+      Use <code>cleanup_mode: keep</code> to inspect deliverables there, then
+      release the sandbox. Choose <code>local</code> or a storage bucket only
+      when you need bulk output collection.
     </p>
 
     <div class="note">
