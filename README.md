@@ -49,10 +49,13 @@ across all 55 subdomains and reference integrations for several agent harnesses.
 
 ## Quick start
 
-**ALE v1.1 contains 151 tasks.** Use matching task code, images, and data from
-the [asset manifest](releases/v1.1/assets.json). The compact
-[run and upgrade guide](docs/releases/v1.1.md) covers setup, six workflows moved
-to open-source tools, the removal of `engineering/mold-flow`, and existing logs.
+**ALE v1.1 updates 62 tasks and retires one, leaving 151 tasks.** The updates
+cover instructions (54), verification (48), environment (32), and data (30);
+categories overlap. Six workflows move to open-source Linux tools, three also
+supported in Docker. Use matching task code, images, and data from the
+[asset manifest](releases/v1.1/assets.json). The compact
+[run and upgrade guide](docs/releases/v1.1.md) covers the changes, supported
+environments, setup, and existing logs.
 
 ```bash
 git clone git@github.com:rdi-berkeley/agents-last-exam.git

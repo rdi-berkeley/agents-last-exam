@@ -404,8 +404,21 @@ def test_release_manifest_covers_current_selection_repairs_and_retirement():
     tasks = manifest["tasks"]
     assert manifest["release"] == "v1.1"
     assert "release_revision" not in manifest
-    assert sum(entry["action"] == "rerun" for entry in tasks.values()) == 66
-    assert sum(entry["action"] == "retain" for entry in tasks.values()) == 85
+    assert sum(entry["action"] == "rerun" for entry in tasks.values()) == 62
+    assert sum(entry["action"] == "retain" for entry in tasks.values()) == 89
+    categories = manifest["category_definitions"]
+    counts = {category: 0 for category in categories}
+    for entry in tasks.values():
+        changes = entry.get("changes", [])
+        assert len(changes) == len(set(changes))
+        assert set(changes) <= categories.keys()
+        assert bool(changes) == (entry["action"] == "rerun")
+        for category in changes:
+            counts[category] += 1
+    assert manifest["change_summary"] == {"updated_tasks": 62, **counts}
+    assets = json.loads((ROOT / "releases/v1.1/assets.json").read_text())
+    assert assets["scope"]["updated_tasks"] == 62
+    assert assets["scope"]["task_change_categories"] == counts
     for task in (
         "engineering/2d_drawings_to_3d_building_model",
         "engineering/cailian_road_highway_alignment_2",
@@ -419,7 +432,6 @@ def test_release_manifest_covers_current_selection_repairs_and_retirement():
         "computing_math/os_log_permission_guard_v1",
         "health_medicine/causal_ihdp_ite_estimation_6a_v1",
         "health_medicine/flusight_offline_hosp_forecast_2024_12_14",
-        "life_sciences/tms_marrow_cell_type_annotation_instance_1",
         "life_sciences/zdock_hiv_dimer_interface_scoring_v1",
     ):
         assert tasks[task]["action"] == "rerun"
@@ -431,6 +443,15 @@ def test_release_manifest_covers_current_selection_repairs_and_retirement():
     assert set(tasks) == selected | {"engineering/mold-flow"}
     assert tasks["engineering/mold-flow"]["action"] == "retire"
     assert tasks["visual_media/atlas_outpost_graybox_navigation"]["action"] == "retain"
+    for task in (
+        "engineering/abb_irb6700_asset_to_urdf_instance_1",
+        "health_medicine/wsi_tumor_localization_1",
+        "life_sciences/tms_marrow_cell_type_annotation_instance_1",
+        "physical_sciences/lenacapavir_sar_table2_extraction",
+    ):
+        assert tasks[task]["action"] == "retain"
+        assert tasks[task]["changes"] == []
+        assert tasks[task]["retention_note"]
 
 
 @pytest.fixture
@@ -479,7 +500,7 @@ def clean_retained_tasks(tmp_path, tracked_task_files):
     return repository
 
 
-def test_full_v1_fixture_migrates_152_logs_and_resumes_only_66(clean_retained_tasks, tmp_path):
+def test_full_v1_fixture_migrates_152_logs_and_resumes_only_62(clean_retained_tasks, tmp_path):
     from ale_run.cli import _filter_resume
     from ale_run.orchestration.experiment_spec import AgentSpec, RunUnit
 
@@ -501,10 +522,10 @@ def test_full_v1_fixture_migrates_152_logs_and_resumes_only_66(clean_retained_ta
             )
     operations = upgrade.build_plan(logs, repository=clean_retained_tasks)
     assert len(operations) == 152
-    assert sum(operation.action == "retain" for operation in operations) == 85
+    assert sum(operation.action == "retain" for operation in operations) == 89
     assert all(path.exists() for path in originals)
     upgrade.apply_plan(operations)
-    assert len(list(logs.glob("*/*/*/v*/*/run.json"))) == 85
+    assert len(list(logs.glob("*/*/*/v*/*/run.json"))) == 89
     for task_id, entry in manifest["tasks"].items():
         directory = logs / "agent/model" / task_id.replace("/", "__")
         assert directory.exists() == (entry["action"] == "retain")
@@ -517,7 +538,7 @@ def test_full_v1_fixture_migrates_152_logs_and_resumes_only_66(clean_retained_ta
         remaining = _filter_resume(units, logs)
     finally:
         os.chdir(previous_cwd)
-    assert len(remaining) == 66
+    assert len(remaining) == 62
     assert {unit.task_path for unit in remaining} == {
         task_id for task_id, entry in manifest["tasks"].items() if entry["action"] == "rerun"
     }

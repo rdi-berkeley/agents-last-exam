@@ -20,14 +20,56 @@
 
     <h2 id="v1-1">Use the v1.1 release</h2>
     <p>
-      ALE v1.1 contains <strong>151 tasks</strong>. Task instructions, graders,
-      references, and runtime compatibility are updated together. Six formerly
+      ALE v1.1 updates <strong>62 tasks</strong> and retires one, leaving
+      <strong>151 tasks</strong>. Six formerly
       licensed tasks keep their IDs and business goals using open-source Linux
       workflows: Blender building reconstruction, FreeCAD Road alignment,
       FreeCAD CAM with LinuxCNC and CAMotics, Kratos support analysis, MuseScore
       transcription, and Ardour project migration. <code>engineering/mold-flow</code>
       is removed because its full fill/pack/cool/demold workflow has no validated
       open-source replacement at the original scope.
+    </p>
+    <table>
+      <thead><tr><th>Change</th><th>Tasks</th><th>What counts</th></tr></thead>
+      <tbody>
+        <tr><td>Instruction</td><td>54</td><td>Agent-facing prompts and instructions, including input documents</td></tr>
+        <tr><td>Verification</td><td>48</td><td>Scoring logic, acceptance rules and grader execution</td></tr>
+        <tr><td>Environment</td><td>32</td><td>Task-specific software, dependencies, setup, staging, paths, resources or platform</td></tr>
+        <tr><td>Data</td><td>30</td><td>Input materials, starter/helper assets, models, media or reference answers</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Categories overlap; the six conversions are included in the 62 updated
+      tasks. Classify by content, not storage location: a prompt edit in a data
+      archive counts as Instruction. These counts exclude the retired task,
+      unselected variants, inactive metadata, packaging-only cleanup and shared
+      framework changes. See the
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/releases/v1.1/upgrade.json">per-task category map</a>.
+    </p>
+    <p>
+      Changes preserve the original business goal and intended difficulty, align
+      grading with public requirements and valid equivalent answers, and supply
+      necessary inputs and working runtimes without exposing hidden references.
+    </p>
+    <table>
+      <thead><tr><th>Converted task</th><th>Open-source workflow</th><th>Supported environment</th></tr></thead>
+      <tbody>
+        <tr><td>Building reconstruction</td><td>Blender</td><td>Docker or Linux VM</td></tr>
+        <tr><td>Road alignment</td><td>FreeCAD Road</td><td>Linux VM</td></tr>
+        <tr><td>G-code machining</td><td>FreeCAD CAM, LinuxCNC and CAMotics</td><td>Linux VM</td></tr>
+        <tr><td>Excavation support analysis</td><td>Kratos</td><td>Linux VM</td></tr>
+        <tr><td>Music transcription</td><td>MuseScore</td><td>Docker or Linux VM</td></tr>
+        <tr><td>Music project migration</td><td>Ardour</td><td>Docker or Linux VM</td></tr>
+      </tbody>
+    </table>
+    <p>
+      All six use the Linux VM image with QEMU or Google Cloud. The three Docker
+      additions passed native save/reopen, export and task artifact checks;
+      these checks establish runtime compatibility, not agent task scores.
+      The default Docker profile lacks the process/network isolation used by
+      G-code, the systemd supervisor used by Road, and the supervisor plus
+      writable delegated cgroups used by excavation support. These three require
+      the Linux VM profile.
     </p>
     <p>
       Use the task code, profiles, images, and data together. The

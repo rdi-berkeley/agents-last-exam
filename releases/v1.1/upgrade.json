@@ -16,6 +16,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "business_finance/american_option_pricing_ls": {
@@ -40,6 +45,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment"
       ]
     },
     "business_finance/bpmn_supply_disruption_l3": {
@@ -52,6 +62,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification"
       ]
     },
     "business_finance/digital_marketing_audience_segmentation_1": {
@@ -124,6 +138,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "computing_math/cost_optimization_1": {
@@ -144,6 +164,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "computing_math/ghidra_malware_config_extraction_01": {
@@ -156,6 +182,9 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction"
       ]
     },
     "computing_math/ising_post_measurement_1": {
@@ -163,6 +192,9 @@
       "revision": "sha256:f80dfe6b222cca331b7107b702c373c5920b7c62e731d22b05b722f85ca65904",
       "reasons": [
         "task-repair-data-update-or-oss-conversion"
+      ],
+      "changes": [
+        "instruction"
       ]
     },
     "computing_math/k3_abelian_extensions": {
@@ -182,6 +214,9 @@
       "revision": "sha256:ff72423ff000c3e30949430a48693b6916c013dccd8c3c65d44ca98b2cc1fe66",
       "reasons": [
         "task-repair-data-update-or-oss-conversion"
+      ],
+      "changes": [
+        "instruction"
       ]
     },
     "computing_math/newyear_keygen2": {
@@ -193,6 +228,9 @@
       "revision": "sha256:8740652a5e3fc5960d9e89eec814cf117d838209d6557255a16d27d0c6a9b41c",
       "reasons": [
         "task-repair-data-update-or-oss-conversion"
+      ],
+      "changes": [
+        "environment"
       ]
     },
     "computing_math/paper_reproduction_instance_1": {
@@ -229,6 +267,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "data"
       ]
     },
     "education_info/marc_remediation_folio_overlay": {
@@ -237,6 +280,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "data"
       ]
     },
     "education_info/moodle_gradebook_closeout_reconciliation": {
@@ -245,6 +293,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "data"
       ]
     },
     "education_info/yi_manuscript_translation_1": {
@@ -257,6 +310,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "engineering/Analog_Active": {
@@ -264,12 +323,10 @@
       "revision": "sha256:b39a44103ada7e338878ae9253ffc6c43ce4fa7f8c82155a2c12d8abe60105b4"
     },
     "engineering/abb_irb6700_asset_to_urdf_instance_1": {
-      "action": "rerun",
+      "action": "retain",
       "revision": "sha256:ef44765f70ba1283adb919ff5feeb03fa2f79dda9ac1dd9fd9eaeecc972c5e47",
-      "reasons": [
-        "task-repair-data-update-or-oss-conversion",
-        "source-diff-from-v1-baseline"
-      ]
+      "changes": [],
+      "retention_note": "Only inactive task-card network metadata changed; selected inputs, grader and runtime behavior are unchanged."
     },
     "engineering/aerospace_low_thrust_trajectory": {
       "action": "rerun",
@@ -277,6 +334,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "engineering/cailian_road_highway_alignment_2": {
@@ -285,6 +348,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "engineering/chisel_verilog_alignment_seq_1": {
@@ -293,6 +362,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "verification",
+        "data"
       ]
     },
     "engineering/gcode": {
@@ -301,6 +374,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "engineering/humanoid_velocity_tracking_policy": {
@@ -313,6 +392,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "engineering/inner_support_elevation_optimization": {
@@ -321,6 +406,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "engineering/kicad_navswitch_library_integration_release_002": {
@@ -333,6 +424,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "engineering/openroad_sky130_ibex_pnr_signoff": {
@@ -341,6 +438,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "engineering/pcb_layout_kicad_1": {
@@ -353,6 +455,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "data"
       ]
     },
     "engineering/robotics_blender_tabletop_reconstruction": {
@@ -369,6 +476,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "environment",
+        "data"
       ]
     },
     "health_medicine/Clinical_Variant_Annotation": {
@@ -377,6 +489,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "data"
       ]
     },
     "health_medicine/causal_ihdp_ite_estimation_6a_v1": {
@@ -384,6 +501,9 @@
       "revision": "sha256:f513e86e2ace8af89e5eaa98d501a29ce4d195242ec7c99c042f615d9dec70b5",
       "reasons": [
         "task-repair-data-update-or-oss-conversion"
+      ],
+      "changes": [
+        "instruction"
       ]
     },
     "health_medicine/crf_sdtm_mapping_1": {
@@ -392,6 +512,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "data"
       ]
     },
     "health_medicine/crf_sdtm_mapping_4": {
@@ -400,6 +525,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "data"
       ]
     },
     "health_medicine/ct_geometry_calibration_catphan": {
@@ -423,6 +553,9 @@
       "revision": "sha256:a0fd69d2a7f8ff16acd5db67d6e640e090abe7dd4c56dae98fb167b352a9130a",
       "reasons": [
         "task-repair-data-update-or-oss-conversion"
+      ],
+      "changes": [
+        "instruction"
       ]
     },
     "health_medicine/healthcare_bias_audit_27a_public_replication_v1": {
@@ -431,6 +564,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment"
       ]
     },
     "health_medicine/healthcare_sap_group_sequential_nsclc": {
@@ -455,6 +593,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "health_medicine/microdicom_nih_cxr_reader_adjudication": {
@@ -467,6 +611,9 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction"
       ]
     },
     "health_medicine/nsclc_radiomics_cox_signature_v1": {
@@ -475,6 +622,9 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "verification"
       ]
     },
     "health_medicine/obermeyer_bias_reproduction": {
@@ -483,6 +633,9 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "verification"
       ]
     },
     "health_medicine/prostate_imrt_matrad_reproduction": {
@@ -491,6 +644,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification"
       ]
     },
     "health_medicine/public_health_mask_mandate_ratio": {
@@ -515,15 +672,18 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment"
       ]
     },
     "health_medicine/wsi_tumor_localization_1": {
-      "action": "rerun",
+      "action": "retain",
       "revision": "sha256:c263a86dc2314ff191bcbde80726c3af7e935fcd5fd91e2f2fe579c6204d59a0",
-      "reasons": [
-        "task-repair-data-update-or-oss-conversion",
-        "source-diff-from-v1-baseline"
-      ]
+      "changes": [],
+      "retention_note": "Only inactive task-card network metadata changed; selected inputs, grader and runtime behavior are unchanged."
     },
     "legal/agora_governance_classify_instance_1": {
       "action": "retain",
@@ -539,6 +699,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "life_sciences/amber_minimization_script_prep_instance_1": {
@@ -547,6 +713,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification"
       ]
     },
     "life_sciences/amber_three_stage_mmgbsa_workflow_instance_1": {
@@ -555,6 +725,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification"
       ]
     },
     "life_sciences/cell_tracking_instance_1": {
@@ -571,6 +745,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "life_sciences/genomic_interval_processing_1": {
@@ -579,6 +759,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "data"
       ]
     },
     "life_sciences/hg002_chr22_germline_variant_pipeline": {
@@ -587,6 +772,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification"
       ]
     },
     "life_sciences/idp_ensemble_scoring": {
@@ -595,6 +784,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "life_sciences/merfish_image_decoding_segmentation_1": {
@@ -603,6 +798,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification"
       ]
     },
     "life_sciences/protein_function_annotation_instance_1": {
@@ -615,6 +814,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "life_sciences/rgi_mcr1_colistin_v2": {
@@ -623,6 +828,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment"
       ]
     },
     "life_sciences/spatial_transcriptomics_spatial_domain_identification": {
@@ -631,6 +841,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification"
       ]
     },
     "life_sciences/tcga_brca_deg_analysis": {
@@ -638,12 +852,10 @@
       "revision": "sha256:4fcbb9fec4d7717c608be1745962173fbb6b3efbbf356311d2f04c9787b2bc99"
     },
     "life_sciences/tms_marrow_cell_type_annotation_instance_1": {
-      "action": "rerun",
+      "action": "retain",
       "revision": "sha256:a57203815b68740e1a3920e761ed12032c6ad5b3b5882942760b2dcc6dc89d10",
-      "reasons": [
-        "task-repair-data-update-or-oss-conversion",
-        "source-diff-from-v1-baseline"
-      ]
+      "changes": [],
+      "retention_note": "Only inactive task-card network metadata changed; selected inputs, grader and runtime behavior are unchanged."
     },
     "life_sciences/tp53_locus_variant_histone_browser_svg": {
       "action": "rerun",
@@ -651,6 +863,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification"
       ]
     },
     "life_sciences/yeast_colony_detection": {
@@ -662,6 +878,9 @@
       "revision": "sha256:3ced41ffea9dd0c3c72529adc7306efd11a6a8e2a3d139836ad43af2de1c3fcb",
       "reasons": [
         "task-repair-data-update-or-oss-conversion"
+      ],
+      "changes": [
+        "data"
       ]
     },
     "other/aerobics_wc2026_portugal_trio_difficulty_scoring": {
@@ -678,6 +897,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification"
       ]
     },
     "physical_sciences/climate_prediction": {
@@ -686,6 +909,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification"
       ]
     },
     "physical_sciences/computational_materials_science": {
@@ -698,6 +925,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "environment"
       ]
     },
     "physical_sciences/exact_diag_heisenberg_j1j2": {
@@ -718,6 +949,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification"
       ]
     },
     "physical_sciences/ketcher_smiles_reproduction": {
@@ -726,14 +961,17 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "environment"
       ]
     },
     "physical_sciences/lenacapavir_sar_table2_extraction": {
-      "action": "rerun",
+      "action": "retain",
       "revision": "sha256:efd8d426c2e7872fe12481c5e0b572d4c25352d2977ad480c4d61009c00760ef",
-      "reasons": [
-        "task-repair-data-update-or-oss-conversion"
-      ]
+      "changes": [],
+      "retention_note": "Only unused evaluator activation/bytecode packaging changed; selected inputs, reference answers and grading are unchanged."
     },
     "physical_sciences/molecular_structure_plausibility": {
       "action": "retain",
@@ -745,6 +983,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "environment"
       ]
     },
     "physical_sciences/phonon_dispersion_thermodynamics": {
@@ -761,6 +1003,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "environment"
       ]
     },
     "psychology_neuro/celegans_neuron_tracking": {
@@ -777,6 +1023,10 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification"
       ]
     },
     "social_sciences/atwood_2022_measles_vaccine_reproduction": {
@@ -789,6 +1039,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment"
       ]
     },
     "transport_safety/capacitated_vehicle_routing_problems": {
@@ -821,6 +1076,10 @@
       "revision": "sha256:a82f7a5f8f0b5ae7715e29f70d11998709be75a51c975747dc9d3022ca3495bd",
       "reasons": [
         "task-repair-data-update-or-oss-conversion"
+      ],
+      "changes": [
+        "instruction",
+        "environment"
       ]
     },
     "visual_media/human_mesh_animation_reproduction": {
@@ -837,6 +1096,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "visual_media/project_migration": {
@@ -845,6 +1110,12 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "visual_media/skeletal_animation_reproduction": {
@@ -853,6 +1124,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "instruction",
+        "verification",
+        "environment"
       ]
     },
     "visual_media/uv_reproduction": {
@@ -861,6 +1137,11 @@
       "reasons": [
         "task-repair-data-update-or-oss-conversion",
         "source-diff-from-v1-baseline"
+      ],
+      "changes": [
+        "verification",
+        "environment",
+        "data"
       ]
     },
     "visual_media/video_storyboard_001": {
@@ -873,5 +1154,19 @@
         "removed-from-v1.1"
       ]
     }
-  }
+  },
+  "change_summary": {
+    "updated_tasks": 62,
+    "instruction": 54,
+    "verification": 48,
+    "environment": 32,
+    "data": 30
+  },
+  "category_definitions": {
+    "instruction": "Agent-facing prompt and instructions, including documents distributed with task inputs.",
+    "verification": "Scoring logic, acceptance rules and grader execution; reference-answer content alone is Data.",
+    "environment": "Task-specific software, dependencies, setup, staging, paths, resource limits or execution platform.",
+    "data": "Inputs, starter/helper assets, models, media or reference answers; excludes instruction-only, grader-only and runtime-only payload edits."
+  },
+  "counting_policy": "Distinct selected benchmark tasks relative to v1 source and distributed inputs/references. Categories overlap. Excludes the retired task, unselected variants, inactive metadata, packaging-only cleanup and shared framework changes."
 }

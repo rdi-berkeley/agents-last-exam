@@ -12,7 +12,7 @@
     },
     "selected_tasks/docker_support.txt": {
       "count": 102,
-      "sha256": "022ea38d858aa1f15574ef89b06e5d8076e2028bcf3dccbabb1f092188e653ab"
+      "sha256": "8dd284a9ad50f4e1cdbea55fc05c95aa6a511d2c987798d8c2ad7b44f1f2df24"
     },
     "selected_tasks/full.txt": {
       "count": 151,
@@ -155,7 +155,7 @@
     "uncompressed_bytes": 88292216874
   },
   "scope": {
-    "updated_tasks": 66,
+    "updated_tasks": 62,
     "excluded": [
       "AWS",
       "Aliyun"
@@ -170,6 +170,13 @@
     ],
     "retired_tasks": {
       "engineering/mold-flow": "Full four-cavity filling, packing, cooling and demolding was not validated with open-source software at the original scope; original data exists."
-    }
+    },
+    "task_change_categories": {
+      "instruction": 54,
+      "verification": 48,
+      "environment": 32,
+      "data": 30
+    },
+    "task_change_manifest": "releases/v1.1/upgrade.json"
   }
 }

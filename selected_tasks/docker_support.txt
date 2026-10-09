@@ -1,5 +1,5 @@
 # Linux (cpu-free-ubuntu) Docker allowlist - 102 tasks.
-# Blender building, MuseScore transcription, and Ardour migration await
+# Blender building, MuseScore transcription, and Ardour migration passed
 # native workflow checks in the published container.
 # The 4 tasks needing nested Docker (openroad_sky130_ibex_pnr_signoff,
 # k8s_migration_1, bpmn_supply_disruption_l3, bpmn_category_governance_restructuring_l3)
