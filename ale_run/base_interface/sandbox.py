@@ -38,7 +38,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
-from typing import Any, Iterable, Literal
+from typing import Any, ClassVar, Iterable, Literal
 
 import requests
 
@@ -145,6 +145,9 @@ class SandboxHandle:
     # ─── provider extras (rarely-used, free-form) ───
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    # Provider-owned streaming upload transport, kept out of serialized metadata.
+    upload_transport: ClassVar[Any] = None
+
     @property
     def is_linux(self) -> bool:
         return self.os == "linux"
@@ -197,6 +200,9 @@ class SandboxHandle:
 
     async def upload_local_file(self, local_path: str, remote_path: str) -> None:
         """Upload a HOST-side file into the sandbox."""
+        if self.upload_transport is not None:
+            await self.upload_transport(local_path, remote_path)
+            return
         await asyncio.to_thread(_upload_local_file_sync, self, local_path, remote_path)
 
     async def download_to_local(

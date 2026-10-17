@@ -28,6 +28,9 @@ dev = [
     "pytest-asyncio>=0.23",
     "ruff>=0.5",
 ]
+daytona = [
+    "daytona==0.225.0",
+]
 
 [tool.uv.workspace]
 # Each agent declares its own deps in ale_run/agents/<agent>/pyproject.toml.

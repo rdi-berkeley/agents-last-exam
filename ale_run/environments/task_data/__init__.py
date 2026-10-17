@@ -8,8 +8,8 @@ Sources dispatched on yaml ``task_data_source``:
   ``"s3://<bucket>"``        sync from an S3 bucket
   ``"oss://<bucket>"``       sync from an Alibaba Cloud OSS bucket
   ``"hf://<dataset>"``       HuggingFace Hub (STUB)
-  ``"local:<host_dir>"``     docker cp from a HOST dir — for a data-less Docker
-                             image: input before the agent, reference before eval
+  ``"local:<host_dir>"``     host data for Docker/Daytona: input before the
+                             agent, reference before eval
 
 Each backend module exposes two coroutines:
 

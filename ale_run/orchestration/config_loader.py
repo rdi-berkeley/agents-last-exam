@@ -516,6 +516,7 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
     aliyun_snaps: dict[str, Any] = {}   # tag -> {image, gpu, zones(zone ids)}
     aliyun_creds: dict[str, Any] = {}   # region/sg/ram_role/... (reconciled, last wins)
     docker_cfg: dict[str, Any] | None = None
+    daytona_cfg: dict[str, Any] | None = None
     qemu_snaps: dict[str, Any] = {}
 
     for tag, entry in snapshots.items():
@@ -575,6 +576,11 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
                     f"required `qemu.disk_source`"
                 )
             qemu_snaps[str(tag)] = {"image": str(image), **knobs}
+        elif kind == "daytona":
+            this = {"image": str(image), **knobs}
+            if daytona_cfg is not None and daytona_cfg != this:
+                raise ValueError(f"environment {path!r}: conflicting Daytona snapshot configs")
+            daytona_cfg = this
         elif kind == "static":
             raise ValueError(
                 f"environment {path!r}: `static` cannot be a per-snapshot "
@@ -620,6 +626,11 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
         if gcs_sa_key:
             dk["gcs_sa_key"] = gcs_sa_key
         provider_specs["docker"] = ProviderSpec(kind="docker", config=dk)
+    if daytona_cfg is not None:
+        dt = dict(daytona_cfg)
+        if gcs_sa_key:
+            dt["gcs_sa_key"] = gcs_sa_key
+        provider_specs["daytona"] = ProviderSpec(kind="daytona", config=dt)
     if qemu_snaps:
         qemu_cfg: dict[str, Any] = {"snapshots": qemu_snaps}
         if gcs_sa_key:

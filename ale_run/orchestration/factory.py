@@ -189,6 +189,9 @@ def build_provider(spec: "ProviderSpec") -> "Provider":
     if kind == "docker":
         from ..environments.providers.docker import DockerProvider
         return DockerProvider(spec.config)
+    if kind == "daytona":
+        from ..environments.providers.daytona import DaytonaProvider
+        return DaytonaProvider(spec.config)
     if kind == "qemu":
         from ..environments.providers.qemu import QemuProvider
         return QemuProvider(spec.config)
