@@ -45,6 +45,7 @@ async def test_installs_when_atspi_bindings_missing(monkeypatch) -> None:
 
     assert apt_calls, "apt-get must run when the AT-SPI2 python bindings do not import"
     assert "apt-get install" in apt_calls[0][2]
+    assert "fluxbox" in apt_calls[0][2]
 
 
 async def test_skips_when_tools_and_atspi_present(monkeypatch) -> None:
@@ -66,6 +67,18 @@ async def test_installs_when_screenshot_tools_missing(monkeypatch) -> None:
     await _make_deployer()._ensure_computer_prereqs()
 
     assert apt_calls, "apt-get must run when scrot/xdotool/ffmpeg are missing"
+
+
+async def test_installs_when_window_manager_missing(monkeypatch) -> None:
+    monkeypatch.setattr(
+        deployer_mod.shutil, "which", lambda command: None if command == "fluxbox" else "/usr/bin/x",
+    )
+    apt_calls: list[list[str]] = []
+    monkeypatch.setattr(deployer_mod.subprocess, "run", _fake_run(atspi_rc=0, apt_calls=apt_calls))
+
+    await _make_deployer()._ensure_computer_prereqs()
+
+    assert apt_calls
 
 
 def test_build_env_pins_system_python_first_on_path(monkeypatch) -> None:

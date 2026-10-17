@@ -19,6 +19,11 @@ from ale_run.orchestration.run_writer import RunWriter
 from ale_run.orchestration.runner import Runner
 
 
+@pytest.fixture(autouse=True)
+def installed_host_dependencies(monkeypatch):
+    monkeypatch.setattr("ale_run.orchestration.host_preflight.check_host_dependencies", lambda _: None)
+
+
 def _spec(
     tmp_path: Path,
     *,

@@ -67,11 +67,7 @@ def _build_label_map(ws) -> dict[str, tuple[str, Any]]:
     label_map: dict[str, tuple[str, Any]] = {}
     for row in ws.iter_rows():
         for i, cell in enumerate(row):
-            if (
-                cell.value
-                and isinstance(cell.value, str)
-                and not cell.value.startswith("=")
-            ):
+            if cell.value and isinstance(cell.value, str) and not cell.value.startswith("="):
                 norm = _normalize(cell.value)
                 if norm in label_map:
                     continue
@@ -81,9 +77,7 @@ def _build_label_map(ws) -> dict[str, tuple[str, Any]]:
     return label_map
 
 
-def _find_label(
-    label_map: dict[str, tuple[str, Any]], target: str
-) -> tuple[str, Any] | None:
+def _find_label(label_map: dict[str, tuple[str, Any]], target: str) -> tuple[str, Any] | None:
     norm_target = _normalize(target)
     if norm_target in label_map:
         return label_map[norm_target]
@@ -93,15 +87,24 @@ def _find_label(
     return None
 
 
-def score_workbook_bytes(
-    agent_bytes: bytes, manifest: dict[str, Any]
-) -> WorkbookScoreResult:
+def _find_header_candidates(ws, target: str) -> list[Any]:
+    title_pattern = re.compile(
+        rf"(?:\d+[.)]\s*)?{re.escape(_normalize(target))}"
+        r"(?:\s*\([^()]*\)|\s*\[[^\[\]]*\])*\s*(?:[:\-–—]\s*.*)?"
+    )
+    return [
+        cell
+        for row in ws.iter_rows()
+        for cell in row
+        if isinstance(cell.value, str) and title_pattern.fullmatch(_normalize(cell.value))
+    ]
+
+
+def score_workbook_bytes(agent_bytes: bytes, manifest: dict[str, Any]) -> WorkbookScoreResult:
     try:
         wb = load_workbook(BytesIO(agent_bytes), data_only=False)
     except Exception as exc:
-        return WorkbookScoreResult(
-            score=0.0, passed=False, reasons=[f"unreadable_workbook:{exc}"]
-        )
+        return WorkbookScoreResult(score=0.0, passed=False, reasons=[f"unreadable_workbook:{exc}"])
 
     ws = wb.active
     reasons: list[str] = []
@@ -120,27 +123,20 @@ def score_workbook_bytes(
     for header in manifest.get("section_headers", []):
         total += 1
         text = header["text"]
-        norm_text = _normalize(text)
-        found = False
-        for row in ws.iter_rows():
-            for cell in row:
-                if cell.value and isinstance(cell.value, str):
-                    if norm_text in _normalize(cell.value):
-                        found = True
-                        ok = True
-                        if header.get("bold") and not (cell.font and cell.font.bold):
-                            reasons.append(f"header_not_bold:{text}")
-                            ok = False
-                        if header.get("fill") and not _has_fill(cell):
-                            reasons.append(f"header_no_fill:{text}")
-                            ok = False
-                        if ok:
-                            passed += 1
-                        break
-            if found:
-                break
-        if not found:
+        candidates = _find_header_candidates(ws, text)
+        if not candidates:
             reasons.append(f"header_missing:{text}")
+            continue
+        cell = candidates[0]
+        ok = True
+        if header.get("bold") and not (cell.font and cell.font.bold):
+            reasons.append(f"header_not_bold:{text}")
+            ok = False
+        if header.get("fill") and not _has_fill(cell):
+            reasons.append(f"header_no_fill:{text}")
+            ok = False
+        if ok:
+            passed += 1
 
     for entry in manifest.get("fixed_values", []):
         total += 1
@@ -161,9 +157,7 @@ def score_workbook_bytes(
         else:
             passed += 1
 
-    for entry in manifest.get("formula_cells", []) + manifest.get(
-        "dashboard_formulas", []
-    ):
+    for entry in manifest.get("formula_cells", []) + manifest.get("dashboard_formulas", []):
         total += 1
         label = entry["label"]
         must_ref_labels = entry["must_reference"]
@@ -186,9 +180,7 @@ def score_workbook_bytes(
             ref_coord = ref_result[0]
             if ref_coord.upper() not in formula_refs:
                 all_ok = False
-                reasons.append(
-                    f"formula_missing_ref:{label}->{ref_label}({ref_coord})"
-                )
+                reasons.append(f"formula_missing_ref:{label}->{ref_label}({ref_coord})")
                 break
         if all_ok:
             passed += 1

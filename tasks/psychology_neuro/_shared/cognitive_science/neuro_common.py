@@ -13,9 +13,6 @@ from computer import Computer
 from tasks.linux_runtime import LinuxTaskConfig
 
 
-# Default canonical domain for cognitive scenes. Per-scene domain lives on
-# SceneSpec.domain (scene3_skullstrip_qc overrides to health_medicine); this
-# module constant is only the fallback for non-scene paths.
 DOMAIN_NAME = "psychology_neuro"
 VM_PROJECT = "sunblaze-4"
 VM_ZONE = "us-west2-a"
@@ -43,9 +40,6 @@ class SceneSpec:
     required_outputs: tuple[str, ...]
     reference_files: tuple[str, ...]
     evaluation_hint: str
-    # Canonical taxonomy domain this scene is filed under. Most cognitive scenes
-    # live under psychology_neuro; scene3_skullstrip_qc is classified under
-    # health_medicine. Single source of truth for all path resolution below.
     domain: str = "psychology_neuro"
 
 
@@ -103,6 +97,11 @@ SCENE_SPECS: dict[str, SceneSpec] = {
             4. Export a screenshot of the resample settings as resample_settings.png.
             5. Compute the ROI statistics on the resampled mask and save them to scene2_stats.csv.
 
+            Save one ROI row with the required columns `mean,max,voxel_count`.
+            Compute mean and maximum of the statistical map inside the
+            resampled ROI (mask > 0.5), and count those ROI voxels.
+            Column order and additional descriptive columns do not matter.
+
             Required outputs:
             - output/roi_mask_2mm_nn.nii.gz
             - output/resample_settings.png
@@ -113,57 +112,6 @@ SCENE_SPECS: dict[str, SceneSpec] = {
         required_outputs=("roi_mask_2mm_nn.nii.gz", "resample_settings.png", "scene2_stats.csv"),
         reference_files=("scene2_stats.csv",),
         evaluation_hint="The output mask must truly land on the 2 mm stat-map grid, the CSV must reflect that mask, and the settings screenshot must be readable.",
-    ),
-    "scene3_skullstrip_qc": SceneSpec(
-        task_name="scene3_skullstrip_qc",
-        scene_slug="scene3_skullstrip_qc",
-        domain="health_medicine",
-        description_pdf="task3.pdf",
-        software_name="FSLeyes",
-        software_version="1.18.1",
-        tool_command="fsleyes",
-        launch_scene_arg="scene3_skullstrip_qc",
-        instruction_text=dedent(
-            """\
-            Workflow 3: skull-stripping QC
-
-            Goal:
-            1. Open the staged T1w image and candidate masks in FSLeyes.
-            2. Visually compare the three candidate masks for over- and under-stripping.
-            3. Choose the best candidate.
-            4. Save qc_result.json with the following fields:
-               - "chosen_mask": the filename of the best candidate (e.g. "cand2_mid_mask.nii.gz")
-               - "verdict": exactly "OK" if the chosen mask is acceptable, or "NOT_OK" if none are acceptable
-               - "rationale": a short explanation of why you chose that candidate
-
-            Required output:
-            - output/qc_result.json
-            """
-        ),
-        input_files=(
-            "T1w.nii.gz",
-            "cand1_loose_mask.nii.gz",
-            "cand2_mid_mask.nii.gz",
-            "cand3_strict_mask.nii.gz",
-            "cand1_loose_brain.nii.gz",
-            "cand2_mid_brain.nii.gz",
-            "cand3_strict_brain.nii.gz",
-            "candidates.json",
-        ),
-        required_outputs=("qc_result.json",),
-        reference_files=(
-            "qc_result.json",
-            "cand1_overlay_ax.png",
-            "cand1_overlay_cor.png",
-            "cand1_overlay_sag.png",
-            "cand2_overlay_ax.png",
-            "cand2_overlay_cor.png",
-            "cand2_overlay_sag.png",
-            "cand3_overlay_ax.png",
-            "cand3_overlay_cor.png",
-            "cand3_overlay_sag.png",
-        ),
-        evaluation_hint="The JSON must identify the best candidate mask, include a QC verdict, and include a short rationale.",
     ),
     "scene4_workbench": SceneSpec(
         task_name="scene4_workbench",
@@ -423,32 +371,6 @@ async def _create_negative_fixture(session, spec: SceneSpec, root: str) -> None:
                 """
             ),
             timeout=300.0,
-        )
-        return
-
-    if spec.task_name == "scene3_skullstrip_qc":
-        await _run(
-            session,
-            dedent(
-                f"""\
-                cp "{RAW_BUNDLE_ROOT}/task/output/{spec.scene_slug}"/cand*.png "{root}/"
-                """
-            ),
-        )
-        await _write_text(
-            session,
-            f"{root}/qc_result.json",
-            json.dumps(
-                {
-                    "candidate_voxel_counts": {"cand1": 1846906, "cand2": 1728426, "cand3": 1563172},
-                    "chosen_mask": "cand1_loose_mask.nii.gz",
-                    "rationale": "Deliberately wrong negative fixture.",
-                    "scene": spec.scene_slug,
-                    "verdict": "NOT_OK",
-                },
-                indent=2,
-            )
-            + "\n",
         )
         return
 

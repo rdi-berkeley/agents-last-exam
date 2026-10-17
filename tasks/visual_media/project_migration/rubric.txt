@@ -1,0 +1,55 @@
+Music migration audio metric: spectral-envelope-v1
+
+The task remains replacement of unavailable instruments/effects while preserving
+the original editable music, controllers and routing. No plugin identity or
+approved instrument list is scored. Delivery gates and the 20% delivery / 80%
+audio weighting are unchanged. An audio LLM is not used.
+
+Each active reference stem selects three 12-second passages at its 25/50/75%
+active-time quantiles. Selection uses only reference audio, before examining
+the submission. Export complete stems from the instrument output after track
+inserts and before downstream group/master processing. The evaluator separately
+renders the submitted native project from time zero at the same output tap.
+Each passage scores the lower of delivered/reference and native/reference.
+Average passages within each active stem, then average stems equally. Missing,
+invalid or silent submitted stems remain in the denominator with zero credit.
+
+The public implementation is audio_metrics.py. Its continuous score compares
+time-resolved spectral shape (tone/texture) and amplitude envelope (attacks,
+decays, sustained notes and changing dynamics). It is an acoustic similarity
+metric, not a claim to reproduce every human listening judgment. Matching notes
+or having a pleasant sound alone does not imply matching the original timbre.
+
+Decode finite mono/stereo audio, remove constant per-channel DC, and resample
+with an anti-aliasing polyphase filter to 22050 Hz. Only a constant overall
+scale is removed. Do not time-warp, shift notes or normalize each frame's
+loudness independently. Stereo channel powers are averaged, not signed samples;
+channel swaps, polarity and panning of a mono source do not change the metric.
+
+At two Hann-window FFT sizes (1024 and 4096 samples), advance 220 samples per
+frame. Project channel-averaged power into 64 triangular mel-frequency bands
+from 0 to 11025 Hz and smooth over time with a Gaussian sigma of one frame.
+For spectral shape, divide each frame's bands by their summed energy and take
+10*log10 with a -50 dB relative-power floor. Compare corresponding time frames
+where BOTH recordings exceed 1% of their own peak amplitude envelope. S is the
+mean absolute difference in dB across those bands/frames and both resolutions;
+when there is no shared active frame, use 50 dB at that resolution.
+
+Separately, form the square-root energy envelope, normalized by the recording's
+mean energy at that resolution. E is the mean absolute envelope difference
+over ALL time frames and both resolutions, including pauses and missing notes.
+The passage score is exp(-((S/8)^2 + (E/0.5)^2)). These fixed scales are public;
+there is no hidden threshold or binary pass cutoff. Smaller departures receive
+smooth partial credit; wrong tone, attacks or dynamic contours lose credit.
+
+Exact non-silent decoded PCM or one common positive gain consistent with all
+integer-PCM rounding cells receives 1. Proven decoded equality or lossless
+float/integer rounding equivalence between delivered and native passages reuses
+the delivered score. Constant DC and exactly zero audio cannot pass this guard.
+Faint varying audio is not rejected merely for low volume. Ordinary resampling
+and encoding differences use the continuous metric when not analytically exact.
+
+Receipts record the algorithm, rubric and three audio hashes, spectral and
+envelope distances, both component scores and their minimum. No network request
+or audio-provider fallback occurs. Missing/broken references, evaluator renders,
+decoders or runtime are unscored infrastructure errors, not agent-quality zeros.

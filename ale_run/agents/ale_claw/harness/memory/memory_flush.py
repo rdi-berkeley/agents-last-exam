@@ -38,6 +38,8 @@ async def run_memory_flush(
     silent_token: str,
     thinking_params: dict[str, Any] | None = None,
     summary_runtime: ResolvedModel | None = None,
+    api_key: str | None = None,
+    api_base: str | None = None,
 ) -> None:
     """Run a pre-compaction memory flush turn via litellm.
 
@@ -112,6 +114,8 @@ async def run_memory_flush(
             max_tokens=4096,
             temperature=1.0,
             thinking_params=thinking_params,
+            api_key=api_key,
+            api_base=api_base,
         )
         reply_content = response.text
         tool_calls = response.tool_calls

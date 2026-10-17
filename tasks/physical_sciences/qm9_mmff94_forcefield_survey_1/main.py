@@ -23,6 +23,7 @@ VARIANTS = [
 ]
 
 SCRIPTS_DIR = Path(__file__).parent / "scripts"
+ASSETS_DIR = Path(__file__).parent / "assets"
 EVAL_TMP_DIR = r"C:\Users\User\AppData\Local\Temp\agenthle_eval\qm9_mmff94_forcefield_survey_1"
 
 
@@ -64,13 +65,20 @@ relative to B3LYP/6-31G(2df,p) reference geometries across the QM9 dataset.
 `{self.VARIANT_NAME}`: {self.VARIANT_LABEL}
 
 ## Input
-- QM9 archive (bz2-compressed tar of 130,831 XYZ files): `{self.input_archive}`
+- QM9 archive (bz2-compressed tar of 133,885 XYZ files): `{self.input_archive}`
+- Exclude the 3,054 molecule IDs in `{self.input_dir}\\uncharacterized_ids.json`,
+  the QM9 authors' published geometry-consistency exclusions. The retained
+  survey population is 130,831 molecules, including molecules skipped by the
+  numerical protocol below. Do not select an arbitrary subset of the archive.
+- Read `{self.input_dir}\\survey_protocol.json` for the exact numerical settings,
+  functional-group definitions, aggregation rules, and output field conventions.
 - Stream the archive with `tarfile.open(..., "r:bz2")`. Do not extract it on disk.
 
 ## Software
 - Python 3.12 is on PATH (`python`).
-- RDKit, NumPy, pandas, and matplotlib are pre-installed in the system Python.
-- No internet access is required or permitted.
+- Use RDKit 2026.03.1, NumPy, pandas, and matplotlib. Check the installed RDKit
+  version and install that exact version if necessary.
+- All dataset inputs are provided locally.
 
 ## Output Directory
 Write every result file directly inside:
@@ -89,6 +97,14 @@ The following 10 files under `{self.remote_output_dir}`:
    to the QM9 B3LYP distance. Emit rows with `|Discrepancy_A| >= 1.0` using
    columns `Molecule_ID, SMILES, QM9_Dist_A, RDKit_Dist_A, Discrepancy_A`.
    Flush continuously so a crash late in the scan does not lose earlier rows.
+   Use the second SMILES field (relaxed geometry), without canonicalizing or
+   reordering atoms before embedding. Use `AllChem.ETKDG()` (v1), one thread,
+   and `MMFFOptimizeMolecule(mmffVariant='MMFF94', maxIters=200)`.
+   `Discrepancy_A` is the absolute distance difference: include both directions.
+   Skip a molecule if SMILES parsing, MMFF parameterization, or the standard
+   embedding call fails; record skipped IDs and reasons in an auxiliary file.
+   Do not use alternative embeddings or unbounded retries. Retain the geometry
+   after 200 optimization iterations even if the convergence status is 1.
 2. `phase2_classified.csv` — Phase 2. For every Phase 1 row, run a 200-conformer
    ETKDGv3 search (`randomSeed=42`), MMFF94-optimize each conformer, pick the
    lowest-energy conformer, and measure its heteroatom distance. Classify
@@ -96,6 +112,11 @@ The following 10 files under `{self.remote_output_dir}`:
    >= 0.5 Å, otherwise `sampling_artifact`. Columns: `Molecule_ID, SMILES,
    QM9_Dist_A, Naive_MMFF94_Dist_A, Naive_Discrepancy_A, Global_Min_Dist_A,
    Global_Min_Energy_kcal, Residual_Discrepancy_A, Classification`.
+   Use one thread, `pruneRmsThresh=-1`, all other ETKDGv3 defaults, and
+   `MMFFOptimizeMoleculeConfs(numThreads=1, mmffVariant='MMFF94', maxIters=200)`.
+   Select the lowest reported energy among all returned conformers, breaking
+   ties by conformer order. Here "global minimum" means the best of this
+   prescribed finite search, not a proof of the mathematical global minimum.
 3. `phase3_scaffold_analysis.json` — Phase 3. Murcko-scaffold decomposition and
    SMARTS-based functional-group tagging of the genuine failures. Mean/max/min
    residual discrepancy per scaffold and per functional group, plus the top-5
@@ -115,6 +136,8 @@ The following 10 files under `{self.remote_output_dir}`:
    canonical_isomeric_smiles, heteroatom_pair, qm9_heteroatom_distance,
    mmff94_global_min_distance, mmff94_global_min_energy, quantum_forced_energy,
    conformational_snap_distance, snap_energy_drop, delta_e`.
+   Apply the independent-start scan, energy convention, and discrete derivative
+   specified in `survey_protocol.json`; these define the reproducible scan.
 5. `pes_scan_rank1.png`, `pes_scan_rank2.png`, `pes_scan_rank3.png`,
    `pes_scan_rank4.png`, `pes_scan_rank5.png` — one PES plot per top-5 molecule.
 6. `phase5_final_report.json` — Phase 5. Top-level keys `survey_statistics`,
@@ -125,12 +148,11 @@ The following 10 files under `{self.remote_output_dir}`:
    text field explaining what physically distinguishes the two groups.
 
 ## Runtime Expectations
-- Wall-clock budget: roughly 12–16 hours end to end. Phase 2 dominates
-  (200-conformer search over ~635 candidates).
-- Peak memory is observed in Phase 2 (~50–100 MB per molecule during
-  conformer generation).
-- Do not attempt to parallelise with OS-level process spawning inside the
-  same Python process — sequential per-molecule processing is sufficient.
+- Work within the run's wall-clock budget.
+- Save intermediate results regularly.
+- Independent molecules may be processed in parallel within the available CPU
+  and memory limits; keep the per-molecule seeds and settings unchanged.
+- On Windows, protect multiprocessing entry points with `if __name__ == '__main__'`.
 """
 
     def to_metadata(self) -> dict[str, Any]:
@@ -166,6 +188,9 @@ def load():
 @cb.setup_task(split="train")
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
+    input_dir = task_cfg.metadata["input_dir"]
+    for name in ("uncharacterized_ids.json", "survey_protocol.json"):
+        await session.write_file(rf"{input_dir}\{name}", (ASSETS_DIR / name).read_text())
 
 
 @cb.evaluate_task(split="train")
@@ -177,8 +202,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     eval_tmp_dir = meta["eval_tmp_dir"]
 
     if not (await session.file_exists(reference_dir) or await session.directory_exists(reference_dir)):
-        logger.error("[%s] Missing reference dir: %s", tag, reference_dir)
-        return [0.0]
+        raise RuntimeError(f"[{tag}] Missing evaluator reference: {reference_dir}")
     if not (await session.file_exists(agent_output_dir) or await session.directory_exists(agent_output_dir)):
         logger.error("[%s] Missing agent output dir: %s", tag, agent_output_dir)
         return [0.0]
@@ -210,7 +234,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             stdout[:1000],
             stderr[:1000],
         )
-        return [0.0]
+        raise RuntimeError(f"[{tag}] QM9 verifier failed with exit code {rc}: {stderr[:1000]}")
 
     try:
         payload = _extract_json_payload(stdout)
@@ -221,7 +245,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             exc,
             stdout[:1500],
         )
-        return [0.0]
+        raise RuntimeError(f"[{tag}] QM9 verifier returned invalid JSON") from exc
+
+    if payload.get("error"):
+        raise RuntimeError(f"[{tag}] QM9 verifier error: {payload['error']}")
 
     score = float(payload.get("score", 0.0))
     logger.info(

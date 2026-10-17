@@ -143,35 +143,44 @@ Inputs (all under `{self.input_dir}`; treat as read-only):
   yourself with `uv sync --frozen --project {self.runtime_env_dir}` and
   then run the resulting `.venv/bin/python`.
 
-Recommended workflow:
-1. Load the starfish Experiment and sanity-check the image and codebook.
-2. Preprocess: high-pass filter or background-subtract, normalize intensity
-   using the provided `scale_factors`, and confirm the pre-registered tiles
-   are still aligned.
-3. Run starfish BlobDetector on each round/channel and extract 16-bit
-   intensity traces per spot.
-4. Decode with an MHD4-aware decoder (starfish `CheckAll`) with 1-bit error
-   correction; filter by magnitude and distance thresholds.
-5. Run Cellpose on the DAPI image with a pretrained nuclei model and a
-   diameter appropriate for U2OS (roughly 30-50 px).
-6. Assign decoded transcripts to the nearest segmented cell; mark transcripts
-   outside every cell as extracellular and exclude them from the
-   cell-by-gene matrix.
-7. Build the cell-by-gene count matrix for the 130 real genes (exclude
-   blanks) and compute the quality metrics listed in `output_contract.json`.
+Analysis requirements:
+- Use the full 16-component MHD4 codewords with 1-bit error correction.
+- The provided scale factors are intensity divisors for their round/channel tiles.
+- Use starfish for image analysis and Cellpose for DAPI nuclear segmentation.
+- Assign each decoded transcript to the nucleus whose mask contains its nearest
+  integer pixel. Round x and y independently, with exact half-pixel ties going
+  to the even integer (for example, 2.5 becomes 2 and 3.5 becomes 4). Use zero-based
+  mask indexing [rounded y, rounded x]. A rounded pixel outside the FOV or outside
+  every nucleus is extracellular and excluded from the nucleus-by-gene matrix.
+  Keep the original decoded coordinates in the CSV.
+- The DAPI image defines nuclear boundaries. Build the nucleus-by-gene matrix
+  for the 130 real genes, excluding blanks, and report the required quality metrics.
 
 Outputs must go into `{self.remote_output_dir}`:
 - `decoded_transcripts.csv` with columns `gene, x, y, is_exact, total_magnitude`.
 - `segmentation.tiff` - 2048x2048 `uint16` labeled mask (background=0).
-- `cell_by_gene.csv` - leading `cell_id` column followed by the 130 real genes
-  in codebook order; integer counts.
+- `cell_by_gene.csv` - leading `cell_id` column (the legacy field name for a
+  nucleus label) followed by the 130 real genes in codebook order; integer counts.
 - `quality_metrics.json` - scalar keys `total_decoded_transcripts`,
   `blank_rate`, `exact_match_fraction`, `n_cells`, `assigned_fraction`,
   `mean_transcripts_per_cell`.
 
+The historical `cell` names in these files and metrics refer to nuclei and
+nuclear transcript counts, not inferred whole-cell boundaries.
+
 All coordinates (`x`, `y`) in `decoded_transcripts.csv` must be pixel
 coordinates within the 2048x2048 FOV so they line up with the segmentation
 mask.
+Reference-based decoding comparisons (per-gene correlation, real-transcript
+count and spatial concordance) use only the inclusive interior region
+`40 <= x <= 2008` and `40 <= y <= 2008`, in the original pixel coordinates.
+The supplied benchmark has no labels outside this region; border calls are
+not classified as correct or incorrect by these comparisons. Keep full-frame
+outputs, nuclear assignments, the count matrix, blank rate and reported
+quality metrics; do not crop the mask or translate coordinates.
+Total-count plausibility compares decoded real-gene transcripts with the
+reference real-gene total in that same region, excluding Blank controls from both counts.
+`total_decoded_transcripts` still reports all decoded rows, including blanks.
 """
 
     def to_metadata(self) -> dict[str, Any]:
@@ -250,12 +259,16 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         return [0.0]
 
     if result.hard_failed:
-        logger.info("[%s] hard_fail reason=%s", meta["variant_name"], result.hard_fail_reason)
+        logger.info(
+            "[%s] hard_fail reason=%s",
+            meta.get("variant_name", "unknown"),
+            result.hard_fail_reason,
+        )
         return [0.0]
 
     logger.info(
         "[%s] score=%.4f pearson=%s spatial=%s n_cells_seg=%s assigned=%s",
-        meta["variant_name"],
+        meta.get("variant_name", "unknown"),
         result.score,
         result.pearson_r,
         result.spatial_concordance,

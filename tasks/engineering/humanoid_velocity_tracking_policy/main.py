@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -22,7 +21,9 @@ from tasks.common_config import GeneralTaskConfig
 from tasks.common_setup import BaseTaskSetup
 from tasks.engineering.humanoid_velocity_tracking_policy.scripts.score_humanoid_velocity_policy import (
     evaluate_submission,
+    validate_submission,
 )
+from tasks.engineering.humanoid_velocity_tracking_policy.scripts.simulation_process import run_simulation
 
 
 _setup = BaseTaskSetup()
@@ -185,48 +186,19 @@ async def start(task_cfg, session: cb.DesktopSession):
 
 
 async def _run_full_sim_once(task_cfg, session: cb.DesktopSession, remote_results: str) -> bool:
-    """Launch Isaac sim in background on VM and poll for the results file.
-
-    The CUA REST/WebSocket layer times out after ~5min / ~2min respectively,
-    but a full 10-seed rollout takes 30-40 minutes.  We work around this by
-    writing a small .bat wrapper, launching it detached via ``wmic``, and
-    polling for the results file.
-    """
     meta = task_cfg.metadata
     isaac_python = os.environ.get("AGENTHLE_HUMANOID_ISAAC_PYTHON", DEFAULT_ISAAC_PYTHON)
-
-    wrapper_bat = remote_results + ".bat"
-
-    bat_content = (
-        "@echo off\r\n"
-        f"cd /d \"{meta['task_dir']}\"\r\n"
-        f"\"{isaac_python}\" input\\eval\\run_eval.py "
-        f"--policy \"{meta['output_policy']}\" "
-        f"--checkpoint \"{meta['output_checkpoint']}\" "
-        "--seeds 0 1 2 3 4 5 6 7 8 9 "
-        "--num_envs 64 --rollout_seconds 20.0 "
-        "--device cuda "
-        f"--results_path \"{remote_results}\"\r\n"
+    arguments = [
+        "-u", meta["input_run_eval"],
+        "--policy", meta["output_policy"], "--checkpoint", meta["output_checkpoint"],
+        "--seeds", *map(str, range(10)), "--num_envs", "64", "--rollout_seconds", "20.0",
+        "--device", "cuda", "--results_path", remote_results,
+    ]
+    return await run_simulation(
+        session, executable=isaac_python, arguments=arguments,
+        working_directory=meta["task_dir"], results_path=remote_results,
+        timeout=SIM_TIMEOUT, poll_interval=SIM_POLL_INTERVAL,
     )
-
-    await session.run_command(f'del /f /q "{remote_results}" 2>nul', check=False)
-    await session.write_file(wrapper_bat, bat_content)
-    wmic_cmd = f'wmic process call create "cmd /c \\"{wrapper_bat}\\""'
-    await session.run_command(wmic_cmd, check=False)
-
-    elapsed = 0
-    while elapsed < SIM_TIMEOUT:
-        await asyncio.sleep(SIM_POLL_INTERVAL)
-        elapsed += SIM_POLL_INTERVAL
-        if (await session.file_exists(remote_results) or await session.directory_exists(remote_results)):
-            break
-        if elapsed % 120 == 0:
-            logger.info("Isaac sim still running (%ds elapsed)...", elapsed)
-
-    if not (await session.file_exists(remote_results) or await session.directory_exists(remote_results)):
-        logger.error("full Isaac simulation timed out after %ds", SIM_TIMEOUT)
-        return False
-    return True
 
 
 async def _maybe_run_full_sim(
@@ -241,10 +213,8 @@ async def _maybe_run_full_sim(
     await session.interface.create_dir(EVAL_TMP_DIR)
     remote_results = rf"{EVAL_TMP_DIR}\results_run_1.json"
     remote_repeat_results = rf"{EVAL_TMP_DIR}\results_run_2.json"
-    if not await _run_full_sim_once(task_cfg, session, remote_results):
-        return False
-    if not await _run_full_sim_once(task_cfg, session, remote_repeat_results):
-        return False
+    await _run_full_sim_once(task_cfg, session, remote_results)
+    await _run_full_sim_once(task_cfg, session, remote_repeat_results)
     local_results.write_bytes(await session.read_bytes(remote_results))
     local_repeat_results.write_bytes(await session.read_bytes(remote_repeat_results))
     return True
@@ -262,6 +232,8 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         ("reference_baseline_checkpoint", "hidden baseline checkpoint.pt"),
     ]:
         if not (await session.file_exists(meta[key]) or await session.directory_exists(meta[key])):
+            if key.startswith("reference_"):
+                raise RuntimeError(f"Missing evaluator reference: {meta[key]}")
             logger.error("[%s] Missing %s at %s", tag, label, meta[key])
             return [0.0]
 
@@ -283,6 +255,10 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             (local_reference / "baseline" / "checkpoint.pt").write_bytes(
                 await session.read_bytes(meta["reference_baseline_checkpoint"])
             )
+            validation = validate_submission(local_output)
+            if validation["score"] is not None:
+                logger.info("[%s] submission validation=%s", tag, json.dumps(validation, sort_keys=True))
+                return [float(validation["score"])]
             full_sim_ran = await _maybe_run_full_sim(
                 task_cfg,
                 session,
@@ -298,7 +274,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             )
         except Exception as exc:
             logger.exception("[%s] Evaluation failed: %s", tag, exc)
-            return [0.0]
+            raise
 
     logger.info("[%s] evaluation=%s", tag, json.dumps(result, sort_keys=True))
     return [float(result.get("score", 0.0))]

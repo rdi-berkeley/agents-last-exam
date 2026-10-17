@@ -16,8 +16,7 @@
     "graybox",
     "blender",
     "godot",
-    "windows",
-    "gpu-license"
+    "windows"
   ],
   "taskPrompt": "You are working on a Windows GPU VM.\n\n## Variant\n`base`: Atlas Outpost graybox navigation blockout\n\n## Your Task\nFinish the Atlas Outpost graybox level-design starter project. This is a level-blockout workflow: author route geometry, re-export the glTF, wire the Godot validation scene, and write the visible handoff metrics.\n\n## Input Files\n- Task prompt: `base\\input\\TASK_PROMPT.md`\n- Starter project root: `base\\input`\n- Blender blockout: `base\\input\\blender\\atlas_outpost_blockout.blend`\n- Exported glTF starter: `base\\input\\exports\\atlas_outpost_blockout.gltf`\n- Godot validation scene: `base\\input\\godot\\scenes\\atlas_outpost_validation.tscn`\n- Optional Blender launcher: `base\\software\\open_blender.bat`\n- Optional Godot launcher: `base\\software\\open_godot.bat`\n\n## What You Must Do\n1. Read `base\\input\\TASK_PROMPT.md` and the visible specs under `base\\input`.\n2. Complete the graybox route layout in the project files.\n3. Re-export `exports/atlas_outpost_blockout.gltf` and any referenced sidecar files.\n4. Update `godot/scenes/atlas_outpost_validation.tscn` with the required review markers.\n5. Fill `docs/layout_handoff.md` with the visible route metrics.\n6. Save the completed project under `base\\output` using the same relative paths as the starter.\n\n## Required Output Paths\n- `base\\output\\blender\\atlas_outpost_blockout.blend`\n- `base\\output\\exports\\atlas_outpost_blockout.gltf`\n- `base\\output\\exports\\atlas_outpost_blockout.bin` if referenced by the exported glTF\n- `base\\output\\godot\\scenes\\atlas_outpost_validation.tscn`\n- `base\\output\\docs\\layout_handoff.md`\n\n## Important\n- Keep your final deliverables under `base\\output`.\n- Do not modify `input\\` or any non-output data.\n- Do not rely on internet access.\n",
   "agentMustDo": [

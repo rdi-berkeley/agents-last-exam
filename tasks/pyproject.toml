@@ -5,25 +5,36 @@ build-backend = "hatchling.build"
 [project]
 name = "ale-task-eval-deps"
 version = "0.1.0"
-description = "Auto-generated eval dependencies for published tasks."
+description = "Host evaluation dependencies for published tasks."
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "PyMuPDF>=1.27.2.3",
+    "cua-agent==0.7.38",
+    "cua-computer==0.5.17",
     "google-api-core>=2.30.3",
+    "google-auth>=2.0",
+    "google-genai>=1.0",
     "ltspice>=1.0.6",
+    "lxml>=5.0",
+    "matplotlib>=3.9",
+    "mido>=1.3",
+    "networkx==3.6.1",
     "numpy>=2.4.4",
     "openai>=2.8.0",
     "opencv-python-headless>=4.13.0.92",
     "openpyxl>=3.1.5",
+    "packaging>=24.0",
     "pandas>=2.3.3",
     "pillow>=12.2.0",
     "pretty_midi>=0.2.11",
+    "pyparsing>=3.2",
     "python-dotenv>=1.2.2",
     "safetensors>=0.7.0",
     "scikit-image>=0.26.0",
     "scikit-learn>=1.8.0",
     "scipy>=1.17.1",
     "sgfmill>=1.1.1",
+    "stim==1.15.0",
     "torch>=2.11.0",
 ]
 

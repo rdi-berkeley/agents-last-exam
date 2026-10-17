@@ -7,6 +7,7 @@ input/reference data a task needs staged into the VM. Read by
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 
@@ -18,6 +19,9 @@ class TaskDataSpec:
     metadata. Consumed by ``data_staging`` (pushes into the VM) and
     indirectly by the orchestrator (decides whether to fetch a GCS
     prefix, etc.).
+
+    ``sandbox_task_name`` changes only the sandbox directory name;
+    ``task_name`` and ``source_relpath`` retain the canonical source identity.
     """
 
     requires_task_data: bool = False
@@ -30,3 +34,10 @@ class TaskDataSpec:
     reference_dir: str | None = None
     reference_gcs_prefix: str | None = None
     remote_output_dir: str | None = None
+    sandbox_task_name: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.sandbox_task_name is not None and not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_-]*", self.sandbox_task_name
+        ):
+            raise ValueError("sandbox_task_name must be a plain task directory name")

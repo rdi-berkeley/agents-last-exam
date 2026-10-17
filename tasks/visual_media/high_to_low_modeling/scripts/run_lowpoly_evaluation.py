@@ -46,7 +46,7 @@ class LowpolyBenchmark:
     DEFAULT_CONFIG: ClassVar[dict[str, Any]] = {
         "triangle_ratio_cap": 0.05,
         "sample_count_per_mesh": 20_000,
-        "judge_model": "gpt-5.2",
+        "judge_model": None,
         "views_metric": ["front", "back", "left", "right", "top"],
         "views_evidence": ["front", "back", "left", "right", "top", "perspective"],
         "normalize_distances_by": "high_bbox_diagonal",
@@ -827,6 +827,9 @@ class LowpolyBenchmark:
         if backend == "heuristic":
             judged = cls.heuristic_judge(bundle)
         else:
+            from tasks.utils.evaluation import resolve_llm_judge_model
+
+            model = resolve_llm_judge_model(default=model)
             judged = cls.openai_judge(bundle, model=model, temperature=temperature)
         report = {
             "summary": {
@@ -1111,7 +1114,7 @@ class LowpolyBenchmark:
             low_obj_exists=self.paths.low_obj.exists(),
         )
 
-        judge_model = self.judge_model_override or str(self.config["judge_model"])
+        judge_model = self.judge_model_override or self.config.get("judge_model")
         judge_weight = float(self.config.get("score_weights", {}).get("judge_score", 0.25))
         if self.skip_judge or not gate_passed:
             judge_report_path = self.write_stub_judge_report(

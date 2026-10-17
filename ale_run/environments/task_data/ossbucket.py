@@ -27,7 +27,7 @@ import shlex
 from typing import Any
 
 from ...base_interface import SandboxHandle, TaskDataSpec
-from . import join, task_subdir
+from . import join, prepare_task_subdir, task_subdir
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ async def stage_input(
     sandbox: SandboxHandle, task_data: TaskDataSpec, *, source: str,
 ) -> dict[str, Any]:
     oss_prefix = _oss_prefix(source, task_data)
-    base = task_subdir(sandbox, task_data)
+    base = await prepare_task_subdir(sandbox, task_data)
     await sandbox.mkdir(base)
 
     staged: list[str] = []

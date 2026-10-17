@@ -1,0 +1,131 @@
+--- a/ToolSweep.cpp
++++ b/ToolSweep.cpp
+@@ -70,7 +70,7 @@
+       const GCode::Move &move = path->at(i);
+       int tool = move.getTool();
+ 
+-      if (tool < 0) continue;
++      if (tool < 0 || move.getType() == GCode::MoveType::MOVE_RAPID) continue;
+       if (sweeps.size() <= (unsigned)tool) sweeps.resize(tool + 1);
+       if (sweeps[tool].isNull()) sweeps[tool] = getSweep(tools.get(tool));
+ 
+@@ -145,10 +145,10 @@
+ 
+   case GCode::ToolShape::TS_BALLNOSE: {
+     SmartPointer<CompositeSweep> composite = new CompositeSweep;
+-    composite->add
+-      (new SpheroidSweep(tool.getRadius(), 2 * tool.getRadius()), 0);
+-    composite->add(new ConicSweep(tool.getLength(), tool.getRadius(),
+-                                  tool.getRadius()), tool.getRadius());
++    composite->add(new SpheroidSweep(tool.getRadius(), 2 * tool.getRadius(), tool.getRadius()), 0);
++    if (tool.getLength() > tool.getRadius())
++      composite->add(new ConicSweep(tool.getLength() - tool.getRadius(), tool.getRadius(),
++                                    tool.getRadius()), tool.getRadius());
+     return composite;
+   }
+ 
+--- a/CompositeSweep.cpp
++++ b/CompositeSweep.cpp
+@@ -37,8 +37,10 @@
+                                const Vector3D &end,
+                                vector<Rectangle3D> &bboxes,
+                                double tolerance) const {
+-  for (unsigned i = 0; i < children.size(); i++)
+-    children[i]->getBBoxes(start, end, bboxes, tolerance);
++  for (unsigned childIndex = 0; childIndex < children.size(); childIndex++) {
++    Vector3D offset(0, 0, zOffsets[childIndex]);
++    children[childIndex]->getBBoxes(start + offset, end + offset, bboxes, tolerance);
++  }
+ }
+ 
+ 
+--- a/ConicSweep.cpp
++++ b/ConicSweep.cpp
+@@ -55,6 +55,14 @@
+ 
+   // Check z-height
+   if (Pz < min(Az, Bz) || max(Az, Bz) + l < Pz) return -1;
++
++  for (const Vector3D &endpoint : {A, B}) {
++    double height = Pz - endpoint.z();
++    if (height < 0 || height > l) continue;
++    double radius = rb + Tm * height;
++    if (sqr(Px - endpoint.x()) + sqr(Py - endpoint.y()) <= sqr(radius))
++      return 1;
++  }
+ 
+   // epsilon * beta^2 + gamma * beta + rho = 0
+   double epsilon = sqr(Bx - Ax) + sqr(By - Ay) - sqr(Tm * (Bz - Az));
+--- a/SpheroidSweep.cpp
++++ b/SpheroidSweep.cpp
+@@ -29,8 +29,8 @@
+ using namespace CAMotics;
+ 
+ 
+-SpheroidSweep::SpheroidSweep(double radius, double length) :
+-  radius(radius), length(length == -1 ? radius : length) {
++SpheroidSweep::SpheroidSweep(double radius, double length, double heightLimit) :
++  radius(radius), length(length == -1 ? radius : length), heightLimit(heightLimit) {
+ 
+   if (2 * radius != length) scale = Vector3D(1, 1, 2 * radius / length);
+   radius2 = radius * radius;
+@@ -41,7 +41,8 @@
+                               const Vector3D &end,
+                               vector<Rectangle3D> &bboxes,
+                               double tolerance) const {
+-  Sweep::getBBoxes(start, end, bboxes, radius, length, -radius, tolerance);
++  Sweep::getBBoxes(start, end, bboxes, radius,
++                  heightLimit < 0 ? length : min(length, heightLimit), 0, tolerance);
+ }
+ 
+ 
+@@ -58,6 +59,20 @@
+   Vector3D B = _B;
+   Vector3D P = _P;
+ 
++  if (heightLimit >= 0) {
++    Vector3D change = B - A;
++    if (change.z() == 0) {
++      if (P.z() > A.z() + heightLimit) return -1;
++    } else {
++      double boundary = (P.z() - A.z() - heightLimit) / change.z();
++      double lower = change.z() > 0 ? max(0.0, boundary) : 0;
++      double upper = change.z() < 0 ? min(1.0, boundary) : 1;
++      if (lower > upper) return -1;
++      B = A + change * upper;
++      A += change * lower;
++    }
++  }
++
+   // Handle oblong spheroids by scaling the z-axis
+   if (2 * radius != length) {
+     A *= scale;
+@@ -68,6 +83,11 @@
+   // Check z-height
+   if (P.z() < min(A.z(), B.z()) || max(A.z(), B.z()) + 2 * r < P.z())
+     return -1;
++
++  for (const Vector3D &endpoint : {A, B}) {
++    Vector3D difference = P - endpoint - Vector3D(0, 0, radius);
++    if (difference.dot(difference) <= radius2) return 1;
++  }
+ 
+   const Vector3D AB = B - A;
+   const Vector3D PA = A - P;
+--- a/SpheroidSweep.h
++++ b/SpheroidSweep.h
+@@ -27,12 +27,13 @@
+   class SpheroidSweep : public Sweep {
+     double radius;
+     double length;
++    double heightLimit;
+ 
+     cb::Vector3D scale;
+     double radius2;
+ 
+   public:
+-    SpheroidSweep(double radius, double length = -1);
++    SpheroidSweep(double radius, double length = -1, double heightLimit = -1);
+ 
+     // From Sweep
+     void getBBoxes(const cb::Vector3D &start, const cb::Vector3D &end,

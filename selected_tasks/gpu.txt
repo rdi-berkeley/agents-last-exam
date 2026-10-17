@@ -1,0 +1,6 @@
+# Published tasks using the gpu-free snapshot.
+# Total: 3 tasks.
+
+engineering/humanoid_velocity_tracking_policy
+visual_media/chroma_key_from_reference
+visual_media/compress_3dgs_scene_ply

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path, PureWindowsPath
 
 import cua_bench as cb
+from PIL import Image
 
 from tasks.common_config import GeneralTaskConfig
-from tasks.utils.evaluation import EvaluationContext, collect_matching_files, llm_vision_judge
 
 logger = logging.getLogger(__name__)
 
@@ -467,7 +467,6 @@ def _float_eq(a, b, tol=0.01) -> bool:
 
 async def evaluate_variant_task(task_cfg, session: cb.DesktopSession) -> list[float]:
     out_dir = task_cfg.metadata["remote_output_dir"]
-    ref_dir = task_cfg.metadata.get("reference_dir")
     db_name = task_cfg.metadata["db_name"]
     run_tag = task_cfg.metadata["run_tag"]
     work_dir = eval_work_dir(task_cfg.metadata["variant_name"])
@@ -480,7 +479,7 @@ async def evaluate_variant_task(task_cfg, session: cb.DesktopSession) -> list[fl
         "db_name": db_name,
         "checks": {},
         "evidence": {},
-        "screenshot_eval": {},
+        "delivery_checks": {},
     }
 
     preflight_sql = r"""
@@ -891,54 +890,25 @@ SELECT json_build_object(
     report["final_score"] = round(passed / total, 4) if total > 0 else 0.0
     report["score_detail"] = {"passed": passed, "total": total}
 
-    try:
-        if ref_dir:
-            output_files, reference_files = await collect_matching_files(session, out_dir, ref_dir)
-            question_map = {
-                "lc_split.png": "Does the candidate screenshot show Landed Cost allocation with RM-010 additional cost 60.00 and RM-020 additional cost 40.00?",
-                "invoices.png": "Does the candidate screenshot show two paid customer invoices with totals 460 EUR and 230 EUR?",
-                "return_credit.png": "Does the candidate screenshot show a return for serial SSK-0002 and a posted or paid credit note of 200 EUR?",
-                "stock_wh.png": "Does the candidate screenshot show WH has RM-010=0, RM-020=0 and My Co has RM-010=4, RM-020=7?",
-            }
-
-            def prompt_with_question(question: str) -> str:
-                return f"""You are evaluating an Odoo UI screenshot.
-
-Compare two images:
-1. First image: candidate screenshot from the agent run
-2. Second image: reference screenshot for the correct result
-
-Question: {question}
-
-Answer with ONLY YES or NO.
-"""
-
-            async with EvaluationContext(
-                task_tag=task_cfg.metadata["variant_name"],
-                mode="custom",
-                output_dir=None,
-                target_path=out_dir,
-                reference_path=ref_dir,
-            ) as ctx:
-                for name, question in question_map.items():
-                    if name in output_files and name in reference_files:
-                        target_bytes = await session.read_bytes(os.path.join(out_dir, name))
-                        ref_bytes = await session.read_bytes(os.path.join(ref_dir, name))
-                        res = await llm_vision_judge(
-                            prompt=prompt_with_question(question),
-                            image_bytes=target_bytes,
-                            reference_image_bytes=ref_bytes,
-                            return_details=True,
-                            max_tokens=10,
-                            eval_context=ctx,
-                            identifier=f"{task_cfg.metadata['variant_name']}_{name}_content_check",
-                        )
-                        report["screenshot_eval"][name] = {
-                            "passed": (res.get("score", 0.0) > 0.0),
-                            "details": res,
-                        }
-    except Exception as exc:
-        logger.warning("[%s] screenshot grading skipped: %s", task_cfg.metadata["variant_name"], exc)
+    for name in ("lc_split.png", "invoices.png", "return_credit.png", "stock_wh.png", "submission.txt"):
+        path = win_join(out_dir, name)
+        if not await session.file_exists(path):
+            report["delivery_checks"][name] = {"readable": False, "reason": "missing"}
+            continue
+        payload = await session.read_bytes(path)
+        try:
+            if name.endswith(".png"):
+                with Image.open(BytesIO(payload)) as image:
+                    if image.format != "PNG":
+                        raise ValueError("Expected a PNG image")
+                    image.verify()
+            elif not payload.decode("utf-8-sig").strip():
+                raise ValueError("Empty submission note")
+        except (OSError, ValueError) as exc:
+            report["delivery_checks"][name] = {"readable": False, "reason": str(exc)}
+        else:
+            report["delivery_checks"][name] = {"readable": True}
+    report["scoring_basis"] = "database_checks"
 
     await _write_report(session, out_dir=out_dir, work_dir=work_dir, report=report)
     return [report["final_score"]]

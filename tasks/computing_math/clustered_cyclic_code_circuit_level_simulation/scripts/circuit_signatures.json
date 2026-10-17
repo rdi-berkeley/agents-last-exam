@@ -1,0 +1,422 @@
+[
+  {
+    "qubits": 48,
+    "measurements": 1056,
+    "detectors": 528,
+    "observables": 8,
+    "detector_error_distribution_sha256": "7eb53f44e1c6374085571917f6fbbd4e36fe373a2c44a5f3abfb94c8cba27fb2"
+  },
+  {
+    "qubits": 48,
+    "measurements": 1056,
+    "detectors": 528,
+    "observables": 8,
+    "detector_error_distribution_sha256": "1ba20ea5c987ba04a8f37b39d6a5629f8815ead30f9cf8e46061041167a7dcba"
+  },
+  {
+    "qubits": 48,
+    "measurements": 1056,
+    "detectors": 528,
+    "observables": 8,
+    "detector_error_distribution_sha256": "89ed6cc625aa483c6ee6ed5aa6af134be959368e439834b77594a000792c79a5"
+  },
+  {
+    "qubits": 48,
+    "measurements": 1056,
+    "detectors": 528,
+    "observables": 8,
+    "detector_error_distribution_sha256": "90036fbc4afe636376313883315f6cef63407a4e9f2218e1cc8eb2879123c378"
+  },
+  {
+    "qubits": 48,
+    "measurements": 1056,
+    "detectors": 528,
+    "observables": 8,
+    "detector_error_distribution_sha256": "14465f1836762afcc3ece5618f9fd5df5b58e625c95a0c5057d6fedcf587cead"
+  },
+  {
+    "qubits": 48,
+    "measurements": 1056,
+    "detectors": 528,
+    "observables": 8,
+    "detector_error_distribution_sha256": "adc53d40b8864d0fdad2eb2300b6b95568b45263a43dca44cb5067353690eae1"
+  },
+  {
+    "qubits": 48,
+    "measurements": 1056,
+    "detectors": 528,
+    "observables": 8,
+    "detector_error_distribution_sha256": "436dd25cfe7eb3f45dd11e78729736a9c3a444709da4912e7d9ebb126d57c014"
+  },
+  {
+    "qubits": 48,
+    "measurements": 1056,
+    "detectors": 528,
+    "observables": 8,
+    "detector_error_distribution_sha256": "1a1538f29f7ca02d5c1fa3c3eaeab8f1c9d10bb045d2bc5b5bee02e0bf5c6042"
+  },
+  {
+    "qubits": 48,
+    "measurements": 1056,
+    "detectors": 528,
+    "observables": 8,
+    "detector_error_distribution_sha256": "b36c77f9a17b4a429b5060049a4dfbe0cf14b7c0a29ea37bcb4fc0288c3f43e8"
+  },
+  {
+    "qubits": 48,
+    "measurements": 1056,
+    "detectors": 528,
+    "observables": 8,
+    "detector_error_distribution_sha256": "42b3bdbec396bd81c860d3951f3f21525510d740069df1f56b2678eba6dca8a9"
+  },
+  {
+    "qubits": 48,
+    "measurements": 528,
+    "detectors": 264,
+    "observables": 8,
+    "detector_error_distribution_sha256": "d255a972ae03bc7f65e8342533659bb4c5c68b5e420dbf1ba388765aa74ed00b"
+  },
+  {
+    "qubits": 48,
+    "measurements": 528,
+    "detectors": 264,
+    "observables": 8,
+    "detector_error_distribution_sha256": "aa83d61c7d4533d8c829f739c675ec886703c664b54108f71e77cb9795af7d74"
+  },
+  {
+    "qubits": 48,
+    "measurements": 528,
+    "detectors": 264,
+    "observables": 8,
+    "detector_error_distribution_sha256": "87604240eb11f213f23357b35454896366806445460dc9768b0f341467e78168"
+  },
+  {
+    "qubits": 48,
+    "measurements": 528,
+    "detectors": 264,
+    "observables": 8,
+    "detector_error_distribution_sha256": "eb62e9ec39a08454c9228dde27bef26ee22adad4ab72414e89ee95e10762626a"
+  },
+  {
+    "qubits": 48,
+    "measurements": 528,
+    "detectors": 264,
+    "observables": 8,
+    "detector_error_distribution_sha256": "cda8546e85987d50beca6c4a53dd52df2e28fe835e810d9a2a114947c29dd062"
+  },
+  {
+    "qubits": 48,
+    "measurements": 528,
+    "detectors": 264,
+    "observables": 8,
+    "detector_error_distribution_sha256": "4f5a8bf8a13550ff86556a24d1030ac2464d2d1882d63a5cc6bacead646c39f4"
+  },
+  {
+    "qubits": 48,
+    "measurements": 528,
+    "detectors": 264,
+    "observables": 8,
+    "detector_error_distribution_sha256": "cd4846db088e9a49f2f2bba04bbfa3942b29992af1ed6bf51457bdbe03a5d4a0"
+  },
+  {
+    "qubits": 48,
+    "measurements": 528,
+    "detectors": 264,
+    "observables": 8,
+    "detector_error_distribution_sha256": "fcbff3e56e47b2a340364635272b523cb59b397933960e9825959064d2d0efdb"
+  },
+  {
+    "qubits": 48,
+    "measurements": 528,
+    "detectors": 264,
+    "observables": 8,
+    "detector_error_distribution_sha256": "d9ea08f31ce0352683c60a67539b73ccbebe7b0004f04010896af241980262c7"
+  },
+  {
+    "qubits": 48,
+    "measurements": 528,
+    "detectors": 264,
+    "observables": 8,
+    "detector_error_distribution_sha256": "b36cc8a5b580e882c0a1df9608ef5fbc5d9e056a2b8e6852d6d1551d0dd40d4f"
+  },
+  {
+    "qubits": 80,
+    "measurements": 1760,
+    "detectors": 880,
+    "observables": 8,
+    "detector_error_distribution_sha256": "aeaf8b992c5e0a93d635252c6e8d31438a9cdca67af199a88ef249a8505a9aa5"
+  },
+  {
+    "qubits": 80,
+    "measurements": 1760,
+    "detectors": 880,
+    "observables": 8,
+    "detector_error_distribution_sha256": "4b8f655ce831f017484aa991837f33fb20585ed724fc49280ef7b8b5c78b8acb"
+  },
+  {
+    "qubits": 80,
+    "measurements": 1760,
+    "detectors": 880,
+    "observables": 8,
+    "detector_error_distribution_sha256": "6eace80d9c42dd48a19185b5104c4529f320df7133b1270377e9695afd0f67af"
+  },
+  {
+    "qubits": 80,
+    "measurements": 1760,
+    "detectors": 880,
+    "observables": 8,
+    "detector_error_distribution_sha256": "f0fb8eacc8dd8d81db26ffcfb0f7a7336bd6a81608322cb9385970949fc5ff5c"
+  },
+  {
+    "qubits": 80,
+    "measurements": 1760,
+    "detectors": 880,
+    "observables": 8,
+    "detector_error_distribution_sha256": "cb7b33116512366e4cd3565561582d3f0cd1325bd160ec97011b1fa2cb2a1a30"
+  },
+  {
+    "qubits": 80,
+    "measurements": 1760,
+    "detectors": 880,
+    "observables": 8,
+    "detector_error_distribution_sha256": "cdbea19cec607acc00434472678b53e4fdc0d9e0232bd5b4115643a0eedb1a31"
+  },
+  {
+    "qubits": 80,
+    "measurements": 1760,
+    "detectors": 880,
+    "observables": 8,
+    "detector_error_distribution_sha256": "8df49ef13f54c77cc0ef7a27f0058e5d7da538bc0055f8f145ce0eb09d731f47"
+  },
+  {
+    "qubits": 80,
+    "measurements": 1760,
+    "detectors": 880,
+    "observables": 8,
+    "detector_error_distribution_sha256": "8c69ff8d4b46a8c499c1b91e30c7218aed733cd33d164b513309888c85a25595"
+  },
+  {
+    "qubits": 80,
+    "measurements": 1760,
+    "detectors": 880,
+    "observables": 8,
+    "detector_error_distribution_sha256": "66d42aa287b009e8bd7c108758dc5229f74ef626f883e3c5d87044f6fa9e7e35"
+  },
+  {
+    "qubits": 80,
+    "measurements": 1760,
+    "detectors": 880,
+    "observables": 8,
+    "detector_error_distribution_sha256": "d8c17aa2ebc0d42027ae60e640338ed3cffdaac8d5839628e7af78895f0f064f"
+  },
+  {
+    "qubits": 80,
+    "measurements": 880,
+    "detectors": 440,
+    "observables": 8,
+    "detector_error_distribution_sha256": "6e6f8f2afdb2cd00e4b3c23b64a74169b20f85ea6a408cc728e1d4729944af90"
+  },
+  {
+    "qubits": 80,
+    "measurements": 880,
+    "detectors": 440,
+    "observables": 8,
+    "detector_error_distribution_sha256": "004d0b065c13561deac8d525ea6f53d224101e20385a3c81c9e6489e3570dfa8"
+  },
+  {
+    "qubits": 80,
+    "measurements": 880,
+    "detectors": 440,
+    "observables": 8,
+    "detector_error_distribution_sha256": "facd437a9f4941b19ed7ec43313c0c7c831d57e5838d108aafe7b4ae8577305b"
+  },
+  {
+    "qubits": 80,
+    "measurements": 880,
+    "detectors": 440,
+    "observables": 8,
+    "detector_error_distribution_sha256": "d281e8d7cbfc561faf94051b1d077c8fff548f7c3b84b1063b7edfd48a1793a7"
+  },
+  {
+    "qubits": 80,
+    "measurements": 880,
+    "detectors": 440,
+    "observables": 8,
+    "detector_error_distribution_sha256": "cd22865d227e42d895a195a03fad9a91ca808e4e7127b9ffde1794a0fb28d370"
+  },
+  {
+    "qubits": 80,
+    "measurements": 880,
+    "detectors": 440,
+    "observables": 8,
+    "detector_error_distribution_sha256": "1cb43e863c181113654bdf1f15bfd8a1189acafcf83a99efa540e45233655755"
+  },
+  {
+    "qubits": 80,
+    "measurements": 880,
+    "detectors": 440,
+    "observables": 8,
+    "detector_error_distribution_sha256": "ac9e6d03b2ee5f36b9e26771e0576607194ffaf71c3b0398622b65339f4455a5"
+  },
+  {
+    "qubits": 80,
+    "measurements": 880,
+    "detectors": 440,
+    "observables": 8,
+    "detector_error_distribution_sha256": "7be4de17f24620b87a184293bba360fd9c66ed6875357f969d75665aa57c6b68"
+  },
+  {
+    "qubits": 80,
+    "measurements": 880,
+    "detectors": 440,
+    "observables": 8,
+    "detector_error_distribution_sha256": "783729cce64597af851be535e5733e98ab3a148aad34e7f7fb88c261f0e70ef5"
+  },
+  {
+    "qubits": 80,
+    "measurements": 880,
+    "detectors": 440,
+    "observables": 8,
+    "detector_error_distribution_sha256": "bd99e779dbb97db31f8d44ca8a72ff98e892cebd95117ff76151d98c51c0b0e2"
+  },
+  {
+    "qubits": 112,
+    "measurements": 2464,
+    "detectors": 1232,
+    "observables": 8,
+    "detector_error_distribution_sha256": "c18037b78ce5f357151419f58d572fc787a3b2fbae4b972291b82efa0610515e"
+  },
+  {
+    "qubits": 112,
+    "measurements": 2464,
+    "detectors": 1232,
+    "observables": 8,
+    "detector_error_distribution_sha256": "2e0424eb0615e45333e0a77e03fa7420f0ab21af8499ced4b440d73b5034fe03"
+  },
+  {
+    "qubits": 112,
+    "measurements": 2464,
+    "detectors": 1232,
+    "observables": 8,
+    "detector_error_distribution_sha256": "4d00dea701d423c3b657791805a79d6549ae44d40f00b904143cbcf4ec6c3ac1"
+  },
+  {
+    "qubits": 112,
+    "measurements": 2464,
+    "detectors": 1232,
+    "observables": 8,
+    "detector_error_distribution_sha256": "c94ea73ab27dba4e0ebebe7c324c0ac896c9aba667901afab9426899f84e2fd0"
+  },
+  {
+    "qubits": 112,
+    "measurements": 2464,
+    "detectors": 1232,
+    "observables": 8,
+    "detector_error_distribution_sha256": "e3da255a45988f4b12fc4afd54b2858f6b405e4f83ecf7853f0cb97e8031b254"
+  },
+  {
+    "qubits": 112,
+    "measurements": 2464,
+    "detectors": 1232,
+    "observables": 8,
+    "detector_error_distribution_sha256": "da8bc0d24d3a794a9b8691300ed257964a9d68142b4904a722ac563dcf56af0c"
+  },
+  {
+    "qubits": 112,
+    "measurements": 2464,
+    "detectors": 1232,
+    "observables": 8,
+    "detector_error_distribution_sha256": "e41e00c03c9bfeed68014a141cab171e6d41e463a0350fd2111a9ae469f32561"
+  },
+  {
+    "qubits": 112,
+    "measurements": 2464,
+    "detectors": 1232,
+    "observables": 8,
+    "detector_error_distribution_sha256": "90069afe54e3ee600ea749b9de5ed62ea435125ecb89089eb2e32c3889c625c1"
+  },
+  {
+    "qubits": 112,
+    "measurements": 2464,
+    "detectors": 1232,
+    "observables": 8,
+    "detector_error_distribution_sha256": "b15cb2e97271f64e0a4a1a79ec1b20720c7aeff75d463f06a4b1f28e2d2dad2d"
+  },
+  {
+    "qubits": 112,
+    "measurements": 2464,
+    "detectors": 1232,
+    "observables": 8,
+    "detector_error_distribution_sha256": "67e59f835cd79346b194df5ae18e0b57d90cefbc113731fb2da1be0d4c733175"
+  },
+  {
+    "qubits": 112,
+    "measurements": 1232,
+    "detectors": 616,
+    "observables": 8,
+    "detector_error_distribution_sha256": "442dab439fb085c770b85752c3312f0ac068f4c29d548f722e7a783a867ac2ad"
+  },
+  {
+    "qubits": 112,
+    "measurements": 1232,
+    "detectors": 616,
+    "observables": 8,
+    "detector_error_distribution_sha256": "d326255d09faf18ded2f31ade04b617266024b1188eb444873ff37a7b7b0ca37"
+  },
+  {
+    "qubits": 112,
+    "measurements": 1232,
+    "detectors": 616,
+    "observables": 8,
+    "detector_error_distribution_sha256": "a956c90043498267969ef44e26a47f684d8f463c8fe704615ce8a92492bafa54"
+  },
+  {
+    "qubits": 112,
+    "measurements": 1232,
+    "detectors": 616,
+    "observables": 8,
+    "detector_error_distribution_sha256": "028dd09b4b98c8e95803124fc59666b03241c631227f1bf6c383296fad379e0f"
+  },
+  {
+    "qubits": 112,
+    "measurements": 1232,
+    "detectors": 616,
+    "observables": 8,
+    "detector_error_distribution_sha256": "a17b2e2c99433ecf6ca77f3fbf35e4159be080354248a764599e61c3ffd302db"
+  },
+  {
+    "qubits": 112,
+    "measurements": 1232,
+    "detectors": 616,
+    "observables": 8,
+    "detector_error_distribution_sha256": "b85a123635e39d3d9deeaf9f9b5a50c9c0f549bb2317329d75d57b1ee9786c84"
+  },
+  {
+    "qubits": 112,
+    "measurements": 1232,
+    "detectors": 616,
+    "observables": 8,
+    "detector_error_distribution_sha256": "0cda1a81ce994d48d4e2cb2bec7d6abe31a8027daff42e47d5b4ec07e72f0dcd"
+  },
+  {
+    "qubits": 112,
+    "measurements": 1232,
+    "detectors": 616,
+    "observables": 8,
+    "detector_error_distribution_sha256": "4c7448adf55cc8e8e1e7a3dfc0446f6964cb20adb2faefe940c1cb8b66403dc3"
+  },
+  {
+    "qubits": 112,
+    "measurements": 1232,
+    "detectors": 616,
+    "observables": 8,
+    "detector_error_distribution_sha256": "1d3fcc2ee69d1bd289d272572eb5e53cf9f88326bbeaba6c9b20646f3e2264e2"
+  },
+  {
+    "qubits": 112,
+    "measurements": 1232,
+    "detectors": 616,
+    "observables": 8,
+    "detector_error_distribution_sha256": "55bcd410f202e00ccae7d7e25013b50d3455d410354fc4d0fa1b28104217d3cb"
+  }
+]

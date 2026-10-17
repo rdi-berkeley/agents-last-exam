@@ -49,6 +49,15 @@ TASK_ID = f"{DOMAIN_NAME}/{TASK_NAME}"
 VARIANT_NAME = "base"
 EVAL_TMP_DIR = f"/tmp/agenthle_eval/{TASK_NAME}"
 SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
+PUBLIC_RERUN_CONTRACT = """\
+Simulation and reporting contract:
+- Simulate seconds 0-3600. Report at least 3 integer agent_seeds. The submitted configuration must also run with other seeds.
+- Report the mean number of completed tripinfo records as the AM-peak simulated trip total.
+- Detector flows use matched detector/15-minute bins, expressed in vehicles/hour; reported means and standard deviations use the declared seeds.
+- Corridor travel time is the sum of edgeData traveltime values over its edges for the full 0-3600-second horizon. Report corridor statistics over the declared seeds.
+- Signal cycle is the sum of all phase durations. Each phase split includes its yellow and all-red duration.
+- Calibrate demand, detector flows, corridor travel times and signal timing against the supplied observations. All reported results must be reproducible from the submitted configuration.
+"""
 
 if __name__ not in sys.modules:
     sys.modules[__name__] = sys.modules.get(__name__, type(sys)(__name__))
@@ -221,6 +230,7 @@ Required output files:
 - `{self.calibration_report_file}`
 - `{self.decisions_file}`
 
+{PUBLIC_RERUN_CONTRACT}
 Rules:
 - Do not modify files under `{self.input_dir}`.
 - Keep any runtime state you create outside `input/`; the staged wrappers already use `{self.runtime_state_dir}` by default.

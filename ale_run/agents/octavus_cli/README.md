@@ -27,9 +27,11 @@ lifecycle.py                              cua-computer-server (:0 desktop)
 budget, so a run that exceeds the budget is reaped. `parse_artifacts()` runs
 host-side: it reads the single `--json` result off stdout, then reads the
 observable thread with the same agent key to attach the transcript, per-run cost,
-tokens, and effective model to the trajectory. Pure stdlib (subprocess / pathlib
-/ json / urllib) plus the shared node bootstrap; no Octavus-internal or admin
-surface.
+tokens, and effective model to the trajectory. With recording on, the video is
+uploaded shortly after the run ends, so the thread is read until the recording is
+`ready` / `failed` / `unavailable` (up to two minutes) before it is attached. Pure
+stdlib (subprocess / pathlib / json / urllib) plus the shared node bootstrap; no
+Octavus-internal or admin surface.
 
 ## Auth
 
@@ -50,6 +52,8 @@ stored agent (unset inherits the dashboard default):
 |---|---|---|
 | `model` (or top-level `model:`) | `--model` | Primary model, `provider/model-id`. |
 | `backup_model` | `--backup-model` | Backup model, `provider/model-id`. |
+| `thinking` | `--thinking` | `off`, `low`, `medium`, `high`, `max`; null/empty inherits. Requires CLI 1.0.10 or newer. |
+| `platform_url` | `--platform-url` | Optional platform deployment override; null uses the CLI default. |
 | `capabilities` | `--capability slug=on\|off` | Per-capability toggle. A toggle only applies to a capability the agent's protocol declares; toggling an undeclared one is rejected (HTTP 400). |
 | `record` / `record_visibility` | `--record` / `--record-public` | Record the execution view to a shareable video. Gated to funded tiers; `public` yields a permanent URL. |
 
@@ -64,7 +68,7 @@ Reference the preset from an experiment (see `example_exp.yaml` for the shape):
 agents:
   - configs/agents/octavus_cli.yaml
 environment: configs/environments/environment_gcloud.yaml
-tasks: selected_tasks/ale_cli.txt      # 105 cpu-free-ubuntu (Linux) tasks
+tasks: selected_tasks/ale_cli.txt      # 86 cpu-free-ubuntu (Linux) tasks
 ```
 
 ```bash

@@ -28,12 +28,16 @@ def read_wav_rms_db(path):
     import numpy as np
     import soundfile as sf
 
-    data, sr = sf.read(path)
-    if data.ndim > 1:
-        data = data.mean(axis=1)
-    rms = np.sqrt(np.mean(data ** 2))
-    if rms == 0:
+    energy = 0.0
+    samples = 0
+    for block in sf.blocks(path, blocksize=65536, always_2d=True):
+        if not np.isfinite(block).all():
+            raise ValueError(f"Non-finite audio samples: {path}")
+        energy += float(np.sum(block**2))
+        samples += block.size
+    if not samples or energy == 0:
         return -120.0
+    rms = np.sqrt(energy / samples)
     return float(20 * np.log10(rms))
 
 
@@ -42,11 +46,12 @@ def check_audio_quality(path):
     import numpy as np
     import soundfile as sf
 
-    data, sr = sf.read(path)
-    if data.ndim > 1:
-        data = data.mean(axis=1)
-    peak = np.max(np.abs(data))
-    return bool(peak < 1.0)
+    samples = 0
+    for block in sf.blocks(path, blocksize=65536, always_2d=True):
+        if not np.isfinite(block).all() or np.max(np.abs(block)) >= 1.0:
+            return False
+        samples += block.size
+    return samples > 0
 
 
 def extract_track_name(filename):
@@ -59,11 +64,11 @@ def extract_track_name(filename):
     marker = "乐器 - "  # 乐器 -
     idx = base.find(marker)
     if idx >= 0:
-        return base[idx + len(marker):].strip()
+        return base[idx + len(marker) :].strip()
     marker_en = "Instrument - "
     idx = base.find(marker_en)
     if idx >= 0:
-        return base[idx + len(marker_en):].strip()
+        return base[idx + len(marker_en) :].strip()
     return base
 
 
@@ -85,27 +90,43 @@ def find_stem_file(stem_files, target_name):
         base = os.path.splitext(f)[0].lower().strip()
         candidates.append((f, track, base))
 
-    # Pass 1: exact match on extracted track names
-    for f, track, base in candidates:
-        if track == target_track:
-            return f
-
-    # Pass 2: exact match on full basenames
-    for f, track, base in candidates:
-        if base == target_base:
-            return f
-
-    # Pass 3: substring match on extracted track names
-    for f, track, base in candidates:
-        if target_track in track or track in target_track:
-            return f
-
-    # Pass 4: substring match on full basenames
-    for f, track, base in candidates:
-        if target_base in base or base in target_base:
-            return f
+    priorities = (
+        [name for name, track, base in candidates if track == target_track],
+        [name for name, track, base in candidates if base == target_base],
+        [
+            name
+            for name, track, base in candidates
+            if track and target_track and (target_track in track or track in target_track)
+        ],
+        [
+            name
+            for name, track, base in candidates
+            if base and target_base and (target_base in base or base in target_base)
+        ],
+    )
+    for matches in priorities:
+        if matches:
+            return matches[0] if len(matches) == 1 else None
 
     return None
+
+
+def match_stem_files(stem_files, reference_files):
+    """Match each reference unambiguously, without reusing a candidate stem."""
+    matched = {name: find_stem_file(stem_files, name) for name in reference_files}
+    for candidate in stem_files:
+        references = [name for name, value in matched.items() if value == candidate]
+        if len(references) < 2:
+            continue
+        exact = [
+            name
+            for name in references
+            if extract_track_name(name).casefold() == extract_track_name(candidate).casefold()
+        ]
+        for name in references:
+            if len(exact) != 1 or name != exact[0]:
+                matched[name] = None
+    return matched
 
 
 def compute_timbre_similarity(agent_path, ref_path):
@@ -122,8 +143,9 @@ def compute_timbre_similarity(agent_path, ref_path):
         if len(data) < 2048:
             return np.zeros(39)
         mfcc = librosa.feature.mfcc(y=data, sr=sr, n_mfcc=13)
-        delta = librosa.feature.delta(mfcc)
-        delta2 = librosa.feature.delta(mfcc, order=2)
+        delta_options = {"mode": "nearest"} if mfcc.shape[1] < 9 else {}
+        delta = librosa.feature.delta(mfcc, **delta_options)
+        delta2 = librosa.feature.delta(mfcc, order=2, **delta_options)
         features = np.vstack([mfcc, delta, delta2])  # 39 x T
         return features.mean(axis=1)  # 39-dim
 
@@ -143,7 +165,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Score project migration stems (quality + timbral similarity)."
     )
-    parser.add_argument("--agent-stems-dir", required=True, help="Path to agent output stems/ directory")
+    parser.add_argument(
+        "--agent-stems-dir", required=True, help="Path to agent output stems/ directory"
+    )
     parser.add_argument("--ref-stems-dir", required=True, help="Path to reference stems/ directory")
     parser.add_argument("--result-path", required=True, help="Where to write JSON output")
     args = parser.parse_args()
@@ -159,7 +183,7 @@ def main():
             raise FileNotFoundError(f"Reference stems directory not found: {ref_dir}")
 
         # --- Agent stems: list, compute RMS, filter silent, check clipping ---
-        agent_wav_files = [f for f in os.listdir(agent_dir) if f.lower().endswith(".wav")]
+        agent_wav_files = sorted(f for f in os.listdir(agent_dir) if f.lower().endswith(".wav"))
         log(f"Found {len(agent_wav_files)} WAV files in agent stems dir")
 
         agent_stems_info = {}
@@ -181,17 +205,17 @@ def main():
         log(f"Non-silent stems: {len(non_silent_stems)}")
 
         # --- Reference stems ---
-        ref_wav_files = [f for f in os.listdir(ref_dir) if f.lower().endswith(".wav")]
+        ref_wav_files = sorted(f for f in os.listdir(ref_dir) if f.lower().endswith(".wav"))
         log(f"Found {len(ref_wav_files)} WAV files in reference stems dir")
 
         # --- Match ref stems to agent stems and compute timbre similarity ---
         matches = []
         timbre_scores = []
         num_valid = 0
+        matched_files = match_stem_files(non_silent_stems, ref_wav_files)
 
         for ref_name in ref_wav_files:
-            ref_base = os.path.splitext(ref_name)[0]
-            matched = find_stem_file(non_silent_stems, ref_base)
+            matched = matched_files[ref_name]
 
             if matched and matched in agent_stems_info:
                 quality_ok = agent_stems_info[matched]["quality_ok"]
@@ -209,20 +233,24 @@ def main():
                     sim = 0.0
 
                 timbre_scores.append(sim)
-                matches.append({
-                    "ref": ref_name,
-                    "agent": matched,
-                    "quality_ok": quality_ok,
-                    "timbre_similarity": round(sim, 4),
-                })
+                matches.append(
+                    {
+                        "ref": ref_name,
+                        "agent": matched,
+                        "quality_ok": quality_ok,
+                        "timbre_similarity": round(sim, 4),
+                    }
+                )
             else:
                 timbre_scores.append(0.0)
-                matches.append({
-                    "ref": ref_name,
-                    "agent": None,
-                    "quality_ok": False,
-                    "timbre_similarity": None,
-                })
+                matches.append(
+                    {
+                        "ref": ref_name,
+                        "agent": None,
+                        "quality_ok": False,
+                        "timbre_similarity": None,
+                    }
+                )
                 log(f"  Timbre: ref='{ref_name}' -- no matching agent stem")
 
         avg_timbre = sum(timbre_scores) / len(timbre_scores) if timbre_scores else 0.0

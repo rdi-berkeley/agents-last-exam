@@ -1,10 +1,10 @@
-"""Render 11 architectural views matching PDF-drawing conventions.
+"""Render 14 architectural views matching PDF-drawing conventions.
 
 Output filenames (in output_dir):
   plan_hall_ground.png       (top-down, cut at z=1500mm)
   plan_hall_first.png        (top-down, cut at z=5500mm)
   plan_hall_second.png       (top-down, cut at z=9300mm)
-  plan_tower_typical.png     (top-down, cut at z=21500mm)
+  plan_tower_typical.png     (top-down, frozen-reference cut at z=17537.68755mm)
   elevation_north.png        (looking -Y, ortho)
   elevation_south.png        (looking +Y, ortho)
   elevation_east.png         (looking -X, ortho)
@@ -40,7 +40,7 @@ ap.add_argument("--obj", required=True)
 ap.add_argument("--out", required=True)
 ap.add_argument("--res", type=int, default=2048)
 ap.add_argument("--samples", type=int, default=64,
-                help="EEVEE TAA samples; higher = cleaner anti-aliasing")
+                help="Cycles CPU samples per pixel")
 ap.add_argument("--line-thickness", type=float, default=1.5,
                 help="Freestyle line thickness in pixels at target resolution")
 ap.add_argument("--plans-only", action="store_true",
@@ -128,13 +128,15 @@ _obj_axes = (
 bpy.ops.wm.obj_import(filepath=args.obj, **_obj_axes)
 
 # Find the imported mesh (single object expected)
-mesh_obj = None
-for o in bpy.data.objects:
-    if o.type == "MESH":
-        mesh_obj = o
-        break
-if mesh_obj is None:
+mesh_objects = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
+if not mesh_objects:
     raise RuntimeError("No mesh imported")
+bpy.ops.object.select_all(action="DESELECT")
+for mesh in mesh_objects:
+    mesh.select_set(True)
+bpy.context.view_layer.objects.active = mesh_objects[0]
+bpy.ops.object.join()
+mesh_obj = bpy.context.view_layer.objects.active
 
 # Compute world-space bbox
 import mathutils
@@ -153,19 +155,15 @@ print(f"BBOX: X[{xmin:.0f},{xmax:.0f}] Y[{ymin:.0f},{ymax:.0f}] Z[{zmin:.0f},{zm
 print(f"CENTROID: ({cx:.0f},{cy:.0f},{cz:.0f})")
 
 # ---------- Render settings ----------
-_engines = {item.identifier for item in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items}
-if "BLENDER_EEVEE_NEXT" in _engines:
-    scene.render.engine = "BLENDER_EEVEE_NEXT"
-elif "BLENDER_EEVEE" in _engines:
-    scene.render.engine = "BLENDER_EEVEE"
-else:
-    raise RuntimeError(f"No supported EEVEE engine found in {sorted(_engines)}")
+scene.render.engine = "CYCLES"
+scene.cycles.device = "CPU"
+scene.cycles.samples = args.samples
+scene.cycles.seed = 0
 scene.render.resolution_x = args.res
 scene.render.resolution_y = args.res
 scene.render.film_transparent = False
 scene.render.image_settings.file_format = "PNG"
 scene.render.image_settings.color_mode = "RGB"
-scene.eevee.taa_render_samples = args.samples
 
 # In --colored mode, disable AgX/Filmic view transform so Emission outputs
 # render at their literal RGB values — otherwise blue glass / orange metal
@@ -351,7 +349,12 @@ floors_w = detect_floors_with_weights(
     merge_radius_mm=DETECT_MERGE,
     up_axis=args.source_up_axis,
 )
-plan_cuts = select_plan_cuts(zmin, floors_w, floor_offset_mm=FLOOR_OFFSET)
+plan_cuts = select_plan_cuts(
+    zmin, floors_w, floor_offset_mm=FLOOR_OFFSET,
+    tower_cut_height=17537.68754987531 * UNIT_FACTOR,
+)
+for plan_name, cut_mm in (("hall_first", 5530), ("hall_second", 7630)):
+    plan_cuts.setdefault(plan_name, cut_mm * UNIT_FACTOR)
 print("DETECTED_FLOORS_MM:", [(round(z, 1), round(w, 1)) for z, w in floors_w])
 print("PLAN_CUTS_MM:", {k: round(v, 1) for k, v in plan_cuts.items()})
 

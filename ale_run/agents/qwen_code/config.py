@@ -1,14 +1,5 @@
-"""QwenCodeConfig: per-episode knobs for the Qwen Code CLI deployer.
+"""Configuration for the pinned Qwen Code CLI and its OpenAI-compatible endpoint."""
 
-Qwen Code (https://github.com/QwenLM/qwen-code) is QwenLM's own coding-agent
-CLI -- an actively-developed fork/parity-target of Claude Code, published on
-npm as ``@qwen-code/qwen-code``. Auth/model routing is entirely env-var
-driven, no LiteLLM layer and no config file to write: setting
-``OPENAI_API_KEY`` + ``OPENAI_MODEL`` + ``OPENAI_BASE_URL`` together is
-enough for the CLI to auto-infer ``AuthType.USE_OPENAI``
-(``getAuthTypeFromEnv`` in ``packages/cli/src/utils/modelConfigUtils.ts``) --
-no ``qwen auth`` step, no on-disk provider registry (unlike zcode).
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -33,16 +24,14 @@ class QwenCodeConfig:
     base_url: str = "https://router.huggingface.co/v1"
     """OpenAI-compatible base URL (``OPENAI_BASE_URL``)."""
 
-    api_key: str | None = None
+    api_key: str | None = field(default=None, repr=False)
     """Literal API key (``OPENAI_API_KEY``). Required -- there is no
     provider-name heuristic or env-var fallback name to guess here (unlike
     openhands_cli's provider-driven OPENROUTER_API_KEY/ANTHROPIC_API_KEY
-    convention); set ``api_key: ${env:HF_TOKEN}`` in the agent yaml."""
+    convention); set ``api_key: ${env:HF_INFERENCE_TOKEN}`` in the agent yaml."""
 
     cli_version: str = "0.24.4"
-    """Version of the ``@qwen-code/qwen-code`` npm package to install.
-    Pinned (not ``latest``) for reproducibility -- confirmed working via a
-    real local run and a real HF Jobs sandbox smoke test at this version."""
+    """Exact version of the ``@qwen-code/qwen-code`` npm package to install."""
 
     extra_envs: dict[str, str] = field(default_factory=dict)
     """Free-form passthrough env vars exported to the qwen subprocess.

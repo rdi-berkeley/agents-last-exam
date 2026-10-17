@@ -10,19 +10,9 @@
         "base"
       ]
     },
-    "business_finance/financial_stmt_reconstruction_aapl_fy2024": {
-      "variants": [
-        "base"
-      ]
-    },
     "business_finance/taxform_4_1": {
       "variants": [
         "variant_1"
-      ]
-    },
-    "business_finance/pe_screening_memo_1": {
-      "variants": [
-        "zscaler_fy2025"
       ]
     },
     "visual_media/video_storyboard_001": {
@@ -46,11 +36,6 @@
       ]
     },
     "health_medicine/microdicom_nih_cxr_reader_adjudication": {
-      "variants": [
-        "base"
-      ]
-    },
-    "health_medicine/crf_sdtm_mapping_4": {
       "variants": [
         "base"
       ]
@@ -90,42 +75,12 @@
         "base"
       ]
     },
-    "education_info/homework_grading_numerical_pdes_instance_02": {
-      "variants": [
-        "base"
-      ]
-    },
     "business_finance/metabase_bi_dashboard_01": {
       "variants": [
         "base"
       ]
     },
     "business_finance/bpmn_supply_disruption_l3": {
-      "variants": [
-        "base"
-      ]
-    },
-    "health_medicine/scene3_skullstrip_qc": {
-      "variants": [
-        "base"
-      ]
-    },
-    "health_medicine/healthcare_variant_annotation_pipeline": {
-      "variants": [
-        "base"
-      ]
-    },
-    "life_sciences/gene_expression_differential_analysis_functional_enrichment_analysis_1": {
-      "variants": [
-        "base"
-      ]
-    },
-    "life_sciences/hg002_chr22_germline_variant_pipeline": {
-      "variants": [
-        "base"
-      ]
-    },
-    "health_medicine/Clinical_Variant_Annotation": {
       "variants": [
         "base"
       ]
@@ -140,52 +95,7 @@
         "base"
       ]
     },
-    "visual_media/inkscape_cultural_poster_design": {
-      "variants": [
-        "base"
-      ]
-    },
-    "computing_math/os_log_permission_guard_v1": {
-      "variants": [
-        "base"
-      ]
-    },
     "computing_math/k8s_migration_1": {
-      "variants": [
-        "base"
-      ]
-    },
-    "engineering/sanding_performance_scoring_instance_1": {
-      "variants": [
-        "base"
-      ]
-    },
-    "computing_math/branch_bound_atsp": {
-      "variants": [
-        "base"
-      ]
-    },
-    "computing_math/k3_abelian_extensions": {
-      "variants": [
-        "base"
-      ]
-    },
-    "transport_safety/capacitated_vehicle_routing_problems": {
-      "variants": [
-        "base"
-      ]
-    },
-    "agriculture_env/crop_rotation_d02": {
-      "variants": [
-        "base"
-      ]
-    },
-    "health_medicine/replicate_paper_1": {
-      "variants": [
-        "base"
-      ]
-    },
-    "health_medicine/epidemiology_forecast": {
       "variants": [
         "base"
       ]
@@ -196,21 +106,6 @@
       ]
     },
     "health_medicine/flusight_offline_hosp_forecast_2024_12_14": {
-      "variants": [
-        "base"
-      ]
-    },
-    "physical_sciences/adapt_vqe_molecular_energy": {
-      "variants": [
-        "base"
-      ]
-    },
-    "computing_math/ising_post_measurement_1": {
-      "variants": [
-        "n10_critical_u01_correlators"
-      ]
-    },
-    "engineering/abb_irb6700_asset_to_urdf_instance_1": {
       "variants": [
         "base"
       ]
@@ -307,7 +202,7 @@
     },
     "visual_media/project_migration": {
       "variants": [
-        "CONTEXT.md"
+        "celeste_symphonic_suite"
       ]
     },
     "life_sciences/zdock_hiv_dimer_interface_scoring_v1": {
@@ -328,11 +223,6 @@
     "life_sciences/idp_ensemble_scoring": {
       "variants": [
         "default"
-      ]
-    },
-    "life_sciences/pseudotime_de": {
-      "variants": [
-        "base"
       ]
     },
     "physical_sciences/computational_materials_science": {
@@ -435,11 +325,6 @@
         "base"
       ]
     },
-    "life_sciences/protein_function_annotation_instance_1": {
-      "variants": [
-        "base"
-      ]
-    },
     "physical_sciences/qm9_mmff94_forcefield_survey_1": {
       "variants": [
         "base"
@@ -505,11 +390,6 @@
         "dorico_prelude"
       ]
     },
-    "life_sciences/amber_minimization_script_prep_instance_1": {
-      "variants": [
-        "base"
-      ]
-    },
     "life_sciences/yeast_colony_detection": {
       "variants": [
         "base"
@@ -538,11 +418,6 @@
     "health_medicine/wsi_tumor_localization_1": {
       "variants": [
         "center_point"
-      ]
-    },
-    "health_medicine/healthcare_bias_audit_27a_public_replication_v1": {
-      "variants": [
-        "base"
       ]
     },
     "health_medicine/healthcare_sap_group_sequential_nsclc": {
@@ -590,11 +465,6 @@
         "base"
       ]
     },
-    "education_info/moodle_gradebook_closeout_reconciliation": {
-      "variants": [
-        "base"
-      ]
-    },
     "engineering/Analog_Active": {
       "variants": [
         "Analog_Active_v1"
@@ -615,11 +485,6 @@
         "base"
       ]
     },
-    "life_sciences/genomic_interval_processing_1": {
-      "variants": [
-        "base"
-      ]
-    },
     "business_finance/internal_employee_agent_instance_1": {
       "variants": [
         "base"
@@ -635,22 +500,12 @@
         "base"
       ]
     },
-    "engineering/mold-flow": {
-      "variants": [
-        "220089"
-      ]
-    },
     "computing_math/cfr_game_theory_equilibrium": {
       "variants": [
         "base"
       ]
     },
     "physical_sciences/exact_diag_heisenberg_j1j2": {
-      "variants": [
-        "base"
-      ]
-    },
-    "agriculture_env/ndvi_zonal_statistics_d02": {
       "variants": [
         "base"
       ]
@@ -681,11 +536,6 @@
       ]
     },
     "computing_math/ranking_node_feature_parity_recovery_instance_1": {
-      "variants": [
-        "base"
-      ]
-    },
-    "life_sciences/rgi_mcr1_colistin_v2": {
       "variants": [
         "base"
       ]
@@ -736,11 +586,6 @@
       ]
     },
     "engineering/2d_drawings_to_3d_building_model": {
-      "variants": [
-        "base"
-      ]
-    },
-    "engineering/2d_drawings_to_3d_bridge_model": {
       "variants": [
         "base"
       ]

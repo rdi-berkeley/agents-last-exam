@@ -2,10 +2,13 @@
 # Runs as root INSIDE the freshly-imported base container; the result is
 # committed to the final image. Bakes the entrypoint and removes VM-host state
 # that is stale or meaningless in a container.
-set -u
+set -euo pipefail
 
 # --- entrypoint (cua-server on :5000 behind Xvfb :0) ---
 chmod +x /dockerstartup/entrypoint.sh
+
+mkdir -p /tmp/.X11-unix /var/tmp
+chmod 1777 /tmp /tmp/.X11-unix /var/tmp
 
 # --- desktop: install XFCE so the container has a real window manager + panel.
 #     The VM brings its desktop up via gdm/GNOME under systemd; a container has
@@ -14,16 +17,17 @@ chmod +x /dockerstartup/entrypoint.sh
 #     entrypoint can start it directly. Baked here (not in the entrypoint) so it
 #     is installed once, not on every per-task container start. ---
 export DEBIAN_FRONTEND=noninteractive
+apt_sources=(-o Dir::Etc::sourcelist=/etc/apt/sources.list -o Dir::Etc::sourceparts=-)
 if ! command -v startxfce4 >/dev/null 2>&1; then
   # the rootfs export drops /var/cache and /var/log; recreate apt's dirs or it
   # errors ("archives/partial is missing", "/var/log/apt/ missing").
   mkdir -p /var/cache/apt/archives/partial /var/lib/apt/lists/partial /var/log/apt
-  apt-get update -qq \
-  && apt-get install -y --no-install-recommends \
+  apt-get "${apt_sources[@]}" update -qq \
+  && apt-get "${apt_sources[@]}" install -y --no-install-recommends \
        xfce4-session xfwm4 xfce4-panel xfdesktop4 xfce4-settings xfconf \
-       xfce4-terminal dbus-x11 x11-xserver-utils \
+       xfce4-terminal dbus-x11 x11-xserver-utils thunar \
   && apt-get clean && rm -rf /var/lib/apt/lists/* \
-  || echo "WARN: XFCE install failed (desktop will fall back to bare Xvfb)"
+  || { echo "FATAL: XFCE install failed" >&2; exit 1; }
 fi
 
 # --- Chrome in a container: GUI tasks launch google-chrome, but the
@@ -60,9 +64,10 @@ rm -f /home/user/.config/libreoffice/*/.lock        2>/dev/null || true
 #     Thunar and wire the exo-open defaults to the apps that ARE installed. ---
 if ! command -v thunar >/dev/null 2>&1; then
   mkdir -p /var/cache/apt/archives/partial /var/lib/apt/lists/partial /var/log/apt
-  apt-get update -qq && apt-get install -y --no-install-recommends thunar \
+  apt-get "${apt_sources[@]}" update -qq \
+    && apt-get "${apt_sources[@]}" install -y --no-install-recommends thunar \
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
-    || echo "WARN: thunar install failed"
+    || { echo "FATAL: thunar install failed" >&2; exit 1; }
 fi
 install -d -o user -g user /home/user/.config/xfce4
 cat > /home/user/.config/xfce4/helpers.rc <<'HELPERS'
@@ -72,17 +77,12 @@ WebBrowser=google-chrome
 HELPERS
 chown user:user /home/user/.config/xfce4/helpers.rc
 
-# --- dirs excluded from the rootfs tar that the runtime needs back, with the
-#     sticky perms docker would otherwise recreate them as root:0755 ---
-mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
-chmod 1777 /tmp
-mkdir -p /var/tmp && chmod 1777 /var/tmp
-
 # --- task_data_root: this is a DATA-LESS image (the ~146GB of task data is NOT
 #     baked — excluded from the rootfs tar). Task data is supplied at runtime by
 #     the `local:<dir>` task_data source (docker cp from the host) into this dir,
 #     so ship it as an empty mount point. ---
-mkdir -p /media/user/data/agenthle && chown -R user:user /media/user/data
+mkdir -p /media/user/data/agenthle
+chown user:user /media/user/data /media/user/data/agenthle
 
 # --- drop VM-host identity / config (regenerated or N/A in a container) ---
 : > /etc/fstab                 2>/dev/null || true   # no VM disks to mount
@@ -141,7 +141,7 @@ rm -rf /home/user/codex-build 2>/dev/null || true                  # codex BUILD
 rm -f  /home/user/reference.frc 2>/dev/null || true                # ~580MB stray simulation output
 rm -rf /home/user/.config/Code /home/user/.config/Sabaki 2>/dev/null || true   # dev editor / app state
 rm -rf /home/user/.agenthle_hidden_eval_assets 2>/dev/null || true # leftover per-task eval asset (no Linux task should rely on a baked home-dir copy)
-rm -rf /home/user/.cache /home/user/.npm /root/.cache 2>/dev/null || true       # package/build caches
+rm -rf /home/user/.npm 2>/dev/null || true
 
 # --- sanity: paths the ale-ubuntu22-docker Image entry promises must exist ---
 echo "--- verify image-promised paths ---"
@@ -151,22 +151,39 @@ for p in /usr/local/bin/node \
          /opt/ale-run/.venv/bin/python \
          /home/user/cua_mcp_server \
          /media/user/data/agenthle; do
-  if [ -e "$p" ]; then echo "OK   $p"; else echo "MISS $p"; fail=1; fi
+  if [ -x "$p" ]; then echo "OK   $p"; else echo "MISS $p"; fail=1; fi
 done
 command -v Xvfb >/dev/null && echo "OK   Xvfb" || { echo "MISS Xvfb"; fail=1; }
-command -v startxfce4 >/dev/null && echo "OK   startxfce4 (XFCE desktop)" || echo "WARN startxfce4 missing (bare Xvfb, no WM)"
+for binary in startxfce4 xfwm4 xfce4-panel thunar dbus-launch xdotool; do
+  command -v "$binary" >/dev/null || { echo "MISS $binary"; fail=1; }
+done
 # the scrub must NOT have touched the prebaked agent harnesses
 for b in /usr/local/bin/codex /usr/local/bin/openclaw \
          /home/user/.local/bin/claude /home/user/.local/bin/gemini /home/user/.local/bin/hermes; do
-  if [ -e "$b" ]; then echo "OK   agent: $b"; else echo "MISS agent: $b"; fail=1; fi
+  if [ -x "$b" ]; then echo "OK   agent: $b"; else echo "MISS agent: $b"; fail=1; fi
 done
 # the removed dev-VM files/accounts must be GONE
 for s in /home/user/.config/gcloud-agenthle-artifacts /home/user/.netrc \
          /home/weichenzhang /home/bytedance /root/.ssh; do
   [ -e "$s" ] && { echo "LEFTOVER (should be gone): $s"; fail=1; } || echo "OK   scrubbed: $s"
 done
-/opt/cua-server/.venv/bin/python -c "import computer_server" 2>/dev/null \
-  && echo "OK   computer_server importable" \
-  || echo "WARN computer_server import failed without X (expected; entrypoint starts Xvfb)"
+/opt/cua-server/.venv/bin/python -c "import importlib.util; assert importlib.util.find_spec('computer_server')" \
+  || { echo "MISS computer_server module"; fail=1; }
+/opt/ale-run/.venv/bin/python -c "import sys; print(sys.version)" \
+  || { echo "MISS ale-run Python runtime"; fail=1; }
 
-[ "$fail" = 0 ] && echo "CLEANUP_OK" || echo "CLEANUP_WARN: missing expected paths above"
+if [ "$fail" != 0 ]; then
+  echo "CLEANUP_FAILED: missing expected paths above" >&2
+  exit 1
+fi
+echo "--- scrub build-only caches and install logs ---"
+for transient_path in /var/log /var/cache/apt /var/cache/man /var/cache/ldconfig; do
+  if [ -d "$transient_path" ]; then
+    find "$transient_path" -mindepth 1 -delete
+  fi
+done
+if [ -d /var/cache/debconf ]; then
+  find /var/cache/debconf -mindepth 1 -type f -empty -delete
+fi
+mkdir -p /var/cache/apt/archives/partial /var/log/apt
+echo "CLEANUP_OK"

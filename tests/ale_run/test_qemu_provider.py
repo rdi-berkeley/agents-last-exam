@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -32,18 +34,25 @@ def _provider_config(tmp_path: Path, base_qcow2: Path) -> dict:
     }
 
 
-def test_loader_builds_qemu_snapshot_map(tmp_path: Path) -> None:
+@pytest.mark.parametrize("image_revision", [None, "deadbeef"])
+def test_loader_builds_qemu_snapshot_map(tmp_path: Path, image_revision: str | None) -> None:
+    disk_source = (
+        "hf://owner/repo/disk.qcow2"
+        if image_revision
+        else "gs://ale-data-public/images/ale-win10.qcow2"
+    )
     agent = tmp_path / "agent.yaml"
     agent.write_text("harness: dummy\nmodel: test\n", encoding="utf-8")
     environment = tmp_path / "environment.yaml"
     environment.write_text(
-        """
+        f"""
 snapshots:
   cpu-free:
     provider: qemu
     image: ale-win10
     qemu:
-      disk_source: gs://ale-data-public/images/ale-win10.qcow2
+      disk_source: {disk_source}
+      image_revision: {image_revision or 'null'}
 task_data_source: baked_in_sandbox
 output_path: local
 gcs_sa_key: secret/gcp_key.json
@@ -68,7 +77,8 @@ tasks:
     provider = spec.environment.provider_specs["qemu"]
     assert provider.config["snapshots"]["cpu-free"] == {
         "image": "ale-win10",
-        "disk_source": "gs://ale-data-public/images/ale-win10.qcow2",
+        "disk_source": disk_source,
+        "image_revision": image_revision,
     }
     assert provider.config["gcs_sa_key"] == "secret/gcp_key.json"
 
@@ -115,7 +125,56 @@ def test_provider_rejects_invalid_runner_pull_policy(
         QemuProvider(config)
 
 
-def test_provider_rejects_hf_revisions_sharing_one_cache_path(
+@pytest.mark.parametrize("obsolete_value", [None, "", "deadbeef"])
+@pytest.mark.parametrize("has_image_revision", [False, True])
+def test_provider_rejects_obsolete_hf_revision(
+    tmp_path: Path, obsolete_value: str | None, has_image_revision: bool,
+) -> None:
+    config = _provider_config(tmp_path, tmp_path / "unused.qcow2")
+    snapshot = config["snapshots"]["cpu-free"]
+    snapshot["disk_source"] = "hf://owner/repo/disk.qcow2"
+    snapshot["hf_revision"] = obsolete_value
+    if has_image_revision:
+        snapshot["image_revision"] = "deadbeef"
+
+    with pytest.raises(ValueError, match="hf_revision is obsolete; rename it to image_revision"):
+        QemuProvider(config)
+
+
+def test_provider_rejects_obsolete_top_level_hf_revision(tmp_path: Path) -> None:
+    config = _provider_config(tmp_path, tmp_path / "unused.qcow2")
+    config["hf_revision"] = "deadbeef"
+
+    with pytest.raises(ValueError, match="hf_revision is obsolete; use image_revision"):
+        QemuProvider(config)
+
+
+@pytest.mark.parametrize("disk_source", ["gs://bucket/disk.qcow2", "/local/disk.qcow2"])
+def test_provider_rejects_image_revision_for_non_hf_source(
+    tmp_path: Path, disk_source: str,
+) -> None:
+    config = _provider_config(tmp_path, tmp_path / "unused.qcow2")
+    config["snapshots"]["cpu-free"].update(
+        disk_source=disk_source, image_revision="deadbeef",
+    )
+
+    with pytest.raises(ValueError, match="image_revision is valid only for an hf:// disk_source"):
+        QemuProvider(config)
+
+
+@pytest.mark.parametrize(("revision", "expected"), [(" deadbeef ", "deadbeef"), (" ", None)])
+def test_provider_normalizes_image_revision(
+    tmp_path: Path, revision: str, expected: str | None,
+) -> None:
+    config = _provider_config(tmp_path, tmp_path / "unused.qcow2")
+    config["snapshots"]["cpu-free"].update(
+        disk_source="hf://owner/repo/disk.qcow2", image_revision=revision,
+    )
+
+    assert QemuProvider(config).config.snapshots["cpu-free"].image_revision == expected
+
+
+def test_provider_rejects_image_revisions_sharing_one_cache_path(
     tmp_path: Path,
 ) -> None:
     source = "hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2"
@@ -124,13 +183,13 @@ def test_provider_rejects_hf_revisions_sharing_one_cache_path(
             "first": {
                 "image": "ale-win10",
                 "disk_source": source,
-                "hf_revision": "revision-a",
+                "image_revision": "revision-a",
                 "root": str(tmp_path / "qemu"),
             },
             "second": {
                 "image": "ale-win10",
                 "disk_source": source,
-                "hf_revision": "revision-b",
+                "image_revision": "revision-b",
                 "root": str(tmp_path / "qemu"),
             },
         }
@@ -138,6 +197,48 @@ def test_provider_rejects_hf_revisions_sharing_one_cache_path(
 
     with pytest.raises(ValueError, match="share cache path"):
         QemuProvider(config)
+
+
+def test_detect_host_egress_mtu_uses_lowest_metric_default_route(
+    tmp_path: Path,
+) -> None:
+    route_table = tmp_path / "route"
+    route_table.write_text(
+        "Iface Destination Gateway Flags RefCnt Use Metric Mask MTU Window IRTT\n"
+        "eth0 00000000 0100000A 0003 0 0 100 00000000 0 0 0\n"
+        "eth1 00000000 0100000B 0003 0 0 200 00000000 0 0 0\n",
+        encoding="utf-8",
+    )
+    network_root = tmp_path / "net"
+    (network_root / "eth0").mkdir(parents=True)
+    (network_root / "eth0" / "mtu").write_text("1460\n", encoding="utf-8")
+    (network_root / "eth1").mkdir(parents=True)
+    (network_root / "eth1" / "mtu").write_text("1500\n", encoding="utf-8")
+
+    assert qemu_module._detect_host_egress_mtu(route_table, network_root) == 1460
+
+
+@pytest.mark.asyncio
+async def test_configure_guest_mtu_updates_default_interface() -> None:
+    commands: list[tuple[str, float]] = []
+
+    class FakeSandbox:
+        id = "ale-qemu-test"
+
+        async def run_command(
+            self,
+            command: str,
+            *,
+            timeout: float = 60,
+        ) -> subprocess.CompletedProcess:
+            commands.append((command, timeout))
+            return subprocess.CompletedProcess(command, 0, "interface=enp0s3 mtu=1460\n", "")
+
+    await QemuProvider._configure_guest_mtu(FakeSandbox(), 1460)
+
+    assert commands[0][1] == 30
+    assert 'sudo ip link set dev "$interface" mtu 1460' in commands[0][0]
+    assert 'test "$actual" = "1460"' in commands[0][0]
 
 
 def test_demo_task_card_resources_reach_qemu_shape(tmp_path: Path) -> None:
@@ -170,16 +271,52 @@ def test_qemu_shape_falls_back_to_image_default(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("source_kind", "requested_revision", "resolved_revision"),
+    [
+        ("local", None, None),
+        ("hf", None, "deadbeef"),
+        ("hf", "main", "deadbeef"),
+        ("hf", "release", "deadbeef"),
+        ("gs", None, "12345"),
+    ],
+)
 async def test_acquire_creates_overlay_and_returns_guest_handle(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    source_kind: str,
+    requested_revision: str | None,
+    resolved_revision: str | None,
 ) -> None:
     base_qcow2 = tmp_path / "ale-win10.qcow2"
     base_qcow2.write_bytes(b"qcow2")
     config = _provider_config(tmp_path, base_qcow2)
+    source_metadata = None
+    if source_kind != "local":
+        source = (
+            "hf://owner/repo/disk.qcow2" if source_kind == "hf" else "gs://bucket/disk.qcow2"
+        )
+        snapshot_config = config["snapshots"]["cpu-free"]
+        snapshot_config["disk_source"] = source
+        source_metadata = {"source": source, "size": 5, "etag": "resolved-etag"}
+        if source_kind == "hf":
+            snapshot_config["image_revision"] = requested_revision
+            source_metadata.update(revision=requested_revision or "main", commit_hash="deadbeef")
+        else:
+            source_metadata["generation"] = "12345"
+        base_qcow2.with_name(f"{base_qcow2.name}.ale-source.json").write_text(
+            json.dumps({**source_metadata, "data_version": "must-not-be-exported"}),
+            encoding="utf-8",
+        )
     config["gcs_sa_key"] = str(tmp_path / "gcp_key.json")
     provider = QemuProvider(config)
     provider._preflight_done = True
+
+    async def fake_fetch_disk(snapshot):
+        return base_qcow2
+
+    monkeypatch.setattr(provider, "_fetch_hf_disk", fake_fetch_disk)
+    monkeypatch.setattr(provider, "_fetch_gcs_disk", fake_fetch_disk)
 
     docker_calls: list[tuple[str, ...]] = []
     credential_calls: list[tuple[str, str]] = []
@@ -201,6 +338,8 @@ async def test_acquire_creates_overlay_and_returns_guest_handle(
             )
             (storage_dir / "data.qcow2").write_bytes(b"overlay")
         if args[:2] == ("inspect", "--format"):
+            if args[2] == "{{.Image}}":
+                return (0, "sha256:runner-digest", "")
             if args[2] == "{{.State.Running}} {{.State.ExitCode}}":
                 return (0, "true 0", "")
             internal_port = args[2]
@@ -244,6 +383,19 @@ async def test_acquire_creates_overlay_and_returns_guest_handle(
     assert sandbox.metadata["memory_gb"] == 8
     assert sandbox.metadata["novnc_url"] == "http://127.0.0.1:18000"
     assert sandbox.metadata["runner_image"] == "agentslastexam/ale-qemu:0.2.0"
+    provenance = json.loads(json.dumps(sandbox.metadata["image_provenance"]))
+    assert provenance == {
+        "provider": "qemu",
+        "image": "ale-win10",
+        "image_revision": resolved_revision,
+        "disk_source": config["snapshots"]["cpu-free"]["disk_source"],
+        "base_qcow2": str(base_qcow2),
+        "size_bytes": 5,
+        "mtime_ns": base_qcow2.stat().st_mtime_ns,
+        "runner_image": "agentslastexam/ale-qemu:0.2.0",
+        "runner_image_id": "sha256:runner-digest",
+        **({"source_metadata": source_metadata} if source_metadata else {}),
+    }
     assert sandbox.metadata["gcs_key_path"] == r"C:\agenthle\gcs-reader.json"
     assert sandbox.metadata["gcs_user_project"] == "test-project"
     assert credential_calls == [
@@ -519,6 +671,9 @@ async def test_resolve_gcs_disk_refreshes_changed_generation(
     resolved = await provider._resolve_disk(snapshot)
     assert resolved.read_bytes() == b"first"
     assert copy_sources == [f"{source}#100"]
+    first_provenance = provider._disk_provenance(snapshot, resolved)
+    assert first_provenance["image_revision"] == "100"
+    assert first_provenance["source_metadata"]["generation"] == "100"
 
     resolved = await provider._resolve_disk(snapshot)
     assert resolved.read_bytes() == b"first"
@@ -538,19 +693,66 @@ async def test_resolve_gcs_disk_refreshes_changed_generation(
         "size": 6,
         "source": source,
     }
+    updated_provenance = provider._disk_provenance(snapshot, resolved)
+    assert updated_provenance["source_metadata"] == sidecar
+    assert updated_provenance["image_revision"] == "101"
+    assert first_provenance["image_revision"] == "100"
+    assert first_provenance["source_metadata"]["generation"] == "100"
+
+
+@pytest.mark.parametrize(
+    "source_metadata",
+    [
+        [],
+        {"source": "hf://owner/other/disk.qcow2", "size": 5, "revision": "main"},
+        {"source": "hf://owner/repo/disk.qcow2", "size": 6, "revision": "main"},
+        {"source": "hf://owner/repo/disk.qcow2", "size": 5, "revision": "other"},
+    ],
+)
+def test_disk_provenance_rejects_mismatched_cache_identity(
+    tmp_path: Path, source_metadata: object,
+) -> None:
+    base_qcow2 = tmp_path / "disk.qcow2"
+    base_qcow2.write_bytes(b"qcow2")
+    config = _provider_config(tmp_path, base_qcow2)
+    config["snapshots"]["cpu-free"]["disk_source"] = "hf://owner/repo/disk.qcow2"
+    provider = QemuProvider(config)
+    base_qcow2.with_name(f"{base_qcow2.name}.ale-source.json").write_text(
+        json.dumps(source_metadata), encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="provenance does not match resolved disk"):
+        provider._disk_provenance(provider.config.snapshots["cpu-free"], base_qcow2)
+
+
+def test_local_disk_provenance_does_not_claim_adjacent_remote_identity(tmp_path: Path) -> None:
+    base_qcow2 = tmp_path / "disk.qcow2"
+    base_qcow2.write_bytes(b"qcow2")
+    provider = QemuProvider(_provider_config(tmp_path, base_qcow2))
+    base_qcow2.with_name(f"{base_qcow2.name}.ale-source.json").write_text(
+        '{"commit_hash": "unverified"}', encoding="utf-8",
+    )
+
+    provenance = provider._disk_provenance(provider.config.snapshots["cpu-free"], base_qcow2)
+
+    assert provenance["image_revision"] is None
+    assert "source_metadata" not in provenance
+    assert json.loads(json.dumps(provenance)) == provenance
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("image_revision", [None, "main", "deadbeef", "deadbeef" * 5])
 async def test_resolve_hf_disk_downloads(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    image_revision: str | None,
 ) -> None:
     config = {
         "snapshots": {
             "cpu-free-ubuntu": {
                 "image": "ale-ubuntu22",
                 "disk_source": "hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22.qcow2",
-                "hf_revision": "deadbeef",
+                "image_revision": image_revision,
                 "root": str(tmp_path / "qemu"),
             }
         }
@@ -558,13 +760,16 @@ async def test_resolve_hf_disk_downloads(
     provider = QemuProvider(config)
     snapshot = provider.config.snapshots["cpu-free-ubuntu"]
     captured: dict[str, object] = {}
+    downloads: list[str] = []
+    resolved_commit = image_revision if image_revision and len(image_revision) == 40 else "deadbeef"
 
     class Metadata:
         size = 5
-        commit_hash = "deadbeef"
+        commit_hash = resolved_commit
         etag = "etag"
 
     def fake_hf_hub_url(*, repo_id, filename, repo_type, revision):
+        assert revision == image_revision
         captured.update(
             repo_id=repo_id,
             filename=filename,
@@ -590,6 +795,7 @@ async def test_resolve_hf_disk_downloads(
         local_dir,
         force_download=False,
     ):
+        downloads.append(filename)
         captured.update(
             repo_id=repo_id,
             filename=filename,
@@ -618,15 +824,64 @@ async def test_resolve_hf_disk_downloads(
     assert captured["repo_id"] == "agents-last-exam/ale-images-qcow2"
     assert captured["filename"] == "ale-ubuntu22.qcow2"
     assert captured["repo_type"] == "dataset"
-    assert captured["revision"] == "deadbeef"
+    assert captured["revision"] == resolved_commit
     assert captured["force_download"] is False
     assert (resolved.parent / f"{resolved.name}.ale-source.json").is_file()
+    provenance = provider._disk_provenance(snapshot, resolved)
+    assert provenance["image_revision"] == resolved_commit
+    assert provenance["source_metadata"]["revision"] == (image_revision or "main")
+    assert provenance["source_metadata"]["commit_hash"] == resolved_commit
+    assert await provider._resolve_disk(snapshot) == resolved
+    assert downloads == ["ale-ubuntu22.qcow2"]
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("resolved_commit", [None, "", "b" * 40])
+@pytest.mark.parametrize("use_manifest", [False, True])
+async def test_resolve_hf_disk_rejects_unverified_commit_pin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    resolved_commit: str | None,
+    use_manifest: bool,
+) -> None:
+    import huggingface_hub
+    from huggingface_hub.errors import EntryNotFoundError
+
+    config = _provider_config(tmp_path, tmp_path / "unused.qcow2")
+    config["snapshots"]["cpu-free"].update(
+        disk_source="hf://owner/repo/disk.qcow2", image_revision="a" * 40,
+    )
+    provider = QemuProvider(config)
+    snapshot = provider.config.snapshots["cpu-free"]
+    destination = snapshot.image_cache_dir / "disk.qcow2"
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(b"qcow2")
+
+    def fake_metadata(url):
+        if url.endswith(".manifest.json") and not use_manifest:
+            raise EntryNotFoundError("no manifest")
+        return SimpleNamespace(size=5, etag="etag", commit_hash=resolved_commit)
+
+    def fail_download(**kwargs):
+        raise AssertionError("an unverified pin must fail before any download")
+
+    monkeypatch.setattr(huggingface_hub, "hf_hub_url", lambda **kwargs: kwargs["filename"])
+    monkeypatch.setattr(huggingface_hub, "get_hf_file_metadata", fake_metadata)
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", fail_download)
+
+    with pytest.raises(RuntimeError, match="image_revision pin verification failed"):
+        await provider._resolve_disk(snapshot)
+
+    assert destination.read_bytes() == b"qcow2"
+    assert not destination.with_name(f"{destination.name}.ale-source.json").exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("image_revision", ["main", "deadbeef"])
 async def test_resolve_hf_manifest_assembles_and_verifies_disk(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    image_revision: str,
 ) -> None:
     source = "hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2"
     provider = QemuProvider(
@@ -635,7 +890,7 @@ async def test_resolve_hf_manifest_assembles_and_verifies_disk(
                 "cpu-free": {
                     "image": "ale-win10",
                     "disk_source": source,
-                    "hf_revision": "deadbeef",
+                    "image_revision": image_revision,
                     "root": str(tmp_path / "qemu"),
                 }
             }
@@ -675,6 +930,7 @@ async def test_resolve_hf_manifest_assembles_and_verifies_disk(
         **kwargs,
     ):
         _ = (force_download, kwargs)
+        assert kwargs["revision"] == "deadbeef"
         destination = Path(local_dir) / filename
         destination.parent.mkdir(parents=True, exist_ok=True)
         if filename.endswith(".manifest.json"):
@@ -714,7 +970,7 @@ def test_assemble_hf_disk_resumes_completed_parts(tmp_path: Path) -> None:
                 "cpu-free": {
                     "image": "ale-win10",
                     "disk_source": source,
-                    "hf_revision": "deadbeef",
+                    "image_revision": "deadbeef",
                     "root": str(tmp_path / "qemu"),
                 }
             }
@@ -788,9 +1044,13 @@ def test_assemble_hf_disk_resumes_completed_parts(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_resolve_hf_disk_adopts_matching_existing_file(
+@pytest.mark.parametrize("cached_data", [b"qcow2", b"wrong"])
+@pytest.mark.parametrize("verifiable_etag", [False, True])
+async def test_resolve_hf_disk_adopts_only_verified_existing_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    cached_data: bytes,
+    verifiable_etag: bool,
 ) -> None:
     source = "hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2"
     provider = QemuProvider(
@@ -799,7 +1059,7 @@ async def test_resolve_hf_disk_adopts_matching_existing_file(
                 "cpu-free": {
                     "image": "ale-win10",
                     "disk_source": source,
-                    "hf_revision": "deadbeef",
+                    "image_revision": "deadbeef",
                     "root": str(tmp_path / "qemu"),
                 }
             }
@@ -808,12 +1068,13 @@ async def test_resolve_hf_disk_adopts_matching_existing_file(
     snapshot = provider.config.snapshots["cpu-free"]
     destination = snapshot.image_cache_dir / "ale-win10.qcow2"
     destination.parent.mkdir(parents=True)
-    destination.write_bytes(b"qcow2")
+    destination.write_bytes(cached_data)
+    downloads = []
 
     class Metadata:
         size = 5
         commit_hash = "deadbeef"
-        etag = "etag"
+        etag = hashlib.sha256(b"qcow2").hexdigest() if verifiable_etag else "opaque-etag"
 
     import huggingface_hub
 
@@ -832,16 +1093,48 @@ async def test_resolve_hf_disk_adopts_matching_existing_file(
 
     monkeypatch.setattr(huggingface_hub, "get_hf_file_metadata", fake_get_hf_file_metadata)
 
-    def fail_download(**kwargs):
-        raise AssertionError("matching existing disk should not be downloaded")
+    def fake_download(**kwargs):
+        assert kwargs["force_download"] is True
+        downloads.append(kwargs["filename"])
+        destination.write_bytes(b"qcow2")
+        return str(destination)
 
-    monkeypatch.setattr(huggingface_hub, "hf_hub_download", fail_download)
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", fake_download)
 
     resolved = await provider._resolve_disk(snapshot)
 
     assert resolved == destination
+    assert resolved.read_bytes() == b"qcow2"
+    adopted = cached_data == b"qcow2" and verifiable_etag
+    assert downloads == ([] if adopted else ["ale-win10.qcow2"])
     sidecar = destination.with_name(f"{destination.name}.ale-source.json")
     assert json.loads(sidecar.read_text())["commit_hash"] == "deadbeef"
+
+
+@pytest.mark.asyncio
+async def test_acquire_cleans_up_when_runner_image_inspection_fails(tmp_path, monkeypatch):
+    base_qcow2 = tmp_path / "disk.qcow2"
+    base_qcow2.write_bytes(b"fixture")
+    provider = QemuProvider(_provider_config(tmp_path, base_qcow2))
+    provider._preflight_done = True
+    for method in ("_create_overlay", "_start_container", "_configure_hairpin_nat"):
+        monkeypatch.setattr(provider, method, AsyncMock())
+    monkeypatch.setattr(qemu_module, "_get_host_port", AsyncMock(return_value=15000))
+    monkeypatch.setattr(qemu_module, "_wait_cua_or_container_exit", AsyncMock(return_value=True))
+    process = AsyncMock(return_value=(1, "", "runner inspect failed"))
+    monkeypatch.setattr(qemu_module, "_run_process", process)
+    remove = AsyncMock()
+    monkeypatch.setattr(qemu_module, "_remove_container", remove)
+
+    with pytest.raises(RuntimeError, match="runner inspect failed"):
+        await provider.acquire(SandboxSpec(snapshot="cpu-free"))
+
+    process.assert_awaited_once_with(
+        "docker", "inspect", "--format", "{{.Image}}", remove.await_args.args[0],
+    )
+    remove.assert_awaited_once()
+    assert not list((tmp_path / "qemu" / "runtime" / "slots").iterdir())
+    assert base_qcow2.read_bytes() == b"fixture"
 
 
 @pytest.mark.asyncio

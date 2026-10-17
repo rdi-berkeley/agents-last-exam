@@ -1,0 +1,10 @@
+{
+  "Q1": {"ticker": "EXAMPLE_A", "pct_increase": 12.3},
+  "Q2": {"ticker": "EXAMPLE_B", "fiscal_year": 2019, "operating_margin_pct": -1.25},
+  "Q3": {
+    "ranking": [
+      "EXAMPLE_A", "EXAMPLE_B", "EXAMPLE_C", "EXAMPLE_D", "EXAMPLE_E",
+      "EXAMPLE_F", "EXAMPLE_G", "EXAMPLE_H", "EXAMPLE_I", "EXAMPLE_J"
+    ]
+  }
+}

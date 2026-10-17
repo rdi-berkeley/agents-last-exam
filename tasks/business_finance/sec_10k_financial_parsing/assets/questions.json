@@ -1,0 +1,20 @@
+[
+  {
+    "id": "Q1",
+    "question": "Which company had the largest percentage increase in revenue from its earliest available fiscal year to its latest? Report the ticker and the percentage increase rounded to 1 decimal place.",
+    "answer_format": {"ticker": "string", "pct_increase": "float (1 decimal)"},
+    "answer_location": "Put the answer_format object directly at key Q1 of the top-level qa_answers.json object. See schema/qa_answers_schema.json and schema/qa_answers_example.json."
+  },
+  {
+    "id": "Q2",
+    "question": "Across all 10 companies and all available years, which single company-year had the lowest operating margin (operating_income / revenue)? Report ticker, fiscal year, and the margin as a percentage rounded to 2 decimal places.",
+    "answer_format": {"ticker": "string", "fiscal_year": "integer", "operating_margin_pct": "float (2 decimals)"},
+    "answer_location": "Put the answer_format object directly at key Q2 of the top-level qa_answers.json object. See schema/qa_answers_schema.json and schema/qa_answers_example.json."
+  },
+  {
+    "id": "Q3",
+    "question": "For fiscal year 2023 only, rank all 10 companies by stockholders_equity from highest to lowest. Report as an ordered list of tickers.",
+    "answer_format": {"ranking": ["string"]},
+    "answer_location": "Put the answer_format object directly at key Q3 of the top-level qa_answers.json object; the ticker list belongs inside its ranking field. See schema/qa_answers_schema.json and schema/qa_answers_example.json."
+  }
+]

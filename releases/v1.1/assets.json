@@ -1,0 +1,269 @@
+{
+  "version": "1.1",
+  "published_date": "2026-10-14",
+  "selected_task_lists": {
+    "selected_tasks/ale_cli.txt": {
+      "count": 86,
+      "sha256": "45669c7f1f9a171780c1f35453874d940c028d70cafcdd98df084a96191d3e19"
+    },
+    "selected_tasks/cpu.txt": {
+      "count": 119,
+      "sha256": "0e15757312336aab88993b35162670d46667278e9cf8be5ba2d1cee1316563ff"
+    },
+    "selected_tasks/docker_support.txt": {
+      "count": 78,
+      "sha256": "2112356ad3df9379380297905f55860d3f6c47f2dd3fcaaa2367e5080998f76c"
+    },
+    "selected_tasks/full/full-spectrum.txt": {
+      "count": 46,
+      "sha256": "15d0aa7f9ce3dc2c691940af629e0baed02f179339c24f19fa56f5b51e22f751"
+    },
+    "selected_tasks/full/last-exam.txt": {
+      "count": 36,
+      "sha256": "95a4426a5b0fc39b2e7bcfd368bf06d80f399dc68bb6645de35c8da6695df75f"
+    },
+    "selected_tasks/full/near-term.txt": {
+      "count": 45,
+      "sha256": "faf68c069cdaf88540043e6b4cd1fbbd15735563f14c8287a6d9a638aea92f6f"
+    },
+    "selected_tasks/full/overall.txt": {
+      "count": 122,
+      "sha256": "2f8a3ee8a55b15821474dfa8395d36f09becf0715af54431ce50145c616b7462"
+    },
+    "selected_tasks/full.txt": {
+      "count": 122,
+      "sha256": "f780efa9974ff1e964bbf52bbbe5524bc3bcc6ef25c9b8549b925ade2658cf06"
+    },
+    "selected_tasks/hello_both.txt": {
+      "count": 2,
+      "sha256": "ff0f8bcccd31e24f97672dfb142ebcb372817770983e83b1b33db8aed815975d"
+    },
+    "selected_tasks/gpu.txt": {
+      "count": 3,
+      "sha256": "0446bc4a9155abef7e429ed3d0dc391071c6468b00c526defba06c1a8b2eed12"
+    },
+    "selected_tasks/tool_smoke_both.txt": {
+      "count": 2,
+      "sha256": "abf070c223349717f3d441b9edc597c0515f32ace7a03c49e0de82dd5ef3b949"
+    }
+  },
+  "huggingface": {
+    "public": {
+      "repo": "agents-last-exam/agents-last-exam-data",
+      "revision": "bae6244b87da74b212748993863b3ca4f5ba84ad",
+      "gated": false,
+      "tag": "v1.1"
+    },
+    "reference": {
+      "repo": "agents-last-exam/agents-last-exam-reference",
+      "revision": "628e7f22ba6d9e399f8ab097587f93627a82848b",
+      "gated": "manual",
+      "tag": "v1.1"
+    },
+    "metadata": {
+      "repo": "agents-last-exam/agents-last-exam",
+      "revision": "d35928193ff62fee808d0af5fc45af03e43b9216",
+      "gated": false,
+      "tag": "v1.1"
+    },
+    "archive": {
+      "repo": "agents-last-exam/agents-last-exam-data-archive",
+      "revision": "08a30d40604e809c4eef2ede783ebf219c15987b",
+      "gated": "manual",
+      "tag": "v1.1"
+    },
+    "images": {
+      "repo": "agents-last-exam/ale-images-qcow2",
+      "revision": "40ba46b348a684b7d1b34d18e308aed54737f41a",
+      "gated": false,
+      "tag": "v1.1"
+    }
+  },
+  "images": {
+    "linux": {
+      "filename": "ale-ubuntu22-v1.1.qcow2",
+      "sha256": "6557e22ca4dc5a3faba79b36e8c57d859951d17ace9e218f2355db7b77a42bc0",
+      "bytes": 92630876160,
+      "hf_manifest": "ale-ubuntu22-v1.1.qcow2.manifest.json",
+      "parts": 24,
+      "gcloud": {
+        "project": "agenthle-488519",
+        "name": "ale-ubuntu22-v1-1",
+        "id": "6787350152473672543"
+      },
+      "gcs": {
+        "uri": "gs://ale-data-public/images/ale-ubuntu22-v1.1.qcow2",
+        "generation": "1791969857102835",
+        "crc32c": "j7ig3Q=="
+      }
+    },
+    "windows": {
+      "filename": "ale-win10-v1.1.qcow2",
+      "sha256": "0bf3605bca5500f9727157006230d2b829de8de8b280784b41e2be29c4cd621a",
+      "bytes": 78938767360,
+      "hf_manifest": "ale-win10-v1.1.qcow2.manifest.json",
+      "parts": 20,
+      "gcloud": {
+        "project": "agenthle-488519",
+        "name": "ale-win10-v1-1",
+        "id": "3168582503260944238"
+      },
+      "gcs": {
+        "uri": "gs://ale-data-public/images/ale-win10-v1.1.qcow2",
+        "generation": "1791970456931235",
+        "crc32c": "RsQkrA=="
+      }
+    }
+  },
+  "task_data": {
+    "selected_tasks": 122,
+    "logical_members": 85280,
+    "manifest_sha256": "05c8975a5c68309d724a3bdbefa7ef1675bada4f4bde809fbacf113d25bb24bf",
+    "image_task_coverage": 151,
+    "image_inactive_tasks": [
+      "agriculture_env/crop_rotation_d02",
+      "agriculture_env/ndvi_zonal_statistics_d02",
+      "business_finance/financial_stmt_reconstruction_aapl_fy2024",
+      "business_finance/pe_screening_memo_1",
+      "computing_math/branch_bound_atsp",
+      "computing_math/ising_post_measurement_1",
+      "computing_math/k3_abelian_extensions",
+      "computing_math/os_log_permission_guard_v1",
+      "education_info/homework_grading_numerical_pdes_instance_02",
+      "education_info/moodle_gradebook_closeout_reconciliation",
+      "engineering/abb_irb6700_asset_to_urdf_instance_1",
+      "engineering/sanding_performance_scoring_instance_1",
+      "health_medicine/Clinical_Variant_Annotation",
+      "health_medicine/crf_sdtm_mapping_4",
+      "health_medicine/epidemiology_forecast",
+      "health_medicine/healthcare_bias_audit_27a_public_replication_v1",
+      "health_medicine/healthcare_variant_annotation_pipeline",
+      "health_medicine/replicate_paper_1",
+      "health_medicine/scene3_skullstrip_qc",
+      "life_sciences/amber_minimization_script_prep_instance_1",
+      "life_sciences/gene_expression_differential_analysis_functional_enrichment_analysis_1",
+      "life_sciences/genomic_interval_processing_1",
+      "life_sciences/hg002_chr22_germline_variant_pipeline",
+      "life_sciences/protein_function_annotation_instance_1",
+      "life_sciences/pseudotime_de",
+      "life_sciences/rgi_mcr1_colistin_v2",
+      "physical_sciences/adapt_vqe_molecular_energy",
+      "transport_safety/capacitated_vehicle_routing_problems",
+      "visual_media/inkscape_cultural_poster_design"
+    ],
+    "hf_image_projection": "v1.1-platform-projections.json",
+    "archive_filename": "ale-tasks-data.tar.gz",
+    "archive_sha256": "6977425145fdf25f6065e3573c956aca8bb775ede5c6828f299b3dc7e84b1a2e",
+    "archive_bytes": 47649358131,
+    "public_reference_format": "header-encrypted reference.7z",
+    "gcs_public": {
+      "generation_size_crc32c_match": true,
+      "objects": 68609,
+      "prefix": "gs://ale-data-public/v1.1/"
+    },
+    "public_input_software_objects": 68461,
+    "public_reference_archives": 148,
+    "hf_native_path_transport": "_transport/v1.1/path-compatibility.tar",
+    "hf_public_symlink_transport": "_transport/v1.1/tcga-public-symlinks.tar",
+    "archive_task_coverage": 150,
+    "archive_inactive_tasks": [
+      "agriculture_env/crop_rotation_d02",
+      "agriculture_env/ndvi_zonal_statistics_d02",
+      "business_finance/financial_stmt_reconstruction_aapl_fy2024",
+      "business_finance/pe_screening_memo_1",
+      "computing_math/branch_bound_atsp",
+      "computing_math/ising_post_measurement_1",
+      "computing_math/k3_abelian_extensions",
+      "computing_math/os_log_permission_guard_v1",
+      "education_info/moodle_gradebook_closeout_reconciliation",
+      "engineering/abb_irb6700_asset_to_urdf_instance_1",
+      "engineering/sanding_performance_scoring_instance_1",
+      "health_medicine/Clinical_Variant_Annotation",
+      "health_medicine/crf_sdtm_mapping_4",
+      "health_medicine/epidemiology_forecast",
+      "health_medicine/healthcare_bias_audit_27a_public_replication_v1",
+      "health_medicine/healthcare_variant_annotation_pipeline",
+      "health_medicine/replicate_paper_1",
+      "health_medicine/scene3_skullstrip_qc",
+      "life_sciences/amber_minimization_script_prep_instance_1",
+      "life_sciences/gene_expression_differential_analysis_functional_enrichment_analysis_1",
+      "life_sciences/genomic_interval_processing_1",
+      "life_sciences/hg002_chr22_germline_variant_pipeline",
+      "life_sciences/protein_function_annotation_instance_1",
+      "life_sciences/pseudotime_de",
+      "life_sciences/rgi_mcr1_colistin_v2",
+      "physical_sciences/adapt_vqe_molecular_energy",
+      "transport_safety/capacitated_vehicle_routing_problems",
+      "visual_media/inkscape_cultural_poster_design"
+    ]
+  },
+  "qemu_runner": {
+    "image": "agentslastexam/ale-qemu:0.2.0",
+    "registry_digest": "sha256:cc3ead471566c27f7c394c8748ff2e69124f310dbe35fce5e4a5177bc947232f",
+    "guest_task_data_included": false
+  },
+  "docker": {
+    "image": "agentslastexam/ale-ubuntu22-docker:v1.1",
+    "pinned_image": "agentslastexam/ale-ubuntu22-docker:v1.1@sha256:0b223c5042bedfa78f37f17881f6b410aa3d745310b667e5dff62637363c5085",
+    "publication_status": "published",
+    "published_date": "2026-10-14",
+    "registry_digest": "sha256:0b223c5042bedfa78f37f17881f6b410aa3d745310b667e5dff62637363c5085",
+    "config_digest": "sha256:130be0dab07d38a8658fdb325c25ad7c15ea42d6707edf875cd3b361e4f5c041",
+    "compressed_layer_bytes": 37386125249,
+    "aligned_linux_qcow2_sha256": "6557e22ca4dc5a3faba79b36e8c57d859951d17ace9e218f2355db7b77a42bc0"
+  },
+  "scope": {
+    "updated_tasks": 57,
+    "excluded": [
+      "AWS",
+      "Aliyun"
+    ],
+    "open_source_conversions": [
+      "engineering/2d_drawings_to_3d_building_model",
+      "engineering/cailian_road_highway_alignment_2",
+      "engineering/gcode",
+      "engineering/inner_support_elevation_optimization",
+      "visual_media/music_transcription",
+      "visual_media/project_migration"
+    ],
+    "retired_tasks": {
+      "education_info/homework_grading_numerical_pdes_instance_02": "Feedback verification was overly tied to fixed wording.",
+      "engineering/mold-flow": "Full four-cavity filling, packing, cooling and demolding was not validated with open-source software at the original scope; original data exists.",
+      "agriculture_env/crop_rotation_d02": "Removed from the final v1.1 task selection.",
+      "agriculture_env/ndvi_zonal_statistics_d02": "Removed from the final v1.1 task selection.",
+      "business_finance/financial_stmt_reconstruction_aapl_fy2024": "Removed from the final v1.1 task selection.",
+      "business_finance/pe_screening_memo_1": "Removed from the final v1.1 task selection.",
+      "computing_math/branch_bound_atsp": "Removed from the final v1.1 task selection.",
+      "computing_math/ising_post_measurement_1": "Removed from the final v1.1 task selection.",
+      "computing_math/k3_abelian_extensions": "Removed from the final v1.1 task selection.",
+      "computing_math/os_log_permission_guard_v1": "Removed from the final v1.1 task selection.",
+      "education_info/moodle_gradebook_closeout_reconciliation": "Removed from the final v1.1 task selection.",
+      "engineering/abb_irb6700_asset_to_urdf_instance_1": "Removed from the final v1.1 task selection.",
+      "engineering/sanding_performance_scoring_instance_1": "Removed from the final v1.1 task selection.",
+      "health_medicine/Clinical_Variant_Annotation": "Removed from the final v1.1 task selection.",
+      "health_medicine/crf_sdtm_mapping_4": "Removed from the final v1.1 task selection.",
+      "health_medicine/epidemiology_forecast": "Removed from the final v1.1 task selection.",
+      "health_medicine/healthcare_bias_audit_27a_public_replication_v1": "Removed from the final v1.1 task selection.",
+      "health_medicine/healthcare_variant_annotation_pipeline": "Removed from the final v1.1 task selection.",
+      "health_medicine/replicate_paper_1": "Removed from the final v1.1 task selection.",
+      "health_medicine/scene3_skullstrip_qc": "Removed from the final v1.1 task selection.",
+      "life_sciences/amber_minimization_script_prep_instance_1": "Removed from the final v1.1 task selection.",
+      "life_sciences/gene_expression_differential_analysis_functional_enrichment_analysis_1": "Removed from the final v1.1 task selection.",
+      "life_sciences/genomic_interval_processing_1": "Removed from the final v1.1 task selection.",
+      "life_sciences/hg002_chr22_germline_variant_pipeline": "Removed from the final v1.1 task selection.",
+      "life_sciences/protein_function_annotation_instance_1": "Removed from the final v1.1 task selection.",
+      "life_sciences/pseudotime_de": "Removed from the final v1.1 task selection.",
+      "life_sciences/rgi_mcr1_colistin_v2": "Removed from the final v1.1 task selection.",
+      "physical_sciences/adapt_vqe_molecular_energy": "Removed from the final v1.1 task selection.",
+      "transport_safety/capacitated_vehicle_routing_problems": "Removed from the final v1.1 task selection.",
+      "visual_media/inkscape_cultural_poster_design": "Removed from the final v1.1 task selection."
+    },
+    "task_change_categories": {
+      "instruction": 47,
+      "verification": 43,
+      "environment": 32,
+      "data": 23
+    },
+    "task_change_manifest": "releases/v1.1/upgrade.json"
+  }
+}

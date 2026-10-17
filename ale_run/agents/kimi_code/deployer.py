@@ -98,6 +98,22 @@ def _npm_global_root(npm_path: str, prefix: str) -> Path:
     return Path(result.stdout.strip()).resolve()
 
 
+def _launch_command(kimi_path: str, node_path: str, node_modules: Path) -> list[str]:
+    if Path(kimi_path).suffix.lower() not in {".cmd", ".bat"}:
+        return [kimi_path]
+    package = (node_modules / "@moonshot-ai" / "kimi-code").resolve()
+    metadata = json.loads((package / "package.json").read_text(encoding="utf-8"))
+    entry = metadata.get("bin")
+    if isinstance(entry, dict):
+        entry = entry.get("kimi")
+    if not isinstance(entry, str) or not entry:
+        raise RuntimeError("kimi_code: npm package has no kimi entry point")
+    executable = (package / entry).resolve()
+    if not executable.is_relative_to(package) or not executable.is_file():
+        raise RuntimeError("kimi_code: invalid npm entry point")
+    return [node_path, str(executable)]
+
+
 class KimiCodeDeployer(BaseAgentDeployer):
     """Sandbox deployer for ``@moonshot-ai/kimi-code``."""
 
@@ -180,6 +196,7 @@ class KimiCodeDeployer(BaseAgentDeployer):
                 )
 
         self._kimi_path = kimi_path
+        self._kimi_command = _launch_command(kimi_path, node_path, node_modules)
         self._otel_bootstrap_path: Path | None = None
         if config.otel_enabled:
             node_modules = await asyncio.to_thread(_npm_global_root, npm_path, prefix)
@@ -247,7 +264,7 @@ class KimiCodeDeployer(BaseAgentDeployer):
                 process = await asyncio.to_thread(
                     subprocess.Popen,
                     [
-                        self._kimi_path,
+                        *self._kimi_command,
                         "--prompt",
                         prompt,
                         "--output-format",
@@ -259,6 +276,7 @@ class KimiCodeDeployer(BaseAgentDeployer):
                     cwd=str(work_dir),
                     env=env,
                     start_new_session=hasattr(os, "setsid"),
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
                 )
             pid_file.write_text(str(process.pid), encoding="ascii")
             while process.poll() is None:

@@ -14,30 +14,29 @@ Hard gates (set score = 0.0 if any triggered):
 Static subset (70%):
   1. Helm completeness           (20%)  present/8 required K8s kinds after render
   2. Configuration correctness   (25%)  12-item checklist on rendered manifests
-  3. Terraform validity          (10%)  4 structural checks on *.tf
+  3. Terraform validity          (10%)  native validation and 4 structural checks
   4. CI/CD completeness          (10%)  5 stages in deploy.yml
   5. Report completeness         ( 5%)  4 files in verification/
 
-Snapshot-derived live subset (30%, capped by snapshot evidence):
-  (a) Pods Running               (12%)  verification/pods.txt — all rows Running
-  (b) Services have endpoints    (4.5%) verification/services.txt — expected svcs
-  (c) Health endpoint returns 200(4.5%) verification/health-check.txt
-  (d) HPA TARGETS not <unknown>  (4.5%) live-cluster only — 0 in snapshot mode
-  (e) Frontend→db blocked        (4.5%) live-cluster only — 0 in snapshot mode
-
-Checks (d) and (e) only score when `--live-cluster` is set and a reachable
-Minikube cluster already exists. Stage 2 default = snapshot mode.
+Live subset (30%): application pods Running, populated service endpoints,
+healthy backend, reported HPA CPU metrics, and frontend-to-db isolation with
+a successful backend-to-db control. All checks use the task-local kubectl
+wrapper, a captured context, and the discovered application namespace.
 """
 
 import argparse
 import hashlib
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
+import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -63,13 +62,7 @@ REQUIRED_HELM_KINDS = {
     "ingress": ("Ingress", None),
 }
 
-CI_STAGES = {
-    "build": re.compile(r"docker\s+build", re.IGNORECASE),
-    "test": re.compile(r"(pytest|\bnpm\s+test\b)", re.IGNORECASE),
-    "security": re.compile(r"trivy", re.IGNORECASE),
-    "deploy": re.compile(r"helm\s+(upgrade|install)", re.IGNORECASE),
-    "verify": re.compile(r"rollout\s+status", re.IGNORECASE),
-}
+CI_STAGES = ("build", "test", "security", "deploy", "verify")
 
 REQUIRED_VERIFICATION_FILES = (
     "pods.txt",
@@ -248,6 +241,48 @@ def _all_containers_in_docs(docs: list[dict]):
             yield d, c
 
 
+def workload_services(docs: list[dict]) -> dict[str, list[dict]]:
+    workloads = {
+        role: _match_resource(docs, kind, role) or {}
+        for role, kind in (("frontend", "Deployment"), ("backend", "Deployment"), ("db", "StatefulSet"))
+    }
+    templates = {role: workload.get("spec", {}).get("template", {}) for role, workload in workloads.items()}
+    matches = {role: [] for role in workloads}
+    for service in docs:
+        if service.get("kind") != "Service":
+            continue
+        spec = service.get("spec") or {}
+        selector = spec.get("selector") or {}
+        if not selector:
+            continue
+        roles = [role for role, template in templates.items() if all(
+            template.get("metadata", {}).get("labels", {}).get(key) == value
+            for key, value in selector.items()
+        )]
+        if len(roles) != 1:
+            continue
+        role = roles[0]
+        named_ports = {
+            port.get("name"): port.get("containerPort")
+            for container in templates[role].get("spec", {}).get("containers", [])
+            for port in container.get("ports", [])
+            if port.get("name") and port.get("protocol", "TCP") == "TCP"
+        }
+        ports = []
+        for port in spec.get("ports", []):
+            target = port.get("targetPort", port.get("port"))
+            if isinstance(target, str):
+                target = named_ports.get(target)
+            if port.get("protocol", "TCP") == "TCP" and all(
+                type(number) is int and 0 < number < 65536
+                for number in (port.get("port"), target)
+            ):
+                ports.append({"port": port["port"], "target_port": target, "name": port.get("name", "")})
+        if ports and service.get("metadata", {}).get("name"):
+            matches[role].append({"service": service, "ports": ports})
+    return matches
+
+
 def score_config_correctness(docs: list[dict]) -> tuple[float, dict]:
     checks: dict[str, bool] = {}
 
@@ -298,19 +333,36 @@ def score_config_correctness(docs: list[dict]) -> tuple[float, dict]:
             np_db = True
     checks["netpol_selects_db"] = np_db
 
-    # 7. secretKeyRef for sensitive env vars
-    sensitive_env = {"DB_PASSWORD", "SECRET_KEY", "POSTGRES_PASSWORD"}
+    sensitive_env = {"DB_PASSWORD", "SECRET_KEY", "API_KEY", "POSTGRES_PASSWORD"}
+    resources = {
+        (document.get("kind"), document.get("metadata", {}).get("namespace", "default"),
+         document.get("metadata", {}).get("name")): document
+        for document in docs if document.get("kind") in {"Secret", "ConfigMap"}
+    }
     used_secret_ref = set()
     env_value_plain = False
     for _dep, c in _all_containers_in_docs(docs):
+        namespace = _dep.get("metadata", {}).get("namespace", "default")
+        resolved = {}
+        for source in c.get("envFrom") or []:
+            for reference_field, kind in (("secretRef", "Secret"), ("configMapRef", "ConfigMap")):
+                reference = source.get(reference_field) or {}
+                resource = resources.get((kind, namespace, reference.get("name")), {})
+                for key, value in (resource.get("data") or {}).items():
+                    name = source.get("prefix", "") + key
+                    if name in sensitive_env:
+                        resolved[name] = kind == "Secret" and isinstance(value, str)
         for env in c.get("env") or []:
             name = env.get("name")
             if name in sensitive_env:
                 vf = env.get("valueFrom") or {}
-                if "secretKeyRef" in vf:
-                    used_secret_ref.add(name)
-                elif "value" in env:
-                    env_value_plain = True
+                reference = vf.get("secretKeyRef") or {}
+                secret = resources.get(("Secret", namespace, reference.get("name")), {})
+                resolved[name] = "value" not in env and isinstance(
+                    (secret.get("data") or {}).get(reference.get("key")), str
+                )
+        used_secret_ref.update(name for name, valid in resolved.items() if valid)
+        env_value_plain = env_value_plain or any(not valid for valid in resolved.values())
     checks["secret_key_ref_for_sensitive"] = bool(
         used_secret_ref and not env_value_plain
     )
@@ -347,16 +399,10 @@ def score_config_correctness(docs: list[dict]) -> tuple[float, dict]:
     checks["ingress_api_path"] = api_path
 
     # 11. frontend svc NodePort, backend/db ClusterIP
-    svc_types = {}
-    for d in docs:
-        if d.get("kind") != "Service":
-            continue
-        name = (d.get("metadata") or {}).get("name") or ""
-        svc_types[name] = (d.get("spec") or {}).get("type") or "ClusterIP"
-    svc_ok = (
-        svc_types.get("frontend-service") == "NodePort"
-        and svc_types.get("backend-service", "ClusterIP") == "ClusterIP"
-        and svc_types.get("db-service", "ClusterIP") == "ClusterIP"
+    services = workload_services(docs)
+    svc_ok = all(
+        any(item["service"]["spec"].get("type", "ClusterIP") == expected for item in services[role])
+        for role, expected in (("frontend", "NodePort"), ("backend", "ClusterIP"), ("db", "ClusterIP"))
     )
     checks["service_types"] = svc_ok
 
@@ -422,14 +468,231 @@ def _variables_have_descriptions(tf_text: str) -> bool:
     return all(re.search(r"\bdescription\b", b) for b in blocks)
 
 
+def validate_terraform(tf_dir: Path, terraform: str, scratch: Path) -> dict:
+    if not tf_dir.is_dir():
+        return {"valid": False, "reason": "Terraform directory missing"}
+    scratch.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="terraform-", dir=scratch) as work:
+        copied = Path(work) / "configuration"
+        shutil.copytree(tf_dir, copied, ignore=shutil.ignore_patterns(".terraform", "*.tfstate", "*.tfstate.*"))
+        initialized = subprocess.run(
+            [terraform, f"-chdir={copied}", "init", "-backend=false", "-input=false", "-no-color"],
+            capture_output=True, text=True, timeout=180,
+        )
+        if initialized.returncode:
+            diagnostic = initialized.stdout + initialized.stderr
+            unavailable = ("failed to request discovery document", "could not connect to registry",
+                           "timeout", "no such host", "network is unreachable", "tls handshake",
+                           "502 bad gateway", "503 service unavailable", "429 too many requests")
+            invalid = ("does not have a provider named", "no available releases match",
+                       "invalid provider source", "invalid version constraint",
+                       "invalid required_version", "unsupported terraform core version",
+                       "argument or block definition required", "unclosed configuration block",
+                       "invalid single-argument block definition", "duplicate required providers")
+            lowered = " ".join(diagnostic.lower().split())
+            if not any(marker in lowered for marker in unavailable) and any(marker in lowered for marker in invalid):
+                return {"valid": False, "phase": "init", "diagnostic": diagnostic[-8192:]}
+            raise RuntimeError("Terraform initialization unavailable: " + diagnostic[-2000:])
+        result = subprocess.run(
+            [terraform, f"-chdir={copied}", "validate", "-json"],
+            capture_output=True, text=True, timeout=60,
+        )
+        payload = json.loads(result.stdout)
+        if type(payload.get("valid")) is not bool or result.returncode not in (0, 1):
+            raise RuntimeError("Terraform validation lacks a valid execution receipt")
+        if payload["valid"] != (result.returncode == 0):
+            raise RuntimeError("Terraform validity and exit code disagree")
+        diagnostics = payload.get("diagnostics", [])
+        if any("failed to load plugin schemas" in item.get("summary", "").lower() for item in diagnostics):
+            raise RuntimeError("Terraform provider schema could not be loaded")
+        return {"valid": payload["valid"], "phase": "validate", "diagnostics": diagnostics}
+
+
+def ci_shell_commands(script: str, root: Path, directory: Path, depth: int = 0) -> list[list[str]]:
+    commands = []
+    script = re.sub(r"\$\{\{.*?\}\}", "__workflow_expression__", script, flags=re.DOTALL)
+    for line in script.replace("\\\n", " ").splitlines():
+        try:
+            lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|()")
+            lexer.whitespace_split = True
+            tokens = list(lexer)
+        except ValueError:
+            continue
+        command = []
+        for token in [*tokens, ";"]:
+            if not (token and all(character in ";&|()" for character in token)):
+                command.append(token)
+                continue
+            environment_prefix = []
+            while command and (command[0] in {"sudo", "env", "then", "do"} or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", command[0])):
+                prefix = command.pop(0)
+                if prefix.startswith("KUBECONFIG="):
+                    environment_prefix.append(prefix)
+            if command:
+                executable = command[0].rsplit("/", 1)[-1]
+                commands.append([executable, *command[1:], *environment_prefix])
+                script_name = command[0]
+                shell_invocation = executable in {"bash", "sh", "source", "."}
+                if shell_invocation:
+                    script_name = next((argument for argument in command[1:] if not argument.startswith("-")), "")
+                inline_script = executable in {"bash", "sh"} and any(argument in {"-c", "-lc", "-ec"} for argument in command[1:])
+                if executable == "cd" and len(command) == 2:
+                    directory = (directory / command[1]).resolve()
+                if depth < 3 and inline_script:
+                    commands.extend(ci_shell_commands(script_name, root, directory, depth + 1))
+                elif depth < 3 and (shell_invocation or script_name.endswith(".sh")) and script_name:
+                    script_name = script_name.replace("${GITHUB_WORKSPACE}/", "").replace("$GITHUB_WORKSPACE/", "")
+                    if root.name == "output" and script_name.startswith("output/"):
+                        script_name = script_name[len("output/"):]
+                    candidate = (directory / script_name).resolve()
+                    if candidate.is_relative_to(root) and candidate.is_file() and candidate.stat().st_size <= 65536:
+                        commands.extend(ci_shell_commands(candidate.read_text(encoding="utf-8", errors="replace"), root, directory, depth + 1))
+            command = []
+    return commands
+
+
 def score_cicd(ci_file: Path) -> tuple[float, dict]:
     if not ci_file.is_file():
         return 0.0, {stage: False for stage in CI_STAGES}
-    text = ci_file.read_text(encoding="utf-8", errors="replace")
-    results = {stage: bool(pattern.search(text)) for stage, pattern in CI_STAGES.items()}
-    score = sum(1 for v in results.values() if v) / len(results)
+    try:
+        workflow = yaml.safe_load(ci_file.read_text(encoding="utf-8", errors="replace"))
+    except yaml.YAMLError:
+        return 0.0, {stage: False for stage in CI_STAGES}
+    commands = []
+    actions = []
+    stage_jobs = {"deploy": set(), "verify": set()}
+    accessible_jobs = {"deploy": set(), "verify": set()}
+    empty_cluster_jobs = set()
+    jobs = workflow.get("jobs", {}) if isinstance(workflow, dict) else {}
+    if not isinstance(jobs, dict):
+        return 0.0, {stage: False for stage in CI_STAGES}
+    root = ci_file.parent.resolve()
+    if root.name == "workflows" and root.parent.name == ".github":
+        root = root.parent.parent
+    for job_name, job in jobs.items():
+        if not isinstance(job, dict) or not isinstance(job.get("steps", []), list):
+            continue
+        runner = job.get("runs-on", "")
+        labels = runner.get("labels", []) if isinstance(runner, dict) else runner
+        labels = [labels] if isinstance(labels, str) else labels
+        hosted = isinstance(labels, list) and "self-hosted" not in labels and any(
+            isinstance(label, str) and label.startswith(("ubuntu-", "windows-", "macos-")) for label in labels
+        )
+        environments = [workflow.get("env") or {}, job.get("env") or {}]
+        cluster_ready = not hosted or any(environment.get("KUBECONFIG") for environment in environments if isinstance(environment, dict))
+        local_cluster_created = False
+        local_workload_deployed = False
+        defaults = job.get("defaults", workflow.get("defaults", {})) or {}
+        default_directory = (defaults.get("run") or {}).get("working-directory", ".")
+        for step in job.get("steps", []):
+            if not isinstance(step, dict):
+                continue
+            action = str(step.get("uses", ""))
+            actions.append(action)
+            if action.lower().startswith(("azure/k8s-set-context@", "azure/aks-set-context@", "google-github-actions/get-gke-credentials@")):
+                local_cluster_created = False
+            local_cluster_created = local_cluster_created or action.lower().startswith((
+                "helm/kind-action@", "medyagh/setup-minikube@", "engineerd/setup-kind@", "absaoss/k3d-action@",
+            ))
+            if action.lower().startswith((
+                "azure/k8s-set-context@", "azure/aks-set-context@",
+                "google-github-actions/get-gke-credentials@", "helm/kind-action@",
+                "medyagh/setup-minikube@", "engineerd/setup-kind@", "absaoss/k3d-action@",
+            )):
+                cluster_ready = True
+            environment = step.get("env") or {}
+            step_ready = cluster_ready or (isinstance(environment, dict) and bool(environment.get("KUBECONFIG")))
+            script = step.get("run", "")
+            if not isinstance(script, str):
+                continue
+            directory = (root / str(step.get("working-directory", default_directory))).resolve()
+            for command in ci_shell_commands(script, root, directory):
+                commands.append(command)
+                local_cluster_created = local_cluster_created or (
+                    command[:2] == ["minikube", "start"]
+                    or command[:3] in (["kind", "create", "cluster"], ["k3d", "cluster", "create"])
+                )
+                setup = (
+                    command[:2] in (["minikube", "start"], ["oc", "login"])
+                    or command[:3] in (["kind", "create", "cluster"], ["k3d", "cluster", "create"], ["aws", "eks", "update-kubeconfig"], ["az", "aks", "get-credentials"])
+                    or command[:4] == ["gcloud", "container", "clusters", "get-credentials"]
+                    or (command[:2] == ["kubectl", "config"] and "set-cluster" in command and any(token.startswith("--server") for token in command))
+                )
+                destination = command[-1]
+                kubeconfig_destination = destination.endswith("/.kube/config") or destination in {"$KUBECONFIG", "${KUBECONFIG}"}
+                if kubeconfig_destination and (
+                    command[0] in {"cp", "mv", "install"}
+                    or (command[0] in {"echo", "printf", "base64", "tee"} and (">" in command or command[0] == "tee"))
+                ):
+                    setup = True
+                if setup:
+                    cluster_ready = step_ready = True
+                    if not (command[:2] == ["minikube", "start"] or command[:3] in (["kind", "create", "cluster"], ["k3d", "cluster", "create"])):
+                        local_cluster_created = False
+                if command[0] == "export" and any(token.startswith("KUBECONFIG=") for token in command[1:]):
+                    step_ready = True
+                explicit_access = any(
+                    token in {"--kubeconfig", "--server", "--kube-apiserver"}
+                    or token.startswith(("--kubeconfig=", "--server=", "--kube-apiserver=", "KUBECONFIG="))
+                    for token in command
+                )
+                stage = None
+                if command[0] == "helm" and len(command) > 1 and command[1] in {"upgrade", "install"}:
+                    stage = "deploy"
+                elif command[0] == "kubectl" and any(command[index:index + 2] == ["rollout", "status"] for index in range(1, len(command))):
+                    stage = "verify"
+                if stage is not None:
+                    stage_jobs[stage].add(job_name)
+                    if step_ready or explicit_access:
+                        remote_environment = any(
+                            isinstance(value, dict) and value.get("KUBECONFIG")
+                            for value in [*environments, environment]
+                        )
+                        if stage == "verify" and hosted and local_cluster_created and not local_workload_deployed and not (explicit_access or remote_environment):
+                            empty_cluster_jobs.add(job_name)
+                        else:
+                            accessible_jobs[stage].add(job_name)
+                            if stage == "deploy":
+                                local_workload_deployed = True
+                if local_cluster_created and command[0] == "kubectl" and any(
+                    token in {"apply", "create"} for token in command[1:]
+                ) and any(token in {"-f", "--filename", "-k", "--kustomize"} or token.startswith(("--filename=", "--kustomize=")) for token in command[1:]):
+                    local_workload_deployed = True
+    for command in list(commands):
+        if command[:2] != ["docker", "run"]:
+            continue
+        remaining = command[2:]
+        while remaining and remaining[0].startswith("-"):
+            option = remaining.pop(0)
+            if option in {"-e", "--env", "-v", "--volume", "-w", "--workdir", "--name", "--network", "--user", "-u"} and remaining:
+                remaining.pop(0)
+        if len(remaining) > 1:
+            image = remaining[0].split("@", 1)[0].split(":", 1)[0]
+            if image in {"aquasec/trivy", "docker.io/aquasec/trivy"} and not any(
+                token.split("=", 1)[0] == "--entrypoint" for token in command[2:]
+            ):
+                commands.append(["trivy", *remaining[1:]])
+            nested = [remaining[1].rsplit("/", 1)[-1], *remaining[2:]]
+            commands.append(nested)
+            if nested[0] in {"sh", "bash"} and any(flag in {"-c", "-lc", "-ec"} for flag in nested[1:]) and not any(
+                token.split("=", 1)[0] == "--entrypoint" for token in command[2:]
+            ):
+                commands.extend(ci_shell_commands(shlex.join(nested), root, root))
+    results = {
+        "build": any(command[:2] == ["docker", "build"] for command in commands),
+        "test": any(command[0] == "pytest" or command[:2] == ["npm", "test"] or (command[0] in {"python", "python3"} and command[1:3] == ["-m", "pytest"]) for command in commands),
+        "security": any(command[0] == "trivy" for command in commands) or any(action.startswith("aquasecurity/trivy-action@") for action in actions),
+        "deploy": bool(accessible_jobs["deploy"]),
+        "verify": bool(accessible_jobs["verify"]),
+    }
+    score = sum(1 for value in results.values() if value) / len(CI_STAGES)
+    for stage in stage_jobs:
+        missing = sorted(stage_jobs[stage] - accessible_jobs[stage] - (empty_cluster_jobs if stage == "verify" else set()))
+        if missing:
+            results[f"{stage}_missing_cluster_jobs"] = missing
+    if empty_cluster_jobs - accessible_jobs["verify"]:
+        results["verify_empty_cluster_jobs"] = sorted(empty_cluster_jobs - accessible_jobs["verify"])
     return score, results
-
 
 def score_report(verification_dir: Path) -> tuple[float, dict]:
     present = {
@@ -449,25 +712,35 @@ def score_pods_snapshot(path: Path) -> tuple[float, dict]:
     if not path.is_file():
         return 0.0, {"file": False}
     text = path.read_text(encoding="utf-8", errors="replace")
+    pod_row = re.compile(
+        r"^(?:[a-z0-9][a-z0-9-]*\s+)?"
+        r"(?P<name>(?:pod/)?[a-z0-9][a-z0-9.-]*)\s+"
+        r"(?P<ready>\d+)/(?P<total>\d+)\s+"
+        r"(?P<status>[A-Za-z][A-Za-z0-9_:/-]*)(?:\s+.*)?$"
+    )
     rows: list[dict] = []
     for line in text.splitlines():
-        if not line.strip() or line.startswith(("$", "#")):
+        match = pod_row.fullmatch(line.strip())
+        if match is None:
             continue
-        if line.lstrip().startswith("NAME"):
-            continue
-        cols = line.split()
-        if len(cols) < 3:
-            continue
-        # columns: NAME READY STATUS ...
-        status = cols[2]
-        rows.append({"name": cols[0], "status": status})
+        ready_count = int(match["ready"])
+        total_count = int(match["total"])
+        rows.append({
+            "name": match["name"],
+            "status": match["status"],
+            "ready": ready_count == total_count and total_count > 0,
+        })
     if not rows:
         return 0.0, {"file": True, "rows": 0}
-    all_running = all(r["status"] == "Running" for r in rows)
+    active = [row for row in rows if row["status"] != "Completed"]
+    all_running = bool(active) and all(row["status"] == "Running" for row in active)
+    all_ready = bool(active) and all(row["ready"] for row in active)
     return (1.0 if all_running else 0.0), {
         "file": True,
         "rows": len(rows),
+        "completed": len(rows) - len(active),
         "all_running": all_running,
+        "all_ready": all_ready,
     }
 
 
@@ -503,35 +776,181 @@ def score_health_snapshot(path: Path) -> tuple[float, dict]:
     return (1.0 if ok else 0.0), {"file": True, "ok": ok}
 
 
-def score_hpa_live(live: bool) -> tuple[float, dict]:
-    if not live:
-        return 0.0, {"reason": "live-only; not scored in snapshot mode"}
-    proc = subprocess.run(
-        ["kubectl", "get", "hpa", "-o",
-         "jsonpath={range .items[*]}{.status.currentMetrics}{\"\\n\"}{end}"],
-        capture_output=True, text=True,
+@dataclass
+class Cluster:
+    kubectl: str
+    context: str
+    namespace: str
+    observations: list[dict] = field(default_factory=list)
+
+    def run(self, *arguments, timeout=30):
+        command = [self.kubectl, "--context", self.context, "--namespace", self.namespace, *arguments]
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            observation = {"command": command, "error": str(error)}
+            if isinstance(error, subprocess.TimeoutExpired):
+                for name, output in (("stdout", error.stdout), ("stderr", error.stderr)):
+                    observation[name] = output.decode(errors="replace") if isinstance(output, bytes) else output
+            self.observations.append(observation)
+            raise
+        self.observations.append({"command": command, "returncode": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
+        return result
+
+    def get(self, *arguments):
+        result = self.run("get", *arguments, "-o", "json")
+        if result.returncode:
+            raise RuntimeError(f"kubectl get failed: {result.stderr[:200]}")
+        return json.loads(result.stdout)
+
+
+def discover_cluster(kubectl: str) -> Cluster:
+    current = subprocess.run([kubectl, "config", "current-context"], capture_output=True, text=True, timeout=30)
+    if current.returncode or not current.stdout.strip():
+        raise RuntimeError("Task-local kubectl has no active context")
+    context = current.stdout.strip()
+    result = subprocess.run(
+        [kubectl, "--context", context, "get", "deployments", "--all-namespaces", "-l", "app=webapp", "-o", "json"],
+        capture_output=True, text=True, timeout=30,
     )
-    if proc.returncode != 0:
-        return 0.0, {"reason": "kubectl get hpa failed", "stderr": proc.stderr[:200]}
-    ok = bool(proc.stdout.strip()) and "<nil>" not in proc.stdout
-    return (1.0 if ok else 0.0), {"raw": proc.stdout[:200]}
+    if result.returncode:
+        raise RuntimeError(f"Cannot discover application namespace: {result.stderr[:200]}")
+    namespaces = {}
+    for deployment in json.loads(result.stdout).get("items", []):
+        metadata = deployment.get("metadata", {})
+        namespaces.setdefault(metadata.get("namespace", "default"), set()).add(metadata.get("name"))
+    matching = [namespace for namespace, names in namespaces.items() if {"frontend", "backend"} <= names]
+    if len(matching) != 1:
+        raise RuntimeError("Expected one namespace with frontend and backend deployments")
+    return Cluster(kubectl, context, matching[0])
 
 
-def score_netpol_live(live: bool) -> tuple[float, dict]:
-    if not live:
-        return 0.0, {"reason": "live-only; not scored in snapshot mode"}
-    # Run a curl pod in the frontend tier and expect it to fail reaching db-service:5432.
-    cmd = [
-        "kubectl", "run", "netpol-probe",
-        "--image=busybox:1.36", "--restart=Never", "--rm", "-i",
-        "--labels=app=webapp,tier=frontend", "--",
-        "sh", "-c", "nc -w 3 -z db-service 5432 && echo REACHED || echo BLOCKED",
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0 and "BLOCKED" not in proc.stdout:
-        return 0.0, {"reason": "kubectl run probe failed", "stderr": proc.stderr[:200]}
-    blocked = "BLOCKED" in proc.stdout and "REACHED" not in proc.stdout
-    return (1.0 if blocked else 0.0), {"raw": proc.stdout[:200]}
+def score_pods_live(cluster: Cluster) -> tuple[float, dict]:
+    pods = cluster.get("pods", "-l", "app=webapp").get("items", [])
+    active = [pod for pod in pods if not (
+        pod.get("status", {}).get("phase") == "Succeeded"
+        and any(owner.get("kind") == "Job" for owner in pod.get("metadata", {}).get("ownerReferences", [])))]
+    names = [pod.get("metadata", {}).get("name", "") for pod in active]
+    required = all(any(name == role or name.startswith(role + "-") for name in names) for role in ("frontend", "backend", "db"))
+    running = required and all(pod.get("status", {}).get("phase") == "Running" for pod in active)
+    return float(running), {"pods": names, "all_running": running, "completed_jobs": len(pods) - len(active)}
+
+
+def score_services_live(cluster: Cluster) -> tuple[float, dict]:
+    services = workload_services(cluster.get("deployments,statefulsets,services", "-l", "app=webapp").get("items", []))
+    endpoints = {item.get("metadata", {}).get("name"): item for item in cluster.get("endpoints").get("items", [])}
+    populated = {role: [] for role in services}
+    for role, candidates in services.items():
+        for candidate in candidates:
+            name = candidate["service"]["metadata"]["name"]
+            subsets = endpoints.get(name, {}).get("subsets", [])
+            if all(any(
+                subset.get("addresses") and any(
+                    endpoint_port.get("port") == port["target_port"]
+                    and endpoint_port.get("protocol", "TCP") == "TCP"
+                    and endpoint_port.get("name", "") == port["name"]
+                    for endpoint_port in subset.get("ports", [])
+                ) for subset in subsets
+            ) for port in candidate["ports"]):
+                populated[role].append(name)
+    return float(all(populated.values())), {"populated": populated}
+
+
+def score_health_live(cluster: Cluster) -> tuple[float, dict]:
+    services = workload_services(cluster.get("deployments,statefulsets,services", "-l", "app=webapp").get("items", []))
+    probes = []
+    for candidate in services["backend"]:
+        name = candidate["service"]["metadata"]["name"]
+        for port in candidate["ports"]:
+            if port["port"] != 5000:
+                continue
+            url = f"http://{name}:{port['port']}/health"
+            script = f"import json,urllib.request; response=urllib.request.urlopen({url!r},timeout=5); print(json.dumps({{'code':response.status,'body':json.load(response)}}))"
+            result = cluster.run("exec", "deployment/backend", "--", "python", "-c", script)
+            probe = {"url": url, "returncode": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
+            probes.append(probe)
+            if result.returncode:
+                continue
+            try:
+                payload = json.loads(result.stdout)
+            except ValueError:
+                continue
+            healthy = isinstance(payload, dict) and payload.get("code") == 200 and isinstance(payload.get("body"), dict) and payload["body"].get("status") == "healthy"
+            if healthy:
+                return 1.0, {"healthy": True, "probes": probes}
+    return 0.0, {"healthy": False, "probes": probes}
+
+
+def score_hpa_live(cluster: Cluster, *, wait_seconds: int = 180) -> tuple[float, dict]:
+    readings = []
+    for attempt in range(wait_seconds // 5 + 1):
+        hpas = cluster.get("hpa", "-l", "app=webapp").get("items", [])
+        backend_hpas = [hpa for hpa in hpas if
+                        hpa.get("spec", {}).get("scaleTargetRef", {}).get("kind") == "Deployment"
+                        and hpa.get("spec", {}).get("scaleTargetRef", {}).get("name") == "backend"]
+        for hpa in backend_hpas:
+            for metric in hpa.get("status", {}).get("currentMetrics", []):
+                resource = metric.get("resource", {})
+                value = resource.get("current", {}).get("averageUtilization")
+                if metric.get("type") == "Resource" and resource.get("name") == "cpu" and type(value) is int and value >= 0:
+                    readings.append(value)
+        if readings or not backend_hpas or attempt == wait_seconds // 5:
+            break
+        time.sleep(5)
+    return float(bool(readings)), {"cpu_utilization": readings}
+
+
+def score_netpol_live(cluster: Cluster) -> tuple[float, dict]:
+    pods = cluster.get("pods", "-l", "app=webapp").get("items", [])
+    selected = {}
+    for role in ("frontend", "backend"):
+        selected[role] = next((pod for pod in pods if pod.get("metadata", {}).get("name", "").startswith(role + "-") and pod.get("status", {}).get("phase") == "Running"), None)
+    if not all(selected.values()):
+        return 0.0, {"reason": "Running frontend and backend required for network probes"}
+    image = selected["backend"]["spec"]["containers"][0]["image"]
+    script = (
+        "import socket\n"
+        "address=socket.gethostbyname('db-service')\n"
+        "try:\n"
+        "    connection=socket.create_connection((address,5432),timeout=4)\n"
+        "    connection.close()\n"
+        "    print('REACHED')\n"
+        "except socket.timeout:\n"
+        "    print('BLOCKED')\n"
+    )
+    outcomes = {}
+    for role in ("backend", "frontend"):
+        name = f"eval-netpol-{uuid.uuid4().hex[:12]}"
+        labels = selected[role]["metadata"].get("labels", {})
+        label_text = ",".join(f"{key}={value}" for key, value in labels.items() if key != "pod-template-hash")
+        try:
+            result = cluster.run("run", name, f"--image={image}", "--image-pull-policy=IfNotPresent", "--restart=Never", "--rm", "-i", "--pod-running-timeout=45s", f"--labels={label_text}", "--command", "--", "python", "-c", script, timeout=60)
+            markers = [line.strip() for line in result.stdout.splitlines() if line.strip() in {"REACHED", "BLOCKED"}]
+            outcomes[role] = markers[0] if result.returncode == 0 and len(markers) == 1 else "PROBE_FAILED"
+        finally:
+            cluster.run("delete", "pod", name, "--ignore-not-found", "--wait=false")
+    return float(outcomes == {"backend": "REACHED", "frontend": "BLOCKED"}), outcomes
+
+
+def score_cluster(kubectl: str, receipt_path: Path | None = None) -> dict:
+    checks = {"pods": score_pods_live, "services": score_services_live, "health": score_health_live, "hpa": score_hpa_live, "netpol": score_netpol_live}
+    try:
+        cluster = discover_cluster(kubectl)
+    except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
+        results = {name: {"score": 0.0, "detail": {"reason": str(error)}} for name in checks}
+        if receipt_path is not None:
+            receipt_path.write_text(json.dumps({"results": results, "discovery_error": str(error)}), encoding="utf-8")
+        return results
+    results = {}
+    for name, check in checks.items():
+        try:
+            score, detail = check(cluster)
+        except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
+            score, detail = 0.0, {"reason": str(error)}
+        results[name] = {"score": score, "detail": detail, "context": cluster.context, "namespace": cluster.namespace}
+        if receipt_path is not None:
+            receipt_path.write_text(json.dumps({"results": results, "observations": cluster.observations}), encoding="utf-8")
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -548,13 +967,16 @@ def parse_args() -> argparse.Namespace:
         help="evaluator scratch/cache (e.g. bootstrap helm binary)",
     )
     parser.add_argument("--helm-version", default=HELM_VERSION_DEFAULT)
-    parser.add_argument(
-        "--live-cluster",
-        action="store_true",
-        help="score HPA TARGETS and NetworkPolicy against a running cluster",
-    )
+    parser.add_argument("--kubectl", required=True, help="task-local kubectl wrapper")
+    parser.add_argument("--terraform", required=True, help="task-local Terraform executable")
     parser.add_argument("--json-only", action="store_true", help="suppress debug log on stdout")
     return parser.parse_args()
+
+
+def emit_payload(payload: dict, tmp_dir: Path) -> None:
+    serialized = json.dumps(payload)
+    (tmp_dir / "verification.json").write_text(serialized + "\n", encoding="utf-8")
+    print(serialized)
 
 
 def main() -> int:
@@ -578,7 +1000,7 @@ def main() -> int:
             "hard_gate": gate,
             "breakdown": breakdown,
         }
-        print(json.dumps(payload))
+        emit_payload(payload, tmp_dir)
         return 0
 
     helm_bin = ensure_helm(tmp_dir / "bin", args.helm_version)
@@ -589,22 +1011,24 @@ def main() -> int:
             "hard_gate": f"hard_gate: helm template failed ({render_err[:200]})",
             "breakdown": breakdown,
         }
-        print(json.dumps(payload))
+        emit_payload(payload, tmp_dir)
         return 0
 
     helm_score, helm_detail = score_helm_completeness(docs)
     config_score, config_detail = score_config_correctness(docs)
     tf_score, tf_detail = score_terraform(output_dir / "terraform")
+    try:
+        tf_validation = validate_terraform(output_dir / "terraform", args.terraform, tmp_dir)
+    except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
+        emit_payload({"score": None, "infrastructure_error": str(error)}, tmp_dir)
+        return 1
+    tf_detail["native_validation"] = tf_validation
+    if not tf_validation["valid"]:
+        tf_score = 0.0
     ci_score, ci_detail = score_cicd(output_dir / ".github" / "workflows" / "deploy.yml")
     report_score, report_detail = score_report(output_dir / "verification")
 
-    pods_score, pods_detail = score_pods_snapshot(output_dir / "verification" / "pods.txt")
-    svc_score, svc_detail = score_services_snapshot(output_dir / "verification" / "services.txt")
-    health_score, health_detail = score_health_snapshot(
-        output_dir / "verification" / "health-check.txt"
-    )
-    hpa_score, hpa_detail = score_hpa_live(args.live_cluster)
-    netpol_score, netpol_detail = score_netpol_live(args.live_cluster)
+    live = score_cluster(args.kubectl, tmp_dir / "live-probes.json")
 
     total = (
         helm_score * W_HELM
@@ -612,11 +1036,11 @@ def main() -> int:
         + tf_score * W_TERRAFORM
         + ci_score * W_CI
         + report_score * W_REPORT
-        + pods_score * W_PODS
-        + svc_score * W_SVC
-        + health_score * W_HEALTH
-        + hpa_score * W_HPA
-        + netpol_score * W_NETPOL
+        + live["pods"]["score"] * W_PODS
+        + live["services"]["score"] * W_SVC
+        + live["health"]["score"] * W_HEALTH
+        + live["hpa"]["score"] * W_HPA
+        + live["netpol"]["score"] * W_NETPOL
     )
 
     breakdown.update({
@@ -625,20 +1049,16 @@ def main() -> int:
         "terraform_validity": {"score": tf_score, "detail": tf_detail},
         "cicd_completeness": {"score": ci_score, "detail": ci_detail},
         "report_completeness": {"score": report_score, "detail": report_detail},
-        "pods_snapshot": {"score": pods_score, "detail": pods_detail},
-        "services_snapshot": {"score": svc_score, "detail": svc_detail},
-        "health_snapshot": {"score": health_score, "detail": health_detail},
-        "hpa_live": {"score": hpa_score, "detail": hpa_detail, "mode": "live" if args.live_cluster else "skipped"},
-        "netpol_live": {"score": netpol_score, "detail": netpol_detail, "mode": "live" if args.live_cluster else "skipped"},
+        **{f"{name}_live": result for name, result in live.items()},
     })
 
     payload = {
         "score": round(total, 6),
         "hard_gate": None,
-        "mode": "live" if args.live_cluster else "snapshot",
+        "mode": "live",
         "breakdown": breakdown,
     }
-    print(json.dumps(payload))
+    emit_payload(payload, tmp_dir)
     return 0
 
 

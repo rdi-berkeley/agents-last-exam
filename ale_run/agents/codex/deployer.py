@@ -394,12 +394,16 @@ class CodexDeployer(BaseAgentDeployer):
         # ale-kasm which runs on 8000). URL is host:port only — no backslashes,
         # safe in a TOML basic string.
         cua_url = self.executor.cua_bridge_url()
+        coordinate_space = cfg.coordinate_space or (
+            "normalized" if "gemini" in cfg.model.lower() else "pixel"
+        )
         config_toml += (
             "[mcp_servers.cua]\n"
             'type = "stdio"\n'
             f'command = "{node_exe}"\n'
             f'args = ["{mcp_entry}"]\n'
-            f'env = {{ CUA_SERVER_URL = "{cua_url}" }}\n'
+            f'env = {{ CUA_SERVER_URL = "{cua_url}", '
+            f'CUA_COORDINATE_SPACE = "{coordinate_space}" }}\n'
         )
 
         # OpenRouter provider block

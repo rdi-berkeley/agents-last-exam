@@ -18,8 +18,17 @@ Install the
 gcloud auth login
 git clone git@github.com:rdi-berkeley/agents-last-exam.git
 cd agents-last-exam
-uv sync --all-packages
+bash env/install_host_deps.sh
+uv sync --all-packages --locked
+bash env/verify_host_env.sh
 ```
+
+The host installer supports Ubuntu 22.04/24.04/26.04 and Debian 12/13; see
+[host evaluation dependencies](../env/README.md#host-evaluation-environment).
+The checked-in `uv.lock` pins Python dependencies. Verification checks native
+tools, deferred evaluator imports, and all 122 active task entry points without
+starting VMs or contacting judges. The runner repeats host checks before its
+Judge preflight; `--dry-run` remains a configuration-only preview.
 
 The host's `gcloud` login creates and deletes VMs. A separate service-account
 key is injected into each sandbox for Cloud Storage.
@@ -77,12 +86,15 @@ The repository ignores `secret/gcp_key.json`. Do not commit or share it.
 ## 4. Copy the published images
 
 ```bash
-for image in ale-ubuntu22 ale-win10; do
+for image in ale-ubuntu22-v1-1 ale-win10-v1-1; do
   gcloud compute images create "$image" \
     --source-image="$image" \
     --source-image-project=agenthle-488519
 done
 ```
+
+These names match the v1.1 environment profiles. Use the frozen task source with
+matching image and data pins from the [release guide](releases/v1.1.md).
 
 ## 5. Create restricted network access
 
@@ -109,7 +121,10 @@ gcloud compute firewall-rules update ale-allow-cua \
 
 ## 6. Create an optional results bucket
 
-Skip this section if you will keep `output_path: local`.
+Skip this section with the default `output_path: null`. It leaves bulk task
+output in the sandbox while still collecting metadata, trajectories,
+evaluations, and telemetry. Use `cleanup_mode: keep` to inspect deliverables
+there, then stop or delete retained sandboxes when finished.
 
 ```bash
 gcloud storage buckets create "gs://$GCP_BUCKET" \
@@ -129,12 +144,13 @@ To upload task output directly from each sandbox, set this in a copy of
 output_path: gs://<your-results-bucket>
 ```
 
-The default `output_path: local` copies output into each local run directory.
+Set `output_path: local` to copy output into each local run directory. The shipped
+default is `null`, which skips bulk output collection.
 
 ## 7. Configure secrets
 
 ```bash
-cp secret/.env.example secret/.env
+cp -n secret/.env.example secret/.env
 ```
 
 Set the agent API key required by your chosen preset and the Google Cloud
@@ -146,8 +162,22 @@ GCP_PROJECT=<your-project-id>
 GCP_SA_KEY=secret/gcp_key.json
 ```
 
-Judge-based tasks can require separate evaluator keys under
-`secret/eval_time/`. The hello-world task does not.
+For text/image judges, copy `secret/eval_time/openai.env.example` to
+`secret/eval_time/openai.env` and set `JUDGE_BASE_URL`, `JUDGE_API_KEY`, and
+`JUDGE_MODEL`. These settings are read privately at evaluation time, independently
+of solver credentials. Do not source evaluator files or add them to agent presets.
+Optional `JUDGE_REASONING_EFFORT` and `JUDGE_MAX_COMPLETION_TOKENS` configure
+reasoning and a minimum token budget for text/image calls. Music project migration
+uses deterministic audio comparison and requires no audio-model endpoint.
+Its overview screenshot still uses the shared image judge. Gemini
+video judges retain their Gemini configuration. The hello-world task needs no judge.
+
+Before starting sandboxes, a batch containing shared LLM-judge tasks checks the
+configured judge with a text request and, when needed, an image request. A failed
+check aborts the batch. Fix the judge configuration and rerun the same command.
+`--dry-run` does not contact the judge. A later judge outage or malformed scoring
+reply produces an evaluation error with `score: null`, never zero or a substitute
+score. Odoo uses database checks and does not require a Judge API.
 
 ## 8. Validate and run the demo
 
@@ -171,23 +201,27 @@ Windows VMs.
 
 ## 9. Continue to a benchmark task list
 
-Use `selected_tasks/unlicensed.txt` for the complete public set that does not
-require licensed software. The environment profile maps CPU, GPU, Ubuntu, and
-Windows snapshots to their corresponding images and zones.
+Use `selected_tasks/full.txt` for all 122 tasks, or a difficulty list under
+`selected_tasks/full/`. The environment profile maps the three snapshot IDs
+(`cpu-free-ubuntu`, `cpu-free`, `gpu-free`) to their images and zones.
 
 ```yaml
-tasks: selected_tasks/unlicensed.txt
+tasks: selected_tasks/full.txt
 concurrency: 8
 auto_resume: true
 max_attempts: 3
-cleanup_mode: delete
+cleanup_mode: keep
 ```
 
 Choose concurrency according to project quota, GPU availability, LLM rate
-limits, and budget. Auto-resume is enabled by default: prior `completed` and
-`timeout` units are skipped, and failed units are automatically requeued up to
-`max_attempts`. Use `--disable-resume` for a one-off run of every selected unit
-with no retries.
+limits, and budget, including retained sandboxes. Auto-resume skips prior
+`completed` and `timeout` units only when `run.json`'s `task.revision` matches
+the current task-folder SHA256 and `eval_result.json` confirms a successful,
+error-free evaluation with the same numeric score. Unscored evaluation timeouts
+are not complete. Missing or changed hashes rerun; see the
+[v1 log upgrade helper](releases/v1.1.md#upgrade-existing-logs) for legacy logs.
+Failed units retry up to `max_attempts`. Use `--disable-resume` to run every
+selected unit once without retries.
 
 ## Cleanup and recovery
 

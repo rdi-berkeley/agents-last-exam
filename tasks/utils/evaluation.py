@@ -8,8 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
-from openai import AsyncOpenAI, OpenAI
-from dotenv import load_dotenv
+import httpx
+from openai import AsyncOpenAI, BadRequestError, OpenAI
+from dotenv import dotenv_values
 
 if TYPE_CHECKING:
     from cua_bench.computers.base import DesktopSession
@@ -31,85 +32,74 @@ def eval_credentials_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "secret" / "eval_time"
 
 
-def load_eval_env(*, override: bool = False) -> list[str]:
-    """Export every ``secret/eval_time/*.env`` (one file per service) into
-    ``os.environ`` so evaluator judges/scorers find their keys no matter which
-    runner launched the eval — no fragile manual ``source`` step. Shell env wins
-    unless ``override=True``. Only real ``*.env`` files are read (``.example``
-    templates are skipped). Idempotent; returns the variable names it set."""
-    d = eval_credentials_dir()
-    if not d.is_dir():
-        return []
-    loaded: list[str] = []
-    for f in sorted(d.glob("*.env")):
-        try:
-            text = f.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        for raw in text.splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#"):
-                continue
-            if line.startswith("export "):
-                line = line[len("export "):]
-            key, sep, val = line.partition("=")
-            if not sep:
-                continue
-            key, val = key.strip(), val.strip()
-            if len(val) >= 2 and val[0] == val[-1] and val[0] in {'"', "'"}:
-                val = val[1:-1]
-            if key and (override or key not in os.environ):
-                os.environ[key] = val
-                loaded.append(key)
-    if loaded:
-        logger.info("load_eval_env: set %d var(s) from %s", len(loaded), d)
-    return loaded
+def load_eval_env() -> dict[str, str]:
+    """Read evaluator configuration privately; never modify the process environment.
+
+    Real ``secret/eval_time/*.env`` files override environment values. Templates
+    and solver ``.env`` files are not loaded or interpolated.
+    """
+    values = dict(os.environ)
+    for path in sorted(eval_credentials_dir().glob("*.env")):
+        values.update(
+            {
+                key: value
+                for key, value in dotenv_values(path, interpolate=False).items()
+                if value is not None
+            }
+        )
+    return values
 
 
-# Make evaluator credentials available regardless of entrypoint (simprun / ale_run
-# / tests / ad-hoc): load the lumped dev .env (back-compat) then every per-service
-# secret/eval_time/*.env. Runs once at import, before the DEFAULT_* reads below.
-load_dotenv(override=False)
-load_eval_env()
-
-DEFAULT_LLM_JUDGE_MODEL = os.environ.get("LLM_JUDGE_MODEL", "gpt-5.4")
-DEFAULT_GEMINI_VIDEO_JUDGE_MODEL = os.environ.get(
-    "GEMINI_EVAL_MODEL",
-    # NOTE: do not pin a soon-to-be-retired preview build. `gemini-3-pro-preview`
-    # was retired by Google and started returning 404 NOT_FOUND, which silently
-    # zeroed every run. Track the current pro tier and override via env if needed.
-    os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview"),
-)
+DEFAULT_LLM_JUDGE_MODEL = "gpt-5.4"
+DEFAULT_AUDIO_JUDGE_MODEL = "gpt-audio-1.5"
+DEFAULT_GEMINI_VIDEO_JUDGE_MODEL = "gemini-3.1-pro-preview"
 
 
 def resolve_llm_judge_model(*, env_var: str | None = None, default: str | None = None) -> str:
-    """Resolve the model used by LLM-based judges.
-
-    Priority:
-    1. task-specific environment variable, if provided
-    2. explicit default passed by the caller
-    3. shared `LLM_JUDGE_MODEL`
-    4. hard-coded repository fallback
-    """
-    if env_var:
-        value = os.environ.get(env_var)
-        if value:
-            return value
-    if default:
-        return default
-    return DEFAULT_LLM_JUDGE_MODEL
+    """Resolve the shared judge model at call time, with an optional explicit override."""
+    values = load_eval_env()
+    return (
+        values.get("JUDGE_MODEL")
+        or (values.get(env_var) if env_var else None)
+        or default
+        or DEFAULT_LLM_JUDGE_MODEL
+    )
 
 
-def _resolve_client_kwargs(api_key: str | None = None) -> dict[str, str]:
-    load_eval_env()  # ensure secret/eval_time/*.env is loaded at the point creds are read
-    resolved_key = api_key or os.environ.get("OPENAI_API_KEY")
+def judge_config(*, capability: str = "vision") -> dict[str, str]:
+    """Return canonical judge routing with a capability-specific audio model."""
+    if capability not in {"vision", "audio"}:
+        raise ValueError(f"Unknown judge capability: {capability}")
+    values = load_eval_env()
+    return {
+        "api_key": values.get("JUDGE_API_KEY", ""),
+        "base_url": values.get("JUDGE_BASE_URL") or "https://api.openai.com/v1",
+        "model": values.get("AUDIO_JUDGE_MODEL" if capability == "audio" else "JUDGE_MODEL")
+        or (DEFAULT_AUDIO_JUDGE_MODEL if capability == "audio" else DEFAULT_LLM_JUDGE_MODEL),
+        "reasoning_effort": values.get("JUDGE_REASONING_EFFORT", "")
+        if capability != "audio"
+        else "",
+        "max_completion_tokens": values.get("JUDGE_MAX_COMPLETION_TOKENS", "0")
+        if capability != "audio"
+        else "0",
+    }
+
+
+def _resolve_client_kwargs(
+    api_key: str | None = None, *, capability: str = "vision"
+) -> dict[str, Any]:
+    settings = judge_config(capability=capability)
+    resolved_key = api_key or settings["api_key"]
     if not resolved_key:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-    kwargs = {"api_key": resolved_key}
-    api_base = os.environ.get("OPENAI_API_BASE")
-    if api_base:
-        kwargs["base_url"] = api_base
-    return kwargs
+        raise JudgeInfrastructureError("JUDGE_API_KEY is not set")
+    return {
+        "api_key": resolved_key,
+        "base_url": settings["base_url"],
+        "organization": "",
+        "project": "",
+        "timeout": 120,
+        "max_retries": 2,
+    }
 
 
 def build_vision_content(
@@ -149,14 +139,16 @@ def build_vision_image_content(
     return content
 
 
-def _content_with_response_format_candidates(
-    *, response_format: Optional[dict[str, Any]]
-) -> list[Optional[dict[str, Any]]]:
-    return [response_format, None] if response_format is not None else [None]
-
-
 def _extract_message_text(response: Any) -> str:
-    return (response.choices[0].message.content or "").strip()
+    if not response.choices or response.choices[0].finish_reason != "stop":
+        raise JudgeInfrastructureError("Judge returned an incomplete response")
+    message = response.choices[0].message
+    if getattr(message, "refusal", None):
+        raise JudgeInfrastructureError("Judge refused the scoring request")
+    text = (message.content or "").strip()
+    if not text:
+        raise JudgeInfrastructureError("Judge returned an empty response")
+    return text
 
 
 def _extract_json_object(raw: str) -> dict[str, Any]:
@@ -170,10 +162,10 @@ def _extract_json_object(raw: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        raise RuntimeError(f"Judge response is not valid JSON: {text[:200]}")
-    parsed = json.loads(match.group(0))
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    if not fenced:
+        raise JudgeInfrastructureError("Judge response is not a JSON object")
+    parsed = json.loads(fenced.group(1))
     if not isinstance(parsed, dict):
         raise RuntimeError("Judge JSON payload must be an object")
     return parsed
@@ -199,18 +191,18 @@ def _resolve_gemini_auth(
     api_key: str | None = None,
     auth_mode: str | None = None,
 ) -> dict[str, Any]:
-    load_eval_env()  # ensure secret/eval_time/*.env is loaded at the point creds are read
-    raw_mode = (auth_mode or os.environ.get("GEMINI_AUTH_MODE") or "auto").strip().lower()
-    key = api_key or os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    values = load_eval_env()
+    raw_mode = (auth_mode or values.get("GEMINI_AUTH_MODE") or "auto").strip().lower()
+    key = api_key or values.get("GOOGLE_API_KEY") or values.get("GEMINI_API_KEY")
     project = (
-        os.environ.get("GOOGLE_CLOUD_PROJECT")
-        or os.environ.get("GCLOUD_PROJECT")
-        or os.environ.get("GCP_PROJECT")
+        values.get("GOOGLE_CLOUD_PROJECT")
+        or values.get("GCLOUD_PROJECT")
+        or values.get("GCP_PROJECT")
     )
     location = (
-        os.environ.get("GOOGLE_CLOUD_LOCATION")
-        or os.environ.get("GOOGLE_CLOUD_REGION")
-        or os.environ.get("GOOGLE_VERTEX_LOCATION")
+        values.get("GOOGLE_CLOUD_LOCATION")
+        or values.get("GOOGLE_CLOUD_REGION")
+        or values.get("GOOGLE_VERTEX_LOCATION")
         or "us-central1"
     )
 
@@ -240,8 +232,17 @@ def _resolve_gemini_auth(
     if raw_mode in {"vertex", "vertex_ai", "google_cloud", "adc"}:
         if not project:
             raise RuntimeError("GOOGLE_CLOUD_PROJECT is required for Gemini Vertex AI auth")
+        client_kwargs = {"vertexai": True, "project": project, "location": location}
+        if values.get("GOOGLE_APPLICATION_CREDENTIALS"):
+            import google.auth
+
+            credentials, _project = google.auth.load_credentials_from_file(
+                values["GOOGLE_APPLICATION_CREDENTIALS"],
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+            client_kwargs["credentials"] = credentials
         return {
-            "client_kwargs": {"vertexai": True, "project": project, "location": location},
+            "client_kwargs": client_kwargs,
             "auth_mode": "vertex_ai",
             "project": project,
             "location": location,
@@ -266,139 +267,159 @@ def _binary_score_from_response(raw: str) -> float:
     return 1.0 if normalized == "YES" else 0.0
 
 
-def _vision_token_param_candidates(client: AsyncOpenAI, max_tokens: int) -> list[dict]:
-    """Compat shim for different OpenAI SDK/backends.
+def _judge_parameters(
+    *,
+    messages: list[dict[str, Any]],
+    model: str | None = None,
+    max_tokens: int = 2048,
+    temperature: float | None = None,
+    response_format: dict[str, Any] | None = None,
+    reasoning_effort: str | None = None,
+    capability: str = "vision",
+    modalities: list[str] | None = None,
+    store: bool | None = None,
+) -> dict[str, Any]:
+    settings = judge_config(capability=capability)
+    effort = settings["reasoning_effort"] or reasoning_effort
+    budget = max(max_tokens, int(settings["max_completion_tokens"]), 4096 if effort else 0)
+    parameters: dict[str, Any] = {
+        "messages": messages,
+        "model": model or settings["model"],
+        "max_completion_tokens": budget,
+    }
+    for name, value in (
+        ("temperature", temperature),
+        ("response_format", response_format),
+        ("reasoning_effort", effort or None),
+        ("modalities", modalities),
+        ("store", store),
+    ):
+        if value is not None:
+            parameters[name] = value
+    return parameters
 
-    Some local SDK versions only accept ``max_tokens``.
-    Some newer model backends reject ``max_tokens`` and require
-    ``max_completion_tokens``.
-    We try both in a deterministic order based on the local client signature,
-    then fall back to the alternate spelling on error.
-    """
-    create = client.chat.completions.create
-    code = getattr(create, "__code__", None)
-    varnames = set(code.co_varnames if code else ())
-    preferred = (
-        ["max_completion_tokens", "max_tokens"]
-        if "max_completion_tokens" in varnames
-        else ["max_tokens", "max_completion_tokens"]
-    )
-    return [{name: max_tokens} for name in preferred]
+
+def _adapt_judge_parameters(error: BadRequestError, parameters: dict[str, Any]) -> bool:
+    body = error.body if isinstance(error.body, dict) else {}
+    body = body.get("error", body)
+    if not isinstance(body, dict):
+        return False
+    message = str(body.get("message", "")).lower()
+    if not any(marker in message for marker in ("unsupported", "not supported", "not support")):
+        return False
+    parameter = body.get("param")
+    if not parameter:
+        parameter = next(
+            (
+                name
+                for name in ("temperature", "response_format", "max_completion_tokens")
+                if f"'{name}'" in message or f'"{name}"' in message
+            ),
+            None,
+        )
+    if parameter == "max_completion_tokens" and parameter in parameters:
+        parameters["max_tokens"] = parameters.pop(parameter)
+    elif parameter in {"temperature", "response_format"} and parameter in parameters:
+        parameters.pop(parameter)
+    else:
+        return False
+    logger.info("Judge backend rejected %s; retrying with supported parameters", parameter)
+    return True
 
 
-def _sync_token_param_candidates(client: OpenAI, max_tokens: int) -> list[dict[str, int]]:
-    create = client.chat.completions.create
-    code = getattr(create, "__code__", None)
-    varnames = set(code.co_varnames if code else ())
-    preferred = (
-        ["max_completion_tokens", "max_tokens"]
-        if "max_completion_tokens" in varnames
-        else ["max_tokens", "max_completion_tokens"]
-    )
-    return [{name: max_tokens} for name in preferred]
+async def llm_judge_completion(
+    *,
+    messages: list[dict[str, Any]],
+    api_key: str | None = None,
+    capability: str = "vision",
+    transport: httpx.AsyncBaseTransport | None = None,
+    event_hooks: dict[str, list[Any]] | None = None,
+    **kwargs: Any,
+) -> Any:
+    """Shared async scoring transport, preserving messages and raw completion evidence."""
+    parameters = _judge_parameters(messages=messages, capability=capability, **kwargs)
+    async with AsyncOpenAI(
+        **_resolve_client_kwargs(api_key, capability=capability),
+        http_client=httpx.AsyncClient(transport=transport, event_hooks=event_hooks),
+    ) as client:
+        while True:
+            try:
+                return await client.chat.completions.create(**parameters)
+            except BadRequestError as error:
+                if not _adapt_judge_parameters(error, parameters):
+                    raise
+
+
+def llm_judge_completion_sync(
+    *,
+    messages: list[dict[str, Any]],
+    api_key: str | None = None,
+    capability: str = "vision",
+    **kwargs: Any,
+) -> Any:
+    """Shared sync scoring transport, preserving messages and raw completion evidence."""
+    parameters = _judge_parameters(messages=messages, capability=capability, **kwargs)
+    with OpenAI(**_resolve_client_kwargs(api_key, capability=capability)) as client:
+        while True:
+            try:
+                return client.chat.completions.create(**parameters)
+            except BadRequestError as error:
+                if not _adapt_judge_parameters(error, parameters):
+                    raise
 
 
 async def llm_multimodal_text(
     *,
-    content: list[dict[str, Any]],
+    content: str | list[dict[str, Any]],
     model: str | None = None,
     max_tokens: int = 2048,
     temperature: float | None = None,
     api_key: str | None = None,
     response_format: dict[str, Any] | None = None,
+    reasoning_effort: str | None = None,
+    system_prompt: str | None = None,
 ) -> str:
     """Shared async multimodal completion entry for LLM judges."""
-    client = AsyncOpenAI(**_resolve_client_kwargs(api_key))
-    resolved_model = model or resolve_llm_judge_model()
-    last_exc: Exception | None = None
-    response = None
-
-    for format_kwargs in _content_with_response_format_candidates(response_format=response_format):
-        extra_kwargs: dict[str, Any] = {}
-        if temperature is not None:
-            extra_kwargs["temperature"] = temperature
-        if format_kwargs is not None:
-            extra_kwargs["response_format"] = format_kwargs
-
-        for token_kwargs in _vision_token_param_candidates(client, max_tokens):
-            try:
-                response = await client.chat.completions.create(
-                    model=resolved_model,
-                    messages=[{"role": "user", "content": content}],
-                    **extra_kwargs,
-                    **token_kwargs,
-                )
-                return _extract_message_text(response)
-            except TypeError as exc:
-                last_exc = exc
-                continue
-            except Exception as exc:
-                msg = str(exc)
-                if any(
-                    marker in msg
-                    for marker in (
-                        "max_tokens",
-                        "max_completion_tokens",
-                        "unsupported_parameter",
-                        "response_format",
-                    )
-                ):
-                    last_exc = exc
-                    continue
-                raise
-
-    raise last_exc or RuntimeError("multimodal completion request failed")
+    messages = [{"role": "user", "content": content}]
+    if system_prompt is not None:
+        messages.insert(0, {"role": "system", "content": system_prompt})
+    response = await llm_judge_completion(
+        messages=messages,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        api_key=api_key,
+        response_format=response_format,
+        reasoning_effort=reasoning_effort,
+    )
+    return _extract_message_text(response)
 
 
 def llm_multimodal_text_sync(
     *,
-    content: list[dict[str, Any]],
+    content: str | list[dict[str, Any]],
     model: str | None = None,
     max_tokens: int = 2048,
     temperature: float | None = None,
     api_key: str | None = None,
     response_format: dict[str, Any] | None = None,
+    reasoning_effort: str | None = None,
+    system_prompt: str | None = None,
 ) -> str:
     """Shared sync multimodal completion entry for local LLM judges."""
-    client = OpenAI(**_resolve_client_kwargs(api_key))
-    resolved_model = model or resolve_llm_judge_model()
-    last_exc: Exception | None = None
-
-    for format_kwargs in _content_with_response_format_candidates(response_format=response_format):
-        extra_kwargs: dict[str, Any] = {}
-        if temperature is not None:
-            extra_kwargs["temperature"] = temperature
-        if format_kwargs is not None:
-            extra_kwargs["response_format"] = format_kwargs
-
-        for token_kwargs in _sync_token_param_candidates(client, max_tokens):
-            try:
-                response = client.chat.completions.create(
-                    model=resolved_model,
-                    messages=[{"role": "user", "content": content}],
-                    **extra_kwargs,
-                    **token_kwargs,
-                )
-                return _extract_message_text(response)
-            except TypeError as exc:
-                last_exc = exc
-                continue
-            except Exception as exc:
-                msg = str(exc)
-                if any(
-                    marker in msg
-                    for marker in (
-                        "max_tokens",
-                        "max_completion_tokens",
-                        "unsupported_parameter",
-                        "response_format",
-                    )
-                ):
-                    last_exc = exc
-                    continue
-                raise
-
-    raise last_exc or RuntimeError("multimodal completion request failed")
+    messages = [{"role": "user", "content": content}]
+    if system_prompt is not None:
+        messages.insert(0, {"role": "system", "content": system_prompt})
+    response = llm_judge_completion_sync(
+        messages=messages,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        api_key=api_key,
+        response_format=response_format,
+        reasoning_effort=reasoning_effort,
+    )
+    return _extract_message_text(response)
 
 
 async def llm_multimodal_json(
@@ -406,18 +427,25 @@ async def llm_multimodal_json(
     content: list[dict[str, Any]],
     model: str | None = None,
     max_tokens: int = 2048,
-    temperature: float = 0,
+    temperature: float | None = 0,
     api_key: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> dict[str, Any]:
-    raw = await llm_multimodal_text(
-        content=content,
-        model=model,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        api_key=api_key,
-        response_format={"type": "json_object"},
-    )
-    return _extract_json_object(raw)
+    for attempt in range(2):
+        raw = await llm_multimodal_text(
+            content=content,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            api_key=api_key,
+            response_format={"type": "json_object"},
+            reasoning_effort=reasoning_effort,
+        )
+        try:
+            return _extract_json_object(raw)
+        except (ValueError, RuntimeError) as error:
+            if attempt:
+                raise JudgeInfrastructureError("Judge returned invalid JSON twice") from error
 
 
 def llm_multimodal_json_sync(
@@ -425,25 +453,32 @@ def llm_multimodal_json_sync(
     content: list[dict[str, Any]],
     model: str | None = None,
     max_tokens: int = 2048,
-    temperature: float = 0,
+    temperature: float | None = 0,
     api_key: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> dict[str, Any]:
-    raw = llm_multimodal_text_sync(
-        content=content,
-        model=model,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        api_key=api_key,
-        response_format={"type": "json_object"},
-    )
-    return _extract_json_object(raw)
+    for attempt in range(2):
+        raw = llm_multimodal_text_sync(
+            content=content,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            api_key=api_key,
+            response_format={"type": "json_object"},
+            reasoning_effort=reasoning_effort,
+        )
+        try:
+            return _extract_json_object(raw)
+        except (ValueError, RuntimeError) as error:
+            if attempt:
+                raise JudgeInfrastructureError("Judge returned invalid JSON twice") from error
 
 
 async def llm_vision_judge(
     prompt: str,
     image_bytes: bytes,
     reference_image_bytes: Optional[bytes] = None,
-    model: str = DEFAULT_LLM_JUDGE_MODEL,
+    model: str | None = None,
     max_tokens: int = 2048,
     return_binary_score: bool = False,
     api_key: Optional[str] = None,
@@ -459,11 +494,11 @@ async def llm_vision_judge(
         image_bytes: Primary image to evaluate (required)
         reference_image_bytes: Optional reference image for comparison mode.
                               If provided, the LLM will see both images.
-        model: OpenAI model to use (default: "gpt-5.4")
+        model: Judge model override. Defaults to JUDGE_MODEL.
         max_tokens: Maximum tokens for the response
         return_binary_score: If True, parses response for YES/NO and returns 1.0/0.0.
                             If False, returns the raw text response.
-        api_key: OpenAI API key. If None, uses OPENAI_API_KEY from environment.
+        api_key: Judge API key override. Defaults to private JUDGE_API_KEY.
         return_details: If True, returns a dict with full details including VLM response,
                        score, prompt, model, etc. Overrides return_binary_score.
         eval_context: Optional EvaluationContext for automatic logging. When provided,
@@ -608,7 +643,13 @@ async def gemini_video_json_judge(
     (fail/retry the run), not as a legitimate 0.0 score, or a broken judge will
     silently zero every submission including a correct answer.
     """
-    resolved_model = model or DEFAULT_GEMINI_VIDEO_JUDGE_MODEL
+    values = load_eval_env()
+    resolved_model = (
+        model
+        or values.get("GEMINI_EVAL_MODEL")
+        or values.get("GEMINI_MODEL")
+        or DEFAULT_GEMINI_VIDEO_JUDGE_MODEL
+    )
     resolved_auth_mode: str | None = None
     project: str | None = None
     location: str | None = None
@@ -669,9 +710,7 @@ async def gemini_video_json_judge(
             "parsed": None,
             "raw_text": "",
             "model_used": resolved_model,
-            "auth_mode": resolved_auth_mode
-            or auth_mode
-            or os.environ.get("GEMINI_AUTH_MODE", "auto"),
+            "auth_mode": resolved_auth_mode or auth_mode or values.get("GEMINI_AUTH_MODE", "auto"),
             "project": project,
             "location": location,
             "error": f"{type(exc).__name__}: {exc}",
@@ -682,7 +721,9 @@ def _parse_binary_answer(value: Any) -> float:
     if isinstance(value, bool):
         return 1.0 if value else 0.0
     if isinstance(value, (int, float)):
-        return 1.0 if float(value) > 0 else 0.0
+        if value not in (0, 1):
+            raise ValueError(f"Judge returned a non-binary checklist answer: {value!r}")
+        return float(value)
     text = str(value or "").strip().upper()
     if text in {"YES", "Y", "TRUE", "1", "PASS"}:
         return 1.0
@@ -770,9 +811,7 @@ async def llm_vision_binary_checklist_judge(
         logger.exception("Error in llm_vision_binary_checklist_judge")
         if eval_context is not None and identifier is not None:
             eval_context.log_error(identifier, e)
-        raise JudgeInfrastructureError(
-            f"llm_vision_binary_checklist_judge failed: {e}"
-        ) from e
+        raise JudgeInfrastructureError(f"llm_vision_binary_checklist_judge failed: {e}") from e
 
     if eval_context is not None and identifier is not None:
         eval_context.log_evaluation(
@@ -847,7 +886,11 @@ def llm_multimodal_binary_questions_sync(
             temperature=temperature,
             api_key=api_key,
         )
-        parsed = _normalize_binary_response(raw_response) or "NO"
+        parsed = _normalize_binary_response(raw_response)
+        if parsed is None:
+            raise JudgeInfrastructureError(
+                f"Judge returned a non-binary response for question {index}: {raw_response[:200]!r}"
+            )
         score = 1.0 if parsed == "YES" else 0.0
         raw_responses.append(raw_response)
         results.append(
@@ -1081,7 +1124,7 @@ class EvaluationContext:
     def log_evaluation(
         self,
         identifier: str,
-        score: float,
+        score: float | None,
         vlm_response: Optional[str] = None,
         prompt: Optional[str] = None,
         model: Optional[str] = None,
@@ -1110,7 +1153,7 @@ class EvaluationContext:
             **extra_fields,
         }
         # Remove None values for cleaner output
-        eval_entry = {k: v for k, v in eval_entry.items() if v is not None}
+        eval_entry = {k: v for k, v in eval_entry.items() if v is not None or k == "score"}
 
         self.evaluation_details["evaluations"].append(eval_entry)
         self._num_evaluated += 1
@@ -1122,7 +1165,7 @@ class EvaluationContext:
         if error:
             logger.error(f"Identifier '{identifier}' error: {error}")
 
-    def log_error(self, identifier: str, error: Union[str, Exception], score: float = 0.0) -> None:
+    def log_error(self, identifier: str, error: Union[str, Exception], score: float | None = None) -> None:
         """Log an evaluation error."""
         error_msg = str(error)
         self.log_evaluation(identifier=identifier, score=score, error=error_msg)
@@ -1216,7 +1259,7 @@ async def evaluate_milestone_mode(
     Evaluate using milestone mode: compare agent-saved screenshots with references.
     """
     # Check if target directory exists
-    exists = (await session.file_exists(target_path) or await session.directory_exists(target_path))
+    exists = await session.file_exists(target_path) or await session.directory_exists(target_path)
     if not exists:
         logger.info(f"Evaluation: File NOT found at {target_path}")
         return 0.0, {"error": f"Target path not found: {target_path}"}
@@ -1349,7 +1392,7 @@ async def evaluate_deliverable_mode(
                 action_args = {k: v for k, v in action.items() if k != "type"}
 
                 logger.info(
-                    f"[{i+1}/{len(actions_to_execute)}] Executing: {action_type}({action_args})"
+                    f"[{i + 1}/{len(actions_to_execute)}] Executing: {action_type}({action_args})"
                 )
 
                 method = getattr(handler, action_type, None)
@@ -1369,10 +1412,10 @@ async def evaluate_deliverable_mode(
                             identifier = os.path.splitext(reference_files[point_index])[0]
                             screenshots_taken[identifier] = screenshot_bytes
                             logger.info(
-                                f"Screenshot taken at action {i+1} for identifier '{identifier}'"
+                                f"Screenshot taken at action {i + 1} for identifier '{identifier}'"
                             )
                     except Exception as e:
-                        logger.error(f"Failed to take screenshot at action {i+1}: {e}")
+                        logger.error(f"Failed to take screenshot at action {i + 1}: {e}")
 
                 await asyncio.sleep(action_delay)
 

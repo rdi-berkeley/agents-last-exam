@@ -18,6 +18,121 @@
       details stay in reusable config files.
     </p>
 
+    <h2 id="v1-1">Use the v1.1 release</h2>
+    <p>
+      ALE v1.1 selects <strong>122 active tasks</strong> after 30 retirements.
+      The upgrade scope marks <strong>57 active tasks</strong> for rerun and
+      65 for retention. To preserve the original requirements, follow
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/docs/releases/v1.md"><strong>Run original v1</strong></a>
+      with v1 code, legacy images and fresh logs, not v1.1 assets or results. Six formerly
+      licensed tasks keep their IDs and business goals using open-source Linux
+      workflows: Blender building reconstruction, FreeCAD Road alignment,
+      FreeCAD CAM with LinuxCNC and CAMotics, Kratos support analysis, MuseScore
+      transcription, and Ardour project migration. <code>engineering/mold-flow</code>
+      is removed because its full fill/pack/cool/demold workflow has no validated
+      open-source replacement at the original scope.
+      <code>education_info/homework_grading_numerical_pdes_instance_02</code>
+      is retired because feedback verification was overly tied to fixed wording.
+      The <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/docs/releases/v1.1-task-review.md#retired-tasks">retirement list</a>
+      includes these two and 28 further tasks. Retirement narrows release scope;
+      it does not imply that every retired task is defective.
+    </p>
+    <p>
+      Published payloads are unchanged: standalone data packages 150 tasks
+      (28 inactive), and VM images package 151 (29 inactive, including PDE).
+      Inactive payloads have no active source implementation or selection-list
+      entry and do not count toward the 122-task benchmark.
+    </p>
+    <table>
+      <thead><tr><th>Change</th><th>Tasks</th><th>What counts</th></tr></thead>
+      <tbody>
+        <tr><td>Instruction</td><td>47</td><td>Agent-facing prompts and instructions, including input documents</td></tr>
+        <tr><td>Verification</td><td>43</td><td>Scoring logic, acceptance rules and grader execution</td></tr>
+        <tr><td>Environment</td><td>32</td><td>Task-specific software, dependencies, setup, staging, paths, resources or platform</td></tr>
+        <tr><td>Data</td><td>23</td><td>Input materials, starter/helper assets, models, media or reference answers</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Categories overlap; the six conversions are included in the 57 updated
+      tasks. Classify by content, not storage location: a prompt edit in a data
+      archive counts as Instruction. These counts exclude the retired tasks,
+      unselected variants, inactive metadata, packaging-only cleanup and shared
+      framework changes. See the
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/releases/v1.1/upgrade.json">per-task category map</a>.
+    </p>
+    <p>
+      Task designs and source are frozen. Use the matching image and data pins
+      in the asset manifest below. The
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/docs/releases/v1.1-task-review.md">task review</a>
+      records validation scope and limits; it does not certify complete agent
+      validation of the release.
+    </p>
+    <p>
+      Butterfly animation accepts any software. Butterfly and skeletal animation
+      now run on CPU QEMU, for 119 CPU tasks and three GPU tasks. Skeletal evaluation
+      prevents duplicate render launches after transport retries without changing
+      its scoring requirements. Task setup replaces the old butterfly input
+      specification; the published images and data remain compatible.
+    </p>
+    <p>
+      Changes preserve the original business goal and intended difficulty, align
+      grading with public requirements and valid equivalent answers, and supply
+      necessary inputs and working runtimes without exposing hidden references.
+    </p>
+    <p>
+      Shared framework changes cover agent termination before evaluation,
+      resume hashes, image identity checks, judge configuration, provider
+      cleanup, data downloads, and agent adapters. The
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/docs/releases/v1.1.md#framework-fixes-and-improvements">framework change summary</a>
+      explains their effects on runs and the relevant configuration.
+    </p>
+    <table>
+      <thead><tr><th>Converted task</th><th>Open-source workflow</th><th>Supported environment</th></tr></thead>
+      <tbody>
+        <tr><td>Building reconstruction</td><td>Blender</td><td>Docker or Linux VM</td></tr>
+        <tr><td>Road alignment</td><td>FreeCAD Road</td><td>Linux VM</td></tr>
+        <tr><td>G-code machining</td><td>FreeCAD CAM, LinuxCNC and CAMotics</td><td>Linux VM</td></tr>
+        <tr><td>Excavation support analysis</td><td>Kratos</td><td>Linux VM</td></tr>
+        <tr><td>Music transcription</td><td>MuseScore</td><td>Docker or Linux VM</td></tr>
+        <tr><td>Music project migration</td><td>Ardour</td><td>Docker or Linux VM</td></tr>
+      </tbody>
+    </table>
+    <p>
+      All six use the Linux VM image with QEMU or Google Cloud. The default
+      Docker profile supports the three workflows listed above. Runtime
+      compatibility checks cover native save/reopen, export and task artifacts;
+      see the task review for their scope and limits.
+      The default Docker profile lacks the process/network isolation used by
+      G-code, the systemd supervisor used by Road, and the supervisor plus
+      writable delegated cgroups used by excavation support. These three require
+      the Linux VM profile.
+    </p>
+    <p>
+      Use the task code, profiles, images, and data together. The
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/releases/v1.1/assets.json">asset manifest</a>
+      records exact versions. For existing logs, follow
+      <a href="/pages/run.html#upgrade-v1">Upgrade v1 logs</a>; the
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/docs/releases/v1.1.md">command guide</a>
+      covers the same setup and upgrade steps.
+    </p>
+    <table>
+      <thead><tr><th>Component</th><th>Pin</th></tr></thead>
+      <tbody>
+        <tr><td>QEMU disks</td><td>Preserve <code>qemu.image_revision</code> in each shipped snapshot. It selects an immutable Hugging Face dataset revision.</td></tr>
+        <tr><td>Google Cloud images</td><td>Copy the named images from <code>images.*.gcloud</code> in the manifest. Optional <code>gcloud.image_revision</code> verifies the numeric <code>sourceImageId</code>. A copy gets a new ID; pin your project's copy, not the publisher's ID.</td></tr>
+        <tr><td>Docker runtime</td><td>The profile uses the digest in <code>docker.pinned_image</code>. Optional <code>docker.image_revision</code> verifies a SHA256 image ID or repository digest.</td></tr>
+        <tr><td>Task data</td><td>Use <code>huggingface.*.revision</code> and <code>task_data.archive_sha256</code>; install the archive into an empty <code>task-data-v1.1</code>.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      These image revision settings belong inside each snapshot's provider block
+      (<code>qemu</code>, <code>gcloud</code>, or <code>docker</code>).
+      <code>run.json</code>'s <code>environment.image_revision</code> records the
+      acquired image identity even without a configured pin. For QEMU remote
+      disks, it is the resolved Hugging Face commit or GCS object generation;
+      the requested Hugging Face pin remains in source metadata.
+    </p>
+
     <h2>Start from the example</h2>
     <pre><code>cp example_exp.yaml my_experiment.yaml</code></pre>
     <pre><code>name: my_experiment
@@ -52,7 +167,7 @@ cleanup_mode: delete</code></pre>
         <tr><td><code>output.root</code></td><td>The host directory for run records. This is separate from the environment's task-output destination.</td></tr>
         <tr><td><code>concurrency</code></td><td>Maximum run units active at once.</td></tr>
         <tr><td><code>wall_time_s</code></td><td>Optional experiment-wide agent time limit. When omitted, each task card supplies its own timeout.</td></tr>
-        <tr><td><code>auto_resume</code></td><td>Defaults to <code>true</code>. Skips prior completed/timeout units and retries newly failed units.</td></tr>
+        <tr><td><code>auto_resume</code></td><td>Defaults to <code>true</code>. Skips completed/timeout units only with a matching task-folder hash and a successful, error-free evaluation whose numeric score matches the run record. Missing or changed hashes and unscored evaluations rerun. Retries newly failed units.</td></tr>
         <tr><td><code>max_attempts</code></td><td>Total attempts per failed unit in one invocation when auto-resume is enabled. Accepts 1 through 3 and defaults to 3.</td></tr>
         <tr><td><code>cleanup_mode</code></td><td><code>delete</code>, <code>stop</code>, or <code>keep</code> for provider-managed sandboxes.</td></tr>
         <tr><td><code>prompt_suffix</code></td><td>Optional text appended to every task instruction and recorded in the trajectory.</td></tr>
@@ -63,12 +178,11 @@ cleanup_mode: delete</code></pre>
     <table>
       <thead><tr><th>Profile</th><th>Provider routing</th><th>Compatible list</th></tr></thead>
       <tbody>
-        <tr><td><code>configs/environments/environment_gcloud.yaml</code></td><td><a href="/pages/google-cloud.html">Google Cloud VMs</a> for all published snapshots</td><td><code>unlicensed.txt</code>, or <code>full.txt</code> with licensed software activated</td></tr>
-        <tr><td><code>configs/environments/environment_aws.yaml</code></td><td><a href="/pages/aws.html">AWS EC2</a> for the CPU snapshots (no GPU)</td><td><code>cpu_unlicensed.txt</code></td></tr>
-        <tr><td><code>configs/environments/environment_aliyun.yaml</code></td><td><a href="/pages/aliyun.html">Alibaba Cloud ECS</a> for the CPU snapshots (no GPU)</td><td><code>cpu_unlicensed.txt</code></td></tr>
+        <tr><td><code>configs/environments/environment_gcloud.yaml</code></td><td><a href="/pages/google-cloud.html">Google Cloud VMs</a> for all published snapshots</td><td><code>full.txt</code></td></tr>
+        <tr><td><code>configs/environments/environment_aws.yaml</code></td><td><a href="/pages/aws.html">AWS EC2</a> for CPU snapshots; verify matching v1.1 images</td><td><code>cpu.txt</code></td></tr>
+        <tr><td><code>configs/environments/environment_aliyun.yaml</code></td><td><a href="/pages/aliyun.html">Alibaba Cloud ECS</a> for CPU snapshots; verify matching v1.1 images</td><td><code>cpu.txt</code></td></tr>
         <tr><td><code>configs/environments/docker.yaml</code></td><td><a href="/pages/local-docker.html">Local containers</a> for <code>cpu-free-ubuntu</code></td><td><code>docker_support.txt</code></td></tr>
-        <tr><td><code>configs/environments/hfsandbox.yaml</code></td><td><a href="/pages/hf-sandbox.html">HF Sandboxes</a> for <code>cpu-free-ubuntu</code></td><td><code>docker_support.txt</code></td></tr>
-        <tr><td><code>configs/environments/qemu.yaml</code></td><td><a href="/pages/local.html">QEMU/KVM VMs</a> for CPU-compatible Ubuntu and Windows snapshots</td><td><code>cpu_unlicensed.txt</code></td></tr>
+        <tr><td><code>configs/environments/qemu.yaml</code></td><td><a href="/pages/local.html">QEMU/KVM VMs</a> for CPU-compatible Ubuntu and Windows snapshots</td><td><code>cpu.txt</code></td></tr>
         <tr><td>Your own static profile</td><td><a href="/pages/static.html">Existing sandbox</a> for every selected task</td><td>A narrow list matching that machine</td></tr>
       </tbody>
     </table>
@@ -78,11 +192,9 @@ cleanup_mode: delete</code></pre>
     <table>
       <thead><tr><th>Snapshot</th><th>Environment requirement</th></tr></thead>
       <tbody>
-        <tr><td><code>cpu-free-ubuntu</code></td><td>Ubuntu, no licensed software, no required GPU</td></tr>
-        <tr><td><code>cpu-free</code></td><td>Windows, no licensed software, no required GPU</td></tr>
-        <tr><td><code>gpu-free</code></td><td>Windows task that requires GPU execution — runs on Google Cloud only.</td></tr>
-        <tr><td><code>cpu-license</code></td><td>Windows with user-activated licensed software</td></tr>
-        <tr><td><code>gpu-license</code></td><td>Windows with GPU and user-activated licensed software</td></tr>
+        <tr><td><code>cpu-free-ubuntu</code></td><td>Ubuntu CPU</td></tr>
+        <tr><td><code>cpu-free</code></td><td>Windows CPU</td></tr>
+        <tr><td><code>gpu-free</code></td><td>Windows GPU; use the Google Cloud profile.</td></tr>
       </tbody>
     </table>
     <p>
@@ -97,17 +209,18 @@ cleanup_mode: delete</code></pre>
       <thead><tr><th>List</th><th>Units before agent multiplication</th><th>Purpose</th></tr></thead>
       <tbody>
         <tr><td><code>hello_both.txt</code></td><td>2</td><td>Ubuntu and Windows smoke test</td></tr>
-        <tr><td><code>docker_support.txt</code></td><td>99</td><td>Current local-container allowlist</td></tr>
-        <tr><td><code>ale_cli.txt</code></td><td>105</td><td>All published <code>cpu-free-ubuntu</code> tasks</td></tr>
-        <tr><td><code>cpu_unlicensed.txt</code></td><td>140</td><td>Public CPU-runnable set — shared by QEMU, Alibaba Cloud, and AWS</td></tr>
-        <tr><td><code>unlicensed.txt</code></td><td>145</td><td>All public tasks that do not require licensed software</td></tr>
-        <tr><td><code>full.txt</code></td><td>152</td><td>The complete public release, including seven licensed tasks</td></tr>
+        <tr><td><code>docker_support.txt</code></td><td>78</td><td>Supported local-container subset</td></tr>
+        <tr><td><code>ale_cli.txt</code></td><td>86</td><td>All selected <code>cpu-free-ubuntu</code> tasks, including desktop workflows</td></tr>
+        <tr><td><code>cpu.txt</code></td><td>119</td><td>Ubuntu and Windows CPU tasks</td></tr>
+        <tr><td><code>gpu.txt</code></td><td>3</td><td>Windows GPU tasks; use the Google Cloud profile</td></tr>
+        <tr><td><code>full.txt</code></td><td>122</td><td>The complete v1.1 benchmark</td></tr>
       </tbody>
     </table>
     <p>
-      Difficulty-specific lists live under <code>selected_tasks/unlicensed/</code>
-      and <code>selected_tasks/full/</code>. A text list contains one task path
-      per line. A YAML list can select explicit variant indices.
+      All lists live under <code>selected_tasks/</code>, with difficulty lists
+      under <code>selected_tasks/full/*.txt</code>: 45 near-term, 46 full-spectrum,
+      and 36 last-exam tasks. These lists overlap. A text list contains one task
+      path per line. A YAML list can select explicit variant indices.
     </p>
 
     <h2>Choose agent presets</h2>
@@ -150,12 +263,33 @@ GCP_SA_KEY=secret/gcp_key.json</code></pre>
       there.
     </p>
     <p>
-      Start by copying <code>secret/.env.example</code> to
-      <code>secret/.env</code>, then fill in the API and provider credentials
-      needed by your run. GCP variables are required only by the Google Cloud
+      On first setup, copy <code>secret/.env.example</code> to
+      <code>secret/.env</code> with <code>cp -n</code>, then fill in the API and
+      provider credentials needed by your run. GCP variables are required only by the Google Cloud
       profile. Local profiles still need whichever API key their agent preset
-      uses. Judge-based tasks can also require evaluator keys under
-      <code>secret/eval_time/</code>.
+      uses.
+    </p>
+    <p>
+      For text/image judges, copy <code>secret/eval_time/openai.env.example</code>
+      to <code>secret/eval_time/openai.env</code> and set <code>JUDGE_BASE_URL</code>,
+      <code>JUDGE_API_KEY</code>, and <code>JUDGE_MODEL</code>. These settings are
+      read privately at evaluation time, independently of solver credentials.
+      Do not source evaluator files or add them to agent presets. Optional
+      <code>JUDGE_REASONING_EFFORT</code> and <code>JUDGE_MAX_COMPLETION_TOKENS</code>
+      configure reasoning and a minimum token budget for text/image calls. Music
+      project migration uses deterministic audio comparison and requires no
+      audio-model endpoint. Its overview screenshot still uses the shared image
+      judge. Gemini video judges retain their
+      Gemini configuration. The hello-world task needs no judge.
+    </p>
+    <p>
+      Before provisioning sandboxes, batches containing shared LLM-judge tasks
+      probe the configured judge with text and, when required, an image. A failed
+      probe aborts the batch; fix the judge configuration and rerun the command.
+      <code>--dry-run</code> makes no judge requests. A later judge outage or
+      malformed scoring reply produces an evaluation error with
+      <code>score: null</code>, never zero or a substitute score. Odoo uses
+      database checks and does not require a Judge API.
     </p>
 
     <h2>Configure task data and output</h2>
@@ -164,7 +298,7 @@ GCP_SA_KEY=secret/gcp_key.json</code></pre>
       depends on the sandbox substrate:
     </p>
     <pre><code>task_data_source: baked_in_sandbox
-output_path: local
+output_path: null
 
 # Required when the sandbox reads from or writes to GCS:
 # gcs_sa_key: secret/gcp_key.json</code></pre>
@@ -175,14 +309,17 @@ output_path: local
       <li><code>hf://...</code> is accepted by configuration but task-data staging is not implemented yet.</li>
     </ul>
     <p>
-      Output behavior is covered in
-      <a href="/pages/run.html#output-path">Run and collect results</a>.
+      <code>output_path: null</code> is the default. Bulk task output stays in
+      the sandbox; metadata, trajectories, evaluations, and telemetry are still
+      collected. Set <code>cleanup_mode: keep</code> to inspect deliverables in
+      the sandbox, then release it when finished. Output options are covered in
+      <a href="/pages/run.html#output-path">Run, resume and upgrade</a>.
     </p>
 
     <div class="note">
       <div class="note-title">Next</div>
       Validate the resolved matrix and launch it with
-      <a href="/pages/run.html">Run and collect results</a>.
+      <a href="/pages/run.html">Run, resume and upgrade</a>.
     </div>
   </article>
 

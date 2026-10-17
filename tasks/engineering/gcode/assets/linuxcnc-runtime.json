@@ -1,0 +1,36 @@
+{
+  "architecture": "amd64",
+  "rs274_sha256": "aa6c9b2b8ceefb0603435793baaac5238d384780ef67068983ef0a568bba2846",
+  "packages": [
+    {
+      "name": "linuxcnc-uspace",
+      "version": "1:2.9.10",
+      "url": "https://linuxcnc.org/dists/bookworm/2.9-uspace/binary-amd64/linuxcnc-uspace_2.9.10_amd64.deb",
+      "sha256": "09c8d93ed6ddb197a57695e473a7fb6d930fd17cffb77d8f0fa24f2a79b561b2"
+    },
+    {
+      "name": "libboost-python1.74.0",
+      "version": "1.74.0+ds1-21",
+      "url": "https://deb.debian.org/debian/pool/main/b/boost1.74/libboost-python1.74.0_1.74.0+ds1-21_amd64.deb",
+      "sha256": "b1210dc31913a657fe7d70eaa68dc9ac58f5de7f279c99a52a99640b3b3d886a"
+    },
+    {
+      "name": "libpython3.11",
+      "version": "3.11.2-6+deb12u8",
+      "url": "https://deb.debian.org/debian/pool/main/p/python3.11/libpython3.11_3.11.2-6+deb12u8_amd64.deb",
+      "sha256": "63845d53d5f64d2362cfb6007ec175ad1c6044cebe60a1885eff76d2ce637c35"
+    },
+    {
+      "name": "libpython3.11-minimal",
+      "version": "3.11.2-6+deb12u8",
+      "url": "https://deb.debian.org/debian/pool/main/p/python3.11/libpython3.11-minimal_3.11.2-6+deb12u8_amd64.deb",
+      "sha256": "f3beaa03994ffedacf73c43a0843d53b062d347115d8af65bee2034552a4e6f9"
+    },
+    {
+      "name": "libpython3.11-stdlib",
+      "version": "3.11.2-6+deb12u8",
+      "url": "https://deb.debian.org/debian/pool/main/p/python3.11/libpython3.11-stdlib_3.11.2-6+deb12u8_amd64.deb",
+      "sha256": "890b3540dad8a1ccc0deeca025db735bcc82629a76adacbe3b50fcc06ed528ca"
+    }
+  ]
+}

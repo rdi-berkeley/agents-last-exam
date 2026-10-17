@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import logging
 import math
 import os
@@ -439,20 +440,29 @@ async def _blender_can_open_blend(
     blend_path: str,
 ) -> tuple[bool, str, str]:
     ps = (
+        "$ErrorActionPreference = 'Stop'; "
+        "$script = $null; $code = 125; try { "
         f"$exe = '{_ps_quote(blender_path)}'; "
         f"$blend = '{_ps_quote(blend_path)}'; "
-        "& $exe --background --factory-startup $blend --python-expr "
-        "\"print('BLEND_OPEN_CHECK_OK')\""
+        "$script = Join-Path $env:TEMP ('ale-blend-check-' + [guid]::NewGuid() + '.py'); "
+        "Set-Content -LiteralPath $script -Encoding ASCII -Value 'print(\"BLEND_OPEN_CHECK_OK\")'; "
+        "& $exe --background --factory-startup --disable-autoexec $blend --python-exit-code 1 --python $script; "
+        "$code = $LASTEXITCODE "
+        "} catch { Write-Output ('BLEND_CHECK_ERROR: ' + $_.Exception.Message); $code = 125 "
+        "} finally { if ($script) { Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue } }; exit $code"
     )
+    encoded = base64.b64encode(ps.encode("utf-16-le")).decode("ascii")
     result = await session.run_command(
-        f'powershell -NoProfile -Command "{ps}"',
+        f"powershell -NoProfile -NonInteractive -EncodedCommand {encoded}",
         check=False,
     )
     stdout = _as_text(result.get("stdout", ""))
     stderr = _as_text(result.get("stderr", ""))
     opened = "Read blend:" in stdout
-    marker = "BLEND_OPEN_CHECK_OK" in stdout
+    marker = any(line.strip() == "BLEND_OPEN_CHECK_OK" for line in stdout.splitlines())
     return_code = result.get("return_code", 1)
+    if return_code == 125 or any(line.startswith("BLEND_CHECK_ERROR:") for line in stdout.splitlines()):
+        raise RuntimeError(f"Blender validation could not run: {stdout[-1000:]} {stderr[-1000:]}")
     ok = bool(opened and marker and return_code == 0)
     return ok, stdout, stderr
 
@@ -562,11 +572,8 @@ async def evaluate(task_cfg, session: cb.DesktopSession):
         session, list(meta["blender_launcher_candidates"])
     )
     if blender_path is None:
-        logger.warning(
-            "[%s] Blender %s is still unavailable during evaluate(); blend validation is limited to "
-            "existence and non-zero file size on this VM.",
-            tag,
-            BLENDER_VERSION,
+        raise RuntimeError(
+            f"[{tag}] Blender is unavailable; submitted blend cannot be evaluated"
         )
     else:
         blend_open_ok, blend_stdout, blend_stderr = await _blender_can_open_blend(

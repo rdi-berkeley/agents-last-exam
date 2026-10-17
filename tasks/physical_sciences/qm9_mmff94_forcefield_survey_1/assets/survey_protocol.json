@@ -1,0 +1,90 @@
+{
+  "protocol_version": "qm9-mmff94-absolute-v1",
+  "rdkit_version": "2026.03.1",
+  "input": {
+    "archive_molecule_count": 133885,
+    "retained_molecule_count": 130831,
+    "exclude_ids_file": "uncharacterized_ids.json",
+    "exclusions_source": "https://doi.org/10.6084/m9.figshare.978904_D10",
+    "exclusions_source_sha256": "3aa5115d540b356de94791d4a74c3bf1ed91c469ecf52a4f5d7cc0506fe02e24",
+    "smiles": "Second field of the XYZ SMILES line, for the relaxed geometry. Pass this string directly to MolFromSmiles then AddHs; canonicalize only for output identity, never before embedding.",
+    "xyz_number_format": "QM9 uses *^ for scientific notation in some coordinate values; replace it with e.",
+    "pair": "Exactly two N/O/F atoms in the retained XYZ molecule; QM9 distance is the Euclidean distance between their XYZ positions; RDKit pair is the two N/O/F indices after AddHs."
+  },
+  "phase1": {
+    "embedding": "AllChem.ETKDG() (v1), randomSeed=42, numThreads=1, all other defaults.",
+    "optimization": "MMFFOptimizeMolecule(mmffVariant='MMFF94', maxIters=200). Keep the returned geometry for convergence codes 0 or 1.",
+    "inclusion": "abs(RDKit_Dist_A - QM9_Dist_A) >= 1.0 before rounding; Discrepancy_A stores that nonnegative absolute difference.",
+    "failures": "Skip failed SMILES parsing, missing MMFF parameters, or EmbedMolecule returning -1. Record molecule ID and reason separately; no fallback embeddings or parameter changes."
+  },
+  "phase2": {
+    "embedding": "ETKDGv3, randomSeed=42, numThreads=1, pruneRmsThresh=-1, numConfs=200; other defaults.",
+    "optimization": "MMFFOptimizeMoleculeConfs(numThreads=1, maxIters=200, mmffVariant='MMFF94'). Select lowest returned energy regardless of convergence code 0/1, ties by returned conformer order.",
+    "classification": "abs(Global_Min_Dist_A - QM9_Dist_A) >= 0.5 means genuine_ff_failure; otherwise sampling_artifact. Use full precision for thresholds and ranking."
+  },
+  "phase3": {
+    "scaffold": "MurckoScaffold.MurckoScaffoldSmiles(mol=MolFromSmiles(source_smiles), includeChirality=True); empty scaffold is 'acyclic'.",
+    "functional_group_smarts": {
+      "alcohol": "[CX4][OX2H]",
+      "aldehyde": "[CX3H1](=O)[#6]",
+      "alkyne": "[CX2]#[CX2]",
+      "aziridine": "[NX3]1[CX4][CX4]1",
+      "bicyclic": "[R;!R1]",
+      "cyclobutane": "[C]1[C][C][C]1",
+      "cyclopropane": "[C]1[C][C]1",
+      "epoxide": "[OX2]1[CX4][CX4]1",
+      "ether": "[OD2]([#6;!$(C=O)])[#6;!$(C=O)]",
+      "ketone": "[#6][CX3](=O)[#6]",
+      "nitrile": "[CX2]#N"
+    },
+    "aggregation": "A molecule contributes once to each matching group, even with multiple matches. Aggregate genuine failures only. Each scaffold/group has count, mean_discrepancy, max_discrepancy, min_discrepancy of absolute residuals. Most affected scaffold and top functional groups rank by descending mean residual, ties by ascending label.",
+    "molecule_ranking": "Descending full-precision residual, ties by ascending QM9 molecule ID. Phase3 outputs omit molecule IDs; entries use rank, smiles, residual_discrepancy, scaffold and functional_groups.",
+    "schema": {
+      "survey_statistics": [
+        "total_phase2_candidates",
+        "genuine_ff_failures",
+        "sampling_artifacts",
+        "artifact_fraction"
+      ],
+      "scaffold_analysis": [
+        "most_affected_scaffold",
+        "scaffold_stats_by_mean_discrepancy",
+        "functional_group_stats"
+      ],
+      "lists": [
+        "top5_worst_molecules",
+        "all_genuine_failures"
+      ]
+    },
+    "artifact_fraction": "sampling_artifacts / total_phase2_candidates"
+  },
+  "phase4": {
+    "distances": "d[k] = 8.0 - 0.1*k for k=0..55, in descending order.",
+    "initialization": "Start EVERY constrained point independently from an unrounded copy of the Phase2 selected conformer. Do not warm-start from a neighboring scan point. Fresh MMFF94 properties and force field at each point.",
+    "constraint": "MMFFAddDistanceConstraint(first_index, second_index, False, d, d, 10000.0), then Initialize(), then Minimize(maxIts=1000, energyTol=1e-6, forceTol=1e-4). Use the returned geometry, recording non-convergence if any.",
+    "energy": "After constrained minimization, build a fresh MMFF94 force field on the resulting coordinates WITHOUT a constraint and report CalcEnergy(). Thus reported energy excludes artificial restraint energy.",
+    "quantum_forced_energy": "Run the same independent calculation at the exact full-precision QM9 distance, not a rounded grid distance.",
+    "snap": "For interior k=1..54 compute C[k]=(E[k-1]-2*E[k]+E[k+1])/0.01. Choose first k in descending-distance scan order maximizing abs(C[k]); report d[k]. This is a numerical curvature feature, not proof of a physical transition.",
+    "snap_energy_drop": "Signed E[k-1]-E[k+1] at the selected snap index. Preserve the sign; do not take an absolute value.",
+    "delta_e": "quantum_forced_energy - mmff94_global_min_energy, using full precision before rounding.",
+    "heteroatom_pair": "Element symbols joined with '-', e.g. 'N-O'; indices used internally are not this field.",
+    "plot": "Plot all 56 constrained target distances against their computed physical MMFF94 energies; mark the QM9 distance."
+  },
+  "phase5": {
+    "survey_statistics": [
+      "total_molecules_scanned",
+      "phase1_candidates",
+      "genuine_ff_failures",
+      "sampling_artifacts",
+      "artifact_fraction"
+    ],
+    "total_molecules_scanned": "130831, the population remaining after official exclusions, including numerical skips. Distinguish from archive entries (133885).",
+    "scaffold_analysis": [
+      "most_affected_scaffold",
+      "top_functional_groups"
+    ],
+    "top5_characterization": "short_qm9_distance_molecules and long_qm9_distance_molecules contain QM9 molecule IDs as decimal strings; <3.5 vs >=3.5 angstrom. Include a failure_mode_distinction explanation grounded in your results.",
+    "top5_pes_summary": "List of five objects with rank, molecule_id, heteroatom_pair and the seven Phase4 numeric fields, identical to Phase4 values."
+  },
+  "output_precision": "Write numeric values to at least six decimal places or full precision. Do not round intermediate coordinates, energies or classification/ranking values."
+}

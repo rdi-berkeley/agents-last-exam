@@ -69,8 +69,8 @@
     }
   ],
   "vm": {
-    "machineType": "g2-standard-8",
-    "snapshot": "gpu-free",
+    "machineType": "n2-standard-16",
+    "snapshot": "cpu-free",
     "timeout": 7200
   },
   "taxonomy": {

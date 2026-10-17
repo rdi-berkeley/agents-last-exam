@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SEC 10-K analytical answers",
+  "description": "One object keyed by Q1, Q2, and Q3. Each value is the answer itself, without an id/answer wrapper.",
+  "type": "object",
+  "required": ["Q1", "Q2", "Q3"],
+  "additionalProperties": false,
+  "properties": {
+    "Q1": {
+      "type": "object",
+      "required": ["ticker", "pct_increase"],
+      "additionalProperties": false,
+      "properties": {
+        "ticker": {"type": "string"},
+        "pct_increase": {
+          "type": "number",
+          "description": "Percentage increase, rounded to 1 decimal place."
+        }
+      }
+    },
+    "Q2": {
+      "type": "object",
+      "required": ["ticker", "fiscal_year", "operating_margin_pct"],
+      "additionalProperties": false,
+      "properties": {
+        "ticker": {"type": "string"},
+        "fiscal_year": {"type": "integer"},
+        "operating_margin_pct": {
+          "type": "number",
+          "description": "Operating margin as a percentage, rounded to 2 decimal places."
+        }
+      }
+    },
+    "Q3": {
+      "type": "object",
+      "required": ["ranking"],
+      "additionalProperties": false,
+      "properties": {
+        "ranking": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "description": "All 10 tickers, ordered by descending fiscal-year-2023 stockholders' equity."
+        }
+      }
+    }
+  }
+}

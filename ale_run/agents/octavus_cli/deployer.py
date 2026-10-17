@@ -59,12 +59,14 @@ _TERM_GRACE_S = 3.0
 
 # Terminal thread statuses on the consumer read surface.
 _TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
+_RECORDING_SETTLED = frozenset({"ready", "failed", "unavailable"})
+_RECORDING_GRACE_S = 120.0
 
 # The computer's display + accessibility stack the CLI's browser / computer-use
 # tools need. Mirrors the public install script's apt set; a shell/filesystem-
 # only run needs none of it, so a failure here is a warning, not fatal.
 _PREREQ_APT_PACKAGES = (
-    "xvfb", "dbus-x11", "at-spi2-core", "x11-utils", "xdotool", "wmctrl", "scrot", "ffmpeg",
+    "xvfb", "fluxbox", "dbus-x11", "at-spi2-core", "x11-utils", "xdotool", "wmctrl", "scrot", "ffmpeg",
     "python3", "python3-gi", "gir1.2-atspi-2.0", "python3-pil",
     "libnss3", "libatk-bridge2.0-0", "libgtk-3-0", "libgbm1",
     "fonts-liberation",
@@ -130,6 +132,30 @@ def _read_text_tolerant(path: Path) -> str:
         return ""
 
 
+_OOM_PROBE_SH = r"""#!/bin/bash
+LOG="${1:?usage: oom_probe.sh <logfile>}"
+scan_oom() {
+  { dmesg -T 2>/dev/null || sudo -n dmesg -T 2>/dev/null \
+      || journalctl -k -n 200 --no-pager 2>/dev/null || tail -n 200 /var/log/kern.log 2>/dev/null; } \
+    | grep -iE 'out of memory|killed process|oom-kill|oom_reaper' | tail -n 5
+}
+{
+  echo "=== oom_probe start $(date -u +%FT%TZ) ==="
+  grep -E 'MemTotal|SwapTotal' /proc/meminfo 2>/dev/null
+} >> "$LOG" 2>&1
+for _ in $(seq 1 2900); do
+  {
+    echo "--- $(date -u +%FT%TZ) ---"
+    free -m 2>/dev/null | sed -n '1,3p'
+    ps -eo pid,rss,comm --sort=-rss 2>/dev/null | head -n 6
+    oom="$(scan_oom)"
+    [ -n "$oom" ] && printf 'OOM-KERNEL:\n%s\n' "$oom"
+  } >> "$LOG" 2>&1
+  sleep 20
+done
+"""
+
+
 class OctavusCliDeployer(BaseAgentDeployer):
     """Stdlib-only deployer for the ``@octavus/agent`` (``octoagent``) CLI."""
 
@@ -139,6 +165,7 @@ class OctavusCliDeployer(BaseAgentDeployer):
         "octoagent.result.json",
         "octoagent.stdout.log",
         "octoagent.stderr.log",
+        "octoagent.oom_probe.log",
     )
 
     _octoagent_path: str
@@ -216,6 +243,7 @@ class OctavusCliDeployer(BaseAgentDeployer):
 
         have_tools = bool(
             shutil.which("scrot") and shutil.which("xdotool") and shutil.which("ffmpeg")
+            and shutil.which("fluxbox")
         )
         if have_tools and await asyncio.to_thread(_atspi_bindings_importable):
             logger.info("octavus_cli: computer prerequisites already present")
@@ -309,7 +337,9 @@ class OctavusCliDeployer(BaseAgentDeployer):
         stdout_log = wd / "octoagent.stdout.log"
         stderr_log = wd / "octoagent.stderr.log"
         pid_file = wd / "octoagent.pid"
-        for stale in (result_file, stdout_log, stderr_log, pid_file):
+        oom_log = wd / "octoagent.oom_probe.log"
+        oom_script = wd / "octoagent.oom_probe.sh"
+        for stale in (result_file, stdout_log, stderr_log, pid_file, oom_log, oom_script):
             if stale.exists():
                 try:
                     stale.unlink()
@@ -335,6 +365,7 @@ class OctavusCliDeployer(BaseAgentDeployer):
         pid_file.write_text(str(proc.pid), encoding="ascii")
         logger.info("octavus_cli: spawned pid=%s workdir=%s", proc.pid, workdir)
 
+        oom_probe = self._start_oom_probe(oom_script, oom_log)
         try:
             while proc.poll() is None:
                 await asyncio.sleep(_POLL_INTERVAL_S)
@@ -347,6 +378,13 @@ class OctavusCliDeployer(BaseAgentDeployer):
             except (TimeoutError, asyncio.CancelledError):
                 self._reap(proc, force=True)
             raise
+        finally:
+            if oom_probe is not None:
+                try:
+                    self._reap(oom_probe, force=True)
+                    oom_probe.wait(timeout=_TERM_GRACE_S)
+                except (OSError, subprocess.SubprocessError) as exc:
+                    logger.warning("octavus_cli: could not reap OOM probe: %s", exc)
 
         duration_s = time.monotonic() - t0
         exit_code = proc.returncode
@@ -367,15 +405,17 @@ class OctavusCliDeployer(BaseAgentDeployer):
         )
 
     def _build_argv(self, cfg: OctavusCliConfig, *, workdir: str, prompt: str) -> list[str]:
-        # This integration targets the hosted production platform, which is the
-        # CLI's default, so neither --env nor --platform-url is passed.
         argv = [self._octoagent_path, "run", "--json", "--workdir", workdir]
+        if cfg.platform_url:
+            argv += ["--platform-url", cfg.platform_url]
         if cfg.operator_url:
             argv += ["--operator-url", cfg.operator_url]
         if cfg.model:
             argv += ["--model", cfg.model]
         if cfg.backup_model:
             argv += ["--backup-model", cfg.backup_model]
+        if cfg.thinking:
+            argv += ["--thinking", cfg.thinking]
         for slug, enabled in cfg.capabilities.items():
             argv += ["--capability", f"{slug}={'on' if enabled else 'off'}"]
         if cfg.record:
@@ -423,6 +463,26 @@ class OctavusCliDeployer(BaseAgentDeployer):
                 proc.send_signal(sig)
             except ProcessLookupError:
                 pass
+
+    @staticmethod
+    def _start_oom_probe(script: Path, log: Path) -> subprocess.Popen | None:
+        """Start a detached, best-effort OOM recorder with a roughly 16-hour limit.
+
+        It can survive the sandbox entry's death to retain guest memory evidence.
+        Returns None on startup failure. The caller must reap it on normal exit.
+        """
+        try:
+            script.write_text(_OOM_PROBE_SH, encoding="utf-8")
+            return subprocess.Popen(
+                ["bash", str(script), str(log)],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=hasattr(os, "setsid"),
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            logger.warning("octavus_cli: could not start OOM probe: %s", exc)
+            return None
 
     @staticmethod
     def _extract_result_json(stdout_log: Path, result_file: Path) -> dict | None:
@@ -560,34 +620,48 @@ class OctavusCliDeployer(BaseAgentDeployer):
 
         The CLI already waited for the run to finish, so the thread is normally
         terminal by the time this host-side pass runs; a short poll absorbs the
-        few seconds usage aggregation can lag.
+        few seconds usage aggregation can lag, and a finished thread is read until
+        its recording settles (see ``_RECORDING_SETTLED``).
         """
         url = (
             f"{platform_url}/api/v1/workforce/agents/{agent_id}"
             f"/threads/{thread_id}"
         )
         deadline = time.monotonic() + 60.0
+        recording_deadline: float | None = None
         last: dict | None = None
         while True:
+            until = deadline if recording_deadline is None else recording_deadline
+            remaining = until - time.monotonic()
+            if remaining <= 0:
+                return last
             try:
                 request = urllib.request.Request(
                     url,
                     headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
                 )
-                with urllib.request.urlopen(request, timeout=30) as response:
-                    last = json.loads(response.read().decode("utf-8"))
+                with urllib.request.urlopen(request, timeout=min(30.0, remaining)) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("thread response must be a JSON object")
+                last = payload
             except (urllib.error.URLError, TimeoutError, ValueError) as exc:
                 logger.warning("octavus_cli: thread read error: %s", exc)
-                if time.monotonic() >= deadline:
+                if time.monotonic() >= until:
                     return last
-                time.sleep(5.0)
+                time.sleep(min(5.0, max(0.0, until - time.monotonic())))
                 continue
             status = str((last or {}).get("status") or "")
             if status in _TERMINAL_STATUSES and (last or {}).get("usage"):
+                recording = (last or {}).get("recording")
+                if not isinstance(recording, dict) or recording.get("status") in _RECORDING_SETTLED:
+                    return last
+                if recording_deadline is None:
+                    recording_deadline = time.monotonic() + _RECORDING_GRACE_S
+                    until = recording_deadline
+            if time.monotonic() >= until:
                 return last
-            if time.monotonic() >= deadline:
-                return last
-            time.sleep(5.0)
+            time.sleep(min(5.0, max(0.0, until - time.monotonic())))
 
     @staticmethod
     def _map_messages(messages: list[dict], builder: TrajectoryBuilder) -> None:

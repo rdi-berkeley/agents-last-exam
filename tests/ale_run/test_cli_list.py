@@ -1,7 +1,9 @@
 """``ale list`` — task discovery under ``tasks/``."""
+
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from ale_run.cli import main
@@ -22,10 +24,10 @@ def test_list_tasks_finds_main_py_dirs_relative_to_root(tmp_path: Path) -> None:
     root = tmp_path / "tasks"
     _mk_task(root, "demo/hello")
     _mk_task(root, "legal/contract_review")
-    (root / "common_setup.py").write_text("")           # helper module, not a task
-    (root / "legal" / "__init__.py").write_text("")      # namespace marker, not a task
-    _mk_task(root, "__pycache__/junk")                   # skipped
-    _mk_task(root, ".hidden/junk")                       # skipped
+    (root / "common_setup.py").write_text("")  # helper module, not a task
+    (root / "legal" / "__init__.py").write_text("")  # namespace marker, not a task
+    _mk_task(root, "__pycache__/junk")  # skipped
+    _mk_task(root, ".hidden/junk")  # skipped
 
     assert list_tasks(root) == ["demo/hello", "legal/contract_review"]
 
@@ -48,7 +50,7 @@ def test_cli_list_prints_tasks(tmp_path: Path, monkeypatch, capsys) -> None:
 
 def test_cli_list_verbose_includes_card_metadata(tmp_path: Path, monkeypatch, capsys) -> None:
     _mk_task(tmp_path / "tasks", "demo/hello", title="Hello World")
-    _mk_task(tmp_path / "tasks", "demo/nocard")         # no task_card.json — must not crash
+    _mk_task(tmp_path / "tasks", "demo/nocard")  # no task_card.json — must not crash
     monkeypatch.chdir(tmp_path)
 
     assert main(["list", "--verbose"]) == 0
@@ -59,7 +61,7 @@ def test_cli_list_verbose_includes_card_metadata(tmp_path: Path, monkeypatch, ca
 
 def test_repo_tasks_are_discoverable() -> None:
     """The shipped task library must include the demo smoke tasks."""
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(os.environ.get("ALE_PROVIDER_REPO", Path(__file__).resolve().parents[2]))
     tasks = list_tasks(repo_root / "tasks")
     assert "demo/hello" in tasks
     assert "demo/hello_win" in tasks

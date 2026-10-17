@@ -139,11 +139,46 @@ async def test_chroma_soft_eval_propagates_judge_failure(monkeypatch):
 
 
 def test_uv_soft_eval_distinguishes_missing_frames_from_missing_credentials(monkeypatch, tmp_path):
-    monkeypatch.setattr(uv_soft, "_load_api_key", lambda: None)
+    monkeypatch.setattr(uv_soft, "judge_config", lambda: {"api_key": ""})
 
     assert uv_soft.run_local_soft_eval([], tmp_path) == 0.0
-    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
+    with pytest.raises(RuntimeError, match="JUDGE_API_KEY"):
         uv_soft.run_local_soft_eval([{"view": "front"}], tmp_path)
+
+
+def test_uv_soft_eval_prefers_canonical_evaluator_key(monkeypatch, tmp_path):
+    credentials_dir = tmp_path / "eval_time"
+    credentials_dir.mkdir()
+    (credentials_dir / "openai.env").write_text(
+        "JUDGE_API_KEY=evaluator-key\n", encoding="utf-8"
+    )
+    monkeypatch.setenv("AGENTHLE_EVAL_CREDENTIALS_DIR", str(credentials_dir))
+    monkeypatch.setenv("OPENAI_API_KEY", "run-key")
+
+    assert uv_soft.judge_config()["api_key"] == "evaluator-key"
+
+
+def test_uv_soft_eval_does_not_use_run_key_without_canonical_credentials(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("AGENTHLE_EVAL_CREDENTIALS_DIR", str(tmp_path / "missing"))
+    monkeypatch.setenv("OPENAI_API_KEY", "run-key")
+
+    assert not uv_soft.judge_config()["api_key"]
+
+
+def test_uv_soft_eval_does_not_fall_back_when_canonical_file_has_no_key(
+    monkeypatch, tmp_path
+):
+    credentials_dir = tmp_path / "eval_time"
+    credentials_dir.mkdir()
+    (credentials_dir / "openai.env").write_text(
+        "JUDGE_MODEL=test-model\n", encoding="utf-8"
+    )
+    monkeypatch.setenv("AGENTHLE_EVAL_CREDENTIALS_DIR", str(credentials_dir))
+    monkeypatch.setenv("OPENAI_API_KEY", "run-key")
+
+    assert not uv_soft.judge_config()["api_key"]
 
 
 def test_audit_summary_and_negative_checks_are_not_false_positive_claims(monkeypatch):

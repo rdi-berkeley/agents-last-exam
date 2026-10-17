@@ -1,17 +1,23 @@
-"""cailian_road_highway_alignment_2 — Civil 3D highway alignment design task."""
+"""Cailian Road alignment task using native FreeCAD Road on Linux."""
 
 import asyncio
 import base64
 import json
 import logging
 import math
+import shlex
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 
 import cua_bench as cb
 
-from tasks.common_config import GeneralTaskConfig
+from tasks.linux_runtime import LinuxTaskConfig
+from tasks.engineering.cailian_road_highway_alignment_2.setup_native import stage_native_task
 from tasks.common_setup import BaseTaskSetup
+from tasks.engineering.cailian_road_highway_alignment_2.native_commands import (
+    NativeRoadEnvironmentError,
+    run_native_command,
+)
 
 
 _setup = BaseTaskSetup()
@@ -62,93 +68,42 @@ def _read_script(name: str) -> str:
 
 
 @dataclass
-class CailianRoadConfig(GeneralTaskConfig):
+class CailianRoadConfig(LinuxTaskConfig):
     DOMAIN_NAME: str = DOMAIN_NAME
     TASK_NAME: str = TASK_NAME
     VARIANT_NAME: str = VARIANT_NAME
+    REQUIRES_TASK_DATA: bool = False
 
     @property
-    def task_dir(self) -> str:
-        return _win(self.REMOTE_ROOT_DIR, DOMAIN_NAME, TASK_NAME, VARIANT_NAME)
+    def topo_surface_file(self):
+        return f"{self.input_dir}/declared-survey-terrain.obj"
 
     @property
-    def input_dir(self) -> str:
-        return _win(self.task_dir, "input")
+    def alignment_fcstd(self):
+        return f"{self.remote_output_dir}/alignment.FCStd"
 
     @property
-    def topo_surface_file(self) -> str:
-        return _win(self.input_dir, "topo_surface.dwg")
+    def alignment_tsv(self):
+        return f"{self.remote_output_dir}/alignment_metrics.tsv"
 
     @property
-    def alignment_dwg(self) -> str:
-        return _win(self.remote_output_dir, "alignment.dwg")
+    def task_description(self):
+        return (Path(__file__).parent / "assets/instruction.md").read_text().replace("{input_dir}", self.input_dir).replace("{output_dir}", self.remote_output_dir).replace("{software_dir}", self.software_dir)
 
-    @property
-    def alignment_tsv(self) -> str:
-        return _win(self.remote_output_dir, "alignment_metrics.tsv")
-
-    @property
-    def civil3d_launcher(self) -> str:
-        return _win(self.software_dir, "open_civil3d_2024.bat")
-
-    @property
-    def task_description(self) -> str:
-        return f"""\
-You are a civil engineer using AutoCAD Civil 3D 2024 on Windows.
-
-## Your Task
-Design a horizontal alignment for Cailian Road and generate a vertical profile \
-that follows the existing ground surface.
-
-## Control Points
-- Start: X = {START_X}, Y = {START_Y}, Z = {START_Z}
-- End:   X = {END_X}, Y = {END_Y}, Z = {END_Z}
-- Both endpoints must be connected within 0.5 m.
-
-## Design Constraints
-- Minimum curve radius: {MIN_CURVE_RADIUS} m
-- Minimum spiral length (if spirals are used): {MIN_SPIRAL_LENGTH} m
-- Design speed: 30 km/h
-- Total alignment length: {MIN_TOTAL_LENGTH} m – {MAX_TOTAL_LENGTH} m
-- The alignment should include at least 2 horizontal curves to form a \
-meaningful highway design.
-
-## Steps
-1. Open `{self.topo_surface_file}` — the existing-ground TIN surface.
-2. Create a horizontal Alignment between the start and end control points, \
-respecting the design constraints above.
-3. Use *Create Profile from Surface* to generate the raw existing-ground \
-profile along the alignment. Do NOT edit the profile.
-4. Save the drawing with the alignment and profile to: \
-`{self.alignment_dwg}`
-5. Export alignment metrics at 20 m station intervals to: \
-`{self.alignment_tsv}`
-   - TSV columns must be exactly: Station, X, Y, Z
-   - Z values must be the surface elevations at each (X, Y) point.
-
-## Software
-- Launch Civil 3D from: `{self.civil3d_launcher}`
-
-## Output
-- Save alignment drawing to: `{self.alignment_dwg}`
-- Save metrics TSV to: `{self.alignment_tsv}`
-- Keep all work inside `{self.remote_output_dir}`
-"""
-
-    def to_metadata(self) -> dict:
-        metadata = super().to_metadata()
-        metadata.update({
+    def to_metadata(self):
+        return {
+            **super().to_metadata(),
             "task_id": TASK_ID,
-            "task_dir": self.task_dir,
-            "input_dir": self.input_dir,
+            "cad_backend": "freecad-road",
+            "release_status": "native_controls_passed_awaiting_agent_review",
             "topo_surface_file": self.topo_surface_file,
-            "alignment_dwg": self.alignment_dwg,
+            "alignment_fcstd": self.alignment_fcstd,
             "alignment_tsv": self.alignment_tsv,
-            "civil3d_launcher": self.civil3d_launcher,
-            "civil3d_exe": CIVIL3D_EXE,
-            "vm_identity": "sunblaze-4/us-west1-c/agenthle-dev-gpu-licensed",
-        })
-        return metadata
+            "native_road_adapter_dir": self.software_dir,
+            "native_road_runtime": f"{self.software_dir}/runtime",
+            "native_road_work_dir": f"{self.task_dir}/.evaluation",
+            "native_road_cpu": 3,
+        }
 
 
 config = CailianRoadConfig()
@@ -160,7 +115,7 @@ def load():
         cb.Task(
             description=config.task_description,
             metadata=config.to_metadata(),
-            computer={"provider": "computer", "setup_config": {"os_type": "windows"}},
+            computer={"provider": "computer", "setup_config": {"os_type": "linux"}},
         )
     ]
 
@@ -168,6 +123,7 @@ def load():
 @cb.setup_task(split="train")
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
+    await stage_native_task(task_cfg.metadata, session)
 
 
 def _score_from_verifier(vr: dict) -> dict:
@@ -325,9 +281,105 @@ async def _run_cmd(session, cmd, retries=3, delay=5, check=False):
     raise last_err
 
 
+def _score_native_road(vr: dict) -> dict:
+    """Score independently reopened Road geometry with the original weights."""
+    result = _score_from_verifier(vr)
+    if vr.get("error") or not vr.get("native_road_verified"):
+        result["hard_gate_failures"].append("native_road_verification_failed")
+    if result["hard_gate_failures"]:
+        result["final_score"] = 0.0
+        return result
+    rows = vr.get("tsv_rows", [])
+    elevations = vr.get("surface_elevations", [])
+    if len(rows) < 3 or len(rows) != len(elevations):
+        result["hard_gate_failures"].append("native_surface_samples_missing")
+        result["final_score"] = 0.0
+        return result
+    try:
+        stations = [float(row["Station"]) for row in rows]
+        heights = [float(row["Z"]) for row in rows]
+        if not all(math.isfinite(value) for value in stations + heights + elevations):
+            raise ValueError("nonfinite samples")
+    except (KeyError, TypeError, ValueError):
+        result["hard_gate_failures"].append("invalid_native_samples")
+        result["final_score"] = 0.0
+        return result
+    matches = sum(
+        abs(actual - expected) <= VERTICAL_TOLERANCE
+        for actual, expected in zip(heights[1:-1], elevations[1:-1])
+    )
+    result["vertical_subscore"] = 40.0 * matches / (len(rows) - 2)
+    interval_ok = all(
+        abs(current - previous - 20.0) <= STATION_INTERVAL_TOLERANCE
+        for previous, current in zip(stations[:-2], stations[1:-1])
+    )
+    result["formatting_subscore"] += 10.0 if interval_ok else 0.0
+    result["submitter_total"] = sum(
+        result[key]
+        for key in (
+            "curve_subscore", "spiral_subscore", "vertical_subscore", "formatting_subscore"
+        )
+    )
+    result["final_score"] = result["submitter_total"]
+    return result
+
+
+async def _evaluate_native_road(meta: dict, session) -> list[float]:
+    """Run the trusted Road adapter in a separate, resource-limited display."""
+    work_dir = meta["native_road_work_dir"]
+    adapter_dir = meta["native_road_adapter_dir"]
+    request_path = f"{work_dir}/evaluation-request.json"
+    receipt_path = f"{work_dir}/native-verification.json"
+    request = {
+        "mode": "verify",
+        "adapter_dir": adapter_dir,
+        "runtime": meta["native_road_runtime"],
+        "terrain": meta["topo_surface_file"],
+        "alignment": meta["alignment_fcstd"],
+        "tsv": meta["alignment_tsv"],
+        "receipt": receipt_path,
+    }
+    encoded = base64.b64encode(json.dumps(request).encode()).decode()
+    prepare = (
+        "import base64,pathlib; "
+        f"pathlib.Path({work_dir!r}).mkdir(parents=True,exist_ok=True); "
+        f"pathlib.Path({receipt_path!r}).unlink(missing_ok=True); "
+        f"pathlib.Path({request_path!r}).write_bytes(base64.b64decode({encoded!r}))"
+    )
+    await run_native_command(session, shlex.join(["python3", "-c", prepare]), seconds=30)
+    command = shlex.join([
+        "sudo", "-n", "systemd-run", "--quiet", "--wait", "--pipe", "--collect",
+        "--uid=user", "-p", "CPUQuota=100%", "-p",
+        f"AllowedCPUs={meta.get('native_road_cpu', 0)}",
+        "-p", "MemoryMax=3G", "-p", "MemorySwapMax=0", "-p", f"RuntimeMaxSec={min(300, int(meta.get('native_road_seconds', 300)))}",
+        "env", "OMP_NUM_THREADS=1", "OPENBLAS_NUM_THREADS=1",
+        "QTWEBENGINE_DISABLE_SANDBOX=1", f"CAILIAN_NATIVE_REQUEST={request_path}",
+        "xvfb-run", "-a", "-e", f"{work_dir}/xvfb.log",
+        f"{meta['native_road_runtime']}/FreeCAD.AppImage",
+        "--user-cfg", f"{work_dir}/FreeCAD-user.cfg",
+        "--system-cfg", f"{work_dir}/FreeCAD-system.cfg",
+        f"{adapter_dir}/entry.FCMacro",
+    ])
+    await run_native_command(session, command)
+    receipt = await run_native_command(session, shlex.join(["cat", receipt_path]), seconds=30)
+    try:
+        verification = json.loads(receipt.get("stdout") or "")
+    except (TypeError, json.JSONDecodeError) as error:
+        raise NativeRoadEnvironmentError("Native Road verifier did not write valid JSON") from error
+    if not isinstance(verification, dict) or not (
+        verification.get("native_road_verified") is True or isinstance(verification.get("error"), str)
+    ):
+        raise NativeRoadEnvironmentError("Native Road verifier receipt is incomplete")
+    score = _score_native_road(verification)
+    logger.info("cailian native Road scoring payload: %s", json.dumps(score))
+    return [score["final_score"] / 100.0]
+
+
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
+    if meta.get("cad_backend") == "freecad-road":
+        return await _evaluate_native_road(meta, session)
     output_dir = meta["remote_output_dir"]
     alignment_dwg = meta["alignment_dwg"]
     alignment_tsv = meta["alignment_tsv"]

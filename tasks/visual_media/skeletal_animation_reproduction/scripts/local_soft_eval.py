@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 from tasks.utils.evaluation import llm_vision_binary_questions_sync, resolve_llm_judge_model
-
-MODEL = resolve_llm_judge_model(
-    env_var="BLENDER_TASK_SOFT_EVAL_MODEL",
-    default="gpt-5.2",
-)
 
 
 def run_local_soft_eval(
@@ -19,9 +13,6 @@ def run_local_soft_eval(
     replay_sheet: Path,
     pose_state_sheet: Path,
 ) -> float:
-    if not os.environ.get("OPENAI_API_KEY"):
-        return 0.0
-
     prompt_context = (
         "You are an expert animation and rigging judge. "
         "This is a body-motion reproduction task. "
@@ -48,9 +39,9 @@ def run_local_soft_eval(
             replay_sheet.read_bytes(),
             pose_state_sheet.read_bytes(),
         ],
-        model=MODEL,
+        model=resolve_llm_judge_model(),
         temperature=0,
     )
     report_path = reference_sheet.parent / "soft_eval_report.json"
     report_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return max(0.0, min(1.0, float(data.get("final_score", 0.0))))
+    return float(data["final_score"])

@@ -76,10 +76,10 @@
     <p>
       Where those files come from is set by the environment's
       <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/configs/environments/environment_gcloud.yaml"><code>task_data_source</code></a>,
-      which has four implemented modes:
+      which has three common modes:
     </p>
     <ul>
-      <li><strong>Runtime pull</strong> (<code>gs://ale-data-public</code>) — the
+      <li><strong>Runtime pull</strong> (<code>gs://ale-data-public/v1.1</code>): the
       general case: each task's data is fetched onto the sandbox when its slot
       runs. A sandbox you build yourself uses this, and from a Google Cloud VM
       the pull is fast.</li>
@@ -94,11 +94,6 @@
       each task's input into the container before the agent and the reference in
       after. No encryption is needed: the reference is simply never inside the
       container while the agent runs — the same timing that hides it above.</li>
-      <li><strong>Sandbox mount</strong> (<code>mounted:&lt;dir&gt;</code>) — for the
-      <a href="/pages/hf-sandbox.html">HF Sandboxes</a> provider. A bucket you own is
-      mounted read-only into the sandbox job itself (no host in the loop), and the
-      framework <code>cp</code>s each task's input in before the agent and the
-      reference in after — the same timing as local mount.</li>
     </ul>
     <p>
       The configuration schema also reserves <code>hf://...</code> for direct

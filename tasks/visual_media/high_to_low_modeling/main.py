@@ -12,7 +12,7 @@ import cua_bench as cb
 
 from tasks.common_config import GeneralTaskConfig
 from tasks.common_setup import BaseTaskSetup
-from tasks.utils.evaluation import llm_vision_binary_questions_sync, resolve_llm_judge_model
+from tasks.utils.evaluation import judge_config, llm_vision_binary_questions_sync, resolve_llm_judge_model
 
 _setup = BaseTaskSetup()
 
@@ -31,10 +31,6 @@ REMOTE_BLENDER = os.environ.get(
 )
 REMOTE_TEMP_ROOT = os.environ.get(
     "BLENDER_TASK_REMOTE_EVAL_ROOT", r"C:\Users\User\AppData\Local\Temp\agenthle_eval\high_to_low"
-)
-SOFT_EVAL_MODEL = resolve_llm_judge_model(
-    env_var="BLENDER_TASK_SOFT_EVAL_MODEL",
-    default="gpt-4.1-mini",
 )
 
 
@@ -249,7 +245,7 @@ def _run_local_soft_eval(
     metrics: dict[str, Any],
     report_path: Path | None = None,
 ) -> float | None:
-    if not os.environ.get("OPENAI_API_KEY"):
+    if not judge_config()["api_key"]:
         return None
     summary = json.dumps(
         {
@@ -288,7 +284,7 @@ def _run_local_soft_eval(
             heatmap_sheet.read_bytes(),
             silhouette_sheet.read_bytes(),
         ],
-        model=SOFT_EVAL_MODEL,
+        model=resolve_llm_judge_model(),
         temperature=0,
     )
     if report_path is not None:

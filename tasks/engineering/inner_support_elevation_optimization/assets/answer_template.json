@@ -1,0 +1,16 @@
+{
+  "pos_0m_max_settlement_mm": null,
+  "pos_1m_max_settlement_mm": null,
+  "pos_2m_max_settlement_mm": null,
+  "pos_3m_max_settlement_mm": null,
+  "pos_4m_max_settlement_mm": null,
+  "pos_0m_max_disp_mm": null,
+  "pos_1m_max_disp_mm": null,
+  "pos_2m_max_disp_mm": null,
+  "pos_3m_max_disp_mm": null,
+  "pos_4m_max_disp_mm": null,
+  "reduction_0m_to_2m_percent": null,
+  "increase_2m_to_4m_percent": null,
+  "best_support_position_for_minimum_settlement_m": null,
+  "best_support_position_for_minimum_disp_m": null
+}

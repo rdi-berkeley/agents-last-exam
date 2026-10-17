@@ -36,30 +36,13 @@ from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 from agent.agent import ComputerAgent, assert_callable_with, get_json, get_output_call_ids
 from agent.computers.base import AsyncComputerHandler
 from agent.computers.cua import cuaComputerHandler
-from .model.model_config import ResolvedModel
+from .model.model_config import ResolvedModel, resolve_model
 from agent.responses import make_tool_error_item, replace_failed_computer_calls_with_function_calls
 from agent.tools.base import BaseTool
 from agent.types import ToolError
 from core.telemetry import is_telemetry_enabled, record_event
 from litellm.responses.utils import Usage
 
-
-# Map of computer-action name → the param keys the action accepts.
-# Used to filter the JSON arguments blob a model emits for
-# ``function_call name="computer"``.
-_COMPUTER_ACTION_PARAMS: Dict[str, List[str]] = {
-    "screenshot": [],
-    "click": ["x", "y", "button"],
-    "double_click": ["x", "y"],
-    "right_click": ["x", "y"],
-    "type": ["text"],
-    "keypress": ["keys"],
-    "scroll": ["x", "y", "scroll_x", "scroll_y"],
-    "move": ["x", "y"],
-    "drag": ["start_x", "start_y", "end_x", "end_y"],
-    "wait": ["seconds", "ms"],
-    "terminate": ["status"],
-}
 
 from .model._message_shapes import _function_call_output, _image_url_block
 from .canonical.canonical import normalize_to_canonical, sanitize_items
@@ -81,9 +64,23 @@ from .agent_loop_helpers import (  # has_done_signal re-exported for deployer; r
     _extract_messages_for_compaction,
     _maybe_sanitize_screenshot,
     _rewrite_input_image_to_image_url,
-    _strip_images_from_messages,
+    _strip_images_from_messages as _strip_images_from_messages,
     has_done_signal,
 )
+
+_COMPUTER_ACTION_PARAMS: Dict[str, List[str]] = {
+    "screenshot": [],
+    "click": ["x", "y", "button"],
+    "double_click": ["x", "y"],
+    "right_click": ["x", "y"],
+    "type": ["text"],
+    "keypress": ["keys"],
+    "scroll": ["x", "y", "scroll_x", "scroll_y"],
+    "move": ["x", "y"],
+    "drag": ["start_x", "start_y", "end_x", "end_y"],
+    "wait": ["seconds", "ms"],
+    "terminate": ["status"],
+}
 
 class OpenClawComputerAgent(ComputerAgent):
     """ComputerAgent subclass with mid-conversation compaction support.
@@ -178,6 +175,8 @@ class OpenClawComputerAgent(ComputerAgent):
         self.thinking_config = thinking_config
         self.resolved_model = resolved_model
         self.summary_runtime = summary_runtime
+        self._helper_api_key: Optional[str] = None
+        self._helper_api_base: Optional[str] = None
         self._registry = registry
         # Stable bootstrap files re-injected post-compaction so the agent
         # re-anchors on workspace rules after the lossy summary. Mirrors
@@ -385,6 +384,25 @@ class OpenClawComputerAgent(ComputerAgent):
             merged_kwargs["api_key"] = api_key if api_key is not None else self.api_key
         if (api_base is not None) or (self.api_base is not None):
             merged_kwargs["api_base"] = api_base if api_base is not None else self.api_base
+        self._helper_api_key = merged_kwargs.get("api_key")
+        self._helper_api_base = merged_kwargs.get("api_base")
+        primary_model = merged_kwargs.get("model", self.model)
+        helper_model = (
+            self.summary_runtime.model if self.summary_runtime else self.summary_model
+        )
+        primary_provider = (
+            primary_model.split("/", 1)[0] if "/" in primary_model
+            else resolve_model(primary_model).provider
+        )
+        helper_provider = (
+            helper_model.split("/", 1)[0] if "/" in helper_model
+            else resolve_model(helper_model).provider
+        )
+        if primary_provider != helper_provider or (
+            primary_provider == "unknown" and primary_model != helper_model
+        ):
+            self._helper_api_key = None
+            self._helper_api_base = None
 
         items = self._process_input(messages)
 
@@ -463,6 +481,8 @@ class OpenClawComputerAgent(ComputerAgent):
                 else None
             ),
             summary_runtime=self.summary_runtime,
+            api_key=self._helper_api_key,
+            api_base=self._helper_api_base,
         )
 
     def _drain_completions(self, new_items: List[Dict[str, Any]]) -> None:
@@ -950,6 +970,8 @@ class OpenClawComputerAgent(ComputerAgent):
                 else None
             ),
             summary_runtime=self.summary_runtime,
+            api_key=self._helper_api_key,
+            api_base=self._helper_api_base,
         )
 
         # Persist compaction entry with firstKeptEntryId

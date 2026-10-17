@@ -21,11 +21,28 @@
     <h2>Install ALE</h2>
     <pre><code>git clone git@github.com:rdi-berkeley/agents-last-exam.git
 cd agents-last-exam
-uv sync --all-packages</code></pre>
+bash env/install_host_deps.sh
+uv sync --all-packages --locked
+bash env/verify_host_env.sh</code></pre>
+    <p>
+      Host setup supports Ubuntu 22.04/24.04/26.04 and Debian 12/13. The checked-in
+      <code>uv.lock</code> pins Python dependencies. Verification checks native
+      tools, deferred evaluator imports, and all 122 active task entry points
+      without starting sandboxes or calling judges. Provider tools and guest
+      applications are configured separately. See
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/env/README.md#host-evaluation-environment">host setup and validation scope</a>.
+    </p>
+    <p>
+      Use the frozen v1.1 task source with the matching image and data pins in
+      the <a href="/pages/configure.html#v1-1">release configuration</a>.
+      For the original requirements, follow
+      <a href="https://github.com/rdi-berkeley/agents-last-exam/blob/main/docs/releases/v1.md">Run original v1</a>
+      in a separate checkout with legacy images and fresh logs.
+    </p>
 
     <h2>Choose a sandbox provider</h2>
     <p>
-      ALE exposes seven provider implementations. The names below describe the
+      ALE exposes six provider implementations. The names below describe the
       sandbox the task receives. The code identifier used in environment YAML is
       shown in parentheses.
     </p>
@@ -42,37 +59,31 @@ uv sync --all-packages</code></pre>
         <tr>
           <td><a href="/pages/google-cloud.html"><strong>Google Cloud VMs</strong></a><br><code>gcloud</code></td>
           <td>A fresh GCE VM for every run unit</td>
-          <td>145 tasks in <code>unlicensed.txt</code>. The seven additional tasks in <code>full.txt</code> require your own licensed-software activation.</td>
+          <td>All 122 v1.1 tasks in <code>full.txt</code></td>
           <td>Production benchmark runs and elastic concurrency</td>
         </tr>
         <tr>
           <td><a href="/pages/aws.html"><strong>AWS EC2</strong></a><br><code>aws</code></td>
           <td>A fresh EC2 instance for every run unit</td>
-          <td>Linux + Windows from public AMIs. GPU tasks not supported.</td>
+          <td>CPU profiles; verify matching v1.1 images before running the six converted workflows. GPU tasks not supported.</td>
           <td>Production runs on AWS instead of/alongside GCP</td>
         </tr>
         <tr>
           <td><a href="/pages/aliyun.html"><strong>Alibaba Cloud ECS</strong></a><br><code>aliyun</code></td>
           <td>A fresh ECS instance for every run unit</td>
-          <td>Linux + Windows from the same image families. GPU tasks not supported.</td>
+          <td>CPU profiles; verify matching v1.1 images before running the six converted workflows. GPU tasks not supported.</td>
           <td>Production runs on Alibaba Cloud instead of/alongside GCP</td>
         </tr>
         <tr>
           <td><a href="/pages/local-docker.html"><strong>Local containers</strong></a><br><code>docker</code></td>
           <td>A fresh Linux container for every run unit</td>
-          <td>99 tasks in <code>docker_support.txt</code></td>
+          <td>78 supported tasks in <code>docker_support.txt</code></td>
           <td>The lightest local path for the supported Linux subset</td>
-        </tr>
-        <tr>
-          <td><a href="/pages/hf-sandbox.html"><strong>HF Sandboxes</strong></a><br><code>hfsandbox</code></td>
-          <td>A fresh Hugging Face Job for every run unit</td>
-          <td>Same 99 tasks in <code>docker_support.txt</code></td>
-          <td>The same Linux subset without local Docker or a cloud account</td>
         </tr>
         <tr>
           <td><a href="/pages/local.html"><strong>QEMU/KVM VMs</strong></a><br><code>qemu</code></td>
           <td>A fresh QEMU/KVM guest VM for every run unit</td>
-          <td>140 CPU-compatible Ubuntu and Windows tasks in <code>cpu_unlicensed.txt</code></td>
+          <td>119 CPU-compatible Ubuntu and Windows tasks in <code>cpu.txt</code></td>
           <td>Full-OS local testing, including Windows, without cloud VMs</td>
         </tr>
         <tr>
@@ -105,12 +116,11 @@ uv sync --all-packages</code></pre>
     <table>
       <thead><tr><th>Environment</th><th>Recommended task list</th></tr></thead>
       <tbody>
-        <tr><td><code>configs/environments/environment_gcloud.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code>, or <code>full.txt</code> after licensed software is activated</td></tr>
-        <tr><td><code>configs/environments/environment_aws.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code> (same image families on AWS EC2)</td></tr>
-        <tr><td><code>configs/environments/environment_aliyun.yaml</code></td><td><code>selected_tasks/unlicensed.txt</code> (same image families on Alibaba Cloud ECS)</td></tr>
+        <tr><td><code>configs/environments/environment_gcloud.yaml</code></td><td><code>selected_tasks/full.txt</code></td></tr>
+        <tr><td><code>configs/environments/environment_aws.yaml</code></td><td><code>selected_tasks/cpu.txt</code>; verify matching v1.1 images</td></tr>
+        <tr><td><code>configs/environments/environment_aliyun.yaml</code></td><td><code>selected_tasks/cpu.txt</code>; verify matching v1.1 images</td></tr>
         <tr><td><code>configs/environments/docker.yaml</code></td><td><code>selected_tasks/docker_support.txt</code></td></tr>
-        <tr><td><code>configs/environments/hfsandbox.yaml</code></td><td><code>selected_tasks/docker_support.txt</code></td></tr>
-        <tr><td><code>configs/environments/qemu.yaml</code></td><td><code>selected_tasks/cpu_unlicensed.txt</code></td></tr>
+        <tr><td><code>configs/environments/qemu.yaml</code></td><td><code>selected_tasks/cpu.txt</code></td></tr>
         <tr><td>A static environment</td><td>A small list known to match the attached machine</td></tr>
       </tbody>
     </table>
@@ -138,11 +148,6 @@ uv sync --all-packages</code></pre>
         <div class="k">Supported</div>
         <div class="t">Local containers</div>
         <div class="d">A lighter local Linux sandbox with host-staged task data.</div>
-      </a>
-      <a class="card" href="/pages/hf-sandbox.html">
-        <div class="k">Supported</div>
-        <div class="t">HF Sandboxes</div>
-        <div class="d">Ephemeral HF Jobs; no local Docker or cloud account needed.</div>
       </a>
       <a class="card" href="/pages/aws.html">
         <div class="k">Supported</div>

@@ -3,7 +3,7 @@
 Each ``acquire`` launches a fresh container from the ale-kasm image,
 maps a random host port to the container's cua-server (port 8000),
 waits for the server to become healthy, and returns a SandboxHandle
-whose ``endpoint`` is ``http://localhost:<host_port>``.
+whose ``endpoint`` is ``http://127.0.0.1:<host_port>``.
 
 Concurrent tasks each get their own container + port — no proxy layer
 required. Docker's native port mapping IS the routing mechanism.
@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import random
 import re
@@ -31,7 +32,6 @@ _CUA_INTERNAL_PORT = 8000
 _VNC_INTERNAL_PORT = 6901
 _CUA_READY_TIMEOUT = 120
 _CUA_READY_POLL_INTERVAL = 3
-_CUA_READY_STABLE_SUCCESSES = 2
 
 _DEFAULT_CONTAINER_REF = "agentslastexam/ale-kasm:latest"  # fallback if an Image has no docker_image
 _CONTAINER_PREFIX = "ale"                                  # container name prefix (not configurable)
@@ -75,6 +75,7 @@ class DockerProviderConfig:
     image_ref   Override the container ref to boot (default: the Image entry's
                 ``docker_image``). Lets one env config pin a specific tag, e.g.
                 a DinD-capable build, without editing the Image registry.
+    image_revision  Optional expected SHA-256 image ID or repository digest.
     """
 
     image: str = "ale-kasm"
@@ -91,9 +92,15 @@ class DockerProviderConfig:
     # gets ALE_ENABLE_DIND=1; enabling it broadly can add substantial
     # fuse-overlayfs I/O at high concurrency.
     enable_dind: bool = False
+    image_revision: str | None = None
 
 
 def _build_provider_config(raw: dict[str, Any]) -> DockerProviderConfig:
+    image_revision = raw.get("image_revision")
+    if image_revision is not None:
+        image_revision = str(image_revision).strip() or None
+    if image_revision is not None and not re.fullmatch(r"sha256:[0-9a-f]{64}", image_revision):
+        raise ValueError("docker image_revision must be a sha256:<64 lowercase hex digits> digest")
     gcs_sa = raw.get("gcs_sa_key") or ""
     if gcs_sa:
         from pathlib import Path as _P
@@ -111,6 +118,7 @@ def _build_provider_config(raw: dict[str, Any]) -> DockerProviderConfig:
         privileged=bool(raw.get("privileged") or False),
         image_ref=str(raw.get("image_ref") or ""),
         enable_dind=bool(raw.get("enable_dind") or False),
+        image_revision=image_revision,
     )
 
 
@@ -159,6 +167,59 @@ async def _get_host_port(container_name: str, internal_port: int) -> int:
             f"Failed to inspect container {container_name}: {stderr}"
         )
     return int(stdout.strip())
+
+
+async def _get_resource_limits(container_name: str) -> dict[str, int | float]:
+    rc, stdout, stderr = await _run_docker(
+        "inspect", "--format", "{{json .HostConfig}}", container_name,
+    )
+    if rc != 0:
+        raise RuntimeError(
+            f"Failed to inspect container {container_name} limits: {stderr}"
+        )
+    host_config = json.loads(stdout)
+    return {
+        "cpu_quota": host_config["NanoCpus"] / 1_000_000_000,
+        "memory_limit_bytes": host_config["Memory"],
+    }
+
+
+async def _get_image_provenance(
+    container_name: str, config: DockerProviderConfig, container_ref: str,
+) -> dict[str, Any]:
+    rc, image_id, stderr = await _run_docker("inspect", "--format", "{{.Image}}", container_name)
+    if rc != 0:
+        raise RuntimeError(f"Failed to inspect container {container_name} image: {stderr}")
+    image_id = image_id.strip()
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
+        raise RuntimeError(f"Container {container_name} has invalid image ID {image_id!r}")
+    rc, stdout, stderr = await _run_docker(
+        "image", "inspect", "--format", "{{json .RepoDigests}}", image_id,
+    )
+    if rc != 0:
+        raise RuntimeError(f"Failed to inspect Docker image {image_id} digests: {stderr}")
+    repo_digests = json.loads(stdout) or []
+    if not isinstance(repo_digests, list) or not all(isinstance(ref, str) for ref in repo_digests):
+        raise RuntimeError(f"Docker image {image_id} has invalid RepoDigests")
+    digests = {ref.rsplit("@", 1)[-1] for ref in repo_digests}
+    selected_digest = container_ref.rsplit("@", 1)[-1] if "@" in container_ref else None
+    if selected_digest is not None and selected_digest not in digests:
+        raise RuntimeError(
+            f"Docker selected image digest mismatch: expected {selected_digest}, "
+            f"acquired {image_id} with RepoDigests {repo_digests}"
+        )
+    if config.image_revision is not None and config.image_revision not in {image_id, *digests}:
+        raise RuntimeError(
+            f"Docker image_revision mismatch: expected {config.image_revision}, "
+            f"acquired {image_id} with RepoDigests {repo_digests}"
+        )
+    return {
+        "provider": "docker",
+        "image": config.image,
+        "image_revision": selected_digest or config.image_revision or image_id,
+        "image_ref": container_ref,
+        "image_id": image_id,
+    }
 
 
 async def _wait_cua_ready(
@@ -223,17 +284,18 @@ class DockerProvider(Provider):
         run_args = [
             "run", "-d",
             "--name", name,
-            "-p", f"0:{cua_internal_port}",
-            "-p", f"0:{_VNC_INTERNAL_PORT}",
+            "-p", f"127.0.0.1:0:{cua_internal_port}",
+            "-p", f"127.0.0.1:0:{_VNC_INTERNAL_PORT}",
             f"--shm-size={self._cfg.shm_size}",
+            "--init",
+            "-e", "LANG=C.UTF-8",
+            "-e", "LC_ALL=C.UTF-8",
             # Virtual display size for the in-container Xvfb (the entrypoint reads
             # this; falls back to its own default if unset).
             "-e", f"ALE_SCREEN_RESOLUTION={res[0]}x{res[1]}",
             # DinD is gated off in the entrypoint unless this is set (default off).
             "-e", f"ALE_ENABLE_DIND={'1' if self._cfg.enable_dind else '0'}",
-            # A container has no init, so the image's entrypoint starts the X
-            # display + cua-server itself. Invoke it explicitly: some images ship
-            # a no-op CMD ("sleep infinity") that never would.
+            # The image entrypoint starts X and CUA; --init only reaps processes.
             "--entrypoint", image.docker_entrypoint,
         ]
         if self._cfg.privileged:
@@ -277,49 +339,55 @@ class DockerProvider(Provider):
             )
         logger.info("Container %s started (id=%s)", name, stdout[:12])
 
-        cua_port = await _get_host_port(name, cua_internal_port)
-        vnc_port = await _get_host_port(name, _VNC_INTERNAL_PORT)
-        cua_url = f"http://localhost:{cua_port}"
+        try:
+            image_provenance = await _get_image_provenance(name, self._cfg, container_ref)
+            cua_port = await _get_host_port(name, cua_internal_port)
+            vnc_port = await _get_host_port(name, _VNC_INTERNAL_PORT)
+            cua_url = f"http://127.0.0.1:{cua_port}"
 
-        logger.info(
-            "Container %s ports: cua=%d vnc=%d",
-            name, cua_port, vnc_port,
-        )
-
-        ready = await _wait_cua_ready(cua_url)
-        if not ready:
-            logger.error("CUA server not ready in %s, cleaning up", name)
-            await _run_docker("rm", "-f", name)
-            raise RuntimeError(
-                f"CUA server at {cua_url} (container {name}) did not become ready"
+            logger.info(
+                "Container %s ports: cua=%d vnc=%d",
+                name, cua_port, vnc_port,
             )
 
-        gcs_user_project = ""
-        if self._cfg.gcs_sa_key:
-            await self._inject_gcs_credentials(name, self._cfg.gcs_sa_key)
-            # gs://ale-data-public is requester-pays: gsutil needs an explicit
-            # -u <billing-project>. Derive it from the SA key's own project_id
-            # — same source as the injected identity, so the project we bill
-            # always matches the SA we authenticate as. Surfaced so data-staging
-            # adds the flag (see gsbucket).
-            gcs_user_project = _sa_key_project_id(self._cfg.gcs_sa_key)
+            ready = await _wait_cua_ready(cua_url)
+            if not ready:
+                raise RuntimeError(
+                    f"CUA server at {cua_url} (container {name}) did not become ready"
+                )
 
-        return SandboxHandle(
-            id=name,
-            endpoint=cua_url,
-            os=image.os,
-            **image.sandbox_paths(),
-            metadata={
-                "provider": "docker",
-                "container_name": name,
-                "container_id": stdout[:12],
-                "cua_port": cua_port,
-                "vnc_port": vnc_port,
-                "image": self._cfg.image,
-                "snapshot": spec.snapshot,
-                "gcs_user_project": gcs_user_project,
-            },
-        )
+            resource_limits = await _get_resource_limits(name)
+            gcs_user_project = ""
+            if self._cfg.gcs_sa_key:
+                await self._inject_gcs_credentials(name, self._cfg.gcs_sa_key)
+                gcs_user_project = _sa_key_project_id(self._cfg.gcs_sa_key)
+
+            return SandboxHandle(
+                id=name,
+                endpoint=cua_url,
+                os=image.os,
+                **image.sandbox_paths(),
+                metadata={
+                    "provider": "docker",
+                    "container_name": name,
+                    "container_id": stdout[:12],
+                    "cua_port": cua_port,
+                    "vnc_port": vnc_port,
+                    "image": self._cfg.image,
+                    "image_provenance": image_provenance,
+                    "snapshot": spec.snapshot,
+                    "gcs_user_project": gcs_user_project,
+                    "resource_limits": resource_limits,
+                },
+            )
+        except BaseException:
+            try:
+                cleanup_rc, _, cleanup_error = await _run_docker("rm", "-f", name)
+                if cleanup_rc != 0:
+                    logger.error("Failed to remove container %s: %s", name, cleanup_error)
+            except Exception:
+                logger.exception("Failed to remove container %s after acquisition failure", name)
+            raise
 
     async def release(
         self, sandbox: SandboxHandle, *, mode: ReleaseMode = "delete",

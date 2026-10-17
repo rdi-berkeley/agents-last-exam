@@ -26,7 +26,8 @@ Shape:
 Other behavior:
 
 * ``${env:VAR}`` substitution at parse time (KeyError if VAR unset) — applied
-  to the experiment yaml AND every referenced config file.
+  to the experiment yaml AND every referenced config file. Refs that appear
+  only in a comment are dropped by the parser and never required.
 * All relative paths resolve against the main yaml's directory.
 * Unknown / missing keys raise loudly.
 """
@@ -165,14 +166,22 @@ def _read_yaml(path: Path) -> Any:
 
 
 def _substitute_env(text: str) -> str:
-    def repl(m: re.Match[str]) -> str:
-        var = m.group(1)
-        val = os.environ.get(var)
-        if val is None:
-            raise KeyError(
-                f"yaml references ${{env:{var}}} but {var} is not set"
-            )
-        return val
+    """Expand scalar references before parsing, leaving YAML comments untouched."""
+    scalar_ranges = [
+        (token.start_mark.index, token.end_mark.index)
+        for token in yaml.scan(text)
+        if isinstance(token, yaml.tokens.ScalarToken)
+    ]
+
+    def repl(match: re.Match[str]) -> str:
+        if not any(start <= match.start() < end for start, end in scalar_ranges):
+            return match.group(0)
+        variable = match.group(1)
+        value = os.environ.get(variable)
+        if value is None:
+            raise KeyError(f"yaml references ${{env:{variable}}} but {variable} is not set")
+        return value
+
     return _ENV_RE.sub(repl, text)
 
 
@@ -313,12 +322,11 @@ def _build_artifacts(raw: dict[str, Any]) -> ArtifactsSpec:
             and not tdp.startswith("s3://")
             and not tdp.startswith("oss://")
             and not tdp.startswith("hf://")
-            and not tdp.startswith("local:")
-            and not tdp.startswith("mounted:")):
+            and not tdp.startswith("local:")):
         raise ValueError(
             f"artifacts_path.task_data_source must be 'baked_in_sandbox', "
             f"'gs://<bucket>', 's3://<bucket>', 'oss://<bucket>', 'hf://<dataset>', "
-            f"'local:<dir>', or 'mounted:<sandbox_dir>'; "
+            f"or 'local:<dir>'; "
             f"got {task_data_source!r}"
         )
 

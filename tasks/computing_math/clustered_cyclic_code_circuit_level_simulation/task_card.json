@@ -11,15 +11,19 @@
     "NumPy",
     "pandas"
   ],
-  "taskPrompt": "You are working on a Linux VM.\n\n## Variant\n`base`: Three clustered-cyclic CSS codes with QUITS/Stim circuit-level memory simulation.\n\n## Input Files\n- Task notes: `base/input/cc_codes_quits_extraction.tex`\n- Simulation grid: `base/input/simulation_grid.csv`\n- Output requirements: `base/input/output_requirements.txt`\n- Python runtime manifest: `base/input/runtime_env/pyproject.toml`\n\n## Your Task\nReproduce the circuit-level memory-simulation logical failure-rate table for the three clustered-cyclic CSS codes described in the task notes.\n\nUse the staged notes to extract the code construction, QUITS repeated-syndrome-extraction workflow, direction-aware edge-coloring schedule, Stim detector-error-model workflow, BP+OSD decoder settings, and logical failure-rate formulas.\n\nRun every row in the simulation grid. For each row, report the logical failure count, total logical failure probability, per-round logical failure rate, and per-logical-qubit per-round logical failure rate.\n\nYou may install the task-specific open-source Python dependencies from `input/runtime_env/pyproject.toml` or `input/requirements.txt`.\n\n## Output\nWrite the final CSV here:\n- `base/output/logical_error_rates_3codes.csv`\n",
+  "taskPrompt": "You are working on a Linux VM.\n\n## Variant\n`base`: Three clustered-cyclic CSS codes with QUITS/Stim circuit-level memory simulation.\n\n## Input Files\n- Task notes: `base/input/cc_codes_quits_extraction.tex`\n- Simulation grid: `base/input/simulation_grid.csv`\n- Experiment conditions: `base/input/experiment.md`\n- Output requirements: `base/input/output_requirements.txt`\n- Python runtime manifest: `base/input/runtime_env/pyproject.toml`\n\n## Your Task\nReproduce the circuit-level memory-simulation logical failure-rate table for the three clustered-cyclic CSS codes described in the task notes.\n\nImplement the construction, scheduling, simulation and decoding workflow from the notes under the conditions in experiment.md. You may use the supplied low-level BP+OSD decoder. Choose separate sampling seeds and record your circuits and implementation.\n\nRun every row in the simulation grid using exactly the listed 5,000 independent shots. For each row, report the logical failure count, total logical failure probability, per-round logical failure rate, and per-logical-qubit per-round logical failure rate.\n\nCreate the validated task-local runtime with `uv sync --project input/runtime_env --locked`.\n\n## Output\nWrite the final CSV here:\n- `base/output/logical_error_rates_3codes.csv`\nAlso deliver simulation_manifest.json, circuits/ and source/simulate.py under base/output, following output_requirements.txt.\n",
   "agentMustDo": [
-    "Read `input/cc_codes_quits_extraction.tex`, `input/simulation_grid.csv`, and `input/output_requirements.txt`.",
-    "Install or inspect the open-source Python runtime from `input/runtime_env/pyproject.toml` or `input/requirements.txt`.",
-    "Construct and simulate the `[24,8,3]`, `[40,8,5]`, and `[56,8,7]` clustered-cyclic CSS code cases from the supplied notes.",
-    "Compute `num_failures`, `p_logical`, `lfr_per_round`, and `lfr_per_round_per_qubit` for every row in the simulation grid.",
-    "Save the final CSV as `output/logical_error_rates_3codes.csv`."
+    "Implement the circuit-level memory experiment using the supplied code definitions and experimental conditions.",
+    "Produce the complete 5,000-shot-per-row failure-rate CSV from independent sampling.",
+    "Deliver the actual Stim circuits, sampling-seed manifest, and source/simulate.py implementation under output/."
   ],
   "inputFiles": [
+    {
+      "name": "experiment.md",
+      "format": "markdown",
+      "path": "input/experiment.md",
+      "description": "Experimental conditions and circuit/manifest interfaces."
+    },
     {
       "name": "cc_codes_quits_extraction.tex",
       "format": "tex",
@@ -51,13 +55,31 @@
       "format": "csv",
       "path": "output/logical_error_rates_3codes.csv",
       "description": "The completed logical failure-rate table."
+    },
+    {
+      "name": "circuits/",
+      "format": "stim",
+      "path": "output/circuits/",
+      "description": "One circuit per grid row, named row_000.stim through row_059.stim."
+    },
+    {
+      "name": "simulation_manifest.json",
+      "format": "json",
+      "path": "output/simulation_manifest.json",
+      "description": "sampling_seeds: 60 distinct unsigned 64-bit integer seeds in grid order."
+    },
+    {
+      "name": "simulate.py",
+      "format": "python",
+      "path": "output/source/simulate.py",
+      "description": "Submitted simulation implementation with supporting modules under source/."
     }
   ],
-  "evaluation": "The evaluator reads `output/logical_error_rates_3codes.csv`, verifies the exact CSV schema and simulation grid, checks declared code parameters and shot counts, and checks failure-count/probability consistency (`p_logical == num_failures / num_shots` and the LFR formulas). It then asserts the physical distance-suppression invariant: across the sub-threshold physical error rates, the distance-5 code `[40,8,5]` achieves a logical error rate no higher (within a noise margin) than the distance-3 code `[24,8,3]`. The absolute logical-error-rate values are not matched against the reference, because the reference was produced with a much larger shot budget than the evaluation VM can collect; comparing two codes the agent simulated under identical conditions makes the criterion robust to that sampling difference. The positive fixture scores `1.0`; the realistic negative fixture scores `0.0`.",
+  "evaluation": "Checks exact grid and workload, count/rate consistency, and the declared labeled detector-error distributions of the submitted circuits. Independent failure-count samples are compared with two-sample exact tests using multiplicity control and an aggregate test. Sampling seeds and batching are not required to reproduce private integer counts. Missing private assets and evaluator faults remain errors, not solver zero scores.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",
-    "timeout": 7200
+    "timeout": 18000
   },
   "taxonomy": {
     "domain_id": "9",

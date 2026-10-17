@@ -35,7 +35,7 @@ class PiCliConfig:
     """OpenAI-compatible endpoint. Required (and only used) when
     ``provider="custom"``."""
 
-    api_key: str | None = None
+    api_key: str | None = field(default=None, repr=False)
     """Literal API key, used in place of the provider's env-var key for any
     ``provider`` mode. ``None`` falls back to the env var documented under
     ``provider``."""
@@ -48,18 +48,20 @@ class PiCliConfig:
     values are validated by pi itself."""
 
     max_tokens: int = 65536
-    """Max output tokens advertised to pi for provider="custom" (written into
-    the models.json entry pi builds its request from). pi's own models.json
-    schema defaults this to 16384 when omitted -- far too small for
-    reasoning-heavy models (confirmed: GLM-5.3 hit stopReason="length" at
-    exactly 16384 output tokens mid-calculation on every 0-scoring task in a
-    real run, cut off before it could act on its own correct arithmetic).
-    Only applies to provider="custom" -- openrouter/direct modes use pi's
-    own built-in model catalog, which already carries correct per-model
-    maxTokens values pi's maintainers keep updated."""
+    """Output limit for custom providers, written as models.json maxTokens.
+    Direct and OpenRouter providers use Pi's model catalog limits."""
+
+    input_modalities: list[str] = field(default_factory=lambda: ["text", "image"])
+    """Accepted custom-model inputs; use ["text"] for text-only endpoints."""
 
     disabled_tools: list[str] = field(default_factory=list)
     """Tool names passed as ``--exclude-tools a,b,c``."""
 
     extra_args: list[str] = field(default_factory=list)
     """Free-form flags appended verbatim to the pi CLI invocation."""
+
+    def __post_init__(self) -> None:
+        if not self.input_modalities or any(
+            modality not in {"text", "image"} for modality in self.input_modalities
+        ):
+            raise ValueError("input_modalities must contain text and/or image")

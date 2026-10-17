@@ -6,13 +6,12 @@ Terraform config, GitHub Actions pipeline, and live verification snapshots.
 
 Scoring is performed on the VM by `scripts/verify_k8s_migration.py`, which
 renders the chart with a pinned Helm binary and produces a weighted score
-(hard gates drop to 0.0; static 70%, snapshot-derived live 21%, live-only
-(d)+(e) another 9% when run against a real cluster).
+(hard gates drop to 0.0; static 70%, live cluster checks 30%).
 """
 
 import json
 import logging
-import os
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +19,7 @@ import cua_bench as cb
 
 from tasks.common_setup import BaseTaskSetup
 from tasks.linux_runtime import LinuxTaskConfig
+from tasks.utils.evaluation import JudgeInfrastructureError
 
 _setup = BaseTaskSetup()
 
@@ -200,14 +200,11 @@ report a CPU target.
 
 ## Success Criteria
 
-- `Chart.yaml` parses as YAML and declares a `name` (hard gate otherwise).
-- `values.yaml` is present (hard gate otherwise).
-- Secrets must carry only base64-encoded values (no plaintext) (hard gate otherwise).
-- `helm template` renders the chart without error (hard gate otherwise).
-- Static checks (Helm resource coverage, config correctness, Terraform, CI/CD,
-  verification files) contribute up to 70% of the score.
-- Verification snapshots (pod status / services / health endpoint) contribute
-  up to another ~21%. Full credit requires a running Minikube cluster.
+- `Chart.yaml` parses as YAML and declares a `name`.
+- `values.yaml` is present.
+- Secrets must carry only base64-encoded values (no plaintext).
+- `helm template` renders the chart without error.
+- Deploy to a running Minikube cluster and capture the required verification snapshots.
 """
 
     def to_metadata(self) -> dict:
@@ -256,29 +253,24 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     verify_path = f"{eval_tmp_dir}/{VERIFY_SCRIPT_NAME}"
     await session.write_file(verify_path, _read_script(VERIFY_SCRIPT_NAME))
 
-    live_cluster = os.environ.get("K8S_LIVE_CLUSTER") == "1"
-    live_flag = " --live-cluster" if live_cluster else ""
-
     cmd = (
         f'python3.12 "{verify_path}" '
         f'--output-dir "{meta["remote_output_dir"]}" '
         f'--eval-tmp-dir "{eval_tmp_dir}" '
-        f'--json-only{live_flag}'
+        f'--kubectl {shlex.quote(meta["software_entries"]["kubectl"])} '
+        f'--terraform {shlex.quote(meta["software_entries"]["terraform"])} '
+        f'--json-only'
     )
     result = await _run_command(session, cmd, timeout=600.0, check=False)
     stdout = (result.get("stdout") or "").strip()
     if result.get("return_code") != 0 and not stdout:
-        logger.error("verifier crashed: %s", (result.get("stderr") or "")[:400])
-        return [0.0]
+        raise JudgeInfrastructureError("Kubernetes verifier crashed: " + (result.get("stderr") or "")[:400])
     try:
         payload = json.loads(stdout)
-    except json.JSONDecodeError:
-        logger.error(
-            "verifier stdout was not JSON: stdout=%r stderr=%r",
-            stdout[:400],
-            (result.get("stderr") or "")[:400],
-        )
-        return [0.0]
+    except json.JSONDecodeError as error:
+        raise JudgeInfrastructureError("Kubernetes verifier did not produce JSON") from error
+    if payload.get("infrastructure_error"):
+        raise JudgeInfrastructureError(payload["infrastructure_error"])
     score = float(payload.get("score", 0.0))
     logger.info(
         "evaluation: score=%.3f mode=%s hard_gate=%s",

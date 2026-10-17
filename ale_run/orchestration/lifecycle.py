@@ -20,9 +20,11 @@ Phase mapping (refined from simprun, surface renamed to LOG_SPEC events):
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict, replace
 import logging
 import signal
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +41,7 @@ from ..environments.env import ALEEnv
 from ..executors import DockerExecutor, LocalExecutor, SandboxExecutor
 from ..tasks.loader import TaskLoader
 from ..tasks.driver import TaskDriver
+from ..tasks.revision import task_revision
 from .factory import EnvironmentRouter, build_config, resolve_agent
 from .run_writer import RunWriter, slug_task
 from .experiment_spec import ArtifactsSpec, RunUnit, UnitResult
@@ -57,22 +60,44 @@ _DEFAULT_TIMEOUT_S = 7200
 _EVAL_TIMEOUT_S = 7200
 
 
-def _append_prompt_suffix(task_meta: dict[str, Any], prompt_suffix: str) -> None:
-    """Append the experiment-wide ``prompt_suffix`` to the task description.
+def _append_prompt_suffix(
+    task_meta: dict[str, Any],
+    prompt_suffix: str,
+    *,
+    sandbox_metadata: dict[str, Any] | None = None,
+) -> None:
+    """Append experiment text and configured Docker ceilings to the task prompt.
 
-    No-op when the suffix is empty/whitespace. The suffix is added as its
-    own paragraph (blank-line separator) after the task prompt, mutating
-    *task_meta* in place so every downstream consumer — the recorded
-    trajectory and the prompt handed to the agent — sees the same text.
+    Mutate the per-run description so the trajectory and every deployer
+    receive the same text. Other providers retain the suffix-only behavior.
     """
-    if not prompt_suffix or not prompt_suffix.strip():
+    suffixes = [prompt_suffix.strip()] if prompt_suffix and prompt_suffix.strip() else []
+    metadata = sandbox_metadata or {}
+    if metadata.get("provider") == "docker":
+        limits = metadata.get("resource_limits") or {}
+        cpu_quota = limits.get("cpu_quota", 0)
+        memory_bytes = limits.get("memory_limit_bytes", 0)
+        ceilings = []
+        if cpu_quota > 0:
+            ceilings.append(f"CPU quota {cpu_quota:g} CPU equivalents")
+        if memory_bytes > 0:
+            ceilings.append(
+                f"memory limit {memory_bytes / (1024 ** 3):g} GiB ({memory_bytes} bytes)"
+            )
+        if ceilings:
+            suffixes.append(
+                "Task sandbox configured per-container ceilings: "
+                + "; ".join(ceilings)
+                + ". These are not guaranteed free memory or exclusive CPU capacity. "
+                "All sandbox processes share these ceilings. In Docker, /proc, nproc, "
+                "os.cpu_count(), and free may report host resources rather than "
+                "container limits. Size worker pools and numerical-library threads "
+                "to these ceilings and leave memory headroom."
+            )
+    if not suffixes:
         return
     description = task_meta.get("description", "") or ""
-    task_meta["description"] = f"{description.rstrip()}\n\n{prompt_suffix.strip()}"
-
-
-# Mount-fallback: how many provision attempts before we give up. Matches
-# simprun's single retry — the original env + one alternate profile.
+    task_meta["description"] = "\n\n".join([description.rstrip(), *suffixes])
 
 
 # ======================================================================
@@ -196,6 +221,8 @@ async def run_one_unit(
     eval_status = "not_executed"
     eval_duration_s: float | None = None
     eval_error: dict[str, Any] | None = None
+    task_revision_value: str | None = None
+    environment_metadata: dict[str, Any] = {}
     # Execution window timestamps. ``started`` (above) is the ENQUEUE time, so
     # it includes the concurrency-semaphore wait. For the reported per-unit
     # duration we want the actual work window: from when the sem is acquired
@@ -214,6 +241,8 @@ async def run_one_unit(
         exec_started = time.monotonic()
         try:
             task_path = Path("tasks") / unit.task_path
+            task_revision_value = await asyncio.to_thread(task_revision, task_path)
+            writer.emit_event("task_revision", revision=task_revision_value)
             task_meta = TaskLoader(str(task_path)).load(unit.variant_index)
             env_spec = _build_env_spec(task_meta, unit=unit)
             timeout_s = int(wall_time_s or task_meta.get("timeout_s") or _DEFAULT_TIMEOUT_S)
@@ -231,13 +260,17 @@ async def run_one_unit(
             writer.emit_event("provision_started")
             env = ALEEnv(provider=provider, spec=env_spec)
             await env.reset_async()
+            environment_metadata = dict(env.sandbox.metadata.get("image_provenance") or {})
+            environment_metadata["snapshot"] = env_spec.snapshot
             writer.emit_event(
                 "provision_done",
                 env_id=env.sandbox.id,
                 machine_type=env.sandbox.metadata.get("machine_type"),
             )
 
-            _append_prompt_suffix(task_meta, prompt_suffix)
+            _append_prompt_suffix(
+                task_meta, prompt_suffix, sandbox_metadata=env.sandbox.metadata,
+            )
 
             builder = TrajectoryBuilder(
                 agent_name=getattr(config, "name", unit.agent_spec.class_),
@@ -282,6 +315,7 @@ async def run_one_unit(
                 agent_name=agent_name,
                 run_id=writer.run_id,
                 host_artifacts_dir=host_artifacts_dir,
+                sandbox_task_name=getattr(task_meta.get("task_data"), "sandbox_task_name", None),
             )
             writer.emit_event(
                 "agent_run_started",
@@ -299,6 +333,9 @@ async def run_one_unit(
             tail_task: asyncio.Task | None = None
             tail_targets: list[tuple[str, Path]] = []
             if isinstance(executor, SandboxExecutor):
+                executor.on_run_result = lambda result: writer.emit_event(
+                    "agent_run_result", **asdict(result),
+                )
                 hot = tuple(getattr(deployer_cls, "hot_artifacts", ()) or ())
                 if hot:
                     sep = "/" if env.sandbox.is_linux else "\\"
@@ -323,6 +360,7 @@ async def run_one_unit(
                         name="tail_hot_artifacts",
                     )
 
+            launch_error: BaseException | None = None
             try:
                 run_result = await asyncio.wait_for(
                     executor.run_deployer(
@@ -332,15 +370,18 @@ async def run_one_unit(
                     ),
                     timeout=timeout_s,
                 )
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as launch_exc:
+                launch_error = launch_exc
                 run_result = AgentRunResult(
                     status="timeout",
                     error=f"agent wall-budget exceeded after {timeout_s}s",
                     duration_s=float(timeout_s),
                 )
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as launch_exc:
+                launch_error = launch_exc
                 raise
             except Exception as launch_exc:
+                launch_error = launch_exc
                 import traceback as _tb
                 run_result = AgentRunResult(
                     status="failed",
@@ -349,17 +390,36 @@ async def run_one_unit(
                     duration_s=None,
                 )
             finally:
-                if tail_task is not None:
-                    stop_event.set()
-                    try:
-                        reconcile_err = await asyncio.wait_for(tail_task, timeout=120)
-                    except asyncio.TimeoutError:
-                        tail_task.cancel()
-                        reconcile_err = "tail reconcile wait timed out"
-                    if reconcile_err:
-                        writer.emit_event(
-                            "incremental_pull_final_failed", error=reconcile_err,
-                        )
+                try:
+                    if run_result is not None and (
+                        not isinstance(executor, SandboxExecutor)
+                        or executor.last_run_result is None
+                    ):
+                        writer.emit_event("agent_run_result", **asdict(run_result))
+                    env.set_phase("agent_stop")
+                    await executor.stop_deployer()
+                    writer.emit_event("agent_stopped")
+                except BaseException as stop_exc:
+                    writer.emit_event(
+                        "agent_stop_failed", error=str(stop_exc),
+                        run_result=asdict(run_result) if run_result is not None else None,
+                        launch_error=err_dict(launch_error) if launch_error is not None else None,
+                    )
+                    if launch_error is not None and launch_error is not stop_exc:
+                        raise stop_exc from launch_error
+                    raise
+                finally:
+                    if tail_task is not None:
+                        stop_event.set()
+                        try:
+                            reconcile_err = await asyncio.wait_for(tail_task, timeout=120)
+                        except asyncio.TimeoutError:
+                            tail_task.cancel()
+                            reconcile_err = "tail reconcile wait timed out"
+                        if reconcile_err:
+                            writer.emit_event(
+                                "incremental_pull_final_failed", error=reconcile_err,
+                            )
             writer.emit_event(
                 "agent_finished",
                 status=run_result.status,
@@ -413,8 +473,8 @@ async def run_one_unit(
 
             # 3b. STAGING_EVAL (simprun runner.py:_phase3_evaluate second half)
             #     Pull reference data from GCS to the env if the task needs
-            #     it for scoring. Best-effort: many tasks don't have a
-            #     reference/ prefix and we just log + continue.
+            #     it for scoring. Backends explicitly report missing
+            #     reference data; real staging errors abort evaluation.
             env.set_phase("stage_reference")
             await stage_reference(
                 env=env, provider=provider, artifacts=artifacts, task_meta=task_meta,
@@ -496,7 +556,11 @@ async def run_one_unit(
             # ============================================================
             # Lifecycle status promotion (LOG_SPEC §4)
             # ============================================================
-            if run_result is not None and run_result.status == "timeout":
+            if eval_status == "failed":
+                status = "failed"
+                error_str = (eval_error or {}).get("message", "evaluation failed")
+                error_obj = eval_error
+            elif run_result is not None and run_result.status == "timeout":
                 status = "timeout"
                 error_str = run_result.error
             elif run_result is not None and run_result.status == "failed":
@@ -510,10 +574,6 @@ async def run_one_unit(
             elif eval_status == "timeout":
                 status = "timeout"
                 error_str = (eval_error or {}).get("message", "evaluation timed out")
-                error_obj = eval_error
-            elif eval_status == "failed":
-                status = "failed"
-                error_str = (eval_error or {}).get("message", "evaluation failed")
                 error_obj = eval_error
             else:
                 status = "completed"
@@ -593,6 +653,8 @@ async def run_one_unit(
         total_s=total_s,
         trajectory=trajectory,
         category=_category_from_error(error_str),
+        task_revision_value=task_revision_value,
+        environment=environment_metadata,
     )
     writer.write_run_json(run_meta)
 
@@ -647,14 +709,14 @@ def _trajectory_status(agent_status: str, eval_status: str) -> str:
     """Return the whole-episode status recorded in trajectory final metrics."""
     # Match the lifecycle promotion order below exactly so trajectory.json and
     # run.json cannot disagree when both phases fail differently.
+    if eval_status == "failed":
+        return "failed"
     if agent_status == "timeout":
         return "timeout"
     if agent_status == "failed":
         return "failed"
     if eval_status == "timeout":
         return "timeout"
-    if eval_status == "failed":
-        return "failed"
     return "completed"
 
 
@@ -693,6 +755,7 @@ def _build_executor(
     agent_name: str,
     run_id: str,
     host_artifacts_dir: Path,
+    sandbox_task_name: str | None = None,
 ) -> BaseExecutor:
     """Dispatch yaml ``executor: <type>`` to the concrete substrate adapter.
 
@@ -704,12 +767,15 @@ def _build_executor(
     env_passthrough = _collect_env_passthrough()
     if executor_type == "sandbox":
         sb = env.sandbox
+        if sandbox_task_name is not None:
+            run_id = uuid.uuid4().hex
+            sb = replace(sb, id=run_id, metadata={})
         sep = "/" if sb.is_linux else "\\"
         remote_work_dir = f"{sb.work_dir_base.rstrip(sep)}{sep}{agent_name}{sep}{run_id}"
         return SandboxExecutor(
             config=config,
             work_dir=remote_work_dir,
-            sandbox=env.sandbox,
+            sandbox=sb,
             env=env_passthrough,
         )
     if executor_type == "local":
@@ -752,15 +818,19 @@ def _collect_env_passthrough() -> dict[str, str]:
         "ANTHROPIC_API_KEY",
         "ANTHROPIC_AUTH_TOKEN",
         "ANTHROPIC_BASE_URL",
+        "AZURE_CODE_API_KEY",
         "OPENAI_API_KEY",
         "OPENROUTER_API_KEY",
         "BRAVE_API_KEY",
         "CURSOR_API_KEY",
         "GEMINI_API_KEY",
+        "GLM_API_KEY",
         "GOOGLE_API_KEY",
         "XAI_API_KEY",
         "GROK_API_KEY",
         "MOONSHOT_API_KEY",
+        "ZAI_API_KEY",
+        "Z_AI_API_KEY",
         "FACTORY_API_KEY",
         "CURSOR_AUTH_JSON_PATH",
         "CURSOR_AUTH_JSON",
@@ -965,7 +1035,9 @@ async def stage_reference(
     """Pull reference data from GCS onto the env for eval (simprun parity).
 
     Mirrors simprun runner.py:_phase3_evaluate phase ``eval_stage``.
-    Best-effort: many tasks don't ship a reference/ prefix.
+    Backends report an absent reference explicitly. Any staging error is
+    propagated so a corrupt or inaccessible reference cannot be mistaken for
+    a task with no reference data.
     """
     task_data = task_meta.get("task_data")
     if task_data is None or not task_data.requires_task_data:
@@ -973,24 +1045,19 @@ async def stage_reference(
     from ..environments import task_data as task_data_pkg
 
     source = _task_data_source(artifacts)
-    try:
-        backend = task_data_pkg.select(source)
-        report = await backend.stage_reference(env.sandbox, task_data, source=source)
-        if report.get("skipped"):
-            writer.emit_event(
-                "reference_stage_skipped",
-                reason=report.get("reason", "unknown"),
-            )
-        else:
-            writer.emit_event(
-                "reference_stage_completed",
-                staged=report.get("staged"),
-                source=report.get("source"),
-            )
-    except RuntimeError as e:
-        # Reference data is optional — many tasks don't have it.
-        logger.info("Reference staging skipped (may not exist): %s", e)
-        writer.emit_event("reference_stage_skipped", reason=str(e)[:200])
+    backend = task_data_pkg.select(source)
+    report = await backend.stage_reference(env.sandbox, task_data, source=source)
+    if report.get("skipped"):
+        writer.emit_event(
+            "reference_stage_skipped",
+            reason=report.get("reason", "unknown"),
+        )
+    else:
+        writer.emit_event(
+            "reference_stage_completed",
+            staged=report.get("staged"),
+            source=report.get("source"),
+        )
 
 
 async def _stage_task_data(
@@ -1049,6 +1116,8 @@ def _build_run_meta(
     total_s: float,
     trajectory: Trajectory | None,
     category: str | None,
+    task_revision_value: str | None = None,
+    environment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Construct the LOG_SPEC §4 run.json payload."""
     usage = (
@@ -1074,7 +1143,9 @@ def _build_run_meta(
             "slug": slug_task(unit.task_path),
             "path": f"tasks/{unit.task_path}",
             "variant_index": unit.variant_index,
+            "revision": task_revision_value,
         },
+        "environment": environment or {},
         "status": status,
         "score": score,
         "termination": {

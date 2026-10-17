@@ -346,6 +346,8 @@ def main() -> int:
     scene = bpy.context.scene
     scene.render.resolution_x = args.image_width
     scene.render.resolution_y = args.image_height
+    if hasattr(scene.render.image_settings, "media_type"):
+        scene.render.image_settings.media_type = "IMAGE"
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGBA"
     scene.render.film_transparent = False

@@ -1,0 +1,18 @@
+Required artifacts under output/:
+- logical_error_rates_3codes.csv
+- simulation_manifest.json
+- circuits/row_000.stim through circuits/row_059.stim
+- source/simulate.py and any supporting simulation modules under source/
+
+The CSV must contain exactly these columns, in this order:
+code,n,k,d,p_physical,num_rounds,num_shots,num_failures,p_logical,lfr_per_round,lfr_per_round_per_qubit
+
+Include exactly one row for each (code,p_physical) pair in simulation_grid.csv.
+Use its code,n,k,d,p_physical,num_rounds,num_shots values. Row ordering in the
+CSV is unrestricted. num_failures is an integer from 0 to num_shots. Report
+the three probabilities defined in the notes rounded to at least 12
+significant digits, or retain full floating-point round-trip precision.
+Exact values such as 0, 1 and 0.05 need no trailing-zero padding. Scientific
+notation is accepted.
+
+experiment.md defines the experiment and the circuit/manifest interfaces.

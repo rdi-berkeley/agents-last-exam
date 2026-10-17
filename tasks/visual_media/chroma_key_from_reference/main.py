@@ -12,6 +12,7 @@ import cua_bench as cb
 
 from tasks.common_config import GeneralTaskConfig
 from tasks.common_setup import BaseTaskSetup
+from tasks.utils.evaluation import resolve_llm_judge_model
 from tasks.visual_media.chroma_key_from_reference._shared_eval import (
     ROI_INPUT_GATE_THRESHOLD, SOFT_GATE_PASS_THRESHOLD,
     compute_final_frame_result, ps_literal, remote_child)
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 THIS_DIR = Path(__file__).resolve().parent
 REMOTE_HARD_EVAL_SCRIPT = THIS_DIR / "scripts" / "remote_hard_eval.py"
+REMOTE_RUNTIME_SETUP_SCRIPT = THIS_DIR / "scripts" / "ensure_eval_runtime.py"
 
 REMOTE_TEMP_ROOT = os.environ.get(
     "CHROMA_REMOTE_EVAL_ROOT",
@@ -31,7 +33,6 @@ REMOTE_TEMP_ROOT = os.environ.get(
 )
 DEFAULT_OUTPUT_VIDEO_NAME = os.environ.get("TARGET_VIDEO_NAME", "output.mp4")
 SAMPLE_COUNT = 5
-SOFT_EVAL_MODEL = os.environ.get("CHROMA_SOFT_EVAL_MODEL", "gpt-5.2")
 
 
 @dataclass(frozen=True)
@@ -114,7 +115,7 @@ class ChromaTaskConfig(GeneralTaskConfig):
     SOFTWARE_LAUNCHER_NAME: str = "DaVinci Resolve.lnk"
 
     OUTPUT_VIDEO_NAME: str = DEFAULT_OUTPUT_VIDEO_NAME
-    EVAL_MODEL: str = SOFT_EVAL_MODEL
+    EVAL_MODEL: str | None = None
     DEFAULT_SAMPLE_COUNT: int = SAMPLE_COUNT
 
     @property
@@ -184,6 +185,7 @@ Output:
                 "soft_eval_model": self.EVAL_MODEL,
                 "remote_task_dir_name": self.REMOTE_TASK_DIR_NAME,
                 "remote_task_dir": self.task_dir,
+                "evaluation_python": remote_child(REMOTE_TEMP_ROOT, "runtime", "Scripts", "python.exe"),
             }
         )
         return md
@@ -225,9 +227,13 @@ async def _run_remote_hard_eval(
     if not (await session.file_exists(output_video) or await session.directory_exists(output_video)):
         return 0.0, [], [], {"reason": "missing_output_video"}
     if not (await session.file_exists(reference_video) or await session.directory_exists(reference_video)):
-        return 0.0, [], [], {"reason": "missing_reference_video"}
+        raise RuntimeError("chroma evaluation reference video is missing")
     if not (await session.file_exists(input_video) or await session.directory_exists(input_video)):
-        return 0.0, [], [], {"reason": "missing_input_video"}
+        raise RuntimeError("chroma evaluation input video is missing")
+
+    evaluation_python = task_cfg.metadata.get("evaluation_python")
+    if not evaluation_python:
+        raise RuntimeError("chroma evaluation runtime was not initialized by setup")
 
     remote_breakpoint_path = eval_cfg.remote_breakpoint_json
     sample_count = int(task_cfg.metadata.get("sample_count", SAMPLE_COUNT))
@@ -243,7 +249,7 @@ async def _run_remote_hard_eval(
         remote_script_path, REMOTE_HARD_EVAL_SCRIPT.read_text(encoding="utf-8")
     )
     if not (await session.file_exists(remote_breakpoint_path) or await session.directory_exists(remote_breakpoint_path)):
-        return 0.0, [], [], {"reason": "missing_breakpoint_json", "path": remote_breakpoint_path}
+        raise RuntimeError(f"chroma evaluation breakpoint data is missing: {remote_breakpoint_path}")
 
     argv = " ".join(
         ps_literal(value)
@@ -268,7 +274,7 @@ async def _run_remote_hard_eval(
     ps = (
         "$ErrorActionPreference='Stop'; "
         f"Set-Location -LiteralPath {ps_literal(remote_eval_dir)}; "
-        f"& python {argv}"
+        f"& {ps_literal(evaluation_python)} {argv}; exit $LASTEXITCODE"
     )
     result = await session.run_command(f'powershell -NoProfile -Command "{ps}"', check=False)
     stdout = result.get("stdout", "") if isinstance(result, dict) else ""
@@ -277,8 +283,7 @@ async def _run_remote_hard_eval(
 
     payload = _parse_json_from_stdout(stdout)
     if return_code != 0:
-        logger.error("[chroma hard eval] remote script failed for %s: %s", task_tag, stderr[:1000])
-        return 0.0, [], [], {"reason": "remote_script_failed", "stderr": stderr, "stdout": stdout}
+        raise RuntimeError(f"chroma hard evaluator failed for {task_tag}: {stderr[:1000]}")
     if payload is None:
         try:
             payload = json.loads((await session.read_bytes(remote_report_path)).decode("utf-8-sig"))
@@ -290,13 +295,7 @@ async def _run_remote_hard_eval(
                 {"report_path": remote_report_path},
             )
         except Exception as exc:
-            logger.error("[chroma hard eval] could not parse payload for %s: %s", task_tag, exc)
-            return (
-                0.0,
-                [],
-                [],
-                {"reason": "invalid_remote_payload", "stdout": stdout, "stderr": stderr},
-            )
+            raise RuntimeError(f"chroma hard evaluator returned invalid results for {task_tag}") from exc
 
     return (
         float(payload.get("score", 0.0)),
@@ -310,7 +309,7 @@ async def _run_local_soft_eval(
     task_cfg, session: cb.DesktopSession, frame_pairs: list[dict]
 ) -> tuple[float, dict]:
     task_tag = task_cfg.metadata["variant_name"]
-    model = task_cfg.metadata.get("soft_eval_model", SOFT_EVAL_MODEL)
+    model = resolve_llm_judge_model(default=task_cfg.metadata.get("soft_eval_model"))
     frame_items = []
     for pair in frame_pairs:
         input_bytes = await session.read_bytes(pair["input_frame_path"])
@@ -351,6 +350,23 @@ def load():
 @cb.setup_task(split="train")
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
+    runtime_dir = remote_child(REMOTE_TEMP_ROOT, "runtime")
+    setup_script = remote_child(REMOTE_TEMP_ROOT, "ensure_eval_runtime.py")
+    await session.interface.create_dir(REMOTE_TEMP_ROOT)
+    await session.write_file(setup_script, REMOTE_RUNTIME_SETUP_SCRIPT.read_text(encoding="utf-8"))
+    arguments = " ".join(ps_literal(value) for value in [
+        setup_script, "--runtime-dir", runtime_dir,
+        "--input-video", task_cfg.metadata["input_video"],
+    ])
+    command = f"& python {arguments}; exit $LASTEXITCODE"
+    result = await session.run_command(f'powershell -NoProfile -Command "{command}"', check=False)
+    if not isinstance(result, dict) or result.get("return_code", 1) != 0:
+        detail = result.get("stderr", "") if isinstance(result, dict) else str(result)
+        raise RuntimeError(f"chroma evaluation runtime setup failed: {detail[-1500:]}")
+    runtime = _parse_json_from_stdout(result.get("stdout", ""))
+    if not isinstance(runtime, dict) or not runtime.get("python"):
+        raise RuntimeError("chroma evaluation runtime setup returned no interpreter")
+    logger.info("[chroma setup] evaluation runtime ready: %s", runtime)
 
 
 @cb.evaluate_task(split="train")

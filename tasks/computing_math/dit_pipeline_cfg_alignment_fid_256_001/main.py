@@ -42,11 +42,10 @@ if str(REPO_ROOT) not in sys.path:
 from tasks.common_setup import BaseTaskSetup  # noqa: E402
 from tasks.linux_runtime import LinuxTaskConfig  # noqa: E402
 
-SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-from score_outputs import ScoreResult, score_submission_text  # noqa: E402
+from tasks.computing_math.dit_pipeline_cfg_alignment_fid_256_001.scripts.score_outputs import (  # noqa: E402
+    ScoreResult,
+    score_submission_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +188,10 @@ async def start(task_cfg, session: cb.DesktopSession):
 @cb.evaluate_task(split="train")
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
-    if not (await session.file_exists(meta["output_file"]) or await session.directory_exists(meta["output_file"])):
+    if not (
+        await session.file_exists(meta["output_file"])
+        or await session.directory_exists(meta["output_file"])
+    ):
         logger.info("missing output file: %s", meta["output_file"])
         return [0.0]
 

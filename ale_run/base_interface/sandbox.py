@@ -31,12 +31,13 @@ import asyncio
 import base64
 import json
 import logging
+import ntpath
 import os
 import shlex
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Iterable, Literal
 
 import requests
@@ -178,6 +179,11 @@ class SandboxHandle:
         return (await self.read_file(path)).decode("utf-8", errors="replace")
 
     async def exists(self, path: str) -> bool:
+        """Return whether ``path`` exists.
+
+        Raises :class:`RuntimeError` when cua-server cannot execute the probe,
+        so callers do not confuse transport failure with an absent path.
+        """
         return await asyncio.to_thread(_exists_sync, self, path)
 
     async def mkdir(self, path: str) -> None:
@@ -437,6 +443,10 @@ def _exists_sync(sandbox: SandboxHandle, path: str) -> bool:
             '"'
         )
     r = _run_remote_sync(sandbox, cmd, timeout=15)
+    if r.returncode < 0:
+        raise RuntimeError(
+            f"exists({path}) transport failure: {(r.stderr or '').strip()}"
+        )
     return r.returncode == 0
 
 
@@ -472,9 +482,20 @@ def _rm_sync(sandbox: SandboxHandle, paths: list[str]) -> None:
     _run_remote_sync(sandbox, cmd, timeout=30)
 
 
+def _windows_extended_path(path: str) -> str:
+    if not PureWindowsPath(path).is_absolute():
+        return path
+    normalized = ntpath.normpath(path)
+    if normalized.startswith(("\\\\?\\", "\\\\.\\")):
+        return normalized
+    if normalized.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + normalized[2:]
+    return "\\\\?\\" + normalized
+
+
 def _list_dir_sync(sandbox: SandboxHandle, remote_dir: str) -> list[dict[str, Any]]:
     """Recursive walk: emits {"relpath", "is_dir", "size"} per entry.
-    Returns [] on missing dir or transport error."""
+    Returns [] on a missing or empty dir; raises on command/transport failure."""
     if sandbox.is_linux:
         safe = remote_dir.replace("'", "'\\''")
         cmd = (
@@ -482,37 +503,73 @@ def _list_dir_sync(sandbox: SandboxHandle, remote_dir: str) -> list[dict[str, An
             f"cd '{safe}' && find . -mindepth 1 -printf '%P\\t%y\\t%s\\n'"
         )
     else:
-        safe = remote_dir.replace("'", "''")
-        cmd = (
-            'powershell -NoProfile -Command "'
-            f"if (-not (Test-Path -LiteralPath '{safe}' -PathType Container)) {{ '[]'; exit 0 }}; "
-            f"Get-ChildItem -LiteralPath '{safe}' -Recurse | ForEach-Object {{ "
-            f"  $type = if ($_.PSIsContainer) {{ 'd' }} else {{ 'f' }}; "
-            f"  $size = if ($_.PSIsContainer) {{ 0 }} else {{ $_.Length }}; "
-            f"  Write-Output ($_.FullName + [char]9 + $type + [char]9 + $size) "
-            f"}}"
-            '"'
+        script = rf"""import json, os, stat
+root = os.path.abspath({_windows_extended_path(remote_dir)!r})
+if not root.startswith(("\\\\?\\", "\\\\.\\")):
+    root = "\\\\?\\UNC\\" + root[2:] if root.startswith("\\\\") else "\\\\?\\" + root
+try:
+    root_stat = os.stat(root)
+except (FileNotFoundError, NotADirectoryError):
+    print("[]")
+    raise SystemExit(0)
+if not stat.S_ISDIR(root_stat.st_mode):
+    print("[]")
+    raise SystemExit(0)
+def fail(error):
+    raise error
+entries = []
+for current, directories, files in os.walk(root, onerror=fail):
+    for name in directories + files:
+        path = os.path.join(current, name)
+        item_stat = os.stat(path)
+        is_dir = stat.S_ISDIR(item_stat.st_mode)
+        entries.append({{"relpath": os.path.relpath(path, root), "is_dir": is_dir,
+                        "size": 0 if is_dir else item_stat.st_size}})
+print(json.dumps(entries, ensure_ascii=True))
+"""
+        encoded = base64.b64encode(script.encode("utf-8")).decode("ascii")
+        cmd = subprocess.list2cmdline(
+            [sandbox.python, "-B", "-c", f"import base64;exec(base64.b64decode('{encoded}'))"]
         )
     result = _run_remote_sync(sandbox, cmd, timeout=30)
     if result.returncode != 0:
-        return []
+        detail = (result.stderr or "").strip()[:1000] or "no stderr"
+        raise RuntimeError(
+            f"list_dir({remote_dir}) failed rc={result.returncode}: {detail}"
+        )
     out = (result.stdout or "").strip()
     if not out or out == "[]":
         return []
-    prefix_variants: list[str] = []
     if not sandbox.is_linux:
-        norm = remote_dir.rstrip("/\\")
-        prefix_variants = [norm + "\\", norm + "/"]
+        try:
+            entries = json.loads(out)
+        except json.JSONDecodeError as error:
+            raise RuntimeError(f"list_dir({remote_dir}) returned invalid JSON") from error
+        if not isinstance(entries, list):
+            raise RuntimeError(f"list_dir({remote_dir}) returned a non-list result")
+        for entry in entries:
+            if (
+                not isinstance(entry, dict)
+                or not isinstance(entry.get("relpath"), str)
+                or type(entry.get("is_dir")) is not bool
+                or type(entry.get("size")) is not int
+                or entry["size"] < 0
+            ):
+                raise RuntimeError(f"list_dir({remote_dir}) returned an invalid entry")
+            relative = ntpath.normpath(entry["relpath"])
+            if (
+                ntpath.splitdrive(relative)[0] or ntpath.isabs(relative)
+                or relative in (".", "..") or relative.startswith("..\\")
+            ):
+                raise RuntimeError(f"list_dir({remote_dir}) returned a nonrelative path")
+            entry["relpath"] = relative
+        return entries
     entries: list[dict[str, Any]] = []
     for line in out.splitlines():
         parts = line.split("\t")
         if len(parts) < 3:
             continue
         rel, kind, size = parts[0], parts[1], parts[2]
-        for p in prefix_variants:
-            if rel.startswith(p):
-                rel = rel[len(p):]
-                break
         try:
             size_int = int(size)
         except ValueError:
@@ -558,6 +615,8 @@ def _download_to_local_sync(
 
     deadline = _time.monotonic() + timeout
     try:
+        if not sandbox.is_linux:
+            remote_path = _windows_extended_path(remote_path)
         offset = 0
         parts: list[bytes] = []
         while True:

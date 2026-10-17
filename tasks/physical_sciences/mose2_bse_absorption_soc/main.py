@@ -16,7 +16,9 @@ from tasks.common_setup import BaseTaskSetup
 from tasks.linux_runtime import LinuxTaskConfig
 from tasks.physical_sciences._shared.materials_science._common import (
     MOSE2_BSE_ABSORPTION_SOC_SPEC,
+    command_result_parts,
     evaluate_remote_output_dir,
+    run_command,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,7 @@ Compute the SOC-enabled GW-BSE optical response of monolayer MoSe2 from the stag
 Use the task-local command-line tools staged here:
 - `{self.software_bin_dir}/pw.x`
 - `{self.software_bin_dir}/mpirun`
+- `{self.software_bin_dir}/pw2bgw.x` (serial, spinor-capable; see `{self.software_dir}/README.md`)
 - `{self.software_bin_dir}/epsilon.cplx.x`
 - `{self.software_bin_dir}/sigma.cplx.x`
 - `{self.software_bin_dir}/kernel.cplx.x`
@@ -110,13 +113,16 @@ _setup = BaseTaskSetup()
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
     install_script = f"{task_cfg.metadata['software_dir']}/install_software.sh"
-    result = await session.run_command(
-        "bash " + shlex.quote(install_script), timeout=600, check=False
+    result = await run_command(
+        session,
+        "timeout --foreground 600s bash " + shlex.quote(install_script),
+        check=False,
     )
-    if result.returncode != 0:
+    return_code, stdout, stderr = command_result_parts(result)
+    if return_code != 0:
         raise RuntimeError(
             "QE/BerkeleyGW task runtime verification failed: "
-            f"{(result.stderr or result.stdout or '').strip()[-2000:]}"
+            f"{(stderr or stdout or '').strip()[-2000:]}"
         )
 
 

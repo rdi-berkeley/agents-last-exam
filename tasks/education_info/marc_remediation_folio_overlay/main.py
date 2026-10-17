@@ -160,6 +160,8 @@ You are working on a Linux VM to complete a MARC remediation and FOLIO overlay s
 2. Implement `scripts/remediate_catalog.py` in the copied project while preserving this CLI:
    `python scripts/remediate_catalog.py --case-dir <case_dir> --output-dir <output_dir>`
 3. Use the case files and policy rules to remediate MARC records, choose FOLIO overlay actions, and emit all required output artifacts.
+   Follow `OUTPUT_CONTRACT.md` in the copied project for the exact output schema.
+   Follow each case's `cataloging_policy.md` for RDA carrier-evidence precedence and vocabulary-source subfields.
 4. Run the CLI on the visible public case before finishing:
    `{self.python_entry_point} scripts/remediate_catalog.py --case-dir input/public_case --output-dir outputs/public_case`
 

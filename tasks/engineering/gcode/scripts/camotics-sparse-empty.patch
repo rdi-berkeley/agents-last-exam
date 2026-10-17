@@ -1,0 +1,31 @@
+--- a/src/camotics/contour/MarchingCubes.cpp
++++ b/src/camotics/contour/MarchingCubes.cpp
+@@ -37,6 +37,10 @@
+   uint8_t index = slice.getEdges(x, y, edges);
+   Vector3U offset(x, y, slice.getZ());
+ 
++  if (triangleConnectionTable[index][0] < 0) {
++    tree.insertLeaf(nullptr, offset);
++    return;
++  }
+   SmartPointer<GridTreeLeaf> leaf = new GridTreeLeaf;
+ 
+   // Draw the triangles that were found.  There can be up to five per cube.
+--- a/src/camotics/contour/GridTreeNode.cpp
++++ b/src/camotics/contour/GridTreeNode.cpp
+@@ -62,6 +62,7 @@
+   if (offset[axis] < split) {
+     steps[axis] /= 2;
+ 
++    if (!leaf && !left) return;
+     if (atLeaf(steps)) {
+       if (left) delete left;
+       left = leaf;
+@@ -77,6 +78,7 @@
+     Vector3U rOffset(offset);
+     rOffset[axis] -= split;
+ 
++    if (!leaf && !right) return;
+     if (atLeaf(steps)) {
+       if (right) delete right;
+       right = leaf;

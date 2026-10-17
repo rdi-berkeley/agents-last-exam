@@ -10,11 +10,11 @@ import textwrap
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
-import openai
 import cua_bench as cb
 
 from tasks.common_config import GeneralTaskConfig
 from tasks.common_setup import BaseTaskSetup
+from tasks.utils.evaluation import llm_multimodal_json_sync
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +33,6 @@ LIGHT_ENERGY_TOL_FRAC = 0.30
 MIN_BLEND_BYTES = 10_000
 MIN_PNG_BYTES = 5_000
 MIN_OBJ_BYTES = 100
-
-VLM_JUDGE_MODEL = "gpt-5.5"
-_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
 def _read_script(name: str) -> str:
@@ -168,24 +165,27 @@ def _light_match_score(reference_light: dict[str, Any], candidate_light: dict[st
 
 def _lighting_score(reference_spec: dict[str, Any], metrics: dict[str, Any]) -> float:
     candidate_lights = metrics.get("lights", [])
-    if len(candidate_lights) < 3:
-        return 0.0
     ref_lights = [
         reference_spec["lighting"]["key_light"],
         reference_spec["lighting"]["fill_light"],
         reference_spec["lighting"]["rim_light"],
     ]
-    scores: list[float] = []
-    for ref_light in ref_lights:
-        same_type = [
-            cand for cand in candidate_lights
-            if cand.get("type", "").upper() == ref_light["type"].upper()
-        ]
-        if not same_type:
-            scores.append(0.0)
-            continue
-        scores.append(max(_light_match_score(ref_light, cand) for cand in same_type))
-    return sum(scores) / len(scores)
+    best_scores = {0: 0.0}
+    for candidate_light in candidate_lights:
+        previous_scores = best_scores.copy()
+        for ref_index, ref_light in enumerate(ref_lights):
+            if candidate_light.get("type", "").upper() != ref_light["type"].upper():
+                continue
+            match_score = _light_match_score(ref_light, candidate_light)
+            ref_bit = 1 << ref_index
+            for matched_mask, score in previous_scores.items():
+                if matched_mask & ref_bit:
+                    continue
+                next_mask = matched_mask | ref_bit
+                best_scores[next_mask] = max(
+                    best_scores.get(next_mask, 0.0), score + match_score
+                )
+    return max(best_scores.values()) / len(ref_lights)
 
 
 _VLM_PROMPT = """\
@@ -203,63 +203,34 @@ Score each dimension from 0.0 to 1.0:
 Return ONLY a JSON object with exactly these six keys and float values, nothing else."""
 
 
-def _load_openai_key() -> str:
-    try:  # load secret/eval_time/*.env so the OpenAI judge key is present
-        from tasks.utils.evaluation import load_eval_env
-
-        load_eval_env()
-    except Exception:
-        pass
-    key = os.environ.get("OPENAI_API_KEY")
-    if key:
-        return key
-    if _ENV_FILE.exists():
-        for line in _ENV_FILE.read_text().splitlines():
-            line = line.strip()
-            if line.startswith("OPENAI_API_KEY"):
-                return line.split("=", 1)[1].strip().strip('"').strip("'")
-    raise RuntimeError("OPENAI_API_KEY not found in environment or .env")
-
-
 def _call_vlm_judge(ref_b64: str, cand_b64: str) -> float:
-    client = openai.OpenAI(api_key=_load_openai_key())
-    resp = client.chat.completions.create(
-        model=VLM_JUDGE_MODEL,
-        max_completion_tokens=2048,
-        response_format={"type": "json_object"},
-        messages=[
+    scores = llm_multimodal_json_sync(
+        max_tokens=2048,
+        temperature=None,
+        content=[
+            {"type": "text", "text": _VLM_PROMPT},
             {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": _VLM_PROMPT},
-                    {
-                        "type": "text",
-                        "text": "Reference render (ground truth):",
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{ref_b64}",
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": "Candidate render:",
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{cand_b64}",
-                        },
-                    },
-                ],
-            }
+                "type": "text",
+                "text": "Reference render (ground truth):",
+            },
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/png;base64,{ref_b64}",
+                },
+            },
+            {
+                "type": "text",
+                "text": "Candidate render:",
+            },
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/png;base64,{cand_b64}",
+                },
+            },
         ],
     )
-    text = resp.choices[0].message.content.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    scores = json.loads(text)
     vals = [float(v) for v in scores.values()]
     return sum(vals) / len(vals) if vals else 0.0
 

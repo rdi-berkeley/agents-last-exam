@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -50,16 +51,16 @@ from tasks.linux_runtime import LinuxTaskConfig  # noqa: E402
 
 _setup = BaseTaskSetup()
 
-SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-from score_spatial_domains import (
+from tasks.life_sciences.spatial_transcriptomics_spatial_domain_identification.scripts.score_spatial_domains import (  # noqa: E402
     REQUIRED_PNG,
+    REQUIRED_UMAP_CSV,
     SLICE_CONFIG,
+    VISUAL_CONTRACT,
+    ReferenceValidationError,
     ScoreResult,
     score_output_bundle,
-)  # noqa: E402
+    validate_reference_annotations,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +183,9 @@ Required outputs under `{self.remote_output_dir}`:
 - `manifest.json` — must contain `"has_graph": true`, `"has_embedding": true`, `"has_clustering": true`, an integer `"seed"`, and a nonempty string `"method"`
 - `per_slice/<slice_id>_labels.csv` for all 12 slices with exact header `barcode,predicted_label`
 - `{REQUIRED_PNG}`
+- `{REQUIRED_UMAP_CSV}` with exact header `barcode,UMAP1,UMAP2`
+
+{VISUAL_CONTRACT}
 
 Rules:
 - Use the exact per-slice target cluster counts from `{self.slice_config_file}`.
@@ -213,6 +217,7 @@ Rules:
                 "summary_file": self.summary_file,
                 "manifest_file": self.manifest_file,
                 "umap_png": self.umap_png,
+                "umap_csv": f"{self.remote_output_dir}/{REQUIRED_UMAP_CSV}",
                 "label_files": {
                     slice_id: self.label_file(slice_id) for slice_id, _ in SLICE_CONFIG
                 },
@@ -248,39 +253,56 @@ async def start(task_cfg, session: cb.DesktopSession):
 async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     meta = task_cfg.metadata
 
+    missing_refs = [
+        path for path in meta["annotation_files"].values() if not await session.file_exists(path)
+    ]
+    if missing_refs:
+        raise ReferenceValidationError(
+            f"evaluator-controlled reference annotations missing: {missing_refs}"
+        )
+    try:
+        reference_annotations = {
+            slice_id: _as_text(await session.read_bytes(path))
+            for slice_id, path in meta["annotation_files"].items()
+        }
+    except UnicodeError as exc:
+        raise ReferenceValidationError("reference annotations are not valid UTF-8") from exc
+    validate_reference_annotations(reference_annotations)
+
     required_output_paths = [
         meta["summary_file"],
         meta["manifest_file"],
         meta["umap_png"],
+        meta["umap_csv"],
         *meta["label_files"].values(),
     ]
-    missing_outputs = [path for path in required_output_paths if not (await session.file_exists(path) or await session.directory_exists(path))]
+    missing_outputs = [
+        path for path in required_output_paths if not await session.file_exists(path)
+    ]
     if missing_outputs:
         logger.error("missing output files: %s", missing_outputs)
         return [0.0]
 
-    missing_refs = [
-        path for path in meta["annotation_files"].values() if not (await session.file_exists(path) or await session.directory_exists(path))
-    ]
-    if missing_refs:
-        raise RuntimeError(
-            f"evaluator-controlled reference annotations missing: {missing_refs}"
-        )
-
-    per_slice_labels = {
-        slice_id: _as_text(await session.read_bytes(path))
-        for slice_id, path in meta["label_files"].items()
-    }
-    reference_annotations = {
-        slice_id: _as_text(await session.read_bytes(path))
-        for slice_id, path in meta["annotation_files"].items()
-    }
-    result: ScoreResult = score_output_bundle(
-        summary_csv=_as_text(await session.read_bytes(meta["summary_file"])),
-        manifest_json=_as_text(await session.read_bytes(meta["manifest_file"])),
+    try:
+        per_slice_labels = {
+            slice_id: _as_text(await session.read_bytes(path))
+            for slice_id, path in meta["label_files"].items()
+        }
+        summary_csv = _as_text(await session.read_bytes(meta["summary_file"]))
+        manifest_json = _as_text(await session.read_bytes(meta["manifest_file"]))
+        umap_png = await session.read_bytes(meta["umap_png"])
+        umap_csv = _as_text(await session.read_bytes(meta["umap_csv"]))
+    except (FileNotFoundError, IsADirectoryError, NotADirectoryError, UnicodeError) as exc:
+        logger.error("invalid candidate output: %s", exc)
+        return [0.0]
+    result: ScoreResult = await asyncio.to_thread(
+        score_output_bundle,
+        summary_csv=summary_csv,
+        manifest_json=manifest_json,
         per_slice_labels=per_slice_labels,
         reference_annotations=reference_annotations,
-        umap_png=await session.read_bytes(meta["umap_png"]),
+        umap_png=umap_png,
+        umap_csv=umap_csv,
     )
 
     logger.info("[%s] evaluation=%s", TASK_NAME, json.dumps(result.to_dict(), sort_keys=True))

@@ -2,14 +2,13 @@
 
 The framework recognises three Executor types (in :mod:`ale_run.executors`):
 
-* :class:`LocalExecutor`   — run the deployer in the framework's own
-                             Python process.
+* :class:`LocalExecutor`   — run the deployer in a supervised host worker.
 * :class:`DockerExecutor`  — ``docker run`` a fresh container per unit,
                              ship the deployer + ALE source into it,
                              entrypoint runs the deployer in-container.
 * :class:`SandboxExecutor` — scp the ALE source to the sandbox VM,
-                             ``cua.python_exec`` a bootstrap that runs
-                             the deployer inside the sandbox itself.
+                             detach a supervisor that runs the deployer
+                             inside the sandbox itself.
 
 What the executor IS to a deployer
 ----------------------------------
@@ -23,10 +22,11 @@ the **lifecycle's** handle on the substrate, not the deployer's.
 What the executor IS to the lifecycle
 -------------------------------------
 
-Three methods:
+Four methods:
 
 * :meth:`run_deployer`   — place + run the deployer end-to-end;
                            return an :class:`AgentRunResult`.
+* :meth:`stop_deployer`  — stop and confirm all solver descendants have exited.
 * :meth:`gather_dir`     — bulk-pull ``src`` (substrate-native path)
                            into ``dst`` (host directory). No-op when
                            ``src`` is already a host path.
@@ -199,6 +199,14 @@ class BaseExecutor(abc.ABC):
 
     # ──────── methods (lifecycle uses these) ────────
 
+    async def stop_deployer(self) -> None:
+        """Stop the solver and all descendants, or raise if unconfirmed.
+
+        The lifecycle requires this barrier before exposing reference data.
+        Executors without process containment must fail closed.
+        """
+        raise RuntimeError(f"{self.type}: solver termination cannot be confirmed")
+
     @abc.abstractmethod
     async def run_deployer(
         self,
@@ -211,20 +219,25 @@ class BaseExecutor(abc.ABC):
 
         Concrete implementations:
 
-        * **LocalExecutor**: in-process construct + ``await install();
-          await launch()``.
+        * **LocalExecutor**: supervise a host worker running
+          ``await install(); await launch()``.
         * **DockerExecutor**: stage spec.json into the host bind-mount,
           ``docker run`` with an entrypoint that imports the deployer,
           constructs a local-flavored Executor inside the container,
           and runs it. Returns the container's ``_result.json``.
         * **SandboxExecutor**: scp the ``ale_run/`` tree into the
-          sandbox, ``cua.python_exec`` a bootstrap that imports the
-          deployer + constructs a local-flavored Executor in-sandbox
-          and runs it. Returns the bootstrap's result dict.
+          sandbox, detach a supervisor that imports the deployer +
+          constructs a local-flavored Executor in-sandbox and runs it.
+          Returns the supervisor's result dict.
 
         On crash inside the substrate, the implementation MUST surface
         the traceback in :attr:`AgentRunResult.error` (and pull any
-        crash logs into the host's gather target if possible)."""
+        crash logs into the host's gather target if possible).
+
+        Normal session completion must wait for supervised background tools
+        within the remaining timeout_s budget. At the deadline, stop the
+        entire supervised tree and report timeout before returning.
+        """
 
     @abc.abstractmethod
     async def gather_dir(

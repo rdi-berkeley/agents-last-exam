@@ -14,17 +14,29 @@ not a payload-size one.
 
 import argparse
 import csv
+import importlib.util
 import json
-import os
+import subprocess
 import sys
 import traceback
 from pathlib import Path
 
+if importlib.util.find_spec("rdkit") is None:
+    installation = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "rdkit==2026.3.1"],
+        capture_output=True,
+        text=True,
+    )
+    if installation.returncode:
+        print(installation.stderr[-2000:], file=sys.stderr)
+        print(json.dumps({"error": "Could not install evaluator dependency RDKit 2026.03.1"}))
+        sys.exit(2)
+
 try:
     from rdkit import Chem
 except Exception as exc:  # pragma: no cover
-    print(json.dumps({"score": 0.0, "error": f"rdkit import failed: {exc}"}))
-    sys.exit(0)
+    print(json.dumps({"error": f"rdkit import failed: {exc}"}))
+    sys.exit(2)
 
 
 REQUIRED_OUTPUT_FILES = [
@@ -206,12 +218,12 @@ def _score_phase1(agent_csv, ref_csv):
             0.005,
         ):
             disc_ok += 1
-    checks.append(spot_total > 0 and qm9_ok == spot_total)
+    checks.append(spot_total == len(spot_ids) and qm9_ok == spot_total and spot_total > 0)
     details["spot_qm9_dist_within_tol"] = {
         "matches": qm9_ok,
         "total": spot_total,
     }
-    checks.append(spot_total > 0 and disc_ok == spot_total)
+    checks.append(spot_total == len(spot_ids) and disc_ok == spot_total and spot_total > 0)
     details["spot_discrepancy_within_tol"] = {
         "matches": disc_ok,
         "total": spot_total,
@@ -614,6 +626,15 @@ def _score_phase5(agent_json, ref_json, phase4_ref_json):
 
 
 def score(agent_dir: Path, ref_dir: Path) -> dict:
+    reference_gate = hard_gate(ref_dir)
+    if reference_gate is not None:
+        raise RuntimeError(f"Invalid evaluator reference: {reference_gate}")
+    reference_pes = _load_json(ref_dir / "phase4_pes_results.json")
+    for rank in RANK_KEYS:
+        reference_data = _phase4_data(reference_pes[rank])
+        expected_delta = float(reference_data["quantum_forced_energy"]) - float(reference_data["mmff94_global_min_energy"])
+        if not _within(reference_data["delta_e"], expected_delta, 0.003):
+            raise RuntimeError(f"Invalid evaluator reference: inconsistent delta_e in {rank}")
     gate = hard_gate(agent_dir)
     if gate is not None:
         return {"score": 0.0, "hard_gate": gate}
@@ -680,10 +701,12 @@ def main():
         result = score(Path(args.agent), Path(args.reference))
     except Exception as exc:
         traceback.print_exc(file=sys.stderr)
-        result = {"score": 0.0, "error": f"verifier crashed: {exc}"}
+        print(json.dumps({"error": f"verifier crashed: {exc}"}))
+        return 2
 
     print(json.dumps(result))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

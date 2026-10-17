@@ -38,12 +38,13 @@ output:
   root: .logs/ale                                 # host-side run-log dir
 concurrency: 1                                    # units in flight (caps VMs + LLM RPM)
 wall_time_s: 7200                                 # max seconds an agent may run per unit (then stopped, status=timeout)
-auto_resume: true                                 # skip prior completed/timeout units and retry failures
+auto_resume: true                                 # skip completed/timeout at the same task revision; retry failures
 max_attempts: 3                                   # total attempts per failed unit (1..3)
 cleanup_mode: delete                              # delete | stop | keep
 
 # Appended verbatim (as its own paragraph) to EVERY task's prompt before it
 # reaches the agent. Empty/unset ⇒ no change. Use a `|` block for multi-line.
-# prompt_suffix: |
-#   Complete the task fully autonomously. You have no opportunity to interact with the user; the user will directly evaluate the output you produce.
-#   Do not get stuck in a failure loop — if you conclude the task genuinely cannot be completed (for example, the input data is incomplete, the task itself is unreasonable, or the environment has an anomaly you cannot resolve), write an `infeasible.md` to the output directory explaining the specific reason in detail.
+prompt_suffix: |
+  Complete the task fully autonomously; no user will intervene.
+  When finished, terminate all child processes you started.
+  The user will evaluate your performance based on your delivered artifacts.

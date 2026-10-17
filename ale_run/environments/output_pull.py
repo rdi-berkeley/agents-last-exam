@@ -35,6 +35,10 @@ _OSS_PUSH_TIMEOUT_S = 3600
 
 
 def _output_dir(sandbox: SandboxHandle, task_data: TaskDataSpec) -> str:
+    if task_data.sandbox_task_name:
+        from .task_data import join, task_subdir
+
+        return task_data.remote_output_dir or join(sandbox, task_subdir(sandbox, task_data), "output")
     sep = "/" if sandbox.is_linux else "\\"
     return sep.join(
         [
@@ -322,6 +326,8 @@ async def push_to_gcs(
 
     cp -r preserves the trailing src dir name (``output``) under dst, so
     dst is the run prefix; final landing is ``<bucket>/<run_id>/output/``.
+    Aliased workspaces sync contents to that same destination, including
+    when the task selects an alternate output directory.
 
     Uses ``gsutil`` with the injected SA key (via ``_gsutil`` — same path the
     read/staging side uses) rather than ``gcloud storage cp``. The VMs carry NO
@@ -338,13 +344,16 @@ async def push_to_gcs(
     gsutil = _gsutil(sandbox)
 
     if sandbox.is_linux:
-        cmd = f"{gsutil} -m cp -r {shlex.quote(src)} {shlex.quote(run_prefix)}"
+        if task_data.sandbox_task_name:
+            cmd = f"{gsutil} -m rsync -r {shlex.quote(src)} {shlex.quote(gcs_dst)}"
+        else:
+            cmd = f"{gsutil} -m cp -r {shlex.quote(src)} {shlex.quote(run_prefix)}"
     else:
         cmd = f"powershell -NoProfile -Command \"{gsutil} -m cp -r '{src}' '{run_prefix}'\""
     logger.info("push_to_gcs: %s → %s", src, gcs_dst)
     r = await sandbox.run_command(cmd, timeout=_GCS_PUSH_TIMEOUT_S)
     if r.returncode != 0:
-        raise RuntimeError(f"gsutil cp failed (rc={r.returncode}): {(r.stderr or '')[:300]}")
+        raise RuntimeError(f"gsutil output upload failed (rc={r.returncode}): {(r.stderr or '')[:300]}")
     return {"transport": "gcs", "gcs_path": gcs_dst}
 
 

@@ -19,6 +19,9 @@ signals correctly.
 
 From the repository root:
 
+Check Docker's data root with `docker info --format '{{.DockerRootDir}}'`,
+`findmnt -T` and `df -h` before building. Keep image storage on persistent disk.
+
 ```bash
 docker build \
   -f ale_run/environments/images/ale_qemu/Dockerfile \
@@ -46,6 +49,8 @@ docker push agentslastexam/ale-qemu:latest
 - Container ports `5000` and `8006` expose CUA and noVNC.
 - `VM_NET_IP` defaults to `172.30.0.2`.
 - Docker health becomes healthy when the guest CUA `/status` endpoint responds.
+- For Linux guests, the provider aligns the guest NIC MTU with the host's
+  default IPv4 route before returning the sandbox.
 
 The runner never downloads guest disks. Docker bind mounts are fixed when a
 container is created, so the host-side provider resolves and caches the qcow2,
@@ -58,10 +63,10 @@ The pre-baked guest disks are published in the Hugging Face dataset
 
 | File | Guest |
 |---|---|
-| `ale-win10.qcow2.manifest.json` | Windows 10 qcow2 manifest |
-| `ale-win10.qcow2.parts/*` | Verified 10 GB disk parts |
-| `ale-ubuntu22.qcow2.manifest.json` | Ubuntu 22.04 qcow2 manifest |
-| `ale-ubuntu22.qcow2.parts/*` | Verified 10 GB disk parts |
+| `ale-win10-v1.1.qcow2.manifest.json` | Windows 10 qcow2 manifest |
+| `ale-win10-v1.1.qcow2.parts/*` | Verified parts, at most 4 GB each |
+| `ale-ubuntu22-v1.1.qcow2.manifest.json` | Ubuntu 22.04 qcow2 manifest |
+| `ale-ubuntu22-v1.1.qcow2.parts/*` | Verified parts, at most 4 GB each |
 
 Configure the provider with the logical qcow2 path:
 
@@ -69,11 +74,21 @@ Configure the provider with the logical qcow2 path:
 snapshots:
   cpu-free:
     qemu:
-      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10.qcow2
+      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-win10-v1.1.qcow2
   cpu-free-ubuntu:
     qemu:
-      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22.qcow2
+      disk_source: hf://agents-last-exam/ale-images-qcow2/ale-ubuntu22-v1.1.qcow2
 ```
+
+Retain the immutable `image_revision` from `configs/environments/qemu.yaml` in
+both snapshot blocks. Use `selected_tasks/cpu.txt` for the 119 CPU tasks. See
+[the release guide](../../../../docs/releases/v1.1.md) for checksums, image pins,
+and the log upgrade command. `run.json` records provider image provenance in
+`environment.image_revision`.
+
+The profile defaults to `output_path: null`. Use `cleanup_mode: keep` to
+inspect task files in the sandbox, then stop or delete it after collecting
+needed evidence. Run records and trajectories are still collected locally.
 
 The provider automatically discovers the multipart manifest, downloads and
 verifies each part, reconstructs the selected qcow2 in the host cache, verifies

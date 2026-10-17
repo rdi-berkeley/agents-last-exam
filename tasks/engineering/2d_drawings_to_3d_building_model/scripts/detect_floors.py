@@ -26,7 +26,12 @@ def parse_obj_mesh(obj_path: str):
                 verts.append([float(p[1]), float(p[2]), float(p[3])])
             elif line.startswith("f "):
                 p = line.split()[1:]
-                idx = [int(t.split("/")[0]) - 1 for t in p]
+                indices = [int(token.split("/")[0]) for token in p]
+                if any(index == 0 for index in indices):
+                    raise ValueError("OBJ vertex indices cannot be zero")
+                idx = [index - 1 if index > 0 else len(verts) + index for index in indices]
+                if any(index < 0 or index >= len(verts) for index in idx):
+                    raise ValueError("OBJ face references a missing vertex")
                 for i in range(1, len(idx) - 1):
                     faces.append([idx[0], idx[i], idx[i + 1]])
     return np.array(verts, dtype=np.float64), np.array(faces, dtype=np.int64)
@@ -162,6 +167,8 @@ def select_plan_cuts(
     obj_z_min: float,
     floors_with_w: list[tuple[float, float]],
     floor_offset_mm: float = 1500.0,
+    *,
+    tower_cut_height: float | None = None,
 ) -> dict[str, float]:
     """Pick 4 plan cut heights from detected floors+weights.
 
@@ -172,6 +179,8 @@ def select_plan_cuts(
       - tower_typical: tower_floors[0] + floor_offset (lowest tower floor —
                        most likely to be inside the tower envelope rather than
                        at the parapet/roof level)
+
+    An explicit tower_cut_height uses the frozen reference cut in model units.
     """
     hall_mezz, tower, _ceiling = split_hall_tower(floors_with_w)
     cuts: dict[str, float] = {"hall_ground": obj_z_min + floor_offset_mm}
@@ -179,7 +188,9 @@ def select_plan_cuts(
         cuts["hall_first"] = hall_mezz[0] + floor_offset_mm
     if len(hall_mezz) >= 2:
         cuts["hall_second"] = hall_mezz[1] + floor_offset_mm
-    if tower:
+    if tower_cut_height is not None:
+        cuts["tower_typical"] = tower_cut_height
+    elif tower:
         cuts["tower_typical"] = tower[0] + floor_offset_mm
     return cuts
 

@@ -1,0 +1,287 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{booktabs,longtable,array}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{bm}
+\usepackage{mathtools}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+
+\title{Extracted Notes on Clustered-Cyclic Codes, QUITS Usage,\
+Seed Matrices, Decoding, and Logical Error Metrics}
+\author{Prepared from the uploaded manuscript}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Purpose}
+This note extracts, reorganizes, and condenses from the uploaded manuscript the following items:
+\begin{enumerate}[label=(\arabic*)]
+    \item the clustered-cyclic (CC) code construction,
+    \item how \texttt{QUITS} is used in the circuit-level memory simulations and what is done differently,
+    \item the seed matrices for the $[24,8,3]$, $[40,8,5]$, and $[56,8,7]$ CC codes,
+    \item the decoding settings used in the simulations,
+    \item how the logical error / failure quantities are computed from repeated-syndrome simulations.
+\end{enumerate}
+Throughout, the notation follows the manuscript as closely as possible.
+
+\section{Clustered-cyclic code construction}
+
+\subsection{Base ring and seed matrices}
+A clustered-cyclic code is defined as a lifted-product (LP) CSS code over the quotient ring
+\[
+R = \mathbb{F}_2[x]/(x^p+1),
+\]
+where the lift parameter $p$ is prime. The construction starts from two \emph{square} classical seed matrices
+\[
+H_a \in R^{n_a\times n_a}, \qquad H_b \in R^{n_b\times n_b}.
+\]
+The manuscript imposes the following structural conditions on these seed matrices:
+\begin{itemize}
+    \item every entry is either a \emph{binomial} or zero,
+    \item the supports of the nonzero monomials are arranged cyclically,
+    \item every row and every column has the same number of nonzero binomials,
+    \item both seed matrices are full rank.
+\end{itemize}
+
+\subsection{CSS parity-check matrices}
+Given $H_a$ and $H_b$, the CC code parity-check matrices are
+\begin{align}
+H_X &= \left(\begin{array}{c|c} I_{n_b} \otimes H_a & H_b^{*} \otimes I_{n_a} \end{array}\right), \\
+H_Z &= \left(\begin{array}{c|c} H_b \otimes I_{n_a} & I_{n_b} \otimes H_a^{*} \end{array}\right),
+\end{align}
+where $H_a^{*}$ and $H_b^{*}$ denote conjugate-transposes over the ring, and $I_m$ is the $m\times m$ identity over $R$.
+
+\subsection{Parameters}
+The manuscript states that the resulting binary CSS code has parameters
+\[
+N = 2pn_an_b,
+\qquad
+k = 2n_an_b,
+\qquad
+d \le p.
+\]
+If the row weights of $H_a$ and $H_b$ are $w_a$ and $w_b$, then the stabilizer check weight is
+\[
+W = 2(w_a+w_b).
+\]
+For the examples extracted below, the paper focuses on two families:
+\begin{itemize}
+    \item $n_a=n_b=2$, giving $k=8$ logical qubits,
+    \item $n_a=n_b=3$, giving $k=18$ logical qubits.
+\end{itemize}
+
+\subsection{Why the code is called ``clustered-cyclic''}
+Let
+\[
+\chi = 1+x+x^2+\cdots+x^{p-1} \in R.
+\]
+A key theorem in the manuscript shows that CC codes admit a \emph{clustered logical operator basis}. In the ring description, the logical basis matrix is
+\[
+L=
+\left(
+\begin{array}{c|c}
+\operatorname{diag}_{n_an_b}(\chi) & 0 \\
+\hline
+0 & \operatorname{diag}_{n_an_b}(\chi)
+\end{array}
+\right).
+\]
+After passing to the binary representation, each occurrence of $\chi$ becomes a support on a block of $p$ physical qubits. Hence each logical operator is supported on one entire \emph{cluster} of size $p$, and each logical $X$ operator anti-commutes with exactly one logical $Z$ operator supported on the same cluster. This is the structural feature exploited later for parallel logical measurements and surgery scheduling.
+
+\subsection{What is special relative to more generic LP / HGP constructions}
+The manuscript's extracted differences are:
+\begin{enumerate}[label=(\alph*)]
+    \item the seed matrices are restricted to a cyclic binomial/zero pattern rather than being arbitrary LP seeds,
+    \item the seeds are square and full-rank,
+    \item the resulting logical basis is explicitly clustered, so logical representatives are highly structured and directly addressable,
+    \item this clustered basis is what enables the parallel product-surgery constructions used later in the paper.
+\end{enumerate}
+In other words, the paper is not simply using an arbitrary lifted-product code; it is carving out a subfamily whose logical basis is engineered to make logical measurement layers more surface-code-like.
+
+\section{How \texttt{QUITS} is used, and what is done differently}
+
+\subsection{Role of \texttt{QUITS}}
+For circuit-level memory simulations, the manuscript states that the repeated-syndrome simulation framework is \emph{built upon and extends} \texttt{QUITS}. In each syndrome extraction round, data qubits are coupled to auxiliary qubits by CNOT gates determined by the Tanner graph of the code.
+
+Thus, at a high level, \texttt{QUITS} is used as the base infrastructure for repeated-syndrome circuit-level simulation of qLDPC memory experiments.
+
+\subsection{What is modified relative to the generic \texttt{QUITS} scheduling}
+The manuscript describes a direction-aware greedy edge-coloring scheduler on the Tanner graph. For this task, the experimental conditions in \texttt{experiment.md} fix the physical schedule using DSATUR on QUITS v1.0.0's \texttt{cardinal} layout. The motivation is to reduce the CNOT depth per syndrome round, because every additional layer also adds idle time for qubits that are not active in that layer.
+
+The extracted custom scheduling procedure is:
+\begin{enumerate}[label=(\arabic*)]
+    \item \textbf{Directional partitioning.} Partition Tanner-graph edges into four disjoint groups
+    \[
+    v\in\{N,S,E,W\},
+    \]
+    interpreted as distinct interaction directions. The manuscript notes that this is natural for HGP/LP-style constructions where two-qubit gates can be viewed as horizontal or vertical Tanner-graph edges.
+
+    \item \textbf{Conflict graph construction.} For each direction $v$, form a conflict graph $\mathcal G_v$ whose vertices are CNOT gates in that direction, and connect two vertices exactly when the corresponding CNOTs share a qubit.
+
+    \item \textbf{DSATUR graph coloring.} Use NetworkX DSATUR with the vertex ordering stated in \texttt{experiment.md}. Each color class gives a set of pairwise non-conflicting CNOTs that can be executed simultaneously.
+
+    \item \textbf{Circuit assembly.} The CNOT depth is taken to be
+    \[
+    \gamma_{\mathrm{CNOT}} = \sum_v \phi(\mathcal G_v),
+    \]
+    where $\phi(\mathcal G_v)$ denotes the chromatic number returned by the coloring procedure. In addition, the Hadamards around the $X$-type ancillas and the mid-round ancilla measurement/reset stages each contribute one extra time-step.
+\end{enumerate}
+
+\subsection{Bottom line}
+So the paper's use of \texttt{QUITS} is:
+\begin{itemize}
+    \item use \texttt{QUITS} as the base repeated-syndrome simulation framework,
+    \item use the direction-aware DSATUR Tanner-graph edge-coloring schedule defined in the experimental conditions,
+    \item which removes the circuit-order ambiguity that otherwise changes absolute logical-failure rates.
+\end{itemize}
+The manuscript does \emph{not} give further implementation details beyond that high-level description, so this is the cleanest faithful extraction.
+
+\section{Decoding and post-processing settings}
+The paper states that syndrome-extraction circuits are compiled and sampled with \texttt{Stim}. Decoding is then performed by BP+OSD on the \emph{full space-time parity-check matrices} derived from the detector error model (DEM).
+
+For this task, \texttt{experiment.md} defines the decoder's fault-variable
+representation. Each flattened DEM error instruction remains a separate
+variable with its full detector and logical-observable effects and its prior;
+detector-set-only aggregation is not used.
+
+The reported hyperparameters are:
+
+\begin{center}
+\begin{tabular}{lc}
+\toprule
+Parameter & Value \\
+\midrule
+BP update rule & Min-sum \\
+Min-sum scaling factor & 0.625 \\
+Maximum BP iterations & 200 \\
+OSD method & OSD-CS \\
+OSD order & 5 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+So, in compact form, the decoding stack is:
+\[
+\texttt{Stim} \;\longrightarrow\; \text{DEM} \;\longrightarrow\; \text{full space-time parity-check matrix} \;\longrightarrow\; \text{BP+OSD}.
+\]
+
+\section{How the logical error / failure quantities are computed}
+The manuscript's appendix for circuit-level memory simulations works with repeated syndrome extraction over $\eta$ rounds.
+
+\subsection{Choice of the number of rounds}
+The number of rounds is chosen as
+\[
+\eta = 42 \quad \text{if } \epsilon < 4\times 10^{-3},
+\qquad
+\eta = 20 \quad \text{if } \epsilon > 4\times 10^{-3},
+\]
+where $\epsilon$ is the physical error rate.
+
+\subsection{From total logical failure over $\eta$ rounds to per-round LFR}
+Let $\epsilon_\gamma$ denote the empirically estimated \emph{total logical failure rate over $\eta$ rounds}. Assuming independent failures across rounds in the low-error regime, the per-round logical failure rate (LFR) is defined through
+\[
+(1-\mathrm{LFR})^{\eta} = 1-\epsilon_\gamma.
+\]
+Therefore,
+\[
+\boxed{\mathrm{LFR} = 1-(1-\epsilon_\gamma)^{1/\eta}}.
+\]
+
+\subsection{Per-logical-qubit, per-round quantity}
+To compare codes with different numbers of logical qubits $k$, the manuscript further defines an effective per-logical-qubit per-round failure rate $\epsilon_{1,1}$ by assuming independent, uniform failures across the $k$ logical qubits:
+\[
+1-\epsilon_\gamma = (1-\epsilon_{1,1})^{k\eta}.
+\]
+Hence,
+\[
+\boxed{\epsilon_{1,1} = 1-(1-\epsilon_\gamma)^{1/(k\eta)}}.
+\]
+
+\subsection{Interpretation}
+So there are really three related quantities in play:
+\begin{enumerate}[label=(\roman*)]
+    \item $\epsilon_\gamma$: total logical failure probability over the full $\eta$-round experiment,
+    \item LFR: logical failure rate per syndrome cycle,
+    \item $\epsilon_{1,1}$: effective per-logical-qubit, per-cycle failure rate.
+\end{enumerate}
+If by ``LER'' one means the logical error/failure rate reported in the circuit-level appendix, the paper computes it through this pipeline.
+
+\section{Extracted seed matrices}
+In all three examples below, the seed matrices are given over
+\[
+R=\mathbb{F}_2[x]/(x^p+1),
+\]
+with the indicated prime lift parameter $p$.
+
+\subsection{$[24,8,3]$ code, with $p=3$}
+This is a $k=8$ CC code, so $n_a=n_b=2$ and the seed matrices are $2\times2$:
+\[
+H_a=
+\begin{pmatrix}
+1+x^2 & x+x^2 \\
+1+x   & x+x^2
+\end{pmatrix},
+\qquad
+H_b=
+\begin{pmatrix}
+1+x^2 & x+x^2 \\
+1+x   & 1+x
+\end{pmatrix}.
+\]
+
+\subsection{$[40,8,5]$ code, with $p=5$}
+Again $n_a=n_b=2$:
+\[
+H_a=
+\begin{pmatrix}
+x+x^3 & x+x^4 \\
+x+x^4 & x+x^4
+\end{pmatrix},
+\qquad
+H_b=
+\begin{pmatrix}
+1+x   & x^3+x^4 \\
+1+x^4 & 1+x^4
+\end{pmatrix}.
+\]
+
+\subsection{$[56,8,7]$ code, with $p=7$}
+This is a $k=8$ CC code, so $n_a=n_b=2$ and the seed matrices are $2\times2$:
+\[
+H_a=
+\begin{pmatrix}
+x+x^5 & x+x^3 \\
+1+x^2 & 1+x^3
+\end{pmatrix},
+\qquad
+H_b=
+\begin{pmatrix}
+x^2+x^5 & 1+x \\
+x^5+x^6 & x^4+x^6
+\end{pmatrix}.
+\]
+
+\section{Compact summary}
+A faithful extraction from the manuscript is the following.
+
+\begin{itemize}
+    \item A clustered-cyclic code is a special lifted-product CSS code over $R=\mathbb{F}_2[x]/(x^p+1)$ built from square full-rank cyclic binomial seed matrices $H_a,H_b$.
+    \item Its stabilizer matrices are
+    \[
+    H_X = (I_{n_b}\otimes H_a\mid H_b^*\otimes I_{n_a}),
+    \qquad
+    H_Z = (H_b\otimes I_{n_a}\mid I_{n_b}\otimes H_a^*).
+    \]
+    \item The code has parameters $N=2pn_an_b$, $k=2n_an_b$, and $d\le p$, and admits a clustered logical basis supported on blocks of $p$ qubits.
+    \item Circuit-level memory simulations use \texttt{QUITS}; the task fixes the directional edge-coloring implementation to the DSATUR schedule defined in the experimental conditions.
+    \item Syndrome-extraction circuits are compiled and sampled with \texttt{Stim}; decoding is BP+OSD on the full space-time parity-check matrix derived from the DEM.
+    \item The simulation post-processing turns the measured total logical failure probability over $\eta$ rounds into a per-round LFR and then into a per-logical-qubit, per-round quantity $\epsilon_{1,1}$.
+\end{itemize}
+
+\end{document}

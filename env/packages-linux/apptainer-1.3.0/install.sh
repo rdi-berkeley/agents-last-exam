@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Apptainer 1.3.0 (matches dev VM dev-ubuntu22) — runs the Neurodesk .simg GUI
-# containers for the brain-science scene tasks (scene2_resample, scene3_skullstrip_qc).
+# containers for the brain-science scene tasks (scene2_resample).
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 if ! command -v apptainer >/dev/null 2>&1; then

@@ -13,10 +13,34 @@ control bridge injected alongside agents; the more general non-GUI surface
 
 ## Coordinate system
 
-All coordinates are **normalized to `[0, 1000]`** on both axes, independent of
-the VM's real resolution. The bridge queries the screen size once (cached) and
-converts to absolute pixels before calling the backend. `[0,0]` is top-left,
-`[1000,1000]` bottom-right.
+Coordinates default to **normalized `[0, 1000]`** on both axes. Set
+`CUA_COORDINATE_SPACE=pixel` to use screenshot pixels instead. Tool schemas
+and cursor positions advertise the configured space. Normalized conversion
+uses the current screen size and keeps the bottom-right endpoint inside the
+screen. Codex infers pixels except for Gemini-family models; its
+`coordinate_space` setting overrides that inference.
+
+## Text Input
+
+`CUA_TEXT_INPUT_MODE=auto` preserves native server input for ASCII and for
+Windows/macOS Unicode. Linux Unicode uses X11 INCR selection transfer: the
+bridge waits until the focused X11 client has retrieved every chunk, including
+the terminator. Clipboard-manager reads do not acknowledge application input.
+Text calls are queued; Linux paste helpers also lock per user/display across
+bridge processes. No fixed paste delay or automatic input retry is used.
+
+Linux requires Python with python-xlib, XTEST, and X-Resource (already present
+in the supported X11 images). `CUA_INPUT_PYTHON` overrides `python3` in the
+server shell. Common terminal WM_CLASS values select Ctrl+Shift+V; other
+applications use Ctrl+V. Missing capabilities, lost ownership, or missing
+consumption raise errors. The helper has an 18-second lifetime limit within
+the 20-second server command deadline. Large input is staged under the guest's
+`~/.cache/ale-cua`, not in a shell argument or host tmpfs.
+
+`keystroke` forces the original CUA `type_text` path. `clipboard` forces
+acknowledged X11 paste, including for ASCII; it rejects non-X11 platforms.
+For a bridge running outside the guest, set `CUA_SERVER_PLATFORM` to `linux`,
+`win32`, or `darwin` (the shared deployer environment sets this automatically).
 
 ## Return values
 
@@ -58,16 +82,20 @@ page_up, page_down, f1-f12`, or any single character.
 | Tool | Parameters | Returns |
 |------|------------|---------|
 | `screenshot` | `save_path?: string` (absolute path on the VM) | text confirmation **+ image** block (base64 PNG). If `save_path` given, the parent dir is validated and the PNG is written there too. |
-| `cursor_position` | — | text: `Cursor at [x, y]` (normalized). |
+| `cursor_position` | — | text: `Cursor at [x, y]` in the configured space. |
 | `wait` | `duration: number` (seconds) | text: `Waited <d>s`. Client-side pause. |
 
 ## Local testing
 
 ```bash
 npm install
+npm run test:unit                                          # unit tests
 CUA_SERVER_URL=http://<host>:5000 node src/index.js --test   # smoke test
 CUA_SERVER_URL=http://<host>:5000 node src/index.js           # start stdio server
 ```
 
 `node_modules` is not vendored — it is rebuilt on the substrate by
-`ale_run/agents/_bootstrap.py::ensure_cua_mcp_server` (`npm install --production`).
+`ale_run/agents/_bootstrap.py::ensure_cua_mcp_server` (`npm ci --omit=dev` with
+a lockfile; `npm install --omit=dev` otherwise).
+The shared ensure path refreshes all shipped sources, including the Python
+paste helper, even on prebaked images; unchanged dependencies are reused.

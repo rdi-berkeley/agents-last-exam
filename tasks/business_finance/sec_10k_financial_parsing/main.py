@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +24,7 @@ VARIANT_NAME = "base"
 EVAL_TMP_DIR = "/tmp/agenthle_eval/sec_10k_financial_parsing"
 
 SCRIPTS_DIR = Path(__file__).parent / "scripts"
+ASSETS_DIR = Path(__file__).parent / "assets"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -95,6 +95,14 @@ class Sec10KFinancialParsingConfig(LinuxTaskConfig):
         return f"{self.input_dir}/questions.json"
 
     @property
+    def qa_schema_file(self) -> str:
+        return f"{self.input_dir}/schema/qa_answers_schema.json"
+
+    @property
+    def qa_example_file(self) -> str:
+        return f"{self.input_dir}/schema/qa_answers_example.json"
+
+    @property
     def validation_dir(self) -> str:
         return f"{self.input_dir}/validation"
 
@@ -157,6 +165,8 @@ Visible files and tools:
 - Output schema: `{self.schema_file}`
 - Normalization rules: `{self.normalization_rules}`
 - Analytical questions: `{self.questions_file}`
+- Analytical answer schema: `{self.qa_schema_file}`
+- Analytical answer format example (fictional values): `{self.qa_example_file}`
 - Deterministic validation subset: `{self.validation_dir}`
 - Python wrapper for the staged task runtime: `{self.python_wrapper}`
 
@@ -167,6 +177,22 @@ Your job:
 4. Answer the analytical questions and save them to `{self.qa_output_file}`.
 5. Re-run the extraction workflow on the fixed validation subset in `input/validation/`
    and save those second-pass extraction JSONs to `{self.run2_output_dir}`.
+
+Analytical answer format:
+- `qa_answers.json` must be a top-level JSON object (dictionary) with keys
+  `Q1`, `Q2`, and `Q3`. Put each answer object directly under its question ID.
+- The array in `questions.json` lists questions only. Do not copy that array
+  structure into the answer file or wrap answers in `id`/`answer` objects.
+- `Q1`: `ticker` (string), `pct_increase` (number, rounded to 1 decimal place).
+- `Q2`: `ticker` (string), `fiscal_year` (integer),
+  `operating_margin_pct` (number, rounded to 2 decimal places).
+- `Q3`: an object with `ranking`, an array of all 10 ticker strings ordered
+  from highest to lowest fiscal-year-2023 stockholders' equity.
+
+Format example only; replace every fictional value with your computed answer:
+```json
+{(ASSETS_DIR / "qa_answers_example.json").read_text(encoding="utf-8").strip()}
+```
 
 Important requirements:
 - Follow the staged schema and normalization rules exactly.
@@ -189,6 +215,8 @@ Important requirements:
                 "schema_file": self.schema_file,
                 "normalization_rules": self.normalization_rules,
                 "questions_file": self.questions_file,
+                "qa_schema_file": self.qa_schema_file,
+                "qa_example_file": self.qa_example_file,
                 "validation_dir": self.validation_dir,
                 "runtime_manifest": self.runtime_manifest,
                 "runtime_lock": self.runtime_lock,
@@ -227,6 +255,18 @@ def load():
 @cb.setup_task(split="train")
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
+    for asset_name, metadata_key in (
+        ("questions.json", "questions_file"),
+        ("qa_answers_schema.json", "qa_schema_file"),
+        ("qa_answers_example.json", "qa_example_file"),
+    ):
+        destination = task_cfg.metadata[metadata_key]
+        content = (ASSETS_DIR / asset_name).read_text(encoding="utf-8")
+        await session.write_file(destination, content)
+        if await session.read_file(destination) != content:
+            raise RuntimeError(
+                f"Staged analytical answer contract readback mismatch: {destination}"
+            )
 
 
 @cb.evaluate_task(split="train")
@@ -244,13 +284,15 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         meta["cross_validation_expectations_file"],
     ]
     missing_reference_paths = [
-        path for path in required_reference_paths if not (await session.file_exists(path) or await session.directory_exists(path))
+        path
+        for path in required_reference_paths
+        if not (await session.file_exists(path) or await session.directory_exists(path))
     ]
     if missing_reference_paths:
         logger.error("[%s] staged evaluator reference missing: %s", tag, missing_reference_paths)
         return [0.0]
 
-    verifier_path = f'{meta["eval_tmp_dir"]}/score_outputs.py'
+    verifier_path = f"{meta['eval_tmp_dir']}/score_outputs.py"
     await session.write_file(verifier_path, _read_script("score_outputs.py"))
 
     command = (

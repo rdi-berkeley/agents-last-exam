@@ -9,4 +9,4 @@ harness: qwen_code
 model: Qwen/Qwen3.5-9B
 config:
   base_url: https://router.huggingface.co/v1
-  api_key: ${env:HF_TOKEN}
+  api_key: ${env:HF_INFERENCE_TOKEN}

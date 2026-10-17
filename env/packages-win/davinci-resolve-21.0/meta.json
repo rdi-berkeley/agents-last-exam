@@ -5,5 +5,5 @@
   "version": "21.0.00047",
   "install_location": "C:\\Program Files\\Blackmagic Design\\DaVinci Resolve",
   "verify": "powershell -NoProfile -Command \"(Get-Item 'C:\\Program Files\\Blackmagic Design\\DaVinci Resolve\\Resolve.exe').VersionInfo.ProductVersion -like '21.0*'\"",
-  "note": "Used by visual_media/chroma_key_from_reference (gpu-license). Target runs 21.0.00047 (build 47); Blackmagic now serves 21.0 build 48 (downloadId e2096c01ac344e33926f9da9b5097c4f) which install.ps1 fetches. dev-win10 has the older 20.3.20009, but per user decision (2026-06-15) the target is KEPT on its current 21.0 — this package pins the current version, not a downgrade."
+  "note": "Used by visual_media/chroma_key_from_reference. Target runs 21.0.00047 (build 47); Blackmagic now serves 21.0 build 48 (downloadId e2096c01ac344e33926f9da9b5097c4f) which install.ps1 fetches. dev-win10 has the older 20.3.20009, but per user decision (2026-06-15) the target is KEPT on its current 21.0 — this package pins the current version, not a downgrade."
 }

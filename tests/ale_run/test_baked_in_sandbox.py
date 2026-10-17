@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from ale_run.base_interface import TaskDataSpec
+from ale_run.environments import task_data as task_data_pkg
 from ale_run.environments.task_data import baked_in_sandbox
 from ale_run.orchestration.lifecycle import (
     _collect_env_passthrough,
@@ -112,6 +113,31 @@ async def test_lifecycle_does_not_suppress_missing_host_password(
         ValueError,
         match=baked_in_sandbox.REFERENCE_ARCHIVE_PASSWORD_ENV,
     ):
+        await lifecycle_stage_reference(
+            env=SimpleNamespace(sandbox=sandbox),
+            provider=None,
+            artifacts=None,
+            task_meta={"task_data": _task_data()},
+            run_id="run",
+            task_id="demo/hello",
+            writer=SimpleNamespace(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_propagates_reference_staging_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sandbox = _Sandbox()
+
+    class _BrokenBackend:
+        async def stage_reference(self, *args, **kwargs):
+            _ = args, kwargs
+            raise RuntimeError("corrupt reference archive")
+
+    monkeypatch.setattr(task_data_pkg, "select", lambda _source: _BrokenBackend())
+
+    with pytest.raises(RuntimeError, match="corrupt reference archive"):
         await lifecycle_stage_reference(
             env=SimpleNamespace(sandbox=sandbox),
             provider=None,

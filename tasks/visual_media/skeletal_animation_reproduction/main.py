@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import os
 import shutil
 import textwrap
+import uuid
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from tempfile import TemporaryDirectory
@@ -364,26 +366,52 @@ async def _upload_scripts(session: cb.DesktopSession, remote_scripts_dir: str) -
 async def _launch_remote_job(
     session: cb.DesktopSession, *, remote_scripts_dir: str, args: list[str]
 ) -> None:
+    launch_started = asyncio.get_event_loop().time()
     script_path = _remote_child(remote_scripts_dir, "remote_render_eval.py")
-    stdout_path = _remote_child(remote_scripts_dir, "job_stdout.txt")
-    stderr_path = _remote_child(remote_scripts_dir, "job_stderr.txt")
-    argv = ", ".join("'" + _ps_quote(v) + "'" for v in [script_path, *args])
+    output_dir = args[args.index("--output-dir") + 1]
+    ack_path = _remote_child(output_dir, "launch.json")
+    argv = ", ".join("'" + _ps_quote(v) + "'" for v in [script_path, "--launch", *args])
     ps = (
         "$ErrorActionPreference='Stop'; "
-        f"$wd='{_ps_quote(remote_scripts_dir)}'; "
         f"$py='{_ps_quote(REMOTE_PYTHON)}'; "
         f"$blpref='{_ps_quote(REMOTE_BLENDER)}'; "
         "if (Test-Path -LiteralPath $blpref) { $env:BLENDER_BINARY=$blpref } "
         "else { $env:BLENDER_BINARY=(Get-ChildItem 'C:\\Program Files\\Blender Foundation\\Blender *\\blender.exe','C:\\Softwares\\Blender-*\\blender.exe' -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName) }; "
-        f"$stdout='{_ps_quote(stdout_path)}'; "
-        f"$stderr='{_ps_quote(stderr_path)}'; "
-        "Set-Location -LiteralPath $wd; "
-        "if (Test-Path -LiteralPath $stdout) { Remove-Item -LiteralPath $stdout -Force -ErrorAction SilentlyContinue }; "
-        "if (Test-Path -LiteralPath $stderr) { Remove-Item -LiteralPath $stderr -Force -ErrorAction SilentlyContinue }; "
-        f"Start-Process -FilePath $py -ArgumentList @({argv}) -WorkingDirectory $wd "
-        "-RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden"
+        f"& $py @({argv}); exit $LASTEXITCODE"
     )
-    await session.run_command(f'powershell -NoProfile -Command "{ps}"', check=False)
+    encoded = base64.b64encode(ps.encode("utf-16-le")).decode("ascii")
+    try:
+        await asyncio.wait_for(
+            session.run_command(f"powershell -NoProfile -EncodedCommand {encoded}", check=True),
+            timeout=30.0,
+        )
+    except TimeoutError:
+        logger.warning(
+            "Renderer launch response timed out; checking acknowledgement without relaunch"
+        )
+    ack_deadline = asyncio.get_event_loop().time() + 10.0
+    while asyncio.get_event_loop().time() < ack_deadline:
+        if await session.file_exists(ack_path):
+            try:
+                ack = json.loads(_read_session_text(await session.read_file(ack_path)))
+            except json.JSONDecodeError:
+                ack = {}
+            if ack.get("status") == "started" and ack.get("pid"):
+                logger.info(
+                    "Renderer launch acknowledged pid=%s elapsed_s=%.3f output_dir=%s",
+                    ack["pid"],
+                    asyncio.get_event_loop().time() - launch_started,
+                    output_dir,
+                )
+                return
+            if ack.get("status") == "report_exists" and await session.file_exists(
+                _remote_child(output_dir, "render_report.json")
+            ):
+                return
+            if ack.get("status") == "launch_failed":
+                raise RuntimeError("Remote renderer process failed to launch")
+        await asyncio.sleep(0.1)
+    raise RuntimeError("Remote renderer did not acknowledge launch")
 
 
 async def _wait_for_file(
@@ -392,15 +420,17 @@ async def _wait_for_file(
     timeout_sec: float = 1800.0,
     poll_sec: float = 10.0,
 ) -> bool:
-    deadline = asyncio.get_event_loop().time() + timeout_sec
-    while asyncio.get_event_loop().time() < deadline:
-        try:
-            if (await session.file_exists(path) or await session.directory_exists(path)):
-                return True
-        except Exception:
-            pass
-        await asyncio.sleep(poll_sec)
-    return False
+    try:
+        async with asyncio.timeout(timeout_sec):
+            while True:
+                try:
+                    if await session.file_exists(path) or await session.directory_exists(path):
+                        return True
+                except Exception:
+                    pass
+                await asyncio.sleep(poll_sec)
+    except TimeoutError:
+        return False
 
 
 def _read_session_text(payload: Any) -> str:
@@ -482,7 +512,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         runtime_config["reference_framing"] = reference_framing_targets(reference_frame_paths)
         runtime_config["skeleton_package"] = skeleton_package
 
-        remote_eval_dir = _remote_child(REMOTE_TEMP_ROOT, meta["variant_name"])
+        remote_eval_dir = _remote_child(REMOTE_TEMP_ROOT, meta["variant_name"], uuid.uuid4().hex)
         remote_scripts_dir = _remote_child(remote_eval_dir, "scripts")
         remote_results_dir = _remote_child(remote_eval_dir, "results")
         remote_report = _remote_child(remote_results_dir, "render_report.json")
@@ -492,6 +522,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         await session.write_file(
             remote_runtime_config, json.dumps(runtime_config, ensure_ascii=False, indent=2)
         )
+        render_deadline = asyncio.get_event_loop().time() + 1800.0
         await _launch_remote_job(
             session,
             remote_scripts_dir=remote_scripts_dir,
@@ -506,7 +537,11 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
                 remote_runtime_config,
             ],
         )
-        if not await _wait_for_file(session, remote_report):
+        if not await _wait_for_file(
+            session,
+            remote_report,
+            timeout_sec=max(0.0, render_deadline - asyncio.get_event_loop().time()),
+        ):
             return [0.0]
 
         report = json.loads(_read_session_text(await session.read_file(remote_report)))
@@ -626,26 +661,12 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             pose_state_rows=pose_state_rows,
         )
 
-        vlm_score = float(
-            (
-                float(hard_metrics["video_match_score"])
-                + float(hard_metrics["replay_consistency_score"])
-                + float(hard_metrics["minimal_skeleton_score"])
-            )
-            / 3.0
+        vlm_score = run_local_soft_eval(
+            reference_sheet=bundle["reference_sheet"],
+            preview_sheet=bundle["preview_sheet"],
+            replay_sheet=bundle["replay_sheet"],
+            pose_state_sheet=bundle["pose_state_sheet"],
         )
-        if os.environ.get("OPENAI_API_KEY"):
-            try:
-                vlm_score = run_local_soft_eval(
-                    reference_sheet=bundle["reference_sheet"],
-                    preview_sheet=bundle["preview_sheet"],
-                    replay_sheet=bundle["replay_sheet"],
-                    pose_state_sheet=bundle["pose_state_sheet"],
-                )
-            except Exception:
-                logger.warning(
-                    "Local VLM judge failed; falling back to machine-score mean", exc_info=True
-                )
 
         final_score = compute_final_score(
             validity_gate=bool(hard_metrics["validity_gate_passed"]),

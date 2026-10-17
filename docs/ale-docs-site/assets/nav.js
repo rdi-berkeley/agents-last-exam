@@ -24,12 +24,11 @@ window.ALE_NAV = [
         { href: "/pages/aws.html",           title: "AWS EC2" },
         { href: "/pages/aliyun.html",        title: "Alibaba Cloud ECS" },
         { href: "/pages/local-docker.html",  title: "Local containers" },
-        { href: "/pages/hf-sandbox.html",    title: "HF Sandboxes" },
         { href: "/pages/local.html",         title: "QEMU/KVM VMs" },
         { href: "/pages/static.html",        title: "Existing sandbox" },
       ]},
       { href: "/pages/configure.html", title: "Configure an experiment" },
-      { href: "/pages/run.html",       title: "Run and collect results" },
+      { href: "/pages/run.html",       title: "Run, resume and upgrade" },
     ],
   },
   {

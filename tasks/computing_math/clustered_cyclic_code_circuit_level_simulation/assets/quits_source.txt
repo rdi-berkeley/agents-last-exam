@@ -1,0 +1,6 @@
+QUITS repeated-syndrome framework: https://github.com/mkangquantum/quits
+Tag: v1.0.0
+Commit: 1ccfccf58340ec5e1dce222c2cbee9effae9de6f
+
+The runtime manifest includes the pinned library. Implement the experiment
+described in the notes and experiment.md using its cardinal layout.

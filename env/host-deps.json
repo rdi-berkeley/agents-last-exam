@@ -1,0 +1,121 @@
+{
+  "apt_packages": [
+    "bash",
+    "ca-certificates",
+    "curl",
+    "ffmpeg",
+    "git",
+    "jq",
+    "libgl1",
+    "libglib2.0-0",
+    "r-base-core",
+    "util-linux"
+  ],
+  "commands": {
+    "bash": [
+      "--version"
+    ],
+    "ffmpeg": [
+      "-version"
+    ],
+    "ffprobe": [
+      "-version"
+    ],
+    "findmnt": [
+      "--version"
+    ],
+    "Rscript": [
+      "--version"
+    ]
+  },
+  "python_imports": {
+    "PyMuPDF": [
+      "fitz"
+    ],
+    "cua-agent": [
+      "agent.computers"
+    ],
+    "cua-computer": [
+      "computer"
+    ],
+    "google-api-core": [
+      "google.api_core"
+    ],
+    "google-auth": [
+      "google.auth"
+    ],
+    "google-genai": [
+      "google.genai",
+      "google.genai.types"
+    ],
+    "ltspice": [
+      "ltspice"
+    ],
+    "lxml": [
+      "lxml.etree"
+    ],
+    "matplotlib": [
+      "matplotlib.backends.backend_agg",
+      "matplotlib.figure"
+    ],
+    "mido": [
+      "mido"
+    ],
+    "networkx": [
+      "networkx"
+    ],
+    "numpy": [
+      "numpy"
+    ],
+    "openai": [
+      "openai"
+    ],
+    "opencv-python-headless": [
+      "cv2"
+    ],
+    "openpyxl": [
+      "openpyxl"
+    ],
+    "packaging": [
+      "packaging.requirements"
+    ],
+    "pandas": [
+      "pandas"
+    ],
+    "pillow": [
+      "PIL.Image"
+    ],
+    "pretty_midi": [
+      "pretty_midi"
+    ],
+    "pyparsing": [
+      "pyparsing"
+    ],
+    "python-dotenv": [
+      "dotenv"
+    ],
+    "safetensors": [
+      "safetensors.torch"
+    ],
+    "scikit-image": [
+      "skimage.metrics"
+    ],
+    "scikit-learn": [
+      "sklearn.metrics"
+    ],
+    "scipy": [
+      "scipy.optimize",
+      "scipy.spatial"
+    ],
+    "sgfmill": [
+      "sgfmill.boards",
+      "sgfmill.sgf"
+    ],
+    "stim": [
+      "stim"
+    ],
+    "torch": [
+      "torch"
+    ]
+  }
+}

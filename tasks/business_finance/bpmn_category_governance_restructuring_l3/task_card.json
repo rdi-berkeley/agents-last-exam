@@ -16,7 +16,10 @@
     "Modify the BPMN to handle the L3 compound governance disruption while preserving anchored original elements and IDs.",
     "Use process definition key `zMBCategoryGovernance_modified_L3` and keep new manual work as `userTask` nodes.",
     "Start or reuse the Flowable stack and validate the design against the visible scenario definitions.",
-    "Write the BPMN plus structural, compliance, scenario-result, and design-decision artifacts under `output/`."
+    "Write the BPMN plus structural, compliance, scenario-result, and design-decision artifacts under `output/`.",
+    "Cover merchant readiness and campaign cadence in separate tasks or one explicitly combined coordination task; preserve three-role execution/coordination/decision separation.",
+    "The a50 rule permits anchored tasks, scenario-covered tasks, and required ad-ratio, A/B-test, free-trial, new-merchant, review-based-promotion, merchant-readiness, campaign-cadence, and merchant-admission work identified by name, ID, or documentation. Spaces, hyphens, and underscores are equivalent separators.",
+    "Design-decision sections accept the documented chosen_approach, rejected_alternatives, rationale, and trade-off labels or spaced Markdown equivalents; all four content requirements remain mandatory."
   ],
   "inputFiles": [
     {

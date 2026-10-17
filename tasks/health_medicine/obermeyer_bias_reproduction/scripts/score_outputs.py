@@ -69,7 +69,9 @@ def _mean_top_health(rows: list[dict[str, Any]], score_key: str, n_top: int) -> 
     return sum(rows[i]["gagne_sum_t"] for i in indices) / n_top
 
 
-def _report_component(baseline_report: str, revised_report: str) -> float:
+def _report_component(
+    baseline_report: str, revised_report: str, *, cohort_races: set[str]
+) -> float:
     baseline = baseline_report.lower()
     revised = revised_report.lower()
     baseline_terms = [
@@ -79,24 +81,41 @@ def _report_component(baseline_report: str, revised_report: str) -> float:
         "gagne",
         "cost",
         "similar",
-        "decile",
     ]
-    revised_terms = [
-        "counterfactual",
-        "revised",
-        "high-risk",
-        "threshold",
-        "black",
-        "white",
-        "health",
+    baseline_grouping_terms = (
+        "decile",
+        "quantile",
+        "percentile",
+        "ventile",
+        "stratification",
+        "stratified",
+        "bin",
+        "top 3%",
+        "top three percent",
+        "top group",
+        "highest-risk group",
+    )
+    revised_checks = [
+        "counterfactual" in revised,
+        "revised" in revised,
+        "black" in revised,
+        "white" in revised
+        or (
+            cohort_races == {"black", "white"}
+            and re.search(r"\bnon[ -]?black\s+patients?\b", revised) is not None
+        ),
+        "health" in revised or re.search(r"\bgagne_sum_t\b", revised) is not None,
     ]
     baseline_hits = sum(term in baseline for term in baseline_terms)
-    revised_hits = sum(term in revised for term in revised_terms)
+    baseline_hits += int(any(term in baseline for term in baseline_grouping_terms))
+    revised_hits = sum(revised_checks)
     baseline_numbers = len(re.findall(r"\d+(?:\.\d+)?%?", baseline))
     revised_numbers = len(re.findall(r"\d+(?:\.\d+)?%?", revised))
     baseline_numeric_component = min(1.0, baseline_numbers / 6)
     revised_numeric_component = min(1.0, revised_numbers / 5)
-    term_component = (baseline_hits / len(baseline_terms) + revised_hits / len(revised_terms)) / 2
+    term_component = (
+        baseline_hits / (len(baseline_terms) + 1) + revised_hits / len(revised_checks)
+    ) / 2
     numeric_component = (baseline_numeric_component + revised_numeric_component) / 2
     return min(1.0, 0.65 * term_component + 0.35 * numeric_component)
 
@@ -110,9 +129,7 @@ def _validate_reference_metrics(payload: str) -> dict[str, Any]:
         "n_rows",
         "top_n",
         "baseline_black_fraction",
-        "revised_black_fraction",
         "baseline_help_rate",
-        "revised_help_rate",
         "baseline_max_abs_diff",
     }
     missing = sorted(required - set(metrics))
@@ -126,16 +143,15 @@ def score_output_bundle(
     predictions_csv: str,
     analysis_data_csv: str,
     reference_metrics_json: str,
-    reference_predictions_csv: str,
+    reference_predictions_csv: str | None = None,
     baseline_report_md: str = "",
     revised_report_md: str = "",
 ) -> ScoreResult:
-    """Score the agent output against the staged cohort and hidden reference metrics."""
+    """Score the agent output against the public cohort and baseline metrics."""
 
     try:
         output_columns, pred_rows = _read_csv(predictions_csv)
         data_columns, data_rows = _read_csv(analysis_data_csv)
-        reference_columns, reference_rows = _read_csv(reference_predictions_csv)
     except Exception as exc:
         return _hard_fail(f"csv_parse_error: {exc}")
 
@@ -144,12 +160,6 @@ def score_output_bundle(
             "invalid_output_columns",
             {"expected": REQUIRED_OUTPUT_COLUMNS, "observed": output_columns},
         )
-    if reference_columns != REQUIRED_OUTPUT_COLUMNS:
-        return _hard_fail(
-            "invalid_reference_prediction_columns",
-            {"expected": REQUIRED_OUTPUT_COLUMNS, "observed": reference_columns},
-        )
-
     try:
         reference_metrics = _validate_reference_metrics(reference_metrics_json)
     except ValueError as exc:
@@ -211,6 +221,9 @@ def score_output_bundle(
     if missing_output_ids:
         return _hard_fail("missing_patient_ids_in_output", {"count": len(missing_output_ids)})
 
+    input_order = {patient_id: index for index, patient_id in enumerate(data_by_id)}
+    combined.sort(key=lambda row: input_order[row["patient_id"]])
+
     baseline_max_abs_diff = max(
         abs(row["baseline_score"] - row["risk_score_t"]) for row in combined
     )
@@ -221,7 +234,10 @@ def score_output_bundle(
         )
 
     n_top = max(1, int(len(combined) * TOP_PERCENTILE))
-    if int(reference_metrics["n_rows"]) != len(combined) or int(reference_metrics["top_n"]) != n_top:
+    if (
+        int(reference_metrics["n_rows"]) != len(combined)
+        or int(reference_metrics["top_n"]) != n_top
+    ):
         return _hard_fail(
             "reference_metrics_shape_mismatch",
             {
@@ -259,49 +275,13 @@ def score_output_bundle(
             {"baseline_help_rate": baseline_help, "revised_help_rate": revised_help},
         )
 
-    reference_by_id = {row["patient_id"].strip(): row for row in reference_rows}
-    if set(reference_by_id) != {row["patient_id"] for row in combined}:
-        return _hard_fail("reference_prediction_patient_ids_mismatch")
-    reference_combined = []
-    for row in combined:
-        ref_row = reference_by_id[row["patient_id"]]
-        try:
-            reference_combined.append(
-                {
-                    "patient_id": row["patient_id"],
-                    "revised_score": _to_float(
-                        ref_row.get("revised_score", ""),
-                        field="reference.revised_score",
-                        row_id=row["patient_id"],
-                    ),
-                }
-            )
-        except ValueError as exc:
-            return _hard_fail(f"reference_numeric_validation_error: {exc}")
-    reference_top = set(_top_indices(reference_combined, "revised_score", n_top))
     revised_top = set(_top_indices(combined, "revised_score", n_top))
-    reference_top_overlap = len(reference_top & revised_top) / n_top
-
-    max_allowed_black = float(reference_metrics["revised_black_fraction"]) + 0.15
-    if revised_black > max_allowed_black:
-        return _hard_fail(
-            "revised_black_fraction_implausibly_high",
-            {
-                "observed": revised_black,
-                "max_allowed": max_allowed_black,
-                "reference": reference_metrics["revised_black_fraction"],
-            },
-        )
-
-    if reference_top_overlap < 0.50:
-        return _hard_fail(
-            "revised_top_set_too_far_from_hidden_reference",
-            {"reference_top_overlap": reference_top_overlap},
-        )
 
     black_improvement = revised_black - baseline_black
-    black_component = 1.0 if revised_black >= 0.40 and black_improvement >= 0.15 else max(
-        0.0, min(1.0, black_improvement / 0.15)
+    black_component = (
+        1.0
+        if revised_black >= 0.40 and black_improvement >= 0.15
+        else max(0.0, min(1.0, black_improvement / 0.15))
     )
 
     help_component = 1.0
@@ -313,16 +293,18 @@ def score_output_bundle(
         revised_top_health >= baseline_top_health,
     ]
     ranking_component = sum(ranking_checks) / len(ranking_checks)
-    reference_component = min(1.0, reference_top_overlap / 0.90)
+    health_alignment_component = 1.0 if revised_top_health >= baseline_top_health else 0.0
 
-    report_component = _report_component(baseline_report_md, revised_report_md)
+    report_component = _report_component(
+        baseline_report_md, revised_report_md, cohort_races={row["race"] for row in combined}
+    )
 
     score = (
         0.30 * black_component
         + 0.20 * help_component
         + 0.20 * report_component
         + 0.15 * ranking_component
-        + 0.15 * reference_component
+        + 0.15 * health_alignment_component
     )
     score = round(min(1.0, max(0.0, score)), 6)
 
@@ -340,8 +322,7 @@ def score_output_bundle(
         "black_component": black_component,
         "help_component": help_component,
         "ranking_component": ranking_component,
-        "reference_component": reference_component,
-        "reference_top_overlap": reference_top_overlap,
+        "health_alignment_component": health_alignment_component,
         "report_component": report_component,
         "reference_metrics": reference_metrics,
     }

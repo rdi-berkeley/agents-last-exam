@@ -575,7 +575,7 @@ def main() -> None:
             "judge": {
                 "enabled": True,
                 "backend": "heuristic",
-                "model": "gpt-4.1-mini",
+                "model": None,
                 "temperature": 0,
             },
             "expected_parts": [

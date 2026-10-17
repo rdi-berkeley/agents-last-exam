@@ -105,6 +105,9 @@ class CodexConfig:
     # the Responses-API wire as ``reasoning.effort``.
     reasoning_effort: str = "high"
 
+    coordinate_space: str | None = None
+    """CUA pointer space: infer normalized for Gemini, pixels otherwise."""
+
     # NPM package version to install.
     codex_version: str = _DEFAULT_CODEX_VERSION
 
@@ -162,6 +165,9 @@ class CodexConfig:
     otel_enabled: bool = True
 
     def __post_init__(self) -> None:
+        if self.coordinate_space not in {None, "pixel", "normalized"}:
+            raise ValueError(f"Invalid CodexConfig.coordinate_space: {self.coordinate_space!r}")
+
         # Load the catalog host-side (build_config) and embed its content so it
         # reaches the in-sandbox deployer. On the in-sandbox reconstruction the
         # content kwarg is already populated → we skip the (host-only) file read.

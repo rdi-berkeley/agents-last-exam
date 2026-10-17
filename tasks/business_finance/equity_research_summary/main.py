@@ -97,6 +97,7 @@ exact label text, and which fields must be formulas.
 ## Output Requirements
 - Save exactly one workbook to: `{self.output_workbook}`
 - The filename must be exactly `TSLA_Financial_Summary.xlsx`
+- The worksheet name must contain `TSLA`, for example `TSLA Summary`
 - Use spreadsheet formulas (starting with `=`) for all calculated fields
 - Section headers should be bold with a colored background fill
 - Keep the live Yahoo Finance cells populated with actual numeric values
@@ -145,7 +146,7 @@ async def start(task_cfg, session: cb.DesktopSession):
 
 def _log_result(tag: str, result: WorkbookScoreResult) -> None:
     logger.info(
-        "[%s] score=%.1f passed=%s reasons=%s",
+        "[%s] score=%.4f passed=%s reasons=%s",
         tag,
         result.score,
         result.passed,

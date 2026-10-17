@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import re
 import sys
 from dataclasses import dataclass
 from io import BytesIO
@@ -18,7 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from tasks.utils.evaluation import llm_multimodal_json, resolve_llm_judge_model
+from tasks.utils.evaluation import JudgeInfrastructureError, llm_multimodal_json, resolve_llm_judge_model
 
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 NAMESPACES = {"w": WORD_NS}
@@ -84,24 +83,17 @@ def _clip_text(text: str, *, limit: int) -> str:
     return text[:limit] + "\n[TRUNCATED]"
 
 
-def _normalize_answer(value: Any) -> str:
-    if value is None:
-        return "UNKNOWN"
-    text = str(value).strip().upper()
-    match = re.search(r"\b([ABCD])\b", text)
-    if match:
-        return match.group(1)
-    if text in {"UNKNOWN", "NOT ANSWERED", "UNANSWERED", "N/A", ""}:
-        return "UNKNOWN"
-    return "UNKNOWN"
-
-
 def _normalize_judge_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    raw_answers = payload.get("answers", payload)
+    raw_answers = payload.get("answers") if isinstance(payload, dict) else None
     if not isinstance(raw_answers, dict):
-        raw_answers = {}
+        raise JudgeInfrastructureError("Storyboard judge response is missing answers")
 
-    answers = {qid: _normalize_answer(raw_answers.get(qid)) for qid in QUESTION_IDS}
+    answers = {}
+    for qid in QUESTION_IDS:
+        value = raw_answers.get(qid)
+        if not isinstance(value, str) or value.strip().upper() not in {"A", "B", "C", "D", "UNKNOWN"}:
+            raise JudgeInfrastructureError(f"Storyboard judge returned an invalid answer for {qid}")
+        answers[qid] = value.strip().upper()
     correct = {
         qid: answers[qid] == ANSWER_KEY[qid]
         for qid in QUESTION_IDS
@@ -188,13 +180,13 @@ async def score_storyboard_docx(
     question_docx: bytes,
     model: str | None = None,
 ) -> dict[str, Any]:
+    questions = extract_docx_text(question_docx)
+    if not questions.ok:
+        raise RuntimeError(f"Invalid official question file: {questions.error}")
+
     storyboard = extract_docx_text(storyboard_docx)
     if not storyboard.ok:
         return {"score": 0.0, "error": storyboard.error}
-
-    questions = extract_docx_text(question_docx)
-    if not questions.ok:
-        return {"score": 0.0, "error": questions.error}
 
     judge_payload = await answer_questions_from_storyboard(
         storyboard_text=storyboard.text,

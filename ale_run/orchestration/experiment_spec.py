@@ -33,7 +33,7 @@ class AgentSpec:
             Deployer class path (e.g. ``"my_pkg.MyDeployer"``).
         config: kwargs passed verbatim into the deployer's Config dataclass.
         executor: which substrate to run the deployer in: ``"sandbox"``
-            (in the cua-server VM), ``"local"`` (this Python process), or
+            (in the cua-server VM), ``"local"`` (supervised host worker), or
             ``"docker"`` (host docker container). Must be in
             ``DeployerCls.supported_executors`` or ``None`` (factory uses
             ``DeployerCls.default_executor``).
@@ -98,7 +98,7 @@ class ArtifactsSpec:
 
     * ``None`` (yaml ``null``) — skip output gather entirely. The agent's
       output files stay on the VM and are lost on VM teardown. Smallest
-      footprint; the only signal that survives is the eval score.
+      footprint; metadata, trajectories, evaluations and telemetry still survive.
     * ``"local"`` — pull files from the VM straight to
       ``<run_dir>/output/`` via cua HTTP (no GCS round-trip). Right for
       dev / smoke / small outputs.
@@ -139,7 +139,7 @@ class ExperimentSpec:
     collisions."""
 
     auto_resume: bool = True
-    """When enabled, skip prior completed/timeout units and automatically
+    """When enabled, skip completed/timeout units at the current task revision and automatically
     retry newly failed units. Disable in YAML or with ``--disable-resume`` to
     run every selected unit exactly once."""
 

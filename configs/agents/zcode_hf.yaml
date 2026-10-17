@@ -9,4 +9,4 @@ model: Qwen/Qwen3.5-9B
 config:
   provider_id: hf-router
   base_url: https://router.huggingface.co/v1
-  api_key: ${env:HF_TOKEN}
+  api_key: ${env:HF_INFERENCE_TOKEN}

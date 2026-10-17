@@ -34,6 +34,9 @@ config:
   # Hard USD spend cap for the run. null = no cap.
   max_budget_usd: null
 
+  # Maximum response tokens requested through Claude Code. null = CLI default.
+  max_output_tokens: null
+
   # Bypass all tool-permission prompts (required for headless runs).
   dangerously_skip_permissions: true
 

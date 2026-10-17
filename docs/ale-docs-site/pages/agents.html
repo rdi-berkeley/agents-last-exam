@@ -56,6 +56,14 @@
       click. It is the natural fit for harnesses that are already command-line
       tools, like Claude Code or Codex.
     </p>
+    <p>
+      ZCode supports Linux and Windows sandboxes using a pinned CLI source
+      revision and private provider configuration. Its
+      <code>max_output_tokens</code> setting defaults to <code>null</code>,
+      preserving the CLI's own model limits and request mapping. Set it only
+      for an explicit output-token override. Linux npm prefix setup allows
+      60 seconds and retries once on timeout; other setup errors fail immediately.
+    </p>
 
     <h3>Out-of-sandbox</h3>
     <p>

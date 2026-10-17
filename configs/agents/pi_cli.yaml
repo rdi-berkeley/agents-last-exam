@@ -17,5 +17,6 @@ config:
   cli_version: "0.85.1"
   thinking_level: null
   max_tokens: 65536
+  input_modalities: [text, image]
   disabled_tools: []
   extra_args: []

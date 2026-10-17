@@ -2,7 +2,7 @@
 
 The framework ships the ``ale_run/`` source tree to the sandbox (one-time
 per run, size-skipped on repeats), writes a ``_spec.json`` into the
-deployer's work_dir, fires a small launcher that ``setsid``-spawns
+deployer's work_dir, fires a small launcher that detaches
 ``python -m ale_run.executors._sandbox_entry <spec>``, then polls until
 the in-sandbox process drops a ``_done.marker``.
 
@@ -32,10 +32,13 @@ import asyncio
 import json
 import logging
 import shlex
+import sys
 import time
-from dataclasses import dataclass
+import traceback
+import uuid
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 from ..base_interface import (
     BaseExecutor,
@@ -86,17 +89,15 @@ def _ale_src_root_for(sandbox: SandboxHandle) -> str:
 _GATHER_RETRIES = 3
 _GATHER_BACKOFFS_S = (1.0, 3.0, 9.0)
 
-# Poll loop tuning (matches simprun)
+# Poll loop tuning
 _POLL_INTERVAL_S = 10.0
-# Liveness-probe robustness: a single non-zero return from the alive-check
-# command is NOT proof the agent died — a transient cua/network transport
-# error makes the probe itself return non-zero (rc=-1) without raising. Require
-# this many CONSECUTIVE failed probes (re-probing on a short interval) before
-# declaring the sandbox gone, so one blip can't fail an already-completed run.
-_LIVENESS_MISS_THRESHOLD = 3
+_LIVENESS_PROCESS_MISS_THRESHOLD = 3
 _LIVENESS_REPROBE_S = 5.0
+_LIVENESS_TRANSPORT_GRACE_S = 10 * 60.0
 _PID_WAIT_S = 4.5            # how long to wait for the launcher to write the PID file
 _PID_WAIT_TICK_S = 0.3
+_STOP_TIMEOUT_S = 60.0
+_STOP_POLL_S = 0.2
 
 # Incremental tail tuning
 _TAIL_INTERVAL_S = 60.0
@@ -125,8 +126,59 @@ class SandboxExecutor(BaseExecutor):
     a detached subprocess; host polls until done.marker."""
 
     type: ClassVar[str] = "sandbox"
+    _run_token: str = field(default_factory=lambda: uuid.uuid4().hex, init=False)
+    _spawn_attempted: bool = field(default=False, init=False)
+    _stop_task: asyncio.Task | None = field(default=None, init=False, repr=False)
+    last_run_result: AgentRunResult | None = field(default=None, init=False)
+    on_run_result: Callable[[AgentRunResult], None] | None = field(
+        default=None, init=False, repr=False,
+    )
 
     async def run_deployer(
+        self,
+        *,
+        deployer_cls: type["BaseAgentDeployer"],
+        prompt: str,
+        timeout_s: float,
+    ) -> "AgentRunResult":
+        from ..base_interface import AgentRunResult
+
+        self.last_run_result = None
+        try:
+            try:
+                self.last_run_result = await self._run_deployer(
+                    deployer_cls=deployer_cls, prompt=prompt, timeout_s=timeout_s,
+                )
+            except BaseException as exc:
+                self.last_run_result = AgentRunResult(
+                    status=(
+                        "cancelled" if isinstance(exc, asyncio.CancelledError)
+                        else "timeout" if isinstance(exc, TimeoutError) else "failed"
+                    ),
+                    error="".join(traceback.format_exception(exc)),
+                )
+                raise
+            finally:
+                if self.last_run_result is not None and self.on_run_result is not None:
+                    self.on_run_result(self.last_run_result)
+            return self.last_run_result
+        finally:
+            pending_error = sys.exception()
+            try:
+                await self.stop_deployer()
+            except BaseException as stop_exc:
+                if self.last_run_result is not None:
+                    stop_exc.add_note(
+                        f"Primary agent result: {json.dumps(asdict(self.last_run_result))}",
+                    )
+                if pending_error is not None:
+                    stop_exc.add_note(
+                        "Pre-cleanup exception: "
+                        + "".join(traceback.format_exception(pending_error)),
+                    )
+                raise
+
+    async def _run_deployer(
         self,
         *,
         deployer_cls: type["BaseAgentDeployer"],
@@ -165,7 +217,10 @@ class SandboxExecutor(BaseExecutor):
         await sb.mkdir(self.work_dir)
 
         # 3. Reset stale state from any prior attempt (best-effort)
-        await sb.rm([pid_file, result_path, done_marker, entry_log, secrets_path])
+        await sb.rm([
+            pid_file, result_path, done_marker, entry_log, secrets_path,
+            f"{wd}{sep}_worker_result.json",
+        ])
 
         # 4. Write spec.json into the sandbox's work_dir.
         #    Secrets (api keys etc.) are deliberately KEPT OUT of the spec —
@@ -184,6 +239,7 @@ class SandboxExecutor(BaseExecutor):
             "secrets_file": SECRETS_FILE,
             "prompt": prompt,
             "timeout_s": float(timeout_s),
+            "run_token": self._run_token,
         }
         await sb.write_file(spec_path, json.dumps(spec, indent=2))
 
@@ -215,9 +271,10 @@ class SandboxExecutor(BaseExecutor):
                 f'powershell -NoProfile -ExecutionPolicy Bypass -File '
                 f'"{launcher_path}"'
             )
+        self._spawn_attempted = True
         spawn_res = await sb.run_command(spawn_cmd, timeout=60)
-        # The launcher backgrounds the entry via setsid+disown and returns in
-        # milliseconds, so a slow cua-server can drop the spawn RPC's SSE
+        # The launcher detaches the supervisor and returns promptly, so a
+        # slow cua-server can drop the spawn RPC's SSE
         # response (rc=-1 "transport error") even though the command actually
         # ran server-side. Don't treat a transport-level failure as fatal:
         # fall through to the PID check, which authoritatively tells us whether
@@ -259,7 +316,8 @@ class SandboxExecutor(BaseExecutor):
         t0 = time.monotonic()
         deadline = t0 + timeout_s
         marker_hit = False
-        consecutive_misses = 0
+        consecutive_process_misses = 0
+        transport_unavailable_since: float | None = None
         while time.monotonic() < deadline:
             try:
                 if await sb.exists(done_marker):
@@ -276,32 +334,78 @@ class SandboxExecutor(BaseExecutor):
                     '"'
                 )
             )
+            probe_started = time.monotonic()
             alive = await sb.run_command(alive_cmd, timeout=60)
-            if alive.returncode != 0:
+            probe_finished = time.monotonic()
+
+            if alive.returncode < 0:
+                if transport_unavailable_since is None:
+                    transport_unavailable_since = probe_started
+                unavailable_s = probe_finished - transport_unavailable_since
+                consecutive_process_misses = 0
+                logger.warning(
+                    "sandbox: liveness transport unavailable for %.1fs "
+                    "(pid=%s); process state unknown, re-probing",
+                    unavailable_s,
+                    pid,
+                )
+                if unavailable_s >= _LIVENESS_TRANSPORT_GRACE_S:
+                    return AgentRunResult(
+                        status="failed",
+                        pid=pid,
+                        duration_s=probe_finished - t0,
+                        error=(
+                            "sandbox transport unavailable for "
+                            f"{unavailable_s:.1f}s; process state unknown"
+                        ),
+                    )
+                await asyncio.sleep(_LIVENESS_REPROBE_S)
+                continue
+
+            if transport_unavailable_since is not None:
+                logger.info(
+                    "sandbox: liveness transport recovered after %.1fs (pid=%s)",
+                    probe_finished - transport_unavailable_since,
+                    pid,
+                )
+                transport_unavailable_since = None
+
+            if alive.returncode > 0:
                 # Give the marker one more chance (race with disk flush) first.
                 await asyncio.sleep(2)
-                if await sb.exists(done_marker):
-                    marker_hit = True
-                    break
-                consecutive_misses += 1
+                try:
+                    if await sb.exists(done_marker):
+                        marker_hit = True
+                        break
+                except Exception as e:  # noqa: BLE001
+                    logger.debug("done.marker re-probe failed: %s", e)
+                consecutive_process_misses += 1
                 logger.warning(
-                    "sandbox: liveness probe failed (rc=%s) %d/%d consecutive "
-                    "(pid=%s) — transient transport error or process gone; re-probing",
-                    alive.returncode, consecutive_misses, _LIVENESS_MISS_THRESHOLD, pid,
+                    "sandbox: process liveness probe reports pid=%s absent "
+                    "(rc=%s) %d/%d consecutive; re-probing",
+                    pid,
+                    alive.returncode,
+                    consecutive_process_misses,
+                    _LIVENESS_PROCESS_MISS_THRESHOLD,
                 )
-                if consecutive_misses >= _LIVENESS_MISS_THRESHOLD:
+                if (
+                    consecutive_process_misses
+                    >= _LIVENESS_PROCESS_MISS_THRESHOLD
+                ):
                     entry_tail = await self._tail_log(entry_log)
                     return AgentRunResult(
                         status="failed",
                         pid=pid,
                         duration_s=time.monotonic() - t0,
-                        error=f"sandbox process disappeared before done.marker "
-                              f"({_LIVENESS_MISS_THRESHOLD} consecutive probe failures); "
-                              f"entry log tail: {entry_tail}",
+                        error=(
+                            "sandbox process disappeared before done.marker "
+                            f"({_LIVENESS_PROCESS_MISS_THRESHOLD} consecutive "
+                            f"process-missing probes); entry log tail: {entry_tail}"
+                        ),
                     )
                 await asyncio.sleep(_LIVENESS_REPROBE_S)
                 continue
-            consecutive_misses = 0
+            consecutive_process_misses = 0
             await asyncio.sleep(_POLL_INTERVAL_S)
 
         duration_s = time.monotonic() - t0
@@ -311,7 +415,6 @@ class SandboxExecutor(BaseExecutor):
             logger.warning(
                 "sandbox: wall budget %.0fs exceeded — killing pid=%s", timeout_s, pid,
             )
-            await self._kill(pid)
             entry_tail = await self._tail_log(entry_log)
             return AgentRunResult(
                 status="timeout",
@@ -340,7 +443,8 @@ class SandboxExecutor(BaseExecutor):
             err = out.get("error") or "sandbox bootstrap failed"
             return AgentRunResult(
                 status=out.get("status", "failed"),
-                pid=pid,
+                pid=out.get("pid") or pid,
+                exit_code=out.get("exit_code"),
                 duration_s=out.get("duration_s") or duration_s,
                 error=f"{err}\n{tb}" if tb else err,
             )
@@ -500,36 +604,73 @@ class SandboxExecutor(BaseExecutor):
             await asyncio.sleep(_PID_WAIT_TICK_S)
         return None
 
-    async def _kill(self, pid: int) -> None:
-        """TERM + KILL the in-sandbox pid; idempotent."""
-        sb = self.sandbox
+    async def stop_deployer(self) -> None:
+        """Wait for the guest supervisor to confirm its process tree is empty."""
+        if not self._spawn_attempted:
+            return
+        if self._stop_task is None:
+            self._stop_task = asyncio.create_task(
+                asyncio.wait_for(self._stop_and_verify(), timeout=_STOP_TIMEOUT_S),
+            )
+        cancelled = False
+        while not self._stop_task.done():
+            try:
+                await asyncio.shield(self._stop_task)
+            except asyncio.CancelledError:
+                cancelled = True
+            except Exception:
+                break
         try:
-            if sb.is_linux:
-                await sb.run_command(
-                    f"kill -TERM {pid} 2>/dev/null || true", timeout=30,
-                )
-                await asyncio.sleep(2)
-                await sb.run_command(
-                    f"kill -KILL {pid} 2>/dev/null || true", timeout=30,
-                )
-            else:
-                await sb.run_command(
-                    'powershell -NoProfile -Command "'
-                    f"Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue"
-                    '"',
-                    timeout=30,
-                )
-        except Exception as e:                                      # noqa: BLE001
-            logger.debug("_kill pid=%s failed: %s", pid, e)
+            self._stop_task.result()
+        except Exception as exc:
+            raise RuntimeError("sandbox solver termination unconfirmed; reference blocked") from exc
+        if cancelled:
+            raise asyncio.CancelledError
+
+    async def _stop_and_verify(self) -> None:
+        sep = "/" if self.sandbox.is_linux else "\\"
+        work_dir = self.work_dir.rstrip(sep)
+        stop_path = f"{work_dir}{sep}_stop.request"
+        stopped_path = f"{work_dir}{sep}_stopped.json"
+        requested = False
+        while True:
+            try:
+                if not requested:
+                    await self.sandbox.write_file(stop_path, self._run_token)
+                    requested = True
+                raw = await self.sandbox.read_text(stopped_path)
+                report = json.loads(raw)
+            except (OSError, RuntimeError, ValueError):
+                await asyncio.sleep(_STOP_POLL_S)
+                continue
+            if not isinstance(report, dict) or report.get("run_token") != self._run_token:
+                await asyncio.sleep(_STOP_POLL_S)
+                continue
+            if report.get("stopped") is not True:
+                raise RuntimeError(f"sandbox process cleanup failed: {report.get('error')}")
+            return
 
     async def _tail_log(self, entry_log: str, max_bytes: int = 1500) -> str:
         """Tail the in-sandbox entry log for diagnostic messages.
         Returns ``"(unavailable)"`` if read fails."""
-        try:
-            text = await self.sandbox.read_text(entry_log)
-            return text[-max_bytes:] if text else "(empty)"
-        except Exception:                                           # noqa: BLE001
-            return "(unavailable)"
+        paths = [("stdout", entry_log)]
+        if not self.sandbox.is_linux:
+            paths.append(("stderr", f"{entry_log}.err"))
+
+        available = False
+        parts: list[str] = []
+        for label, path in paths:
+            try:
+                text = await self.sandbox.read_text(path)
+                available = True
+            except Exception:                                       # noqa: BLE001
+                continue
+            if text:
+                parts.append(f"[{label}]\n{text}")
+
+        if parts:
+            return "\n".join(parts)[-max_bytes:]
+        return "(empty)" if available else "(unavailable)"
 
 
 def _build_launcher(
@@ -543,29 +684,17 @@ def _build_launcher(
 ) -> str:
     """Compose the per-OS launcher script.
 
-    The launcher fires the entry as a fully detached subprocess and
-    immediately writes its PID. After it returns (within seconds), the
-    host's ``run_command`` RPC for the launcher returns — no long
-    connection is held.
+    The launcher detaches the entry, whose own PID is published before
+    starting the worker. The host's ``run_command`` RPC returns within
+    seconds; no long connection is held.
     """
     if sandbox.is_linux:
-        # Idempotent: a dropped spawn-RPC response triggers a host-side retry
-        # that re-runs this launcher. Guard against spawning a second entry by
-        # bailing if the recorded PID is still alive.
         return (
             "#!/bin/bash\n"
             "set -u\n"
-            f"PIDF={shlex.quote(pid_file)}\n"
-            "if [ -s \"$PIDF\" ] && kill -0 \"$(cat \"$PIDF\")\" 2>/dev/null; then\n"
-            "  exit 0\n"
-            "fi\n"
             f"export PYTHONPATH={shlex.quote(ale_src_root)}:${{PYTHONPATH:-}}\n"
-            f"setsid {shlex.quote(python)} -m ale_run.executors._sandbox_entry "
-            f"{shlex.quote(spec_path)} "
-            f"</dev/null >{shlex.quote(entry_log)} 2>&1 &\n"
-            "CHILD=$!\n"
-            "echo \"$CHILD\" > \"$PIDF\"\n"
-            "disown $CHILD 2>/dev/null || true\n"
+            f"exec {shlex.quote(python)} -m ale_run.executors._sandbox_entry "
+            f"{shlex.quote(spec_path)} --launch\n"
         )
     # Windows: PowerShell launcher
     # We add ale_src_root to PYTHONPATH for the spawned python, then
@@ -591,7 +720,10 @@ def _build_launcher(
         "  }\n"
         "}\n"
         f"$env:PYTHONPATH = '{src_quoted};' + $env:PYTHONPATH\n"
-        f"$proc = Start-Process -FilePath '{py_quoted}' "
+        f"$python = '{py_quoted}'\n"
+        "$pythonw = Join-Path (Split-Path -Parent $python) 'pythonw.exe'\n"
+        "if (-not (Test-Path -LiteralPath $pythonw)) { $pythonw = $python }\n"
+        "$proc = Start-Process -FilePath $pythonw "
         f"-ArgumentList '-m','ale_run.executors._sandbox_entry','{spec_quoted}' "
         f"-WindowStyle Hidden -PassThru "
         f"-RedirectStandardOutput '{log_quoted}' "

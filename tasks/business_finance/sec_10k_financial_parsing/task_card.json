@@ -10,12 +10,12 @@
     "pypdf",
     "pydantic"
   ],
-  "taskPrompt": "You are working on a Linux VM with a fixed corpus of SEC 10-K PDFs.\n\nVisible files and tools:\n- Filing corpus: `base/input/filings`\n- Filing metadata: `base/input/filings/manifest.json`\n- Output schema: `base/input/schema/extraction_schema.json`\n- Normalization rules: `base/input/schema/normalization_rules.txt`\n- Analytical questions: `base/input/questions.json`\n- Deterministic validation subset: `base/input/validation`\n- Python wrapper for the staged task runtime: `base/software/python_with_task_deps.sh`\n\nYour job:\n1. Parse every filing in `input/filings/`.\n2. Save one normalized extraction JSON per filing to `base/output/extractions`.\n3. Save one raw extraction text file per filing to `base/output/raw_extractions`.\n4. Answer the analytical questions and save them to `base/output/qa_answers.json`.\n5. Re-run the extraction workflow on the fixed validation subset in `input/validation/`\n   and save those second-pass extraction JSONs to `base/output/run2_extractions`.\n\nImportant requirements:\n- Follow the staged schema and normalization rules exactly.\n- Use raw USD integers for monetary fields and 2-decimal floats for EPS.\n- Do not write outside `base/output`.\n- Do not modify files under `input/`.\n- The validation rerun should reflect a second deterministic pass over the same\n  visible validation filings.\n",
+  "taskPrompt": "You are working on a Linux VM with a fixed corpus of SEC 10-K PDFs.\n\nVisible files and tools:\n- Filing corpus: `base/input/filings`\n- Filing metadata: `base/input/filings/manifest.json`\n- Output schema: `base/input/schema/extraction_schema.json`\n- Normalization rules: `base/input/schema/normalization_rules.txt`\n- Analytical questions: `base/input/questions.json`\n- Analytical answer schema: `base/input/schema/qa_answers_schema.json`\n- Analytical answer format example (fictional values): `base/input/schema/qa_answers_example.json`\n- Deterministic validation subset: `base/input/validation`\n- Python wrapper for the staged task runtime: `base/software/python_with_task_deps.sh`\n\nYour job:\n1. Parse every filing in `input/filings/`.\n2. Save one normalized extraction JSON per filing to `base/output/extractions`.\n3. Save one raw extraction text file per filing to `base/output/raw_extractions`.\n4. Answer the analytical questions and save them to `base/output/qa_answers.json`.\n5. Re-run the extraction workflow on the fixed validation subset in `input/validation/`\n   and save those second-pass extraction JSONs to `base/output/run2_extractions`.\n\nAnalytical answer format:\n- `qa_answers.json` must be a top-level JSON object (dictionary) with keys\n  `Q1`, `Q2`, and `Q3`. Put each answer object directly under its question ID.\n- The array in `questions.json` lists questions only. Do not copy that array\n  structure into the answer file or wrap answers in `id`/`answer` objects.\n- `Q1`: `ticker` (string), `pct_increase` (number, rounded to 1 decimal place).\n- `Q2`: `ticker` (string), `fiscal_year` (integer),\n  `operating_margin_pct` (number, rounded to 2 decimal places).\n- `Q3`: an object with `ranking`, an array of all 10 ticker strings ordered\n  from highest to lowest fiscal-year-2023 stockholders' equity.\n\nFormat example only; replace every fictional value with your computed answer:\n```json\n{\n  \"Q1\": {\"ticker\": \"EXAMPLE_A\", \"pct_increase\": 12.3},\n  \"Q2\": {\"ticker\": \"EXAMPLE_B\", \"fiscal_year\": 2019, \"operating_margin_pct\": -1.25},\n  \"Q3\": {\n    \"ranking\": [\n      \"EXAMPLE_A\", \"EXAMPLE_B\", \"EXAMPLE_C\", \"EXAMPLE_D\", \"EXAMPLE_E\",\n      \"EXAMPLE_F\", \"EXAMPLE_G\", \"EXAMPLE_H\", \"EXAMPLE_I\", \"EXAMPLE_J\"\n    ]\n  }\n}\n```\n\nImportant requirements:\n- Follow the staged schema and normalization rules exactly.\n- Use raw USD integers for monetary fields and 2-decimal floats for EPS.\n- Do not write outside `base/output`.\n- Do not modify files under `input/`.\n- The validation rerun should reflect a second deterministic pass over the same\n  visible validation filings.\n",
   "agentMustDo": [
     "Inspect the staged SEC 10-K corpus in `input/filings/` and use `input/filings/manifest.json` to understand company, ticker, and year coverage.",
     "Produce one normalized extraction JSON per filing under `output/extractions/`, following the staged schema and normalization rules exactly.",
     "Save one raw extraction text file per filing under `output/raw_extractions/` that preserves the text evidence actually used from each PDF.",
-    "Answer the three staged analytical questions and save them to `output/qa_answers.json`.",
+    "Answer the three staged analytical questions and save output/qa_answers.json as a dictionary keyed by Q1, Q2, and Q3; each value must directly match its answer_format object, following input/schema/qa_answers_schema.json.",
     "Re-run the extraction workflow on the fixed 5-file validation subset in `input/validation/` and save the second-pass JSON outputs under `output/run2_extractions/`."
   ],
   "inputFiles": [
@@ -47,7 +47,19 @@
       "name": "questions.json",
       "format": "JSON",
       "path": "input/questions.json",
-      "description": "Three analytical questions that must be answered from the extracted data."
+      "description": "Three analytical questions with per-question answer fields and their locations in the top-level answer dictionary."
+    },
+    {
+      "name": "qa_answers_schema.json",
+      "format": "JSON Schema",
+      "path": "input/schema/qa_answers_schema.json",
+      "description": "Public analytical-answer schema: an object keyed by Q1, Q2, and Q3, with direct answer objects."
+    },
+    {
+      "name": "qa_answers_example.json",
+      "format": "JSON",
+      "path": "input/schema/qa_answers_example.json",
+      "description": "Shape-only example with fictional values; compute all actual answers from the corpus."
     },
     {
       "name": "validation/",
@@ -79,7 +91,7 @@
       "name": "qa_answers.json",
       "format": "JSON",
       "path": "output/qa_answers.json",
-      "description": "Answers for the three staged analytical questions."
+      "description": "Top-level object keyed by Q1, Q2, and Q3; values follow the corresponding question answer_format without id/answer wrappers."
     },
     {
       "name": "run2_extractions/",

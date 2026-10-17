@@ -13,11 +13,10 @@
   <article class="article">
     <h1>Build a custom image</h1>
     <p class="lede">
-      ALE boots each sandbox from a named image. The published
-      <code>ale-ubuntu22</code> and <code>ale-win10</code> images already carry
-      the software the public task set needs. Build your own when you add a task
-      that wants software not yet baked in, or when you provision licensed
-      Windows applications that the public images omit. The steps below use the
+      ALE boots each sandbox from a named image. The versioned Linux and Windows
+      images in <code>releases/v1.1/assets.json</code> carry the software the
+      selected task set needs. Build your own when you add a task
+      that needs software not yet baked in. The steps below use the
       Google Cloud provider throughout; other providers follow the same
       build-then-snapshot shape.
     </p>
@@ -25,11 +24,15 @@
     <div class="note">
       <div class="note-title">When you do not need this</div>
       The published images cover every task in
-      <code>selected_tasks/unlicensed.txt</code>. Copy them as-is from the
+      <code>selected_tasks/full.txt</code>. Copy them as-is from the
       <a href="/pages/google-cloud.html#copy-images">Google Cloud quick start</a>
-      and skip this page unless you are adding software or enabling licensed
-      tasks.
+      and use this page when adding software for custom tasks.
     </div>
+
+    <p>
+      Use the matching v1.1 release manifest and profiles when copying or
+      extending either image. See <a href="/pages/configure.html#v1-1">release pins</a>.
+    </p>
 
     <h2>The image model</h2>
     <p>
@@ -125,7 +128,7 @@ env/verify_task_env.sh path/to/task_card.json path/to/task_base_dir</code></pre>
         </tr>
         <tr>
           <td><strong>Image <code>python</code></strong></td>
-          <td>Inside the sandbox (Linux <code>/opt/ale-run/.venv</code>, Windows system Python).</td>
+          <td>Inside the sandbox (Linux <code>/opt/ale-run/.venv</code>, Windows <code>C:\ale-run\.venv</code>).</td>
           <td>The in-sandbox framework entry point and agent hosting. <code>install_agent_deps()</code> pip-installs each agent's declared packages into <em>this</em> interpreter at launch.</td>
           <td>Yes — this is the <code>python</code> field your module declares.</td>
         </tr>
@@ -139,7 +142,7 @@ env/verify_task_env.sh path/to/task_card.json path/to/task_base_dir</code></pre>
     </table>
     <p>
       The one you bake is the image <code>python</code>: keep it user-writable and
-      minimal — <code>pydantic</code>, <code>pip</code>, and what
+      minimal: <code>pydantic</code>, <code>requests</code>, <code>pip</code>, and what
       <code>install_agent_deps()</code> adds — not a home for task libraries.
     </p>
     <div class="note">
@@ -151,23 +154,90 @@ env/verify_task_env.sh path/to/task_card.json path/to/task_base_dir</code></pre>
       <code>evaluator_env</code> venv, most lean on the image Python.
     </div>
 
-    <h2>1. Boot a builder VM</h2>
+    <h2 id="base">Stock-OS prerequisites and runtime bootstrap</h2>
+    <p>
+      First create the sandbox account (<code>user</code> on Linux,
+      <code>User</code> on Windows) and an autologin desktop. Linux needs
+      <code>uv</code> and an X11 session; Windows needs Python 3.12 with the
+      <code>py</code> launcher. Run these commands as the sandbox user, with sudo
+      access on Linux or elevated PowerShell on Windows.
+    </p>
+    <h3>Framework Python</h3>
+    <pre><code># Linux: create a user-writable, pip-enabled runtime
+sudo install -d -o user -g "$(id -gn user)" /opt/ale-run
+uv venv --python 3.12 --seed /opt/ale-run/.venv
+uv pip install --python /opt/ale-run/.venv/bin/python pydantic requests
+/opt/ale-run/.venv/bin/python -c 'import pip, pydantic, requests'</code></pre>
+    <pre><code># Windows PowerShell
+py -3.12 -m venv C:\ale-run\.venv
+if ($LASTEXITCODE -ne 0) { throw 'Framework venv creation failed' }
+&amp; C:\ale-run\.venv\Scripts\python.exe -m pip install pydantic requests
+if ($LASTEXITCODE -ne 0) { throw 'Framework dependency installation failed' }
+&amp; C:\ale-run\.venv\Scripts\python.exe -c "import pip, pydantic, requests"
+if ($LASTEXITCODE -ne 0) { throw 'Framework import check failed' }</code></pre>
+    <h3>Node</h3>
+    <p>
+      Install the official Node 24.12.0 x64 distribution, verifying its
+      <a href="https://nodejs.org/dist/v24.12.0/SHASUMS256.txt">checksum</a>.
+      On Linux unpack under <code>/usr/local</code>, stripping the archive's
+      top-level directory; on Windows unpack under <code>C:\Users\User</code>.
+      Verify the paths the image modules declare:
+    </p>
+    <pre><code># Linux
+/usr/local/bin/node --version</code></pre>
+    <pre><code># Windows PowerShell
+&amp; 'C:\Users\User\node-v24.12.0-win-x64\node.exe' --version</code></pre>
+    <h3>CUA boot services</h3>
+    <p>
+      CUA runs separately from the framework Python, on port 5000. The v1.1
+      demo images report <code>cua-computer-server</code> 0.3.39; retain the
+      actual server source and dependency pins when reproducing it.
+      <code>env/packages-linux/cua-server-venv/install.sh</code> creates only an
+      interpreter, not the server or its services. Inspect the existing boot
+      resources on a published-image builder:
+    </p>
+    <pre><code># Linux: service environment includes DISPLAY and XAUTHORITY
+systemctl cat cua-computer-server.service \
+  cua-computer-server-health.service cua-computer-server-health.timer
+cat /usr/local/bin/cua-computer-server-health.sh</code></pre>
+    <pre><code># Windows PowerShell
+Export-ScheduledTask -TaskName CuaServer-agenthle
+Get-Content C:\Users\User\scripts\cua_watchdog.ps1</code></pre>
+    <p>
+      Linux's service runs as <code>user</code> with process restart and a
+      30-second health timer. Windows's task uses <code>InteractiveToken</code>,
+      999 failure restarts at one-minute intervals, and the watchdog above.
+      These scripts live in the published images, not this repository; adapt
+      desktop authentication and interpreter paths to your own installation.
+    </p>
+    <p>
+      This section supplies prerequisites and runtime bootstrap, not a complete
+      stock-OS installer. Published-image demos, service/path inspection and
+      isolated runtime checks validate the documented components, not a stock-OS
+      rebuild. To customize the existing images, continue at
+      <a href="#builder">step 1</a>; with your own desktop/CUA setup already
+      working, continue at <a href="#software">step 2</a>.
+    </p>
+
+    <h2 id="builder">1. Boot a builder VM</h2>
     <p>
       Start from the matching published base so the CUA server, node, Python, and
       path conventions are already in place. Create a VM from the base image and
       keep it running while you install software:
     </p>
-    <pre><code>gcloud compute instances create ale-builder \
-  --image=ale-ubuntu22 --image-project="$GCP_PROJECT" \
+    <pre><code>BASE_IMAGE=$(jq -r '.images.linux.gcloud.name' releases/v1.1/assets.json)
+gcloud compute instances create ale-builder \
+  --image="$BASE_IMAGE" --image-project="$GCP_PROJECT" \
   --machine-type=e2-standard-4 \
   --zone="$GCP_REGION-a" \
   --tags=ale-run</code></pre>
     <p>
-      For a Windows image, build from <code>ale-win10</code> (or
-      <code>ale-win-server</code> for the GPU family) over RDP.
+      First copy the selected release image into your project. For Windows,
+      use the image named by <code>images.windows.gcloud.name</code> in the
+      manifest and connect over RDP.
     </p>
 
-    <h2>2. Install and verify the software</h2>
+    <h2 id="software">2. Install and verify the software</h2>
     <p>
       Copy the <code>env/</code> tree to the builder and run the installers for
       each task card you want the image to cover. On Linux:
@@ -201,7 +271,7 @@ env/verify_task_env.sh tasks/&lt;domain&gt;/&lt;task&gt;/task_card.json \
       The reference archive stays encrypted during the run and is decrypted only
       at grading. Both images carry <code>7z</code> on PATH. To skip baking, point
       the environment at a <code>gs://</code> source instead — see
-      <a href="/pages/run.html">Run and collect results</a>.
+      <a href="/pages/run.html">Run, resume and upgrade</a>.
     </p>
 
     <h2 id="snapshot">4. Snapshot the disk into a named image</h2>
@@ -221,6 +291,7 @@ gcloud compute images create ale-ubuntu22-custom \
       start copies the published images:
     </p>
     <pre><code>gcloud compute images create ale-ubuntu22-custom \
+  --project="&lt;destination-project&gt;" \
   --source-image=ale-ubuntu22-custom \
   --source-image-project="$GCP_PROJECT"</code></pre>
 
@@ -257,49 +328,6 @@ uv run python -m ale_run run my_experiment.yaml</code></pre>
     <pre><code>gcloud compute firewall-rules create ale-allow-cua-8000 \
   --network=ale-vpc --direction=INGRESS --allow=tcp:8000 \
   --source-ranges="$ALE_CLIENT_CIDR" --target-tags=ale-run</code></pre>
-
-    <h2 id="licensed">Licensed tasks</h2>
-    <p>
-      The public task set splits into an <strong>unlicensed</strong> subset that
-      the published images run as-is, and a small <strong>licensed</strong> subset
-      whose software cannot be redistributed. Of the 152 tasks in
-      <code>selected_tasks/full.txt</code>, 145 are in
-      <code>unlicensed.txt</code>; the remaining 7 are listed in
-      <code>selected_tasks/licensed.txt</code>. Every licensed task today is a
-      Windows task — there are no licensed Linux packages.
-    </p>
-    <table>
-      <thead><tr><th>Task</th><th>Licensed software</th></tr></thead>
-      <tbody>
-        <tr><td>engineering/2d_drawings_to_3d_building_model</td><td>Autodesk Civil 3D 2024</td></tr>
-        <tr><td>engineering/cailian_road_highway_alignment_2</td><td>Autodesk Civil 3D 2024</td></tr>
-        <tr><td>engineering/gcode</td><td>Autodesk PowerMill 2025</td></tr>
-        <tr><td>engineering/inner_support_elevation_optimization</td><td>PLAXIS 3D 2023.2</td></tr>
-        <tr><td>engineering/mold-flow</td><td>Moldex3D 2025</td></tr>
-        <tr><td>visual_media/music_transcription</td><td>Steinberg Dorico 6 / Cubase 15</td></tr>
-        <tr><td>visual_media/project_migration</td><td>Rhino 8</td></tr>
-      </tbody>
-    </table>
-    <p>
-      Their installers and credentials are <strong>not</strong> committed to the
-      repository; keep them outside it. Each licensed package carries a
-      <code>meta.json</code> (pinned version + <code>verify</code> command) and a
-      <code>README.md</code> with one reproducible provisioning sequence (for
-      example <code>env/packages-win/rhino-8/</code>):
-    </p>
-    <ol>
-      <li>Purchase the product entitlement from the vendor.</li>
-      <li>Assign the entitlement to the account used for installation.</li>
-      <li>Sign in to the vendor account and download the pinned installer.</li>
-      <li>Install and activate on the builder Windows VM, and disable automatic updates to preserve the pinned build.</li>
-      <li>Run the package's <code>meta.json</code> <code>verify</code> command.</li>
-    </ol>
-    <p>
-      Provision the licensed software into your Windows builder alongside the
-      unlicensed software — one image carries both — then snapshot and register it
-      like any other custom image (steps 4–5). Point your Windows snapshot at that
-      image and run <code>selected_tasks/licensed.txt</code>.
-    </p>
 
     <h2>Checklist</h2>
     <ul>

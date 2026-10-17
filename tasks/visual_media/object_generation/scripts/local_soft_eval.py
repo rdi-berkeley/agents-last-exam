@@ -1,35 +1,10 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 from PIL import Image, ImageOps, ImageDraw
-from tasks.utils.evaluation import llm_vision_binary_questions_sync, resolve_llm_judge_model
-
-MODEL = resolve_llm_judge_model(
-    env_var='BLENDER_TASK_SOFT_EVAL_MODEL',
-    default='gpt-4.1-mini',
-)
-
-
-def _load_api_key() -> str | None:
-    direct = os.environ.get('OPENAI_API_KEY')
-    if direct:
-        return direct
-    repo_env = Path(__file__).resolve().parents[4] / '.env'
-    if not repo_env.exists():
-        return None
-    for line in repo_env.read_text(encoding='utf-8').splitlines():
-        line = line.strip()
-        if not line or line.startswith('#') or not line.startswith('OPENAI_API_KEY='):
-            continue
-        value = line.split('=', 1)[1].strip()
-        if value[:1] == value[-1:] and value[:1] in {'"', "'"}:
-            value = value[1:-1]
-        if value:
-            return value
-    return None
+from tasks.utils.evaluation import judge_config, llm_vision_binary_questions_sync, resolve_llm_judge_model
 
 
 def _pair_sheet(reference_path: Path, candidate_path: Path, label: str, out_path: Path) -> Path:
@@ -63,7 +38,7 @@ def _stack(paths: list[Path], out_path: Path) -> Path:
 
 
 def run_local_soft_eval(frame_pairs: list[dict], local_tmp_dir: Path) -> float:
-    api_key = _load_api_key()
+    api_key = judge_config()["api_key"]
     if not api_key or not frame_pairs:
         return 0.0
     local_tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -98,7 +73,7 @@ def run_local_soft_eval(frame_pairs: list[dict], local_tmp_dir: Path) -> float:
         prompt_context=prompt_context,
         questions=questions,
         image_bytes_list=[bundle.read_bytes()],
-        model=MODEL,
+        model=resolve_llm_judge_model(),
         temperature=0,
         api_key=api_key,
     )

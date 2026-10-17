@@ -1,14 +1,14 @@
-"""Run the pi (earendil-works/pi) CLI inside an ALE sandbox."""
+"""Run the pinned Pi CLI headlessly in a Linux sandbox."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
 import shutil
 import subprocess
 import time
+import tempfile
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -24,11 +24,19 @@ from ale_run.base_interface import (
     TrajectoryBuilder,
 )
 
+from ale_run.agents._cli_runtime import (
+    redact,
+    ensure_cli_node,
+    run_command,
+    secret_values,
+    wait_process,
+    write_private_json,
+)
+
 from .config import PiCliConfig
 
 logger = logging.getLogger(__name__)
 
-_POLL_INTERVAL_S = 2.0
 _TERM_GRACE_S = 2.0
 _NPM_PACKAGE = "@earendil-works/pi-coding-agent"
 
@@ -61,16 +69,19 @@ class PiCliDeployer(BaseAgentDeployer):
             raise NotImplementedError("pi_cli is Linux-only")
 
         from ale_run.agents._bootstrap import ensure_node_npm
-        _node, npm = await ensure_node_npm()
+
+        node, npm = await ensure_node_npm()
+        node = await ensure_cli_node(node, npm, (22, 19, 0))
+        self._node_path = node
 
         pi_path = shutil.which("pi")
-        installed_version = _installed_version(pi_path) if pi_path else None
+        installed_version = await _installed_version(pi_path) if pi_path else None
         if not pi_path or installed_version != cfg.cli_version:
-            proc = await asyncio.to_thread(
-                subprocess.run,
-                [npm, "install", "-g", "--ignore-scripts",
-                 f"{_NPM_PACKAGE}@{cfg.cli_version}"],
-                capture_output=True, text=True, timeout=300,
+            proc = await run_command(
+                [npm, "install", "-g", "--ignore-scripts", f"{_NPM_PACKAGE}@{cfg.cli_version}"],
+                capture_output=True,
+                text=True,
+                timeout=300,
             )
             if proc.returncode != 0:
                 raise RuntimeError(
@@ -80,27 +91,22 @@ class PiCliDeployer(BaseAgentDeployer):
             pi_path = shutil.which("pi")
             if not pi_path:
                 raise RuntimeError("PiCliDeployer: 'pi' still not found after install")
+            if await _installed_version(pi_path) != cfg.cli_version:
+                raise RuntimeError("pi_cli: installed CLI does not match cli_version")
         self._pi_path = pi_path
 
         wd = Path(self.executor.work_dir)
         wd.mkdir(parents=True, exist_ok=True)
 
-        home = os.path.expanduser("~")
+        self._home_dir = tempfile.mkdtemp(prefix=".ale-pi-", dir=wd.parent)
+        home = self._home_dir
         pi_agent_dir = Path(home) / ".pi" / "agent"
         pi_agent_dir.mkdir(parents=True, exist_ok=True)
-
-        auth_file = pi_agent_dir / "auth.json"
-        if auth_file.exists():
-            try:
-                auth_file.unlink()
-            except OSError:
-                pass
 
         if cfg.provider == "custom":
             if not cfg.base_url:
                 raise RuntimeError("pi_cli: provider=custom requires base_url")
-            exec_env = dict(self.executor.env or {})
-            key = cfg.api_key or exec_env.get("OPENROUTER_API_KEY") or exec_env.get("HF_TOKEN")
+            key = cfg.api_key or self._build_env(cfg).get("ALE_PI_API_KEY")
             if not key:
                 raise RuntimeError(
                     "pi_cli: provider=custom but no api_key/OPENROUTER_API_KEY/HF_TOKEN set"
@@ -110,23 +116,21 @@ class PiCliDeployer(BaseAgentDeployer):
                     "custom": {
                         "baseUrl": cfg.base_url,
                         "api": "openai-completions",
-                        "apiKey": key,
-                        "models": [{"id": cfg.model, "maxTokens": cfg.max_tokens}],
+                        "apiKey": "${ALE_PI_API_KEY}",
+                        "models": [
+                            {
+                                "id": cfg.model,
+                                "maxTokens": cfg.max_tokens,
+                                "input": cfg.input_modalities,
+                            }
+                        ],
                     },
                 },
             }
-            (pi_agent_dir / "models.json").write_text(
-                json.dumps(models_json, indent=2), encoding="utf-8",
-            )
-        else:
-            models_json_file = pi_agent_dir / "models.json"
-            if models_json_file.exists():
-                try:
-                    models_json_file.unlink()
-                except OSError:
-                    pass
+            write_private_json(pi_agent_dir / "models.json", models_json)
 
         from ale_run.agents._bootstrap import cua_bridge_env, ensure_cua_mcp_server
+
         await ensure_cua_mcp_server(sandbox)
         mcp_index = f"{sandbox.mcp_server_dir.rstrip('/')}/src/index.js"
         mcp_dir = Path(home) / ".config" / "mcp"
@@ -142,30 +146,25 @@ class PiCliDeployer(BaseAgentDeployer):
                     },
                 },
             }
-            mcp_path.write_text(json.dumps(mcp_config, indent=2), encoding="utf-8")
+            write_private_json(mcp_path, mcp_config)
 
-            adapter_probe = await asyncio.to_thread(
-                subprocess.run,
+            adapter_probe = await run_command(
                 [self._pi_path, "list"],
-                capture_output=True, text=True, timeout=30,
+                env=self._build_env(cfg),
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             if "pi-mcp-adapter" not in (adapter_probe.stdout or ""):
-                install_proc = await asyncio.to_thread(
-                    subprocess.run,
-                    [self._pi_path, "install", "npm:pi-mcp-adapter"],
-                    capture_output=True, text=True, timeout=120,
+                install_proc = await run_command(
+                    [self._pi_path, "install", "npm:pi-mcp-adapter@5.3.0"],
+                    env=self._build_env(cfg),
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
                 )
                 if install_proc.returncode != 0:
-                    logger.warning(
-                        "pi_cli: pi-mcp-adapter install failed (rc=%d): %s",
-                        install_proc.returncode, (install_proc.stderr or "")[:400],
-                    )
-        else:
-            if mcp_path.exists():
-                try:
-                    mcp_path.unlink()
-                except OSError:
-                    pass
+                    raise RuntimeError("pi_cli: required pi-mcp-adapter installation failed")
 
     async def launch(self, prompt: str) -> AgentRunResult:
         cfg: PiCliConfig = self.config  # type: ignore[assignment]
@@ -191,10 +190,8 @@ class PiCliDeployer(BaseAgentDeployer):
         env = self._build_env(cfg)
 
         t0 = time.monotonic()
-        with open(transcript_file, "wb") as tout, \
-             open(stderr_log, "wb") as terr:
-            proc = await asyncio.to_thread(
-                subprocess.Popen,
+        with open(transcript_file, "wb") as tout, open(stderr_log, "wb") as terr:
+            proc = subprocess.Popen(
                 argv,
                 stdin=subprocess.DEVNULL,
                 stdout=tout,
@@ -205,24 +202,7 @@ class PiCliDeployer(BaseAgentDeployer):
             )
         pid_file.write_text(str(proc.pid), encoding="ascii")
 
-        try:
-            while proc.poll() is None:
-                await asyncio.sleep(_POLL_INTERVAL_S)
-        except asyncio.CancelledError:
-            try:
-                proc.terminate()
-            except ProcessLookupError:
-                pass
-            try:
-                await asyncio.wait_for(
-                    asyncio.to_thread(proc.wait), timeout=_TERM_GRACE_S,
-                )
-            except (asyncio.TimeoutError, asyncio.CancelledError):
-                try:
-                    proc.kill()
-                except ProcessLookupError:
-                    pass
-            raise
+        await wait_process(proc, grace_s=_TERM_GRACE_S)
 
         duration_s = time.monotonic() - t0
         exit_code = proc.returncode
@@ -230,8 +210,26 @@ class PiCliDeployer(BaseAgentDeployer):
 
         status = "completed" if exit_code == 0 else "failed"
         error: str | None = None
+        if exit_code == 0:
+            final_message = {}
+            for line in transcript_file.read_text(encoding="utf-8", errors="replace").splitlines():
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(event, dict):
+                    continue
+                message = event.get("message")
+                if event.get("type") == "message_end" and isinstance(message, dict):
+                    if message.get("role") == "assistant":
+                        final_message = message
+            if final_message.get("stopReason") in {"error", "aborted"}:
+                status = "failed"
+                error = (
+                    final_message.get("errorMessage") or "Pi ended without a successful response"
+                )
         if status == "failed":
-            error = _diagnose_failure(stderr_log, transcript_file, exit_code)
+            error = error or _diagnose_failure(stderr_log, transcript_file, exit_code)
         return AgentRunResult(
             status=status,
             pid=proc.pid,
@@ -239,7 +237,7 @@ class PiCliDeployer(BaseAgentDeployer):
             transcript_path=str(transcript_file),
             stderr_path=str(stderr_log),
             duration_s=duration_s,
-            error=error,
+            error=redact(error, secret_values(cfg, self.executor.env)),
         )
 
     def _build_argv(self, cfg: PiCliConfig, prompt_file: str) -> list[str]:
@@ -269,9 +267,9 @@ class PiCliDeployer(BaseAgentDeployer):
 
         flag_str = " ".join(_quote(f) for f in flags)
         return [
-            "bash", "-c",
-            f'PROMPT="$(cat {_quote(prompt_file)})"; '
-            f'exec {_quote(pi_bin)} {flag_str} -- "$PROMPT"',
+            "bash",
+            "-c",
+            f'PROMPT="$(cat {_quote(prompt_file)})"; exec {_quote(pi_bin)} {flag_str} -- "$PROMPT"',
         ]
 
     def _build_env(self, cfg: PiCliConfig) -> dict[str, str]:
@@ -281,7 +279,7 @@ class PiCliDeployer(BaseAgentDeployer):
             env[k] = v
 
         def _key(name: str) -> str:
-            return exec_env.get(name, "")
+            return env.get(name, "")
 
         if cfg.provider == "openrouter":
             key = cfg.api_key or _key("OPENROUTER_API_KEY")
@@ -298,10 +296,16 @@ class PiCliDeployer(BaseAgentDeployer):
                 raise RuntimeError(f"pi_cli: provider=direct but no api_key/{env_var}")
             env[env_var] = key
 
+        elif cfg.provider == "custom":
+            key = cfg.api_key or env.get("OPENROUTER_API_KEY") or env.get("HF_TOKEN")
+            if not key:
+                raise RuntimeError("pi_cli: custom provider requires an API key")
+            env["ALE_PI_API_KEY"] = key
+
         env["PI_OFFLINE"] = "1"
         env["PI_SKIP_VERSION_CHECK"] = "1"
         env["NO_COLOR"] = "1"
-        env["HOME"] = os.path.expanduser("~")
+        env["HOME"] = getattr(self, "_home_dir", os.path.expanduser("~"))
 
         home = os.path.expanduser("~")
         path = env.get("PATH", "")
@@ -309,6 +313,8 @@ class PiCliDeployer(BaseAgentDeployer):
             if extra not in path:
                 path = f"{extra}:{path}"
         env["PATH"] = path
+        if getattr(self, "_node_path", None):
+            env["PATH"] = str(Path(self._node_path).parent) + os.pathsep + env["PATH"]
 
         return env
 
@@ -330,7 +336,9 @@ class PiCliDeployer(BaseAgentDeployer):
             )
             return
 
-        raw = transcript_file.read_text(encoding="utf-8", errors="replace")
+        raw = redact(
+            transcript_file.read_text(encoding="utf-8", errors="replace"), secret_values(config)
+        )
         events: list[dict[str, Any]] = []
         for line in raw.splitlines():
             line = line.strip()
@@ -349,10 +357,12 @@ class PiCliDeployer(BaseAgentDeployer):
                 message="pi_cli: no JSON events parsed from transcript",
                 extra={"reason": "no_events"},
             )
-            builder.trajectory.extra.setdefault("pi_cli", {}).update({
-                "exit_code": run_result.exit_code,
-                "transcript_path": str(transcript_file),
-            })
+            builder.trajectory.extra.setdefault("pi_cli", {}).update(
+                {
+                    "exit_code": run_result.exit_code,
+                    "transcript_path": str(transcript_file),
+                }
+            )
             return
 
         total_input = total_output = total_cache_read = total_cache_write = 0
@@ -377,24 +387,31 @@ class PiCliDeployer(BaseAgentDeployer):
             elif etype == "tool_execution_start":
                 builder.add_step(
                     source="agent",
-                    tool_calls=[ToolCall(
-                        id=str(ev.get("toolCallId") or ""),
-                        name=str(ev.get("toolName") or ""),
-                        arguments=_as_dict(ev.get("args")),
-                    )],
+                    tool_calls=[
+                        ToolCall(
+                            id=str(ev.get("toolCallId") or ""),
+                            name=str(ev.get("toolName") or ""),
+                            arguments=_as_dict(ev.get("args")),
+                        )
+                    ],
                 )
 
             elif etype == "tool_execution_end":
-                content = cls._result_to_content(ev.get("result"))
+                result = ev.get("result")
+                content = cls._result_to_content(
+                    result.get("content", result) if isinstance(result, dict) else result
+                )
                 builder.add_step(
                     source="environment",
-                    observation=Observation(results=[
-                        ToolResult(
-                            tool_call_id=str(ev.get("toolCallId") or ""),
-                            content=content,
-                            is_error=bool(ev.get("isError")),
-                        ),
-                    ]),
+                    observation=Observation(
+                        results=[
+                            ToolResult(
+                                tool_call_id=str(ev.get("toolCallId") or ""),
+                                content=content,
+                                is_error=bool(ev.get("isError")),
+                            ),
+                        ]
+                    ),
                 )
 
         if usage_seen or cost_seen:
@@ -411,19 +428,25 @@ class PiCliDeployer(BaseAgentDeployer):
                 extra={"usage_summary": True},
             )
 
-        builder.trajectory.extra.setdefault("pi_cli", {}).update({
-            "exit_code": run_result.exit_code,
-            "transcript_path": str(transcript_file),
-            "event_count": len(events),
-        })
+        builder.trajectory.extra.setdefault("pi_cli", {}).update(
+            {
+                "exit_code": run_result.exit_code,
+                "transcript_path": str(transcript_file),
+                "event_count": len(events),
+            }
+        )
 
     @classmethod
     def _consume_message(
-        cls, message: Any, builder: TrajectoryBuilder,
+        cls,
+        message: Any,
+        builder: TrajectoryBuilder,
     ) -> dict[str, Any] | None:
         if not isinstance(message, dict):
             return None
         role = message.get("role") or "assistant"
+        if role == "toolResult":
+            return None
         source = {"user": "user", "assistant": "agent"}.get(role, "system")
 
         text_parts: list[str] = []
@@ -437,8 +460,10 @@ class PiCliDeployer(BaseAgentDeployer):
                 btype = block.get("type")
                 if btype in ("text", "text_delta") and isinstance(block.get("text"), str):
                     text_parts.append(block["text"])
-                elif btype in ("reasoning", "thinking") and isinstance(block.get("text"), str):
-                    text_parts.append(f"[reasoning] {block['text']}")
+                elif btype in ("reasoning", "thinking"):
+                    reasoning = block.get("thinking") or block.get("text")
+                    if isinstance(reasoning, str):
+                        builder.add_step(source=source, reasoning=reasoning)
 
         if text_parts:
             builder.add_step(source=source, message="\n".join(t for t in text_parts if t))
@@ -489,11 +514,24 @@ class PiCliDeployer(BaseAgentDeployer):
 
 def _image_part(block: dict[str, Any]) -> ContentPart | None:
     url = block.get("url") or block.get("data") or block.get("image")
+    if (
+        block.get("type") == "image"
+        and isinstance(block.get("data"), str)
+        and "base64," not in block["data"]
+    ):
+        return ContentPart(
+            type="image",
+            image=ImageSource(
+                type="base64",
+                media_type=block.get("mimeType") or "image/png",
+                data=block["data"],
+            ),
+        )
     if not isinstance(url, str) or "base64," not in url:
         return None
     marker = "base64,"
     idx = url.find(marker)
-    data = url[idx + len(marker):]
+    data = url[idx + len(marker) :]
     media_type = "image/png"
     header = url[:idx]
     if header.startswith("data:") and ";" in header:
@@ -524,12 +562,17 @@ def _opt_float(value: Any) -> float | None:
     return None
 
 
-def _installed_version(pi_path: str) -> str | None:
+async def _installed_version(pi_path: str) -> str | None:
     try:
-        probe = subprocess.run(
-            [pi_path, "-v"], capture_output=True, text=True, timeout=30,
+        probe = await run_command(
+            [pi_path, "-v"],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
     except (subprocess.SubprocessError, OSError):
+        return None
+    if probe.returncode != 0:
         return None
     out = (probe.stdout or "") + (probe.stderr or "")
     for token in out.split():

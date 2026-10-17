@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import glob
+import json
 import logging
 import os
 import platform
@@ -173,7 +174,20 @@ async def _configure_npm_prefix() -> None:
     npm_bin = f"{npm_global}/bin"
     os.makedirs(npm_global, exist_ok=True)
 
-    await _sh(f"npm config set prefix '{npm_global}'", timeout=15)
+    for attempt in range(2):
+        try:
+            proc = await _sh(f"npm config set prefix '{npm_global}'", timeout=60)
+            break
+        except subprocess.TimeoutExpired:
+            if attempt == 1:
+                raise
+            logger.warning("bootstrap: npm config set prefix timed out after 60s; retrying once")
+
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"bootstrap: npm config set prefix failed (rc={proc.returncode}): "
+            f"{(proc.stderr or proc.stdout or '')[-500:]}"
+        )
 
     if npm_bin not in os.environ.get("PATH", ""):
         os.environ["PATH"] = f"{npm_bin}:{os.environ.get('PATH', '')}"
@@ -195,8 +209,7 @@ def _bridge_installed(bridge_dir: str) -> bool:
     shipped tree) makes the node child die on its first import of
     ``@modelcontextprotocol/sdk`` with ``MODULE_NOT_FOUND``. We therefore require
     the SDK module the bridge imports first to exist alongside the entry script.
-    This predicate is the fast-skip path: when both are present, the ensure-step
-    is a no-op.
+    This predicate skips dependency installation, not source refresh.
     """
     index = os.path.join(bridge_dir, "src", "index.js")
     sdk_dir = os.path.join(
@@ -206,23 +219,18 @@ def _bridge_installed(bridge_dir: str) -> bool:
 
 
 async def _ensure_bridge_at(src_dir: Path, target_dir: str, *, what: str) -> str:
-    """Copy ``src_dir`` → ``target_dir`` and ``npm install --production`` it.
+    """Refresh bridge sources and install missing or changed dependencies.
 
     Shared implementation behind :func:`ensure_cua_mcp_server` (GUI bridge into
     the sandbox's ``mcp_server_dir``) and :func:`ensure_vm_mcp_server` (vm bridge
-    into a host dir for native agents). Idempotent: a prebaked / already-installed
-    tree is a no-op.
+    into a host dir for native agents). Prebaked dependencies are reused when
+    their manifests match the shipped sources.
 
     Runs where the deployer runs — IN the sandbox for sandbox-resident agents, on
     the host for native agents — so it uses ``shutil`` / ``subprocess`` directly
     rather than ``run_command`` RPCs. ``what`` is a short label used only in log
     and error messages. Returns ``target_dir`` (the bridge root).
     """
-    # Fast-path: prebaked / already-installed. Skip the copy + npm install.
-    if _bridge_installed(target_dir):
-        logger.info("ensure_%s_mcp_server: bridge already present at %s", what, target_dir)
-        return target_dir
-
     if not src_dir.is_dir():
         raise RuntimeError(
             f"ensure_{what}_mcp_server: vendored bridge source missing at "
@@ -230,32 +238,60 @@ async def _ensure_bridge_at(src_dir: Path, target_dir: str, *, what: str) -> str
             "sandbox .ale-src ship, or the in-tree _assets dir on the host)."
         )
 
-    logger.info("ensure_%s_mcp_server: installing bridge %s → %s", what, src_dir, target_dir)
+    needs_install = not _bridge_installed(target_dir)
+    target = Path(target_dir)
+    for manifest in ("package.json", "package-lock.json"):
+        source_manifest = src_dir / manifest
+        target_manifest = target / manifest
+        if not source_manifest.exists():
+            continue
+        if not target_manifest.exists():
+            needs_install = True
+            continue
+        if manifest == "package.json":
+            source_package = json.loads(source_manifest.read_text(encoding="utf-8"))
+            target_package = json.loads(target_manifest.read_text(encoding="utf-8"))
+            needs_install |= any(
+                source_package.get(key) != target_package.get(key)
+                for key in ("dependencies", "optionalDependencies", "peerDependencies")
+            )
+        else:
+            needs_install |= source_manifest.read_bytes() != target_manifest.read_bytes()
+
+    logger.info("ensure_%s_mcp_server: refreshing bridge %s → %s", what, src_dir, target_dir)
 
     # 1. Copy the bridge source (package.json + package-lock.json + src/) into
     #    target_dir. Never copy node_modules — it is rebuilt by npm install
     #    (binaries must match the substrate's arch).
     os.makedirs(target_dir, exist_ok=True)
     for entry in src_dir.iterdir():
-        if entry.name == "node_modules":
+        if entry.name in {"node_modules", "__pycache__"} or src_dir.resolve() == target.resolve():
             continue
         dest = os.path.join(target_dir, entry.name)
         if entry.is_dir():
-            shutil.copytree(entry, dest, dirs_exist_ok=True)
+            shutil.copytree(
+                entry, dest, dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns("node_modules", "__pycache__"),
+            )
         else:
             shutil.copy2(entry, dest)
 
-    # 2. npm install --production inside the bridge dir.
+    if not needs_install:
+        logger.info("ensure_%s_mcp_server: reusing dependencies at %s", what, target_dir)
+        return target_dir
+
+    # 2. Install the locked production dependencies inside the bridge dir.
     npm = await ensure_npm()
+    install_command = [npm, "ci" if (src_dir / "package-lock.json").is_file() else "install", "--omit=dev"]
     proc = await asyncio.to_thread(
         subprocess.run,
-        [npm, "install", "--production"],
+        install_command,
         cwd=target_dir,
         capture_output=True, text=True, timeout=600,
     )
     if proc.returncode != 0:
         raise RuntimeError(
-            f"ensure_{what}_mcp_server: npm install --production failed in "
+            f"ensure_{what}_mcp_server: {' '.join(install_command)} failed in "
             f"{target_dir} (rc={proc.returncode}): "
             f"{(proc.stderr or proc.stdout or '')[-800:]}"
         )
@@ -277,7 +313,8 @@ async def _ensure_bridge_at(src_dir: Path, target_dir: str, *, what: str) -> str
 async def ensure_cua_mcp_server(sandbox: "SandboxHandle") -> str:
     """Ensure the cua (GUI) MCP bridge is installed at ``sandbox.mcp_server_dir``.
 
-    Idempotent (prebaked-image fast-path). Cross-OS: ``mcp_server_dir`` is
+    Refreshes sources while reusing matching prebaked dependencies.
+    Cross-OS: ``mcp_server_dir`` is
     whatever the image declares (``/home/.../cua_mcp_server`` on linux,
     ``C:\\Users\\User\\cua_mcp_server`` on windows). Prebaking the bridge into the
     image is purely a speed optimization; this dynamic install is the correctness
@@ -316,7 +353,10 @@ def cua_bridge_env(executor: "BaseExecutor") -> dict[str, str]:
     executor knows the URL reachable from where the bridge runs
     (``SandboxExecutor`` → loopback + image port; Local/Docker → host endpoint),
     so deployers splat this into their ``mcpServers.cua`` entry's ``env``."""
-    return {"CUA_SERVER_URL": executor.cua_bridge_url()}
+    return {
+        "CUA_SERVER_URL": executor.cua_bridge_url(),
+        "CUA_SERVER_PLATFORM": "linux" if executor.sandbox.is_linux else "win32",
+    }
 
 
 def vm_bridge_env(executor: "BaseExecutor") -> dict[str, str]:

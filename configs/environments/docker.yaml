@@ -1,24 +1,31 @@
-# Docker provider for the cpu-free-ubuntu (Linux, no-GPU, no-license) tasks —
-# boots the published `agentslastexam/ale-ubuntu22-docker:latest` image as a
+# Docker provider for the cpu-free-ubuntu (Linux, no-GPU) tasks —
+# boots the versioned `agentslastexam/ale-ubuntu22-docker:v1.1` image as a
 # local container instead of one GCE VM per task.
 #
 # Per-task cpus/memory are derived from the task card's GCE machine type by the
 # provider (c4-standard-4 -> 4 CPU / 15g, etc.); `resolution` sets the Xvfb size.
 #
-# This profile intentionally stays a simple rootless-Docker path. Four tasks
-# require Docker inside the sandbox, and two more require Apptainer/Singularity;
-# use the QEMU/KVM provider for those tasks so the nested runtime executes inside
-# a complete Ubuntu guest. Opt-in DinD hooks remain available for custom
+# This profile intentionally stays a simple rootless-Docker path. Eight selected
+# Linux tasks are excluded; use QEMU/KVM inside a complete Ubuntu guest:
+# - business_finance/bpmn_category_governance_restructuring_l3 (nested Docker)
+# - business_finance/bpmn_supply_disruption_l3 (nested Docker)
+# - computing_math/k8s_migration_1 (nested Docker)
+# - engineering/openroad_sky130_ibex_pnr_signoff (nested Docker)
+# - psychology_neuro/scene2_resample (Apptainer/Singularity)
+# - engineering/gcode (PID/network namespaces)
+# - engineering/cailian_road_highway_alignment_2 (systemd supervision)
+# - engineering/inner_support_elevation_optimization (systemd/delegated cgroups)
+# Opt-in DinD hooks remain available for custom
 # development setups through `enable_dind: true` + `privileged: true`, but they
 # are outside the supported `docker_support.txt` profile.
 snapshots:
   cpu-free-ubuntu:
     provider: docker
-    image: ale-ubuntu22-docker     # -> agentslastexam/ale-ubuntu22-docker:latest (from the Image registry; pulls from Hub if absent)
+    image: ale-ubuntu22-docker-v1-1
     docker:
       shm_size: 2g
       resolution: [1024, 768]
-task_data_source: local:task-data
+task_data_source: local:task-data-v1.1
 output_path: null
 # output_path: local          # uncomment to fetch each run's output back to the host
 gcs_sa_key: secret/gcp_key.json

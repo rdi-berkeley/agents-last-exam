@@ -197,16 +197,8 @@ def _matches_hidden_baseline(output_dir: Path, reference_dir: Path) -> bool:
     )
 
 
-def evaluate_submission(
-    output_dir: Path,
-    reference_dir: Path,
-    *,
-    results_path: Path | None = None,
-    repeat_results_path: Path | None = None,
-    allow_fixture_hash_fallback: bool = False,
-) -> dict[str, Any]:
+def validate_submission(output_dir: Path) -> dict[str, Any]:
     output_dir = output_dir.resolve()
-    reference_dir = reference_dir.resolve()
 
     structure_ok, structure_reason = _structure_gate(output_dir)
     if not structure_ok:
@@ -222,6 +214,23 @@ def evaluate_submission(
         }
     if not api_ok:
         return {"score": 0.0, "reason": "api_gate_failed", "details": api_reason}
+    return {"score": None, "reason": "api_gate_passed", "api_details": api_details}
+
+
+def evaluate_submission(
+    output_dir: Path,
+    reference_dir: Path,
+    *,
+    results_path: Path | None = None,
+    repeat_results_path: Path | None = None,
+    allow_fixture_hash_fallback: bool = False,
+) -> dict[str, Any]:
+    output_dir = output_dir.resolve()
+    reference_dir = reference_dir.resolve()
+    validation = validate_submission(output_dir)
+    if validation["score"] is not None:
+        return validation
+    api_details = validation["api_details"]
 
     if results_path is not None and results_path.exists():
         sim_result = _score_results(results_path, repeat_results_path)

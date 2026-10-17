@@ -2,39 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageOps
 
-from tasks.utils.evaluation import EvaluationContext, llm_vision_binary_questions_sync, resolve_llm_judge_model
+from tasks.utils.evaluation import judge_config, EvaluationContext, llm_vision_binary_questions_sync, resolve_llm_judge_model
 
 logger = logging.getLogger(__name__)
-
-MODEL = resolve_llm_judge_model(
-    env_var="UNREAL_TASK_SOFT_EVAL_MODEL",
-    default="gpt-4.1-mini",
-)
-
-
-def _load_api_key() -> str | None:
-    direct = os.environ.get("OPENAI_API_KEY")
-    if direct:
-        return direct
-    for parent in Path(__file__).resolve().parents:
-        repo_env = parent / ".env"
-        if not repo_env.exists():
-            continue
-        for line in repo_env.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or not line.startswith("OPENAI_API_KEY="):
-                continue
-            value = line.split("=", 1)[1].strip()
-            if value[:1] == value[-1:] and value[:1] in {'"', "'"}:
-                value = value[1:-1]
-            if value:
-                return value
-    return None
 
 
 def _load_panel(path: Path, *, fallback_size: tuple[int, int] | None = None) -> Image.Image:
@@ -106,7 +80,7 @@ def run_local_soft_eval(
     frame_pairs: list[dict[str, str]],
     local_tmp_dir: Path,
 ) -> float | None:
-    api_key = _load_api_key()
+    api_key = judge_config()["api_key"]
     if not api_key or not frame_pairs:
         return None
 
@@ -117,7 +91,7 @@ def run_local_soft_eval(
         mode="unreal_scene_restoration_soft_eval",
         output_dir=str(local_tmp_dir),
         auto_save=False,
-        model=MODEL,
+        model=resolve_llm_judge_model(),
         frame_count=len(frame_pairs),
     ) as ctx:
         pair_sheets: list[Path] = []
@@ -141,7 +115,7 @@ def run_local_soft_eval(
             prompt_context=prompt,
             questions=questions,
             image_bytes_list=[path.read_bytes() for path in bundle_images],
-            model=MODEL,
+            model=resolve_llm_judge_model(),
             temperature=0,
             api_key=api_key,
         )
@@ -159,7 +133,7 @@ def run_local_soft_eval(
             identifier="scene_bundle",
             score=final_score,
             prompt=prompt,
-            model=MODEL,
+            model=resolve_llm_judge_model(),
             vlm_response=json.dumps(data, ensure_ascii=False),
             frame_pair_count=len(frame_pairs),
             bundle_count=len(bundle_images),

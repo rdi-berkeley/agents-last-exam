@@ -92,6 +92,10 @@ class ClaudeCodeConfig:
 
     # ---- CLI knobs ----
     max_budget_usd: float | None = None
+    max_output_tokens: int | None = None
+    """Maximum output tokens requested from the model through Claude Code's
+    ``CLAUDE_CODE_MAX_OUTPUT_TOKENS`` environment variable. ``None`` leaves the
+    CLI default unchanged."""
     disabled_tools: tuple[str, ...] = _DISABLED_TOOLS
     dangerously_skip_permissions: bool = True
 

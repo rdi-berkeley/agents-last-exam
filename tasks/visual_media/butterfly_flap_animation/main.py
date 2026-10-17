@@ -117,10 +117,6 @@ class ButterflyFlapConfig(GeneralTaskConfig):
         return rf"{self.input_dir}\task_spec.md"
 
     @property
-    def ae_launcher(self) -> str:
-        return rf"{self.software_dir}\launch_after_effects.bat"
-
-    @property
     def remote_output_dir(self) -> str:
         return rf"{self.task_dir}\{_canonical_output_dir_name(self.REMOTE_OUTPUT_DIR)}"
 
@@ -130,22 +126,17 @@ class ButterflyFlapConfig(GeneralTaskConfig):
 
     @property
     def task_description(self) -> str:
-        return rf"""Create a butterfly wing-flap animation in Adobe After Effects.
+        return rf"""Create a butterfly wing-flap animation. You may use any software.
 
 Remote workspace:
 - Task folder: {self.task_dir}
-
-Software:
-- Launch Adobe After Effects using: {self.ae_launcher}
-- The installed After Effects version may differ from the original submission; use the available AE version opened by this launcher.
-- After Effects is the intended tool, but if AE is not available in the environment, any other way to achieve the goal is welcome (the output MP4 is what gets evaluated).
 
 Visible inputs:
 - Source butterfly artwork: {self.source_image}
 - Detailed task spec: {self.task_spec}
 
 What to do:
-1. Import the butterfly image into After Effects.
+1. Use the provided butterfly image as the source artwork.
 2. Split or mask the butterfly into a central body plus left and right wings.
 3. Set wing anchor points near the wing-body joints.
 4. Animate the wings with repeated Y-rotation or equivalent perspective deformation.
@@ -172,7 +163,6 @@ Do not modify files under input/. Write only the final MP4 under output/.
                 "input_dir": self.input_dir,
                 "source_image": self.source_image,
                 "task_spec": self.task_spec,
-                "ae_launcher": self.ae_launcher,
                 "output_dir_name": _canonical_output_dir_name(self.REMOTE_OUTPUT_DIR),
                 "output_video": self.remote_output_video,
                 "output_video_name": self.OUTPUT_VIDEO_NAME,
@@ -200,6 +190,10 @@ def load():
 @cb.setup_task(split="train")
 async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
+    await session.write_file(
+        task_cfg.metadata["task_spec"],
+        (Path(__file__).parent / "task_spec.md").read_text(encoding="utf-8"),
+    )
 
 
 @cb.evaluate_task(split="train")

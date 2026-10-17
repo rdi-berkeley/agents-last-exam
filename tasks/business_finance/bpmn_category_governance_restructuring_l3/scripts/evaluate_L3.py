@@ -38,7 +38,6 @@ import re
 import sys
 import traceback
 from collections import defaultdict, deque
-from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 try:
@@ -75,6 +74,8 @@ LOGISTICS_ANCHORS: Set[str] = {
     "logistics_lane",
     "logistics_capacity_confirmation",
 }
+
+ORIGINAL_EXCLUSIVE_GATEWAYS: Set[str] = {"gw_exception_exists", "gw_exception_join"}
 
 # Process definition keys
 ORIGINAL_PROCESS_KEY = "zMBCategoryGovernance_original"
@@ -408,6 +409,35 @@ def gateway_conditions_text(graph: BPMNGraph, gw_id: str) -> str:
 # ============================================================================
 
 
+def _design_decision_fields(body: str) -> Dict[str, List[str]]:
+    """Read labeled Markdown fields in one modification section."""
+    fields: Dict[str, List[str]] = {}
+    current = None
+    for line in body.splitlines():
+        text = re.sub(r"^[ \t]*(?:[-*][ \t]+|#{1,6}[ \t]+)?(?:\*\*)?", "", line)
+        match = re.match(
+            r"(chosen[ _-]*approach|rejected[ _-]*alternatives|"
+            r"rationale(?:[ _]+(?:cites|references)(?:[ _]+rules?)?)?|trade[ _-]*off)"
+            r"(?:\*\*)?[ \t]*:[ \t]*(?:\*\*)?[ \t]*(.*)$",
+            text, flags=re.IGNORECASE,
+        )
+        if match:
+            label = match.group(1).lower()
+            current = next(key for key in ("chosen", "rejected", "rationale", "trade")
+                           if label.startswith(key))
+            fields.setdefault(current, [])
+            text = match.group(2)
+        if current and text.strip():
+            fields[current].append(text.strip())
+    return fields
+
+
+def _normalize_design_alternative(text: str) -> str:
+    text = re.sub(r"^(?:[-*]|\d+[.)])[ \t]+", "", text.strip())
+    text = " ".join(text.split()).rstrip(" .,!?:;")
+    return text if any(character.isalnum() for character in text) else ""
+
+
 def discover_nodes(graph: BPMNGraph) -> Dict[str, Optional[str]]:
     """Locate the key Solution A nodes by name/ID matching + topology hints.
 
@@ -670,17 +700,19 @@ def discover_nodes(graph: BPMNGraph) -> Dict[str, Optional[str]]:
             claimed_tasks.add(discovered["senior_lead_escalation_task"])
 
     if discovered["merchant_coordination_task"] is None:
+        coordination_exclusions = claimed_tasks - {discovered["campaign_coordination_task"]}
         discovered["merchant_coordination_task"] = (
-            _find_task_by_all_fragments(["merchant", "readiness"], exclude=claimed_tasks)
-            or _find_task_by_all_fragments(["merchant", "coordination"], exclude=claimed_tasks)
+            _find_task_by_all_fragments(["merchant", "readiness"], exclude=coordination_exclusions)
+            or _find_task_by_all_fragments(["merchant", "coordination"], exclude=coordination_exclusions)
         )
         if discovered["merchant_coordination_task"]:
             claimed_tasks.add(discovered["merchant_coordination_task"])
 
     if discovered["campaign_coordination_task"] is None:
+        coordination_exclusions = claimed_tasks - {discovered["merchant_coordination_task"]}
         discovered["campaign_coordination_task"] = (
-            _find_task_by_all_fragments(["campaign", "cadence"], exclude=claimed_tasks)
-            or _find_task_by_all_fragments(["campaign", "coordination"], exclude=claimed_tasks)
+            _find_task_by_all_fragments(["campaign", "cadence"], exclude=coordination_exclusions)
+            or _find_task_by_all_fragments(["campaign", "coordination"], exclude=coordination_exclusions)
         )
         if discovered["campaign_coordination_task"]:
             claimed_tasks.add(discovered["campaign_coordination_task"])
@@ -776,6 +808,56 @@ def _nearest_parallel_split_ancestor(
     return None
 
 
+def _nested_parallel_join_split(
+    graph: "BPMNGraph",
+    join: str,
+    enclosing_joins: Optional[Set[str]] = None,
+) -> Optional[str]:
+    """Return a common split with distinct branches, closing nested joins first."""
+    blocked = (enclosing_joins or set()) | {join}
+    origins: List[Tuple[str, str]] = []
+    for incoming in graph.in_flows.get(join, []):
+        pending = [(incoming["source"], incoming["flow_id"])]
+        visited: Set[Tuple[str, str]] = set()
+        branch_origins: Set[Tuple[str, str]] = set()
+        while pending:
+            node, flow_id = pending.pop()
+            if node in blocked:
+                return None
+            if (node, flow_id) in visited:
+                continue
+            visited.add((node, flow_id))
+            if graph.is_parallel_gateway(node):
+                inc = len(graph.in_flows.get(node, []))
+                out = len(graph.outgoing_flows(node))
+                if inc <= 1 and out >= 2:
+                    branch_origins.add((node, flow_id))
+                    continue
+                if inc >= 2 and out == 1:
+                    split = _nested_parallel_join_split(graph, node, blocked)
+                    if split is None or inc != len(graph.outgoing_flows(split)):
+                        return None
+                    node = split
+                else:
+                    return None
+            if node in graph.boundary_events:
+                if graph.elements[node].get("cancelActivity", "true").lower() != "true":
+                    return None
+                pending.append((graph.boundary_events[node], flow_id))
+                continue
+            predecessors = graph.in_flows.get(node, [])
+            if not predecessors:
+                return None
+            pending.extend((flow["source"], flow["flow_id"]) for flow in predecessors)
+        if len(branch_origins) != 1:
+            return None
+        origins.append(next(iter(branch_origins)))
+    if len(origins) < 2 or len(set(origins)) != len(origins):
+        return None
+    splits = {split for split, _ in origins}
+    return next(iter(splits)) if len(splits) == 1 else None
+
+
 def _count_user_tasks_on_path(
     graph: "BPMNGraph",
     start: str,
@@ -813,48 +895,34 @@ def _find_non_terminating_paths(
     graph: "BPMNGraph",
     start: str,
     terminal_ids: Set[str],
-    max_depth: int = 40,
 ) -> List[str]:
-    """Walk forward from start; return list of reachable nodes that have no
-    outgoing flow and are NOT in terminal_ids (dead ends). Also flags nodes
-    whose outgoing all lead to cycles without ever reaching a terminal."""
+    """Return reachable dead ends or entries to cycles with no terminal exit."""
+    terminal_reach = set(terminal_ids)
+    queue: deque = deque(terminal_ids)
+    while queue:
+        node = queue.popleft()
+        for predecessor in graph.predecessors(node):
+            if predecessor not in terminal_reach:
+                terminal_reach.add(predecessor)
+                queue.append(predecessor)
+
     visited: Set[str] = set()
     dead: List[str] = []
-    queue: deque = deque([(start, 0)])
-    # Forward-reach terminal set
-    terminal_reach: Dict[str, bool] = {}
-
-    def reaches_terminal(node: str, depth: int, path: Set[str]) -> bool:
-        if node in terminal_ids:
-            return True
-        if node in terminal_reach:
-            return terminal_reach[node]
-        if depth > max_depth or node in path:
-            return False
-        path = path | {node}
-        succs = graph.successors(node)
-        if not succs:
-            terminal_reach[node] = False
-            return False
-        ok = any(reaches_terminal(s, depth + 1, path) for s in succs)
-        terminal_reach[node] = ok
-        return ok
-
+    queue = deque([start])
     while queue:
-        node, depth = queue.popleft()
-        if node in visited or depth > max_depth:
+        node = queue.popleft()
+        if node in visited:
             continue
         visited.add(node)
         if node in terminal_ids:
             continue
-        if not reaches_terminal(node, 0, set()):
-            # This node, once reached, cannot get out to a terminal
+        if node not in terminal_reach:
             dead.append(node)
             continue
         for succ in graph.successors(node):
             if succ not in visited:
-                queue.append((succ, depth + 1))
-    return dead
+                queue.append(succ)
+    return sorted(dead)
 
 
 def _reaches_avoiding(
@@ -1299,7 +1367,6 @@ def check_structural(graph: BPMNGraph) -> Tuple[Dict, Dict]:
             graph,
             start=st,
             terminal_ids={"main_end", TERMINAL_ESCALATION_END},
-            max_depth=40,
         )
         if dead:
             a43_ok = False
@@ -1359,7 +1426,7 @@ def check_structural(graph: BPMNGraph) -> Tuple[Dict, Dict]:
             a45_issues.append({"join": eid, "reason": "source_without_split_ancestor",
                                "ancestors": split_ancestors})
             continue
-        if len(set(split_ancestors)) > 1:
+        if len(set(split_ancestors)) > 1 and _nested_parallel_join_split(graph, eid) is None:
             a45_issues.append({"join": eid, "reason": "sources_from_different_splits",
                                "ancestors": split_ancestors})
     a45_ok = len(a45_issues) == 0
@@ -1555,6 +1622,8 @@ def check_structural(graph: BPMNGraph) -> Tuple[Dict, Dict]:
             continue
         blob = (graph.get_task_name(eid) + " " + eid + " "
                 + graph.get_documentation(eid)).lower()
+        blob = re.sub(r"\ba\s*/\s*b\b", "ab", blob)
+        blob = re.sub(r"[\s-]+", "_", blob)
         if any(p in blob for p in canonical_task_patterns):
             continue  # matches a canonical domain pattern
         shadow_tasks.append(eid)
@@ -1640,15 +1709,17 @@ def check_structural(graph: BPMNGraph) -> Tuple[Dict, Dict]:
 # ============================================================================
 
 
-def check_test_results(results_path: str) -> Dict:
+def check_test_results(results_path: str, trusted_results: Optional[Dict] = None) -> Dict:
     """Section B: Load test_results.json and check pass rate.
 
-    L3 hardened threshold: >=95% overall, AND the anti_gaming category must be
-    10/10 (mandatory, doesn't count toward the 95% percentage gate - a submission
-    with 98/100 but 3/10 anti_gaming still fails)."""
+    L3 threshold: >=57/60 overall, AND the five anti_gaming probes must all pass.
+    """
     try:
-        with open(results_path) as f:
-            data = json.load(f)
+        if trusted_results is None:
+            with open(results_path) as f:
+                data = json.load(f)
+        else:
+            data = trusted_results
     except (FileNotFoundError, json.JSONDecodeError) as e:
         return {
             "error": str(e),
@@ -1755,11 +1826,17 @@ def check_compliance(
     #   (a) structured: {"enforcing_elements":[{"element":<id>, ...}, ...]}
     #   (b) free-text:  {"evidence": "<sentence mentioning element IDs>"}
     c05_issues: List[Dict[str, str]] = []
+    lane_reference_ids = {lane_id for lane_id in graph.lanes if lane_id}
+    lane_reference_ids.update(
+        element.get("id") for element in graph.root.iter(_qn("laneSet"))
+        if element.get("id")
+    )
     try:
         with open(rules_path) as f:
             rules_data = json.load(f)
         rule_entries = rules_data.get("rules", {})
         known_ids = {eid for eid in graph.elements.keys() if len(eid) >= 4}
+        known_ids.update(lane_reference_ids)
         # Also count sequenceFlow IDs as valid BPMN references (reference
         # solution cites flow_* for routing rules like "non-critical rejection
         # loops back to planning").
@@ -1794,6 +1871,11 @@ def check_compliance(
                 if evidence.strip():
                     for eid in known_ids:
                         if eid in evidence:
+                            if eid in lane_reference_ids and not re.search(
+                                rf"(?<![\w:.-]){re.escape(eid)}(?![\w:-]|\.[\w:.-])",
+                                evidence,
+                            ):
+                                continue
                             bound = True
                             break
             if not bound:
@@ -1827,6 +1909,7 @@ def check_compliance(
             struct = json.load(f)
         mods_data = struct.get("modifications", {})
         known_ids = set(graph.elements.keys())
+        known_ids.update(lane_reference_ids)
         # Also accept flow IDs and process key as structural references
         for flows in graph.out_flows.values():
             for fl in flows:
@@ -2040,7 +2123,7 @@ def check_compliance(
     # as the rules_path (submission directory). For each modification_1..18,
     # a section must be present with:
     #   - Chosen approach (non-empty)
-    #   - Rejected alternatives (>=2 distinct lines, different from chosen)
+    #   - Rejected alternatives (>=2 distinct entries, different from chosen)
     #   - Rationale citing >=1 existing rule_ID
     #   - Trade-off (non-empty)
     import os
@@ -2063,49 +2146,29 @@ def check_compliance(
             if mname not in sections:
                 c11_issues.append({"modification": mname, "reason": "section_missing"})
                 continue
-            body = sections[mname].lower()
-            chosen_m = _re.search(r"chosen\s*approach\s*:?\s*(.+)", body)
-            chosen = (chosen_m.group(1).split("\n")[0].strip() if chosen_m else "")
+            fields = _design_decision_fields(sections[mname].lower())
+            chosen = _normalize_design_alternative(" ".join(fields.get("chosen", [])))
             if not chosen:
                 c11_issues.append({"modification": mname, "reason": "no_chosen_approach"})
                 continue
-            # Rejected alternatives: count non-empty bullet lines beneath
-            # "rejected alternatives". End-anchor to "rationale cites" or
-            # "trade-off" line (not to any "rationale" substring which may
-            # legitimately appear inside bullet text like "rationale log").
-            rej_block = _re.search(
-                r"rejected\s*alternatives\s*:?(.*?)(?:rationale\s*(?:cites|references)|trade-?off|$)",
-                body, flags=_re.DOTALL
-            )
-            if not rej_block:
+            if "rejected" not in fields:
                 c11_issues.append({"modification": mname, "reason": "no_rejected_alternatives_section"})
                 continue
-            bullets = [
-                ln.strip().lstrip("-*").strip()
-                for ln in rej_block.group(1).split("\n")
-                if ln.strip().lstrip("-*").strip()
-            ]
-            # distinct from chosen
-            distinct = [b for b in bullets if b and b != chosen]
+            alternatives = {
+                _normalize_design_alternative(alternative)
+                for line in fields["rejected"]
+                for alternative in line.split(";")
+            }
+            distinct = alternatives - {"", chosen}
             if len(distinct) < 2:
                 c11_issues.append({"modification": mname, "reason": "fewer_than_2_rejected_alternatives"})
                 continue
-            # Rationale must cite >=1 valid rule_ID. Anchor to the
-            # "rationale cites" / "cites rule" phrase; "out_rationale"
-            # mentioned in chosen_approach should not be confused for the
-            # rationale bullet.
-            rationale_m = _re.search(
-                r"rationale\s+(?:cites|references)\s+rules?\s*:?\*{0,2}\s*([^\n]+)",
-                body,
-            )
-            rationale = rationale_m.group(1) if rationale_m else ""
-            cited_rules = [rid for rid in REQUIRED_RULES if rid in rationale]
+            rationale = " ".join(fields.get("rationale", []))
+            cited_rules = set(_re.findall(r"\brule_\d+[a-z]?\b", rationale)) & set(REQUIRED_RULES)
             if not cited_rules:
                 c11_issues.append({"modification": mname, "reason": "no_valid_rule_cited"})
                 continue
-            # Trade-off non-empty (match the bullet, not substrings of other words)
-            tradeoff_m = _re.search(r"trade-?off[^\n]*:?\s*([^\n]+)", body)
-            tradeoff = (tradeoff_m.group(1).strip() if tradeoff_m else "")
+            tradeoff = " ".join(fields.get("trade", []))
             if not tradeoff:
                 c11_issues.append({"modification": mname, "reason": "trade_off_empty"})
         results["c11_design_decisions_audit"] = len(c11_issues) == 0
@@ -2304,7 +2367,7 @@ def check_anti_gaming(graph: BPMNGraph, discovered: Dict[str, Optional[str]]) ->
     decision_role = graph.get_assignee(decision_task) if decision_task else ""
 
     # Count in how many sets the same role appears
-    all_roles = set()
+    _all_roles = set()
     role_in_sets: Dict[str, Set[str]] = defaultdict(set)
     if exec_role:
         role_in_sets[exec_role].add("execution")
@@ -2326,20 +2389,16 @@ def check_anti_gaming(graph: BPMNGraph, discovered: Dict[str, Optional[str]]) ->
         and "team_executes_plan" in graph.elements
     )
 
-    # D3: <=30% of decisions routed to senior lead alone
+    # D3: Rule 11 counts direct senior-assigned targets of new exclusive gateways.
     total_decision_flows = 0
     senior_terminal_flows = 0
-    senior_task = discovered.get("senior_lead_escalation_task")
     for eid in graph.elements:
-        if not graph.is_decision_gateway(eid):
+        if graph.get_type(eid) != "exclusiveGateway" or eid in ORIGINAL_EXCLUSIVE_GATEWAYS:
             continue
         for f in graph.outgoing_flows(eid):
             total_decision_flows += 1
             tgt = f.get("target", "")
-            if tgt == senior_task:
-                senior_terminal_flows += 1
-            elif senior_task and graph.is_reachable(tgt, senior_task, max_depth=3):
-                # near-direct routing
+            if graph.get_type(tgt) == "userTask" and graph.get_assignee(tgt) == ROLE_SENIOR_LEAD:
                 senior_terminal_flows += 1
     ratio = senior_terminal_flows / total_decision_flows if total_decision_flows > 0 else 0
     results["d03_senior_escalation_ratio_le_30"] = ratio <= 0.30
@@ -2669,7 +2728,7 @@ def evaluate(args) -> Dict:
     print("\n" + "=" * 60)
     print("B. RUNTIME SCENARIOS (>=95% required AND anti_gaming mandatory, 60 scenarios for L3 hardened)")
     print("=" * 60)
-    test_check = check_test_results(args.results)
+    test_check = check_test_results(args.results, getattr(args, "trusted_results", None))
     report["sections"]["B_scenarios"] = test_check
     print(f"  Passed: {test_check.get('passed_scenarios', 0)}/{test_check.get('total_scenarios', 0)}")
     print(f"  Pass rate: {test_check.get('pass_rate', 0):.1%}")

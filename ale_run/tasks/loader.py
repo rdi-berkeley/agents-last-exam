@@ -41,21 +41,14 @@ _TASK_IMPORT_LOCK = threading.Lock()
 
 
 def list_tasks(root: str | os.PathLike[str] = "tasks") -> list[str]:
-    """Discover task directories under ``root``.
-
-    A task is any directory containing a ``main.py``. Returned paths are
-    relative to ``root`` with ``/`` separators (e.g. ``"demo/hello"``), i.e.
-    exactly the form used in ``selected_tasks/*.txt`` and experiment yamls,
-    and sorted. Hidden dirs and ``__pycache__`` are skipped. A missing root
-    yields an empty list.
-    """
+    """Return sorted task paths without importing task modules or following directory links."""
     root_path = Path(root)
     if not root_path.is_dir():
         return []
-    found: list[str] = []
+    found = []
     for dirpath, dirnames, filenames in os.walk(root_path):
         dirnames[:] = sorted(
-            d for d in dirnames if not d.startswith(".") and d != "__pycache__"
+            name for name in dirnames if not name.startswith(".") and name != "__pycache__"
         )
         if "main.py" in filenames and Path(dirpath) != root_path:
             found.append(Path(dirpath).relative_to(root_path).as_posix())
@@ -414,6 +407,7 @@ class TaskLoader:
             reference_dir=metadata.get("reference_dir"),
             reference_gcs_prefix=metadata.get("reference_gcs_prefix"),
             remote_output_dir=metadata.get("remote_output_dir"),
+            sandbox_task_name=metadata.get("sandbox_task_name"),
         )
 
     def get_setup_fn(self):

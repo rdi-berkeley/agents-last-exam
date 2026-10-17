@@ -117,6 +117,8 @@ class TestRunMemoryFlush:
                     flush_system_prompt="system",
                     silent_token="<silent>",
                     thinking_params={"reasoning": {"effort": "high", "summary": "concise"}},
+                    api_key="custom-key",
+                    api_base="http://127.0.0.1:4010/v1",
                 )
             )
 
@@ -126,6 +128,8 @@ class TestRunMemoryFlush:
             "effort": "high",
             "summary": "concise",
         }
+        assert mock_aresponses.await_args.kwargs["api_key"] == "custom-key"
+        assert mock_aresponses.await_args.kwargs["api_base"] == "http://127.0.0.1:4010/v1"
         assert memory_store.last_session_content == "remember staircase"
         assert session_mgr.flush_recorded is True
 

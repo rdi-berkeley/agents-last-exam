@@ -60,7 +60,7 @@ def _check_csv(output_dir):
     return True, "ok"
 
 
-def _compute_metrics(preds, truth, train_outputs):
+def _compute_metrics(preds, truth, reference_train_outputs):
     tas_rmse = float(np.sqrt(np.mean((preds[:, 0] - truth[:, 0]) ** 2)))
     pr_rmse = float(np.sqrt(np.mean((preds[:, 1] - truth[:, 1]) ** 2)))
 
@@ -71,7 +71,7 @@ def _compute_metrics(preds, truth, train_outputs):
         np.sqrt(np.mean((preds[:, 1].mean(axis=0) - truth[:, 1].mean(axis=0)) ** 2))
     )
 
-    clim = train_outputs.mean(axis=0)
+    clim = reference_train_outputs.mean(axis=0)
     clim_tiled = np.tile(clim, (truth.shape[0], 1, 1, 1))
     clim_rmse = float(np.sqrt(np.mean((clim_tiled - truth) ** 2)))
     pred_rmse = float(np.sqrt(np.mean((preds - truth) ** 2)))
@@ -115,13 +115,22 @@ def verify(output_dir, reference_dir, input_dir):
 
     preds = _load_npy(os.path.join(output_dir, "processed/test_predictions.npy"))
     truth = _load_npy(os.path.join(reference_dir, "processed/test_outputs.npy"))
-    train_out = _load_npy(os.path.join(output_dir, "processed/train_outputs.npy"))
+    reference_train_out = _load_npy(
+        os.path.join(reference_dir, "processed/train_outputs.npy")
+    )
 
     if preds.shape != truth.shape:
         result["detail"] = f"prediction shape {list(preds.shape)} != truth {list(truth.shape)}"
         return result
 
-    metrics = _compute_metrics(preds, truth, train_out)
+    if list(reference_train_out.shape) != list(expected_shapes["train_outputs"]):
+        result["detail"] = (
+            "reference train_outputs shape "
+            f"{list(reference_train_out.shape)} != {expected_shapes['train_outputs']}"
+        )
+        return result
+
+    metrics = _compute_metrics(preds, truth, reference_train_out)
     result.update(metrics)
 
     with open(os.path.join(reference_dir, "evaluation_contract.json")) as f:

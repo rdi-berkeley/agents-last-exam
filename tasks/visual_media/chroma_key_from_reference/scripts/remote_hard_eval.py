@@ -13,6 +13,10 @@ HARD_QUALITY_FULL_FRAME_WEIGHT = 0.3
 HARD_QUALITY_ROI_EDGE_WEIGHT = 0.7
 
 
+class InvalidOutputVideoError(Exception):
+    pass
+
+
 def clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
@@ -286,7 +290,10 @@ def main() -> None:
         raise FileNotFoundError(f"missing output video: {output_video}")
 
     input_w, input_h, _, _ = probe_video(input_video)
-    output_w, output_h, fps, frame_count = probe_video(output_video)
+    try:
+        output_w, output_h, fps, frame_count = probe_video(output_video)
+    except RuntimeError as exc:
+        raise InvalidOutputVideoError(str(exc)) from exc
     duration = max(0.0, (frame_count - 1) / max(fps, 1e-6)) if frame_count > 0 else 0.0
 
     points, sample_count = load_breakpoints(point_file, args.sample_count)
@@ -305,7 +312,10 @@ def main() -> None:
 
         in_frame = read_frame_at(input_video, time_sec)
         ref_frame = read_frame_at(reference_video, time_sec)
-        out_frame = read_frame_at(output_video, time_sec)
+        try:
+            out_frame = read_frame_at(output_video, time_sec)
+        except RuntimeError as exc:
+            raise InvalidOutputVideoError(str(exc)) from exc
 
         input_full_path = frames_dir / f"input_{identifier}.png"
         ref_full_path = frames_dir / f"reference_{identifier}.png"
@@ -390,4 +400,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except InvalidOutputVideoError as exc:
+        print(json.dumps({"score": 0.0, "details": [], "frame_pairs": [],
+                          "reason": "invalid_output_video", "error": str(exc)}))

@@ -136,24 +136,19 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     output_file = meta["output_file"]
     question_file = meta["question_file"]
 
-    try:
-        if not (await session.file_exists(output_file) or await session.directory_exists(output_file)):
-            logger.warning("Missing storyboard output: %s", output_file)
-            return [0.0]
-        if not (await session.file_exists(question_file) or await session.directory_exists(question_file)):
-            logger.warning("Missing question file: %s", question_file)
-            return [0.0]
-
-        storyboard_docx = await session.read_bytes(output_file)
-        question_docx = await session.read_bytes(question_file)
-        result = await score_storyboard_docx(
-            storyboard_docx=storyboard_docx,
-            question_docx=question_docx,
-            model=meta.get("judge_model"),
-        )
-    except Exception as exc:
-        logger.exception("Evaluation failed: %s", exc)
+    if not await session.file_exists(question_file):
+        raise FileNotFoundError(f"Missing official question file: {question_file}")
+    if not await session.file_exists(output_file):
+        logger.warning("Missing storyboard output: %s", output_file)
         return [0.0]
 
+    storyboard_docx = await session.read_bytes(output_file)
+    question_docx = await session.read_bytes(question_file)
+    result = await score_storyboard_docx(
+        storyboard_docx=storyboard_docx,
+        question_docx=question_docx,
+        model=meta.get("judge_model"),
+    )
+
     logger.info("evaluation=%s", json.dumps(result, sort_keys=True))
-    return [float(result.get("score", 0.0))]
+    return [float(result["score"])]

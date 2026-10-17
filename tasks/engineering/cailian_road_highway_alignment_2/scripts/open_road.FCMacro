@@ -1,0 +1,17 @@
+import os
+from pathlib import Path
+import sys
+
+import FreeCAD
+
+software = Path(os.environ["CAILIAN_SOFTWARE"])
+sys.path.insert(0, str(software))
+sys.path.insert(0, str(software / "runtime/Road"))
+sys.path.insert(0, str(software / "runtime/road-python"))
+import freecad
+
+freecad.__path__.append(str(software / "runtime/Road/freecad"))
+from road_compat import install
+
+install()
+FreeCAD.openDocument(str(software.parent / "input/declared-survey-terrain.FCStd"))

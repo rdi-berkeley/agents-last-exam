@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,12 +13,11 @@ import cua_bench as cb
 
 from tasks.common_config import GeneralTaskConfig
 from tasks.common_setup import BaseTaskSetup
-
-SCRIPTS_DIR = Path(__file__).parent / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-from score_onepager_v2 import SharedVlmJudge, score_output_v2
+from tasks.business_finance.saas_onepager_brand_refresh_instance_1.scripts.score_onepager_v2 import (
+    SharedVlmJudge,
+    score_output_v2,
+)
+from tasks.utils.evaluation import JudgeInfrastructureError
 
 _setup = BaseTaskSetup()
 
@@ -75,8 +73,8 @@ class OnePagerBrandRefreshConfig(GeneralTaskConfig):
         return rf"{self.input_dir}\assets"
 
     @property
-    def powerpoint_launcher(self) -> str:
-        return rf"{self.software_dir}\OpenPowerPoint.bat"
+    def impress_executable(self) -> str:
+        return r"C:\Program Files\LibreOffice\program\simpress.exe"
 
     @property
     def output_png(self) -> str:
@@ -127,7 +125,8 @@ You are editing a SaaS one-pager on a Windows VM.
 `{self.VARIANT_NAME}`: {self.VARIANT_LABEL}
 
 ## Runtime Entry Point
-- Open PowerPoint from: `{self.powerpoint_launcher}`
+- Open LibreOffice Impress from: `{self.impress_executable}`.
+- Use the installed LibreOffice renderer for the final export. Microsoft PowerPoint is not required.
 
 ## Visible Inputs
 - Source one-pager PNG: `{self.original_png}`
@@ -141,15 +140,16 @@ You are editing a SaaS one-pager on a Windows VM.
 
 ## What You Must Do
 1. Read the staged brief and input files.
-2. Rebuild the one-pager as a meaningfully editable single-slide PowerPoint.
+2. Rebuild the one-pager as a meaningfully editable single-slide PPTX presentation.
 3. Apply the requested NorthstarOS brand refresh while preserving the overall composition.
-4. Save the editable PowerPoint exactly to `{self.output_pptx}`.
+4. Save the editable presentation in PowerPoint (.pptx) format exactly to `{self.output_pptx}`.
 5. Export the final slide exactly to `{self.output_png}`.
 
 ## Output Requirements
 - The `.pptx` must remain meaningfully editable.
 - Save only the final required deliverables inside `{self.remote_output_dir}`.
 - Do not modify files under `input/`.
+- Preserve the KPI labels and values from `metrics.csv`; do not rename the labels.
 """
 
     def to_metadata(self) -> dict[str, Any]:
@@ -173,7 +173,7 @@ You are editing a SaaS one-pager on a Windows VM.
             "task_brief": self.task_brief,
             "output_contract": self.output_contract,
             "assets_dir": self.assets_dir,
-            "powerpoint_launcher": self.powerpoint_launcher,
+            "impress_executable": self.impress_executable,
             "output_png": self.output_png,
             "output_pptx": self.output_pptx,
             "reference_png": self.reference_png,
@@ -253,10 +253,7 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         logger.error("[%s] Missing evaluation artifact: %s", meta["variant_name"], exc)
         return [0.0]
     except Exception as exc:
-        logger.error(
-            "[%s] Failed to read remote evaluation artifacts: %s", meta["variant_name"], exc
-        )
-        return [0.0]
+        raise JudgeInfrastructureError("Failed to read one-pager evaluation artifacts") from exc
 
     reference_paths = {
         "edited_onepager.png": meta["reference_png"],
@@ -270,14 +267,8 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     }
     try:
         reference_bytes = await _read_required_bytes(session, reference_paths)
-    except FileNotFoundError as exc:
-        logger.error("[%s] Missing staged evaluator reference: %s", meta["variant_name"], exc)
-        return [0.0]
     except Exception as exc:
-        logger.error(
-            "[%s] Failed to read staged evaluator reference: %s", meta["variant_name"], exc
-        )
-        return [0.0]
+        raise JudgeInfrastructureError("Failed to read staged one-pager reference") from exc
 
     with tempfile.TemporaryDirectory(prefix=f"{TASK_NAME}_") as tmp_dir:
         tmp_root = Path(tmp_dir)
@@ -293,49 +284,27 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
         for name, payload in reference_bytes.items():
             (reference_dir / name).write_bytes(payload)
 
-        # Concept image for the anti-copy gate (optional; gate is skipped if absent).
-        original_png_remote = meta.get("original_png")
         try:
-            if original_png_remote and (await session.file_exists(original_png_remote) or await session.directory_exists(original_png_remote)):
-                (input_dir / "original_onepager.png").write_bytes(
-                    await session.read_bytes(original_png_remote)
-                )
-        except Exception as exc:
-            logger.warning(
-                "[%s] anti-copy concept image unavailable: %s", meta["variant_name"], exc
+            original = await _read_required_bytes(
+                session, {"original_onepager.png": meta["original_png"]}
             )
+            (input_dir / "original_onepager.png").write_bytes(original["original_onepager.png"])
+        except Exception as exc:
+            raise JudgeInfrastructureError("Failed to read one-pager source image") from exc
 
-        # VLM judge owns the soft visual/asset dimensions. Construct it, but never
-        # let a missing key / API error zero out the run: fall back to the
-        # render-independent deterministic layer (which still passes a correct
-        # rebuild and fails the exploit/copy classes).
-        judge = None
         try:
             judge = SharedVlmJudge()
-        except Exception as exc:
-            logger.error(
-                "[%s] VLM judge unavailable; scoring deterministic-only: %s",
-                meta["variant_name"],
-                exc,
-            )
-
-        try:
             result = score_output_v2(
                 output_dir, reference_dir, judge=judge, input_dir=input_dir
             )
+        except JudgeInfrastructureError:
+            raise
         except Exception as exc:
-            logger.error(
-                "[%s] scoring with VLM failed (%s); retrying deterministic-only",
-                meta["variant_name"],
-                exc,
-            )
-            result = score_output_v2(
-                output_dir, reference_dir, judge=None, input_dir=input_dir
-            )
+            raise JudgeInfrastructureError("One-pager evaluation failed") from exc
 
         logger.info(
             "[%s] evaluation result: %s",
             meta["variant_name"],
             json.dumps(result, ensure_ascii=False),
         )
-        return [1.0 if result.get("pass") else 0.0]
+        return [result["final_score"]]

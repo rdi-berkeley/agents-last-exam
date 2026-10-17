@@ -12,8 +12,9 @@ A task asks for a logical snapshot (``cpu-free`` / ``gpu-free`` / ...);
 the provider resolves it via the yaml ``snapshots`` map to a GCE image +
 zone list, picks a machine (task-card ``vm.machineType`` override, else
 a default, with C→N2 fallback), and tries the zones in order on capacity
-errors. Boot disk size comes from the image's baked size; disk *type* is
-derived from the machine family (c4/m4/x4 → hyperdisk-balanced, else pd-ssd).
+errors. Boot disk size defaults to the image's baked size unless overridden;
+disk *type* is derived from the machine family (c4/m4/x4 → hyperdisk-balanced,
+else pd-ssd).
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ import json
 import logging
 import random
 import re
+import shlex
 import time
 from dataclasses import dataclass, field as dataclass_field
 from pathlib import Path
@@ -256,6 +258,7 @@ class SnapshotConfig:
     image: str          # GCE image name (= framework Image-registry family)
     gpu: str | None     # accelerator type; None for CPU snapshots
     zones: tuple[str, ...]   # zones to try, in order, on capacity errors
+    boot_disk_size_gb: int | None = None
     resolution: tuple[int, int] | None = None
     """Windows display resolution (w, h) to force after the VM boots. None
     leaves the image/driver default. Applied in acquire() for Windows snapshots
@@ -267,6 +270,8 @@ class SnapshotConfig:
     to 1920x1440 (e.g. 1024x768, 1280x800, 1920x1080); GPU VMs (nvidia-l4-vws /
     GRID) are a superset up to 7680x4320. 1024x768 and 1920x1080 work on both.
     The operator-facing list lives in the environment yaml comment."""
+    image_revision: str | None = None
+    """Optional expected numeric sourceImageId of the acquired boot disk."""
 
     @property
     def os(self) -> str:
@@ -309,9 +314,23 @@ def _build_snapshot_config(raw: Any) -> SnapshotConfig:
     zones = tuple(raw.get("zones") or ())
     if not zones:
         raise KeyError(f"snapshot {image!r} missing required `zones`")
+    boot_disk_size_gb = raw.get("boot_disk_size_gb")
+    if boot_disk_size_gb is not None:
+        boot_disk_size_gb = int(boot_disk_size_gb)
+        if boot_disk_size_gb <= 0:
+            raise ValueError(
+                f"snapshot {image!r} boot_disk_size_gb must be positive"
+            )
+    image_revision = raw.get("image_revision")
+    if image_revision is not None:
+        image_revision = str(image_revision).strip() or None
+    if image_revision is not None and not re.fullmatch(r"[1-9][0-9]*", image_revision):
+        raise ValueError("gcloud image_revision must be a numeric GCE image ID")
     return SnapshotConfig(
         image=str(image), gpu=raw.get("gpu"), zones=zones,
+        boot_disk_size_gb=boot_disk_size_gb,
         resolution=_parse_resolution(raw.get("resolution"), image),
+        image_revision=image_revision,
     )
 
 
@@ -428,10 +447,11 @@ def _build_create_args(
     label_str: str,
     project: str,
     boot_disk_type: str,
+    boot_disk_size_gb: int | None,
 ) -> list[str]:
     """``gcloud compute instances create`` argv.
 
-    Boot disk size is NOT passed — we use the GCE image's baked size.
+    Boot disk size defaults to the image's baked size unless overridden.
     """
     args = [
         "compute",
@@ -449,6 +469,8 @@ def _build_create_args(
         f"--labels={label_str}",
         "--format=json",
     ]
+    if boot_disk_size_gb is not None:
+        args.append(f"--boot-disk-size={boot_disk_size_gb}GB")
     if gpu and not _is_accelerator_machine_type(machine_type):
         args.append(f"--accelerator=type={gpu},count=1")
     # onHostMaintenance: some families (c4) REQUIRE TERMINATE and reject MIGRATE;
@@ -472,6 +494,7 @@ async def _try_create_in_zone(
     zone: str,
     label_str: str,
     project: str,
+    boot_disk_size_gb: int | None,
 ) -> tuple[bool, str, str, str]:
     args = _build_create_args(
         name=name,
@@ -485,6 +508,7 @@ async def _try_create_in_zone(
         label_str=label_str,
         project=project,
         boot_disk_type=_boot_disk_type(machine_type),
+        boot_disk_size_gb=boot_disk_size_gb,
     )
     last_stderr = ""
     for attempt in range(1, _GCP_MAX_RETRIES_TRANSIENT + 1):
@@ -565,6 +589,39 @@ async def _poll_for_ip(name: str, zone: str, project: str, timeout: float = 120)
                 pass
         await asyncio.sleep(5)
     raise RuntimeError(f"Timed out waiting for external IP on {name}")
+
+
+async def _get_image_provenance(
+    inst: dict[str, Any], snapshot: SnapshotConfig, *, zone: str, project: str,
+) -> dict[str, Any]:
+    boot_disk = next((disk for disk in inst.get("disks", []) if disk.get("boot")), None)
+    if not boot_disk or not boot_disk.get("source"):
+        raise RuntimeError("GCloud image provenance requires an acquired boot disk")
+    disk_name = boot_disk["source"].rsplit("/", 1)[-1]
+    rc, stdout, stderr = await _run_gcloud(
+        "compute", "disks", "describe", disk_name,
+        f"--zone={zone}", "--format=json(sourceImage,sourceImageId)", project=project,
+    )
+    if rc != 0:
+        raise RuntimeError(f"Failed to inspect GCloud boot disk {disk_name}: {stderr}")
+    try:
+        disk_metadata = json.loads(stdout)
+        image_revision = str(disk_metadata["sourceImageId"])
+    except (ValueError, KeyError, TypeError) as exc:
+        raise RuntimeError(f"GCloud boot disk {disk_name} has no sourceImageId") from exc
+    if not re.fullmatch(r"[1-9][0-9]*", image_revision):
+        raise RuntimeError(f"GCloud boot disk {disk_name} has invalid sourceImageId {image_revision!r}")
+    if snapshot.image_revision is not None and snapshot.image_revision != image_revision:
+        raise RuntimeError(
+            f"GCloud image_revision mismatch: expected {snapshot.image_revision}, "
+            f"acquired {image_revision}"
+        )
+    return {
+        "provider": "gcloud",
+        "image": snapshot.image,
+        "image_revision": image_revision,
+        "source_image": disk_metadata.get("sourceImage"),
+    }
 
 
 def _probe_cua(cua_url: str, payload: dict) -> tuple[bool, str]:
@@ -821,6 +878,7 @@ class GcloudProvider(Provider):
                     zone=zone,
                     label_str=label_str,
                     project=self._cfg.project,
+                    boot_disk_size_gb=snap.boot_disk_size_gb,
                 )
                 if ok:
                     stdout = out
@@ -828,7 +886,33 @@ class GcloudProvider(Provider):
                     break
                 last_stderr = stderr
                 if not _is_zone_capacity_error(stderr):
-                    raise RuntimeError(f"gcloud instances create failed: {stderr}")
+                    regional_missing = re.search(
+                        rf"machine type with name ['\"]?{re.escape(machine)}['\"]? "
+                        rf"does not exist in zone ['\"]?{re.escape(zone)}(?:['\".]|$)",
+                        stderr, re.IGNORECASE,
+                    ) or re.search(
+                        rf"/zones/{re.escape(zone)}/machineTypes/{re.escape(machine)}['\"] "
+                        r"was not found", stderr, re.IGNORECASE,
+                    )
+                    if not regional_missing:
+                        raise RuntimeError(f"gcloud instances create failed: {stderr}")
+                    listed_rc, listed_out, listed_err = await _run_gcloud(
+                        "compute", "machine-types", "list", f"--filter=name={machine}",
+                        "--limit=1", "--format=json", project=self._cfg.project,
+                    )
+                    if listed_rc:
+                        raise RuntimeError(
+                            f"gcloud machine-type availability check failed: {listed_err}"
+                        )
+                    try:
+                        available = json.loads(listed_out)
+                    except ValueError as exc:
+                        raise RuntimeError("gcloud machine-type availability returned invalid JSON") from exc
+                    if not isinstance(available, list) or not any(
+                        isinstance(item, dict) and item.get("name") == machine
+                        for item in available
+                    ):
+                        raise RuntimeError(f"gcloud instances create failed: {stderr}")
             if stdout:
                 break
         else:
@@ -849,6 +933,9 @@ class GcloudProvider(Provider):
                     f"Failed to parse gcloud output: {e}\nstdout: {stdout[:500]}"
                 ) from e
 
+            image_provenance = await _get_image_provenance(
+                inst, snap, zone=used_zone, project=self._cfg.project,
+            )
             external_ip = _extract_external_ip(inst)
             if not external_ip:
                 external_ip = await _poll_for_ip(
@@ -871,6 +958,9 @@ class GcloudProvider(Provider):
             ready = await wait_cua_ready(cua_url, snap.os)
             if not ready:
                 raise RuntimeError(f"CUA server at {cua_url} did not become ready")
+
+            if image.os == "linux" and snap.boot_disk_size_gb is not None:
+                await self._expand_linux_root_disk(cua_url)
 
             # Force the Windows display resolution if the snapshot configures one
             # (Linux X picks its own size, so we never touch it). No silent
@@ -904,6 +994,7 @@ class GcloudProvider(Provider):
                     "machine_type": used_machine,
                     "external_ip": external_ip,
                     "image": image.name,
+                    "image_provenance": image_provenance,
                     "snapshot": spec.snapshot,
                     "gcs_key_path": gcs_key_path,
                     "gcs_user_project": gcs_user_project,
@@ -920,6 +1011,64 @@ class GcloudProvider(Provider):
             except Exception as de:  # noqa: BLE001
                 logger.error("acquire: could not delete leaked VM %s: %s", name, de)
             raise
+
+    @staticmethod
+    async def _expand_linux_root_disk(cua_url: str) -> None:
+        """Grow the Linux root partition and filesystem to the boot disk size."""
+        from cua_bench.computers.remote import RemoteDesktopSession
+
+        session = RemoteDesktopSession(api_url=cua_url, os_type="linux")
+        _init_computer_skip_wait(session)
+        script = r"""
+set -eu
+root="$(readlink -f "$(findmnt -n -o SOURCE /)")"
+parent="$(lsblk -no PKNAME "$root")"
+partition="$(cat "/sys/class/block/${root##*/}/partition")"
+test -n "$parent"
+test -n "$partition"
+growpart_status=0
+sudo growpart "/dev/$parent" "$partition" || growpart_status=$?
+if [ "$growpart_status" -gt 1 ]; then
+  exit "$growpart_status"
+fi
+disk_bytes="$(lsblk -bdno SIZE "/dev/$parent")"
+partition_bytes="$(lsblk -bdno SIZE "$root")"
+partition_start="$(cat "/sys/class/block/${root##*/}/start")"
+test "$disk_bytes" -gt 0
+if [ "$((partition_start * 512 + partition_bytes + 1024 * 1024))" -lt "$disk_bytes" ]; then
+  echo "root partition does not fill boot disk: $partition_bytes of $disk_bytes bytes" >&2
+  exit 1
+fi
+fstype="$(findmnt -n -o FSTYPE /)"
+case "$fstype" in
+  ext2|ext3|ext4) sudo resize2fs "$root" ;;
+  xfs) sudo xfs_growfs / ;;
+  *) echo "unsupported root filesystem: $fstype" >&2; exit 1 ;;
+esac
+filesystem_bytes="$(df -B1 --output=size / | tail -1 | tr -d ' ')"
+test "$filesystem_bytes" -ge "$((partition_bytes * 95 / 100))"
+df -h /
+"""
+        result = await session.run_command(
+            f"bash -lc {shlex.quote(script)}",
+            check=False,
+        )
+        return_code = (
+            result.get("return_code")
+            if isinstance(result, dict)
+            else None
+        )
+        if return_code != 0:
+            stderr = result.get("stderr", "") if isinstance(result, dict) else ""
+            stdout = result.get("stdout", "") if isinstance(result, dict) else ""
+            raise RuntimeError(
+                "gcloud: failed to expand Linux root disk: "
+                f"{stderr or stdout or result}"
+            )
+        logger.info(
+            "gcloud: expanded Linux root disk: %s",
+            str(result.get("stdout", "")).strip(),
+        )
 
     @staticmethod
     async def _set_windows_resolution(

@@ -1,22 +1,5 @@
-"""ZCodeConfig: per-episode knobs for the ZCode deployer.
+"""Configuration for source-built ZCode and a custom OpenAI-compatible provider."""
 
-ZCode (https://github.com/zai-org/ZCode) is Z.ai's own coding-agent CLI --
-a TypeScript/Node monorepo, NOT a Claude Code fork. It has no LiteLLM layer
-and no published npm package (``zcode-cli``/``@zcode/cli`` are not on the
-npm registry as of 2026-09), so the deployer builds it from source every
-install: clone, ``pnpm install --filter @zcode/cli...``, ``pnpm --filter
-@zcode/cli build`` -> ``apps/zcode-cli/packages/cli/dist/zcode.cjs``.
-
-Model/provider routing is entirely file-based (no ``--model`` CLI flag
-exists): the deployer writes a "personal" provider-config JSON
-(``ZCODE_PERSONAL_PROVIDER_CONFIG_FILE``) declaring one custom
-``openai-chat-completions`` provider plus a paired minimal "builtin"
-provider-config JSON (``ZCODE_BUILTIN_PROVIDER_CONFIG_FILE``, required to be
-set whenever the personal one is, per ``prepareCliProviderRuntimeEnv`` --
-both-or-neither). See ``deployer.py`` module docstring for the exact JSON
-shapes (reverse-engineered from ``packages/provider/src/config/*.ts``'s zod
-schemas).
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -51,18 +34,26 @@ class ZCodeConfig:
     """OpenAI-chat-completions-compatible base URL
     (``provider.config.api.baseUrl``)."""
 
-    api_key: str | None = None
+    api_key: str | None = field(default=None, repr=False)
     """Literal API key (``provider.config.access.apiKey``). Required --
     ZCode's custom-provider path has no natural env-var fallback name to
     default to (unlike the LiteLLM-routed agents in this repo), so a
     missing key is a hard error at install time. Set via ``api_key:
-    ${env:HF_TOKEN}`` in the agent yaml."""
+    ${env:HF_INFERENCE_TOKEN}`` in the agent yaml."""
 
-    cli_ref: str = "main"
-    """Git ref (branch/tag/sha) of https://github.com/zai-org/ZCode to
-    build. No tagged release has been vetted for this integration yet --
-    pin to a specific sha once one has been, to stop the build silently
-    drifting."""
+    cli_ref: str = "aac4755666d09fdcd70272fcf063c077a639015f"
+    """Git ref of https://github.com/zai-org/ZCode to build."""
+
+    context_window: int = 200000
+    """Context capacity metadata, independent of the output-token override."""
+
+    max_output_tokens: int | None = None
+    """Explicit output-token override. None preserves the pinned CLI's own
+    model metadata and request mapping without adding an adapter output limit.
+    """
+
+    reasoning_request: dict[str, object] = field(default_factory=dict)
+    """Provider-specific reasoning fields, e.g. {"reasoning_effort": "low"}."""
 
     extra_envs: dict[str, str] = field(default_factory=dict)
     """Free-form passthrough env vars exported to the ``zcode`` subprocess
