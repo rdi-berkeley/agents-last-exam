@@ -1,5 +1,4 @@
-"""``task_data_source: local:<host_dir>`` — stage task data from a HOST directory
-into the Docker container via ``docker cp``.
+"""Stage host task data into local Docker or Daytona containers.
 
 For the local Docker provider the host holds the task data (fetched once, e.g.
 from Hugging Face) in the canonical layout:
@@ -13,15 +12,17 @@ container while the agent runs, exactly like the gs:// path. No encryption: the
 answer is hidden by *timing*, not a password, so the host data can be plain
 (no reference.7z).
 
-Docker-only: it shells out to ``docker cp`` against the running container, whose
-name is ``sandbox.id``. ``docker cp`` moves a whole directory tree in one fast
-local-disk operation (no per-file HTTP, unlike ``upload_local_file``).
+Docker uses ``docker cp``. Daytona streams a tar archive through its SDK, with
+ownership assigned to the sandbox user while retaining modes and symlinks.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
+import shlex
+import tarfile
+import tempfile
 from typing import Any
 
 from ...base_interface import SandboxHandle, TaskDataSpec
@@ -74,15 +75,38 @@ async def _docker_cp(src: str, sandbox: SandboxHandle, dst: str) -> None:
         )
 
 
+async def _daytona_copy(src: str, sandbox: SandboxHandle, dst: str) -> None:
+    """Transfer a directory with POSIX modes and symlinks intact."""
+    with tempfile.TemporaryDirectory(prefix="ale-task-data-") as tmp:
+        archive = os.path.join(tmp, "data.tar")
+
+        def pack() -> None:
+            with tarfile.open(archive, "w", dereference=False) as tar:
+                tar.add(src, arcname=".")
+
+        await asyncio.to_thread(pack)
+        remote = join(sandbox, sandbox.work_dir_base, f"task-data-{os.path.basename(tmp)}.tar")
+        try:
+            await sandbox.mkdir(sandbox.work_dir_base)
+            await sandbox.upload_local_file(archive, remote)
+            result = await sandbox.run_command(
+                f"mkdir -p {shlex.quote(dst)} && tar -xf {shlex.quote(remote)} "
+                f"--no-same-owner -C {shlex.quote(dst)}", timeout=3600,
+            )
+            if result.returncode:
+                raise RuntimeError(f"Daytona task-data extraction failed: {result.stderr}")
+        finally:
+            await sandbox.rm([remote])
+
+
 async def stage_input(
     sandbox: SandboxHandle, task_data: TaskDataSpec, *, source: str,
 ) -> dict[str, Any]:
     """Copy input/ (+ software/) from the host into the container; make output/."""
-    if sandbox.metadata.get("provider") != "docker":
+    provider = sandbox.metadata.get("provider")
+    if provider not in ("docker", "daytona"):
         raise NotImplementedError(
-            "task_data_source=local is currently supported only by the direct "
-            "Docker provider. QEMU guests need a host-to-container share plus "
-            "guest-side CIFS/Samba mounting, which is not implemented yet."
+            "task_data_source=local requires the Docker or Daytona provider"
         )
     host = _host_task_dir(source, task_data)
     if not os.path.isdir(os.path.join(host, "input")):
@@ -97,13 +121,14 @@ async def stage_input(
     in_dst = join(sandbox, base, "input")
     await sandbox.mkdir(in_dst)
     await sandbox.mkdir(join(sandbox, base, "output"))
-    await _docker_cp(os.path.join(host, "input") + "/.", sandbox, in_dst)
+    copy = _docker_cp if provider == "docker" else _daytona_copy
+    await copy(os.path.join(host, "input") + "/.", sandbox, in_dst)
     staged = ["input"]
     sw = os.path.join(host, "software")
     if os.path.isdir(sw):
         sw_dst = join(sandbox, base, "software")
         await sandbox.mkdir(sw_dst)
-        await _docker_cp(sw + "/.", sandbox, sw_dst)
+        await copy(sw + "/.", sandbox, sw_dst)
         # mirror baked_in_sandbox: make software wrappers/binaries executable.
         result = await sandbox.run_command(
             f"find {shell_q(sandbox, join(sandbox, base, 'software'))} "
@@ -122,18 +147,27 @@ async def stage_reference(
 ) -> dict[str, Any]:
     """Copy reference/ from the host into the container — AFTER the agent, just
     before evaluate, so the agent never sees the answers during its run."""
-    if sandbox.metadata.get("provider") != "docker":
+    provider = sandbox.metadata.get("provider")
+    if provider not in ("docker", "daytona"):
         raise NotImplementedError(
-            "task_data_source=local is currently supported only by the direct "
-            "Docker provider. QEMU guest staging is not implemented yet."
+            "task_data_source=local requires the Docker or Daytona provider"
         )
     host = _host_task_dir(source, task_data)
     ref = os.path.join(host, "reference")
+    base = task_subdir(sandbox, task_data)
+    archive = os.path.join(host, "reference.7z")
+    if not os.path.isdir(ref) and provider == "daytona" and os.path.isfile(archive):
+        from . import baked_in_sandbox
+
+        target_archive = join(sandbox, base, "reference.7z")
+        await sandbox.upload_local_file(archive, target_archive)
+        report = await baked_in_sandbox.stage_reference(sandbox, task_data, source=source)
+        return {**report, "source": "local"}
     if not os.path.isdir(ref):
         return {"skipped": True, "reason": "no_reference"}
-    base = task_subdir(sandbox, task_data)
     target = join(sandbox, base, "reference")
     await sandbox.rm([target])  # defend against stale reference from a prior run
-    await _docker_cp(ref, sandbox, target)
+    copy = _docker_cp if provider == "docker" else _daytona_copy
+    await copy(ref, sandbox, target)
     logger.info("local: staged reference %s -> %s:%s", ref, sandbox.id, target)
     return {"staged": ["reference"], "source": "local"}

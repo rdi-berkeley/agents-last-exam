@@ -36,6 +36,9 @@ dev = [
     "soundfile>=0.13",
     "trimesh>=4.0",
 ]
+daytona = [
+    "daytona==0.225.0",
+]
 
 [tool.uv.workspace]
 # Each agent declares its own deps in ale_run/agents/<agent>/pyproject.toml.

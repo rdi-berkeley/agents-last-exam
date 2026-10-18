@@ -1,0 +1,19 @@
+# Run the Docker-compatible Linux tasks in private Daytona sandboxes.
+# Install the SDK with: uv sync --extra daytona
+# Set DAYTONA_API_KEY in the environment or the experiment's secret file.
+# The published v1.1 image exceeds the snapshot import limit on some Daytona
+# accounts; use a compatible image or request a higher limit before running.
+snapshots:
+  cpu-free-ubuntu:
+    provider: daytona
+    image: ale-ubuntu22-docker-v1-1
+    daytona:
+      target: us
+      disk_gb: 200
+      resolution: [1024, 768]
+      create_timeout_s: 1800
+      auto_stop_minutes: 60
+# Provide the published v1.1 task data separately. References are staged only
+# after the solver, including when the local source contains reference.7z.
+task_data_source: local:task-data-v1.1
+output_path: local
