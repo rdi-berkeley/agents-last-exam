@@ -1,0 +1,26 @@
+{
+  "taskId": "computing_math/vuln_audit",
+  "title": "Audit a Python web service for security vulnerabilities",
+  "summary": "A realistic Python web service contains fourteen planted security vulnerabilities spanning distinct CWE classes -- several deliberately subtle (a sanitizer, whitelist, or check that looks sufficient but is bypassable; cross-parameter taint; or an obscure class) -- alongside benign modules that use dangerous-looking APIs safely. The agent must identify each real vulnerability and report it as a (file, CWE) finding, scored deterministically against a hidden ground truth with a precision gate that penalizes false positives. Calibrated to challenge recent frontier agents (Sonnet 4.6 / GPT-5.5 / Gemini 3.1 Pro), none of which fully passes it.",
+  "category": "computing_math",
+  "software": ["python", "bandit", "semgrep", "grep"],
+  "taskPrompt": "The repo/ directory under your task directory is a realistic Python web service. Audit it for security vulnerabilities and write your findings to output/findings.json with the schema: {\"findings\": [{\"file\": \"<file>.py\", \"cwe\": \"CWE-NNN\", \"line\": 7, \"explanation\": \"...\"}]}. Report each distinct vulnerability class once per file (a file + CWE pair). Several vulnerabilities are subtle: code that looks mitigated (a sanitizer/whitelist/check) but is bypassable, or a dangerous-looking API used safely. Precision matters: false positives are penalized, and not every file is vulnerable. See input/README.md for the schema and scope.",
+  "agentMustDo": [
+    "Inspect every module under input/repo/ and trace request inputs to dangerous sinks",
+    "Identify each real vulnerability and its CWE class -- including subtle/obscure ones and bypassable mitigations",
+    "Write output/findings.json with one {file, cwe} entry per distinct vulnerability",
+    "Avoid false positives -- do not flag dangerous-looking code that is actually used safely"
+  ],
+  "inputFiles": [
+    { "name": "repo", "format": "Python source tree", "path": "input/repo", "description": "the service to audit: ~20 small modules forming a realistic web service. Not every file is vulnerable, and several use a dangerous-looking API safely." },
+    { "name": "README.md", "format": "Markdown", "path": "input/README.md", "description": "the findings.json schema and scope" }
+  ],
+  "referenceFiles": [
+    { "name": "findings.json", "format": "JSON", "path": "output/findings.json", "description": "hidden: the (file, CWE-family) ground truth that scripts/score_vuln_audit.py compares the agent's output against" }
+  ],
+  "evaluation": "Deterministic gate-and-score, no model judgment (scripts/score_vuln_audit.py). The candidate's output/findings.json is normalized to (basename, CWE-number) pairs. GATE (score 0.0 if it fails): findings.json is well-formed AND precision >= 0.5 against the hidden ground truth -- this defeats the spam-every-CWE attack (high recall with low precision still scores 0). TIERS (equal weight, one per planted vulnerability): a file is credited when the agent reports it with a CWE in that file's accepted family (e.g. weak password KDF accepts CWE-916/327; insecure randomness CWE-330/338; XXE CWE-611; CSV formula injection CWE-1236). Score equals recall over the fourteen planted vulnerabilities, in [0,1].",
+  "vm": { "machineType": "c4-standard-4", "snapshot": "cpu-free-ubuntu", "timeout": 1800 },
+  "variants": 1,
+  "sourceSubmissionId": "<assigned by the agents-last-exam.org/submit portal>",
+  "taxonomy": {}
+}

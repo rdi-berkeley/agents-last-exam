@@ -1,0 +1,28 @@
+{
+  "taskId": "computing_math/incident_rca",
+  "title": "Diagnose a Kubernetes 503 outage from logs and config",
+  "summary": "A service returns 503 with pods Running but never Ready. The agent must diagnose the one true root cause from the deployment manifest and logs (which contain planted distractors) and report it as a structured rca.json, graded deterministically.",
+  "category": "computing_math",
+  "software": ["kubernetes", "kubectl", "yaml", "grep"],
+  "taskPrompt": "The payments-api service returns 503 'no healthy upstream' and its pods are Running but never Ready. Using input/deploy/deployment.yaml and the files under input/logs/, diagnose the ONE true root cause and write output/rca.json: {\"root_cause\": \"<token>\", \"fix\": \"<token>\", \"evidence\": \"the single most decisive log line or config snippet\"}. Choose root_cause and fix from the exact token lists in input/README.md. The logs contain distractors (benign warnings and a recovered blip); identify the real cause, not a red herring.",
+  "agentMustDo": [
+    "Read input/deploy/deployment.yaml and the files under input/logs/",
+    "Distinguish the true root cause from the planted distractors",
+    "Write output/rca.json with root_cause and fix chosen from the README token lists",
+    "Quote the single most decisive piece of evidence"
+  ],
+  "inputFiles": [
+    { "name": "deployment.yaml", "format": "YAML", "path": "input/deploy/deployment.yaml", "description": "the Kubernetes Deployment + Service manifest" },
+    { "name": "app.log", "format": "text", "path": "input/logs/app.log", "description": "the application's own log: the decisive evidence line plus benign distractors" },
+    { "name": "kubelet.log", "format": "text", "path": "input/logs/kubelet.log", "description": "node/kubelet events: readiness failures, 0 ready endpoints, 503" },
+    { "name": "README.md", "format": "Markdown", "path": "input/README.md", "description": "scenario + the root_cause/fix token lists + output schema" }
+  ],
+  "referenceFiles": [
+    { "name": "rca.json", "format": "JSON", "path": "output/rca.json", "description": "hidden: the true root_cause / fix / decisive-evidence substring and the planted distractors, used by scripts/score_incident_rca.py" }
+  ],
+  "evaluation": "Deterministic gate-and-score, no model judgment (scripts/score_incident_rca.py). GATE (score 0.0 if it fails): rca.json is well-formed AND root_cause exactly matches the true cause (held in the hidden ground truth). An intended-outcome check rejects the planted distractors, so naming a red herring scores 0 even though it is a plausible-looking token. TIERS (base 0.5): the correct `fix` token, and `evidence` containing the decisive substring. So a correct diagnosis alone = 0.5; plus the right fix and evidence -> 1.0.",
+  "vm": { "machineType": "c4-standard-4", "snapshot": "cpu-free-ubuntu", "timeout": 1800 },
+  "variants": 1,
+  "sourceSubmissionId": "<assigned by the agents-last-exam.org/submit portal>",
+  "taxonomy": {}
+}
