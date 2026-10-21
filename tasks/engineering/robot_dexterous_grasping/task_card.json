@@ -1,0 +1,47 @@
+{
+  "taskId": "engineering/robot_dexterous_grasping",
+  "title": "Robot Dexterous Grasping",
+  "summary": "In a given simulation environment, generate executable robot trajectories that make a Unitree G1 humanoid grasp and lift three different objects, one trajectory per object. The robot already stands at the table and its LOWER BODY DOES NOT MOVE: the agent controls only the 31 upper-body joints (waist + both arms + both Dex3 hands) and must synthesize the reach, the grasp and the lift itself. Fully self-contained (mujoco/torch/numpy); no grasp poses, no grasp database, and no IK helper are provided. Scoring is all-or-nothing across the three objects.",
+  "category": "engineering",
+  "software": [
+    "MuJoCo (mujoco==3.3.6)",
+    "PyTorch (torch, CUDA)",
+    "NumPy",
+    "transforms3d"
+  ],
+  "taskPrompt": "You are synthesizing dexterous grasping trajectories for a Unitree G1 humanoid (Dex3 3-finger hands) in fixed MuJoCo scenes. The robot is ALREADY STANDING at the table in front of each object and its LOWER BODY DOES NOT MOVE: you do not control the legs or the base and the robot never walks. A bundled RL balance policy holds it standing. You control ONLY the 31 upper-body joints: waist (3), left arm (7), right arm (7), left Dex3 hand (7), right Dex3 hand (7). The right hand is the grasping hand.\n\n## Variant\n`base`: grasp and lift each of the three target objects\n\n## Input Files\n- Task brief: `/input/task_brief.md`\n- Success criteria and metrics: `/input/SUCCESS.md`\n- Trajectory format and deterministic replay/control contract: `/input/TRAJECTORY_SCHEMA.md`\n- Target object ids: `/input/assets/objects.json`\n- Per-object frozen simulation: `/input/assets/obj_<id>/` (scene.mjb, init_state.npy, amo_init_state.npz, robot_params.json incl. upper_body_joint_names / target_body / init_object_z / stand_command)\n- Bundled RL balance policy (holds the robot standing; you never command it): `/input/policy`\n\n## What You Must Do\n1. Read the task brief, the trajectory schema, and the success criteria.\n2. For EACH object id in `/input/assets/objects.json`, build your own control loop over that object's `scene.mjb` + `/input/policy` and synthesize an upper-body motion that reaches to the object, closes the Dex3 fingers on it, and lifts it. There is no grasp database and no inverse-kinematics helper: grasp-pose selection, arm IK, finger closure and motion timing are all yours to solve.\n3. Save one file per object in `/output`: `trajectory_<object_id>.npz`, each containing the float32 array `upper_body` of shape [T, 31] defined in `/input/TRAJECTORY_SCHEMA.md`.\n\n## Output Requirements\n- One `trajectory_<object_id>.npz` per object id, each with `upper_body` [T, 31], finite, T >= 1.\n- On replay under the contract in `/input/TRAJECTORY_SCHEMA.md`, EACH object must end grasped in the right hand (within 0.15 m of the Dex3 fingertip centre), lifted >= 0.08 m above its starting height, with the robot still upright (pelvis > 0.6 m).\n- Scoring is all-or-nothing: all three objects or 0.\n- Do not write final answers outside `/output`.",
+  "agentMustDo": [
+    "Read /input/task_brief.md, /input/TRAJECTORY_SCHEMA.md, and /input/SUCCESS.md.",
+    "For each object id in /input/assets/objects.json, drive that object's bundled MuJoCo scene from its fixed initial state (robot already standing; lower body held by the bundled balance policy).",
+    "Solve grasping yourself for each object: choose where to place the hand, derive the arm joint angles (your own IK), and close the Dex3 fingers. No grasp poses or IK helper are provided.",
+    "Lift each object >= 0.08 m off the table while keeping it in the hand.",
+    "Save one trajectory_<object_id>.npz per object with the 31-column upper_body array; verify success in your own loop (in-hand, lifted, upright). No self-test harness is provided."
+  ],
+  "inputFiles": [
+    {"name": "task_brief.md", "format": "md", "path": "input/task_brief.md", "description": "Agent-facing task contract: goal, the upper-body-only control model, what is given vs what must be solved."},
+    {"name": "SUCCESS.md", "format": "md", "path": "input/SUCCESS.md", "description": "Hard gates, per-object metrics (in_hand, lifted, upright) and the all-or-nothing scoring rule."},
+    {"name": "TRAJECTORY_SCHEMA.md", "format": "md", "path": "input/TRAJECTORY_SCHEMA.md", "description": "The upper_body [T,31] array layout and the deterministic replay/control contract."},
+    {"name": "assets/", "format": "directory", "path": "input/assets/", "description": "objects.json (target ids) plus per-object obj_<id>/ with scene.mjb, init_state.npy, amo_init_state.npz and robot_params.json."},
+    {"name": "policy/", "format": "directory", "path": "input/policy/", "description": "The bundled RL balance policy that holds the robot standing (amo_policy.py + TorchScript weights). The agent never commands it; it is included so the replay is reproducible."}
+  ],
+  "referenceFiles": [
+    {"name": "trajectory_<id>.npz", "format": "npz", "path": "reference/", "description": "Hidden gold-standard upper-body grasp trajectories, one per object, produced by an expert pipeline driven by HUMAN-ANNOTATED grasp poses (automated grasp synthesis was not good enough, which is why this task is hard). Each replays to a successful grasp+lift."},
+    {"name": "grader/run_grader.py", "format": "py", "path": "reference/grader/run_grader.py", "description": "Hidden replay/scoring engine. Replays each object's trajectory with the lower body held by the balance policy and checks in-hand + lifted + upright."}
+  ],
+  "evaluation": "Functional, reference-free, and self-contained (only mujoco/torch/numpy/transforms3d; no external framework). The evaluator enforces the output structure (one trajectory_<object_id>.npz per target object) and a schema gate (array `upper_body`, 2-D, exactly 31 columns, finite), then runs the hidden grader `reference/grader/run_grader.py`. For each object the grader restores that object's frozen MuJoCo integration state and balance-policy state and replays the submitted upper-body trajectory on GPU (deterministic; bit-identical across repeated replays); the lower body is not agent-controlled -- the bundled policy receives a fixed in-place stand command so the robot never walks. An object is solved iff at the end: in_hand (object within 0.15 m of the Dex3 right-hand fingertip centre) AND lifted (>= 0.08 m above its starting height) AND upright (pelvis > 0.60 m). Task score is binary and all-or-nothing: 1.0 iff every object is solved, else 0.0 (the report includes objects_succeeded/objects_total and a per-object breakdown). A malformed npz, a missing file, a crashed replay, a missed grasp or no lift all score 0.0.",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-free",
+    "timeout": 3600
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.11",
+    "subdomain_code": "robotics",
+    "subdomain_name": "Robotics & Autonomous Systems"
+  },
+  "requiredSystemPackages": [
+    "mujoco-gl-libs"
+  ]
+}
