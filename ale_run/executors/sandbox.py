@@ -488,6 +488,12 @@ class SandboxExecutor(BaseExecutor):
             if Path(rel.replace("\\", "/")).name in SECRET_GATHER_EXCLUDES:
                 continue
             local = dst / rel.replace("\\", "/")
+            # Containment: entries are validated at listing time, but the
+            # join is where an escape would land, so assert it here too.
+            if not local.resolve().is_relative_to(dst.resolve()):
+                raise RuntimeError(
+                    f"gather_dir refused to write outside destination: {rel!r}"
+                )
             if entry["is_dir"]:
                 local.mkdir(parents=True, exist_ok=True)
                 continue
