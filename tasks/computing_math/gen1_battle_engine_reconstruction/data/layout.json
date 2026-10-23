@@ -1,0 +1,121 @@
+[
+  {
+    "sizes": {
+      "Battle": 384,
+      "Side": 184,
+      "Pokemon": 24,
+      "ActivePokemon": 32,
+      "Actions": 16,
+      "Durations": 8,
+      "Summaries": 12
+    },
+    "offsets": {
+      "Battle": {
+        "sides": 0,
+        "turn": 368,
+        "last_damage": 370,
+        "last_moves": 372,
+        "rng": 374
+      },
+      "Side": {
+        "pokemon": 0,
+        "active": 144,
+        "order": 176,
+        "last_selected_move": 182,
+        "last_used_move": 183
+      },
+      "Pokemon": {
+        "stats": 0,
+        "moves": 10,
+        "hp": 18,
+        "status": 20,
+        "species": 21,
+        "types": 22,
+        "level": 23
+      },
+      "ActivePokemon": {
+        "stats": 0,
+        "species": 10,
+        "types": 11,
+        "boosts": 12,
+        "volatiles": 16,
+        "moves": 24
+      },
+      "Stats": {
+        "hp": 0,
+        "atk": 2,
+        "def": 4,
+        "spe": 6,
+        "spc": 8
+      },
+      "Boosts": {
+        "atk": 0,
+        "def": 4,
+        "spe": 8,
+        "spc": 12,
+        "accuracy": 16,
+        "evasion": 20
+      },
+      "Volatiles": {
+        "Bide": 0,
+        "Thrashing": 1,
+        "MultiHit": 2,
+        "Flinch": 3,
+        "Charging": 4,
+        "Binding": 5,
+        "Invulnerable": 6,
+        "Confusion": 7,
+        "Mist": 8,
+        "FocusEnergy": 9,
+        "Substitute": 10,
+        "Recharging": 11,
+        "Rage": 12,
+        "LeechSeed": 13,
+        "Toxic": 14,
+        "LightScreen": 15,
+        "Reflect": 16,
+        "Transform": 17,
+        "confusion": 18,
+        "attacks": 21,
+        "state": 24,
+        "substitute": 40,
+        "transform": 48,
+        "disable_duration": 52,
+        "disable_move": 56,
+        "toxic": 59
+      },
+      "Action": {
+        "damage": 0,
+        "hit": 8,
+        "critical_hit": 10,
+        "secondary_chance": 12,
+        "speed_tie": 14,
+        "confused": 16,
+        "paralyzed": 18,
+        "duration": 20,
+        "sleep": 24,
+        "confusion": 27,
+        "disable": 31,
+        "attacking": 34,
+        "binding": 36,
+        "move_slot": 38,
+        "multi_hit": 41,
+        "pp": 44,
+        "psywave": 48,
+        "metronome": 56
+      },
+      "Duration": {
+        "sleeps": 0,
+        "confusion": 18,
+        "disable": 21,
+        "attacking": 25,
+        "binding": 28
+      },
+      "Damage": {
+        "base": 0,
+        "final": 2,
+        "capped": 4
+      }
+    }
+  }
+]
