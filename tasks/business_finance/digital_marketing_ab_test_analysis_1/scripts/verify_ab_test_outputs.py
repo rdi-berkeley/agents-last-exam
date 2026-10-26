@@ -6,6 +6,7 @@ import json
 import math
 import re
 import unicodedata
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from statistics import NormalDist
 
@@ -30,8 +31,8 @@ RECOMMENDATION_HEADING_RE = re.compile(
 MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+\S")
 RECOMMENDATION_TOKEN_RE = re.compile(r"\b(ship|hold)\b", re.IGNORECASE)
 NEGATED_TOKEN_RE = re.compile(
-    r"(?:\b(?:not|never|avoid|without)\b|\brather\s+than\b|\binstead\s+of\b)"
-    r"(?:\s+\w+){0,3}\s*$",
+    r"(?:\b(?:not|never|cannot|can't|won't|avoid|without)\b|\brather\s+than\b|"
+    r"\binstead\s+of\b)(?:\s+(?:yet|currently|immediately|now|safely))?\s*$",
     re.IGNORECASE,
 )
 LIFT_UNITS = (
@@ -51,6 +52,29 @@ LIFT_LABEL_RE = re.compile(
     r"\b(?:(?P<kind>absolute|relative)\s+)?(?:lift|difference|delta)\b",
     re.IGNORECASE,
 )
+PRIMARY_CONTEXT_RE = re.compile(r"\b(?:primary|open(?:ed|ing)?(?:[_ -]?rate)?)\b", re.IGNORECASE)
+OTHER_METRIC_RE = re.compile(
+    r"\b(?:click\w*|unsubscrib\w*|convert\w*|conversion|revenue|income|sales)\b",
+    re.IGNORECASE,
+)
+SAMPLE_LABEL_RE = re.compile(r"\b(?:sample\s+size|sample\s+per\s+(?:arm|group))\b", re.IGNORECASE)
+SAMPLE_REQUIREMENT_RE = re.compile(
+    r"\b(?:requir(?:e[ds]?|ing)|need(?:s|ed)?|minimum|target|planned)\b", re.IGNORECASE
+)
+PER_ARM_RE = re.compile(
+    r"\b(?:per[\s-]+(?:arm|group)|(?:in|for)\s+each\s+(?:arm|group))\b", re.IGNORECASE
+)
+NONCURRENT_CLAIM_RE = re.compile(
+    r"\b(?:previous|historical|earlier|prior|hypothetical|target|goal|minimum|"
+    r"expected|anticipated)\s+(?:(?:primary|absolute|observed|open(?:ed)?(?:[ _-]rate)?)\s+)*$",
+    re.IGNORECASE,
+)
+NONCURRENT_SAMPLE_CLAIM_RE = re.compile(
+    r"\b(?:previous|historical|earlier|prior|hypothetical)\s+"
+    r"(?:(?:required|per[ -]arm)\s+)*(?:sample\s+size|requirement)\b|"
+    r"\bpreviously\s+(?:required|needed)\b",
+    re.IGNORECASE,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -58,6 +82,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input-dir", required=True)
     parser.add_argument("--reference-dir", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--external-report", action="store_true")
+    parser.add_argument("--report-byte-limit", type=int)
     return parser.parse_args()
 
 
@@ -65,8 +91,17 @@ def to_bool(value: str | None) -> bool:
     return str(value).strip().lower() in {"true", "1", "yes"}
 
 
+def parse_bool(value: str | None) -> bool | None:
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "1", "yes"}:
+        return True
+    if normalized in {"false", "0", "no"}:
+        return False
+    return None
+
+
 def read_csv_rows(path: Path, delimiter: str = ",") -> list[dict[str, str]]:
-    with path.open(encoding="utf-8", newline="") as handle:
+    with path.open(encoding="utf-8-sig", newline="") as handle:
         return list(csv.DictReader(handle, delimiter=delimiter))
 
 
@@ -89,6 +124,25 @@ def sample_size_required(historical_metrics: Path) -> int:
         ** 2
     ) / (mde**2)
     return math.ceil(n)
+
+
+def sample_size_bounds(historical_metrics: Path, required_n: int) -> tuple[int, int]:
+    rows = read_csv_rows(historical_metrics)
+    baseline = sum(float(row["open_rate"]) for row in rows) / len(rows)
+    treatment = baseline + 0.03
+    average = (baseline + treatment) / 2
+    pooled_variance = 2 * average * (1 - average)
+    unpooled_variance = baseline * (1 - baseline) + treatment * (1 - treatment)
+    z_sum = NormalDist().inv_cdf(0.975) + NormalDist().inv_cdf(0.8)
+    effect = 2 * (math.asin(math.sqrt(treatment)) - math.asin(math.sqrt(baseline)))
+    estimates = (
+        required_n - POWER_SAMPLE_SIZE_LOWER_TOLERANCE,
+        required_n,
+        math.ceil(z_sum**2 * pooled_variance / 0.03**2),
+        math.ceil(z_sum**2 * unpooled_variance / 0.03**2),
+        math.ceil(2 * z_sum**2 / effect**2),
+    )
+    return max(0, min(estimates)), max(estimates)
 
 
 def metric_stats(results_raw: Path) -> dict[str, dict[str, float | bool]]:
@@ -141,7 +195,11 @@ def bh_correct(p_values: dict[str, float]) -> dict[str, dict[str, float | bool]]
     ordered = sorted(p_values.items(), key=lambda item: item[1])
     metric_count = len(ordered)
     last_passing_rank = max(
-        (rank for rank, (_, p_value) in enumerate(ordered, 1) if p_value <= rank / metric_count * 0.05),
+        (
+            rank
+            for rank, (_, p_value) in enumerate(ordered, 1)
+            if p_value <= rank / metric_count * 0.05
+        ),
         default=0,
     )
     out: dict[str, dict[str, float | bool]] = {}
@@ -176,19 +234,123 @@ def numeric_value_matches(
         return False
 
 
-def report_has_acceptable_sample_size(text: str, required_n: int) -> bool:
-    """Allow the small Cohen's h vs. closed-form power-analysis difference."""
-    minimum_n = max(0, required_n - POWER_SAMPLE_SIZE_LOWER_TOLERANCE)
+def rounding_allowance(value: str, cap: float, *, normalize: bool = False) -> float:
+    try:
+        number = Decimal(value.strip())
+        decimal_tuple = number.as_tuple()
+        exponent = decimal_tuple.exponent
+    except (AttributeError, InvalidOperation, ValueError):
+        return 0.0
+    if not isinstance(exponent, int):
+        return 0.0
+    if normalize:
+        if number.is_zero():
+            exponent = 0
+        else:
+            for digit in reversed(decimal_tuple.digits):
+                if digit:
+                    break
+                exponent += 1
+    return min(cap, 0.5 * 10.0 ** max(-16, min(4, exponent))) + 1e-12
+
+
+def report_has_acceptable_sample_size(
+    text: str, required_n: int, sample_bounds: tuple[int, int] | None = None
+) -> bool:
+    minimum_n, maximum_n = sample_bounds or (
+        max(0, required_n - POWER_SAMPLE_SIZE_LOWER_TOLERANCE),
+        required_n,
+    )
     for match in REPORT_NUMBER_RE.finditer(unicodedata.normalize("NFKC", text)):
         value = float(match["number"].replace(",", ""))
-        if math.isfinite(value) and value.is_integer() and minimum_n <= value <= required_n:
+        if math.isfinite(value) and value.is_integer() and minimum_n <= value <= maximum_n:
             return True
     return False
 
 
+def sample_size_is_per_arm(clause: str, number: re.Match, section: str) -> bool:
+    before = clause[: number.start()]
+    after = clause[number.end() :]
+    if re.search(r"\b(?:not|never|isn't|wasn't|cannot|can't)\b[^.;]{0,40}$", before, re.IGNORECASE):
+        return False
+    if re.match(r"\s*(?:total|overall)\b", after, re.IGNORECASE):
+        return False
+    return bool(
+        PER_ARM_RE.search(before)
+        or PER_ARM_RE.search(section)
+        or re.match(
+            r"\s*(?:delivered\s+)?(?:emails?|subscribers?|customers?|participants?|"
+            r"samples?|observations?)?\s*(?:per|in each|for each)\s+(?:arm|group)\b",
+            after,
+            re.IGNORECASE,
+        )
+    )
+
+
+def report_has_required_sample_size(
+    text: str, required_n: int, sample_bounds: tuple[int, int] | None = None
+) -> bool:
+    text = unicodedata.normalize("NFKC", text)
+    text = text.replace("\u2019", "'").replace("\u2018", "'")
+    text = re.sub(r"[`*\"\u201c\u201d]", "", text)
+    section = ""
+    candidates = []
+    claims = []
+    for paragraph in re.split(r"\n\s*\n", text):
+        lines = paragraph.splitlines()
+        if lines and MARKDOWN_HEADING_RE.match(lines[0]):
+            section = lines.pop(0)
+        if not lines:
+            continue
+        segments = (
+            lines
+            if any("|" in line for line in lines)
+            else [
+                " ".join(part.splitlines()) for part in re.split(r"\n\s*[-*]\s+", "\n".join(lines))
+            ]
+        )
+        candidates.extend((section, segment) for segment in segments)
+    for section, segment in candidates:
+        for clause in re.split(r";|(?<=[.!?])\s+(?=[A-Z])", segment):
+            labels = list(SAMPLE_LABEL_RE.finditer(clause))
+            for label in labels:
+                prefix = clause[: label.start()]
+                if re.search(r"\b(?:observed|actual|achieved|total)\s*$", prefix, re.IGNORECASE):
+                    continue
+                number = REPORT_NUMBER_RE.search(clause, label.end())
+                if number and sample_size_is_per_arm(clause, number, section):
+                    claims.append((number, clause))
+            requirements = list(SAMPLE_REQUIREMENT_RE.finditer(clause))
+            if re.search(r"\b(?:power|sample)\b", section, re.IGNORECASE):
+                requirements.extend(re.finditer(r"\brequirement\b", clause, re.IGNORECASE))
+                requirements.extend(re.finditer(r"\brounds?\s+up\s+to\b", clause, re.IGNORECASE))
+            if re.search(r"\b(?:power|sample)\b", f"{section} {clause}", re.IGNORECASE):
+                requirements.extend(re.finditer(r"\bn\s*[:=]\s*", clause, re.IGNORECASE))
+            for requirement in requirements:
+                if re.fullmatch(r"n\s*[:=]\s*", requirement.group(), re.IGNORECASE):
+                    number = REPORT_NUMBER_RE.match(clause, requirement.end())
+                else:
+                    number = REPORT_NUMBER_RE.search(clause, requirement.end())
+                if number and sample_size_is_per_arm(clause, number, section):
+                    claims.append((number, clause))
+    found_correct = False
+    found_conflict = False
+    for number, clause in claims:
+        if NONCURRENT_SAMPLE_CLAIM_RE.search(clause[: number.start()]):
+            continue
+        value = float(number.group().replace(",", ""))
+        if math.isfinite(value) and value.is_integer():
+            if report_has_acceptable_sample_size(number.group(), required_n, sample_bounds):
+                found_correct = True
+            else:
+                found_conflict = True
+    return found_correct and not found_conflict
+
+
 def report_has_primary_lift(text: str, expected_lift: float) -> bool:
     text = unicodedata.normalize("NFKC", text).replace("\u2212", "-")
-    text = re.sub(r"[`*\"'\u2018\u2019\u201c\u201d]", "", text)
+    text = text.replace("\u2019", "'").replace("\u2018", "'")
+    text = re.sub(r"[`*\"\u201c\u201d]", "", text)
     text = re.sub(r"(?<!\w)_+|_+(?!\w)", "", text)
     candidates = []
     for paragraph in re.split(r"\n\s*\n", text):
@@ -218,19 +380,69 @@ def report_has_primary_lift(text: str, expected_lift: float) -> bool:
                     break
         candidates.extend(re.split(r";|(?<=[.!?])\s+(?=[A-Z])", " ".join(prose)))
 
+    found_correct = False
+    found_conflict = False
     for candidate in candidates:
-        if re.search(r"click|unsubscrib|convert", candidate, re.IGNORECASE) and not re.search(
-            r"primary|open", candidate, re.IGNORECASE
-        ):
-            continue
+        direction = re.search(
+            r"\b(?P<verb>increased|improved|rose|decreased|declined|dropped|fell)\b"
+            r"(?P<before>[^.;]{0,60}?)\bby\s+",
+            candidate,
+            re.IGNORECASE,
+        )
+        if direction and PRIMARY_CONTEXT_RE.search(candidate[: direction.end()]):
+            nearby_other = OTHER_METRIC_RE.search(direction["before"])
+            relative_amount = re.match(
+                r"\s*[+-]?(?:\d+(?:\.\d+)?|\.\d+)\s*(?:%|percent)\s+relativ",
+                candidate[direction.end() :],
+                re.IGNORECASE,
+            )
+            if not nearby_other and not relative_amount:
+                sign = (
+                    "-"
+                    if direction["verb"].lower() in {"decreased", "declined", "dropped", "fell"}
+                    else ""
+                )
+                candidate += f"; Primary absolute lift: {sign}{candidate[direction.end() :]}"
+        comparison = re.search(
+            r"\b(higher|lower)\s+than\s+(?:the\s+)?control\b", candidate, re.IGNORECASE
+        )
+        if comparison:
+            prefix = candidate[: comparison.start()]
+            primary = list(PRIMARY_CONTEXT_RE.finditer(prefix))
+            other = list(OTHER_METRIC_RE.finditer(prefix))
+            numbers = list(REPORT_NUMBER_RE.finditer(prefix))
+            if primary and numbers and (not other or other[-1].start() < primary[-1].start()):
+                number = numbers[-1]
+                unit = LIFT_UNIT_RE.match(prefix, number.end())
+                if (
+                    primary[-1].end() <= number.start()
+                    and unit
+                    and not prefix[unit.end() :].strip()
+                    and not re.search(
+                        r"\brelative(?:ly)?\b", prefix[primary[-1].start() :], re.IGNORECASE
+                    )
+                ):
+                    sign = "-" if comparison.group(1).lower() == "lower" else ""
+                    candidate += f"; Primary absolute lift: {sign}{number.group()}{unit.group()}"
         labels = list(LIFT_LABEL_RE.finditer(candidate))
         for index, label in enumerate(labels):
             if (label["kind"] or "").lower() == "relative":
+                continue
+            prefix = candidate[: label.start()]
+            if re.search(r"\b(?:ci|confidence interval)\s+(?:for\s+)?$", prefix, re.IGNORECASE):
+                continue
+            primary = list(PRIMARY_CONTEXT_RE.finditer(prefix))
+            other = list(OTHER_METRIC_RE.finditer(prefix))
+            if other and (not primary or other[-1].start() > primary[-1].start()):
                 continue
             end = labels[index + 1].start() if index + 1 < len(labels) else len(candidate)
             quantity = candidate[label.end() : end]
             match = REPORT_NUMBER_RE.search(quantity)
             if match is None:
+                continue
+            if re.search(
+                r"\b(?:not|never|isn't|wasn't)\b", quantity[: match.start()], re.IGNORECASE
+            ):
                 continue
             value = float(match["number"].replace(",", ""))
             unit_match = LIFT_UNIT_RE.match(quantity, match.end())
@@ -245,15 +457,20 @@ def report_has_primary_lift(text: str, expected_lift: float) -> bool:
                 value /= 10_000
             elif unit:
                 value /= 100
-            if math.isfinite(value) and math.isclose(
-                value, expected_lift, rel_tol=0, abs_tol=0.00005
-            ):
-                return True
-    return False
+            if not math.isfinite(value):
+                continue
+            if NONCURRENT_CLAIM_RE.search(prefix):
+                continue
+            if math.isclose(value, expected_lift, rel_tol=0, abs_tol=0.00005):
+                found_correct = True
+            elif primary:
+                found_conflict = True
+    return found_correct and not found_conflict
 
 
 def extract_recommendation(text: str) -> str | None:
     lines = text.splitlines()
+    decisions = set()
     for index, line in enumerate(lines):
         heading = RECOMMENDATION_HEADING_RE.match(line)
         if heading is None:
@@ -267,21 +484,17 @@ def extract_recommendation(text: str) -> str | None:
             if MARKDOWN_HEADING_RE.match(following):
                 break
             if not following.strip():
-                if section_lines:
-                    break
                 continue
             section_lines.append(following.strip())
 
-        section = " ".join(section_lines)
-        decisions = set()
+        section = re.sub(r"\*\*|__|[`*]", "", " ".join(section_lines))
         for token in RECOMMENDATION_TOKEN_RE.finditer(section):
             decision = token.group(1).lower()
             prefix = section[max(0, token.start() - 48) : token.start()]
             if NEGATED_TOKEN_RE.search(prefix):
                 decision = "hold" if decision == "ship" else "ship"
             decisions.add(decision)
-        return decisions.pop() if len(decisions) == 1 else None
-    return None
+    return decisions.pop() if len(decisions) == 1 else None
 
 
 def validate_metric_row(
@@ -291,7 +504,7 @@ def validate_metric_row(
     bh_expected: dict[str, dict[str, float | bool]],
 ) -> bool:
     try:
-        if to_bool(row["is_primary"]) != bool(expected["is_primary"]):
+        if parse_bool(row["is_primary"]) is not bool(expected["is_primary"]):
             return False
         for key in (
             "control_rate",
@@ -302,6 +515,22 @@ def validate_metric_row(
         ):
             if not numeric_value_matches(row[key], float(expected[key])):
                 return False
+            if key in {"control_rate", "treatment_rate"} and not 0 <= float(row[key]) <= 1:
+                return False
+
+        if float(row["ci_lower_95"]) > float(row["ci_upper_95"]):
+            return False
+        rate_fields = ("control_rate", "treatment_rate", "absolute_lift")
+        rounding_error = sum(rounding_allowance(row[key], 0.001) for key in rate_fields)
+        if (
+            abs(
+                float(row["treatment_rate"])
+                - float(row["control_rate"])
+                - float(row["absolute_lift"])
+            )
+            > rounding_error
+        ):
+            return False
 
         control_rate = float(expected["control_rate"])
         treatment_rate = float(expected["treatment_rate"])
@@ -319,24 +548,29 @@ def validate_metric_row(
         elif not numeric_value_matches(
             row["relative_lift_pct"],
             float(expected["relative_lift_pct"]),
+            tol=0.05,
             allow_undefined=control_rate == 0.0,
         ):
             return False
         degenerate = control_rate == treatment_rate and control_rate in {0.0, 1.0}
-        if not numeric_value_matches(
-            row["z_statistic"],
-            float(expected["z_statistic"]),
-            tol=0.01,
-            allow_undefined=degenerate,
+        z_statistic = float(expected["z_statistic"])
+        if not any(
+            numeric_value_matches(row["z_statistic"], value, tol=0.01, allow_undefined=degenerate)
+            for value in (z_statistic, -z_statistic)
         ):
             return False
         if not numeric_value_matches(
             row["p_value_raw"],
             float(expected["p_value_raw"]),
+            tol=rounding_allowance(row["p_value_raw"], 0.001, normalize=True),
             allow_undefined=degenerate,
         ):
             return False
-        if to_bool(row["significant_at_05"]) != bool(expected["significant_at_05"]):
+        if row["p_value_raw"].strip().lower() not in UNDEFINED_NUMERIC_VALUES and not (
+            0 <= float(row["p_value_raw"]) <= 1
+        ):
+            return False
+        if parse_bool(row["significant_at_05"]) is not bool(expected["significant_at_05"]):
             return False
         if metric == PRIMARY_METRIC:
             return not any(
@@ -344,11 +578,16 @@ def validate_metric_row(
             )
 
         bh = bh_expected[metric]
-        if not numeric_value_matches(row["bh_rank"], float(bh["bh_rank"])):
+        if (
+            not numeric_value_matches(row["bh_rank"], float(bh["bh_rank"]))
+            or not float(row["bh_rank"]).is_integer()
+        ):
             return False
-        if not numeric_value_matches(row["bh_threshold"], float(bh["bh_threshold"])):
+        if not numeric_value_matches(row["bh_threshold"], float(bh["bh_threshold"])) or not (
+            0 <= float(row["bh_threshold"]) <= 1
+        ):
             return False
-        return to_bool(row["bh_significant"]) == bool(bh["bh_significant"])
+        return parse_bool(row["bh_significant"]) is bool(bh["bh_significant"])
     except (KeyError, TypeError, ValueError):
         return False
 
@@ -358,8 +597,12 @@ def validate_result_rows(
 ) -> dict[str, bool]:
     checks = dict.fromkeys(METRIC_COLUMN_MAP, False)
     try:
-        rows = read_csv_rows(output_path, delimiter="\t")
-    except (OSError, csv.Error):
+        with output_path.open(encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle, delimiter="\t", strict=True)
+            if len(reader.fieldnames or []) != len(set(reader.fieldnames or [])):
+                return checks
+            rows = list(reader)
+    except (OSError, csv.Error, UnicodeError):
         return checks
     if len(rows) != 4:
         return checks
@@ -370,8 +613,28 @@ def validate_result_rows(
     bh_expected = bh_correct(
         {metric: expected_stats[metric]["p_value_raw"] for metric in SECONDARY_METRICS}
     )
+    for p_value in {expected_stats[metric]["p_value_raw"] for metric in SECONDARY_METRICS}:
+        tied = [
+            metric
+            for metric in SECONDARY_METRICS
+            if expected_stats[metric]["p_value_raw"] == p_value
+        ]
+        if len(tied) < 2:
+            continue
+        try:
+            ranks = {metric: float(by_metric[metric]["bh_rank"]) for metric in tied}
+            valid_ranks = {float(bh_expected[metric]["bh_rank"]) for metric in tied}
+            if set(ranks.values()) != valid_ranks:
+                continue
+            for metric, rank in ranks.items():
+                bh_expected[metric]["bh_rank"] = rank
+                bh_expected[metric]["bh_threshold"] = rank / len(SECONDARY_METRICS) * 0.05
+        except (KeyError, TypeError, ValueError):
+            continue
     for metric, expected in expected_stats.items():
-        checks[metric] = validate_metric_row(metric, by_metric[metric], expected, bh_expected)
+        row = by_metric[metric]
+        if None not in row and None not in row.values():
+            checks[metric] = validate_metric_row(metric, row, expected, bh_expected)
     return checks
 
 
@@ -388,7 +651,7 @@ def validate_assignment_csv(output_path: Path, results_raw: Path) -> bool:
             if len(reader.fieldnames or []) != 2 or set(reader.fieldnames) != {"metric", "value"}:
                 return False
             rows = list(reader)
-    except (OSError, csv.Error):
+    except (OSError, csv.Error, UnicodeError):
         return False
     if any(None in row or None in row.values() for row in rows):
         return False
@@ -428,7 +691,10 @@ def validate_assignment_csv(output_path: Path, results_raw: Path) -> bool:
 
 
 def validate_report_md(
-    output_path: Path, expected_stats: dict[str, dict[str, float | bool]], required_n: int
+    output_path: Path,
+    expected_stats: dict[str, dict[str, float | bool]],
+    required_n: int,
+    sample_bounds: tuple[int, int] | None = None,
 ) -> bool:
     try:
         text = output_path.read_text(encoding="utf-8", errors="replace")
@@ -440,7 +706,7 @@ def validate_report_md(
     expected_recommendation = "ship" if primary_sig and guardrail_pass else "hold"
     if extract_recommendation(text) != expected_recommendation:
         return False
-    if not report_has_acceptable_sample_size(text, required_n):
+    if not report_has_required_sample_size(text, required_n, sample_bounds):
         return False
     return report_has_primary_lift(text, float(expected_stats[PRIMARY_METRIC]["absolute_lift"]))
 
@@ -478,24 +744,34 @@ def main() -> int:
         "results": output_dir / "experiment_results.tsv",
         "report": output_dir / "experiment_report.md",
     }
-    payload["missing_files"] = [name for name, path in required_files.items() if not path.exists()]
+    payload["missing_files"] = [name for name, path in required_files.items() if not path.is_file()]
 
     expected_stats = metric_stats(input_dir / "experiment_results_raw.csv")
     required_n = sample_size_required(input_dir / "historical_metrics.csv")
-    assignment_ok = required_files["assignment"].exists() and validate_assignment_csv(
+    sample_bounds = sample_size_bounds(input_dir / "historical_metrics.csv", required_n)
+    assignment_ok = required_files["assignment"].is_file() and validate_assignment_csv(
         required_files["assignment"], input_dir / "experiment_results_raw.csv"
     )
-    if required_files["results"].exists():
+    if required_files["results"].is_file():
         result_checks = validate_result_rows(required_files["results"], expected_stats)
     else:
         result_checks = dict.fromkeys(METRIC_COLUMN_MAP, False)
     results_ok = all(result_checks.values())
-    report_ok = required_files["report"].exists() and validate_report_md(
-        required_files["report"], expected_stats, required_n
+    report_size = (
+        required_files["report"].stat().st_size if required_files["report"].is_file() else 0
     )
-    reference_match = not payload["missing_files"] and all(
-        compare_to_reference(required_files[key], reference_dir / required_files[key].name)
-        for key in required_files
+    report_ok = (
+        not args.external_report
+        and required_files["report"].is_file()
+        and validate_report_md(required_files["report"], expected_stats, required_n, sample_bounds)
+    )
+    reference_match = (
+        (args.report_byte_limit is None or report_size <= args.report_byte_limit)
+        and not payload["missing_files"]
+        and all(
+            compare_to_reference(required_files[key], reference_dir / required_files[key].name)
+            for key in required_files
+        )
     )
     scores = component_scores(assignment_ok, result_checks, report_ok)
 
@@ -508,6 +784,13 @@ def main() -> int:
             "reference_match": reference_match,
             "component_scores": scores,
             "required_n": required_n,
+            "sample_bounds": sample_bounds,
+            "primary_absolute_lift": expected_stats[PRIMARY_METRIC]["absolute_lift"],
+            "expected_recommendation": "ship"
+            if expected_stats[PRIMARY_METRIC]["significant_at_05"]
+            and expected_stats["unsubscribed_rate"]["absolute_lift"] <= 0.005
+            else "hold",
+            "report_size": report_size,
             "open_rate_lift_pp": round(expected_stats[PRIMARY_METRIC]["absolute_lift"] * 100, 3),
             "unsubscribe_lift_pp": round(
                 expected_stats["unsubscribed_rate"]["absolute_lift"] * 100, 3

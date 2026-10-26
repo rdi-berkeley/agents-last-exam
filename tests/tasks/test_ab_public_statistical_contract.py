@@ -122,6 +122,139 @@ def test_fresh_clicked_wald_z_is_the_only_losing_cell(frozen_counts_raw: Path) -
         )
 
 
+def test_two_sided_z_accepts_either_group_order(frozen_counts_raw: Path) -> None:
+    stats = verifier.metric_stats(frozen_counts_raw)
+    bh = verifier.bh_correct(
+        {metric: stats[metric]["p_value_raw"] for metric in verifier.SECONDARY_METRICS}
+    )
+    for metric, expected in stats.items():
+        row = {key: str(value) for key, value in expected.items()}
+        if metric == verifier.PRIMARY_METRIC:
+            row.update(bh_rank="", bh_threshold="", bh_significant="")
+        else:
+            row.update({key: str(value) for key, value in bh[metric].items()})
+        row["z_statistic"] = str(-expected["z_statistic"])
+        assert verifier.validate_metric_row(metric, row, expected, bh)
+
+
+def test_correct_rounded_relative_percentage_is_accepted(frozen_counts_raw: Path) -> None:
+    stats = verifier.metric_stats(frozen_counts_raw)
+    expected = stats["opened_rate"]
+    row = {key: str(value) for key, value in expected.items()}
+    row.update(relative_lift_pct="15.3", bh_rank="", bh_threshold="", bh_significant="")
+    assert verifier.validate_metric_row("opened_rate", row, expected, {})
+    row["relative_lift_pct"] = "15.4"
+    assert not verifier.validate_metric_row("opened_rate", row, expected, {})
+
+
+@pytest.mark.parametrize(
+    "metric,p_value,accepted",
+    [
+        ("opened_rate", "0.0002", True),
+        ("opened_rate", "0.000200", True),
+        ("opened_rate", "2.00e-4", True),
+        ("opened_rate", "0", True),
+        ("opened_rate", "0.000000", True),
+        ("opened_rate", "0.001", False),
+        ("opened_rate", "0.001000", False),
+        ("opened_rate", "1e9999999", False),
+        ("opened_rate", "NaN", False),
+        ("unsubscribed_rate", "0.0104", True),
+        ("unsubscribed_rate", "0.010400", True),
+        ("unsubscribed_rate", "1.0400e-2", True),
+        ("unsubscribed_rate", "0.0106", False),
+        ("unsubscribed_rate", "0.010600", False),
+    ],
+)
+def test_p_value_check_is_independent_of_trailing_zeros(
+    frozen_counts_raw: Path, metric: str, p_value: str, accepted: bool
+) -> None:
+    stats = verifier.metric_stats(frozen_counts_raw)
+    bh = verifier.bh_correct({key: stats[key]["p_value_raw"] for key in verifier.SECONDARY_METRICS})
+    row = {key: str(value) for key, value in stats[metric].items()}
+    if metric == verifier.PRIMARY_METRIC:
+        row.update(bh_rank="", bh_threshold="", bh_significant="")
+    else:
+        row.update({key: str(value) for key, value in bh[metric].items()})
+    row["p_value_raw"] = p_value
+    assert verifier.validate_metric_row(metric, row, stats[metric], bh) is accepted
+
+
+@pytest.mark.parametrize(
+    "metric,changes",
+    [
+        (
+            "unsubscribed_rate",
+            {"control_rate": "0.0002", "treatment_rate": "0.0048", "absolute_lift": "0.0018"},
+        ),
+        ("converted_rate", {"ci_lower_95": "0.0009", "ci_upper_95": "-0.0009"}),
+        ("clicked_rate", {"p_value_raw": "0.001"}),
+    ],
+)
+def test_inconsistent_or_wrong_values_fail_their_metric(
+    frozen_counts_raw: Path, metric: str, changes: dict[str, str]
+) -> None:
+    stats = verifier.metric_stats(frozen_counts_raw)
+    bh = verifier.bh_correct({key: stats[key]["p_value_raw"] for key in verifier.SECONDARY_METRICS})
+    row = {key: str(value) for key, value in stats[metric].items()}
+    row.update({key: str(value) for key, value in bh[metric].items()})
+    assert verifier.validate_metric_row(metric, row, stats[metric], bh)
+    row.update(changes)
+    assert not verifier.validate_metric_row(metric, row, stats[metric], bh)
+
+
+def test_bh_equal_p_values_accept_either_valid_tie_order(tmp_path: Path) -> None:
+    raw = tmp_path / "raw.csv"
+    with raw.open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["variant", "delivered", "opened", "clicked", "converted", "unsubscribed"])
+        for variant in ("control", "treatment"):
+            for index in range(10):
+                writer.writerow([variant, 1, int(index < 5), int(index < 5), 0, 0])
+    stats = verifier.metric_stats(raw)
+    ranks = {"clicked_rate": 1, "converted_rate": 3, "unsubscribed_rate": 2}
+    output = tmp_path / "results.tsv"
+    fields = [
+        "metric",
+        "is_primary",
+        "control_rate",
+        "treatment_rate",
+        "absolute_lift",
+        "relative_lift_pct",
+        "ci_lower_95",
+        "ci_upper_95",
+        "z_statistic",
+        "p_value_raw",
+        "significant_at_05",
+        "bh_rank",
+        "bh_threshold",
+        "bh_significant",
+    ]
+    with output.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t")
+        writer.writeheader()
+        for metric, expected in stats.items():
+            row = {"metric": metric, **expected}
+            if metric == verifier.PRIMARY_METRIC:
+                row.update(bh_rank="", bh_threshold="", bh_significant="")
+            else:
+                row.update(
+                    bh_rank=ranks[metric],
+                    bh_threshold=ranks[metric] / 3 * 0.05,
+                    bh_significant=False,
+                )
+            writer.writerow(row)
+    assert all(verifier.validate_result_rows(output, stats).values())
+    with output.open(newline="") as handle:
+        rows = list(csv.DictReader(handle, delimiter="\t"))
+    next(row for row in rows if row["metric"] == "converted_rate")["bh_rank"] = "2"
+    with output.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t")
+        writer.writeheader()
+        writer.writerows(rows)
+    assert not all(verifier.validate_result_rows(output, stats).values())
+
+
 def test_bh_step_up_preserves_frozen_secondary_outcomes(frozen_counts_raw: Path) -> None:
     stats = verifier.metric_stats(frozen_counts_raw)
     ordered = sorted(verifier.SECONDARY_METRICS, key=lambda metric: stats[metric]["p_value_raw"])
@@ -158,7 +291,9 @@ def test_bh_step_up_rejects_all_hypotheses_through_last_passing_rank(
     frozen_counts_raw: Path, p_values: list[float], decisions: list[bool]
 ) -> None:
     corrected = verifier.bh_correct(dict(zip(verifier.SECONDARY_METRICS, p_values)))
-    assert [corrected[metric]["bh_significant"] for metric in verifier.SECONDARY_METRICS] == decisions
+    assert [
+        corrected[metric]["bh_significant"] for metric in verifier.SECONDARY_METRICS
+    ] == decisions
     expected = verifier.metric_stats(frozen_counts_raw)["clicked_rate"]
     row = {key: str(value) for key, value in expected.items()}
     row.update({key: str(value) for key, value in corrected["clicked_rate"].items()})

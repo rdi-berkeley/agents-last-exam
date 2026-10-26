@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import shlex
 from pathlib import Path, PurePosixPath
@@ -35,7 +36,12 @@ except ModuleNotFoundError:  # pragma: no cover - local fallback only
     )
 
 from tasks.common_setup import BaseTaskSetup
+from tasks.business_finance.digital_marketing_ab_test_analysis_1.report_judge import (
+    MAX_REPORT_CHARS,
+    judge_report,
+)
 from tasks.linux_runtime import LinuxTaskConfig
+from tasks.utils.evaluation import JudgeInfrastructureError
 
 _setup = BaseTaskSetup()
 
@@ -225,21 +231,56 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
             shlex.quote(meta["reference_dir"]),
             "--output-dir",
             shlex.quote(meta["remote_output_dir"]),
+            "--external-report",
+            "--report-byte-limit",
+            str(MAX_REPORT_CHARS * 4),
         ]
     )
     result = await _run_command(session, cmd, check=False)
-    try:
-        payload = _parse_json_stdout(
-            (result.get("stdout") or "") + "\n" + (result.get("stderr") or "")
-        )
-    except ValueError:
-        logger.error("verifier stdout: %s", result.get("stdout", "")[:1000])
-        logger.error("verifier stderr: %s", result.get("stderr", "")[:1000])
-        return [0.0]
     if result.get("return_code", 0) != 0:
-        logger.error("verifier command failed: %s", payload)
-        return [0.0]
+        raise RuntimeError(
+            "digital marketing verifier failed: "
+            f"{(result.get('stderr') or result.get('stdout') or '')[:1000]}"
+        )
+    try:
+        payload = _parse_json_stdout(result.get("stdout") or "")
+        score = float(payload["score"])
+        if not math.isfinite(score) or not 0.0 <= score <= 1.0:
+            raise ValueError("score is not finite or outside [0, 1]")
+        report_score = float(payload["component_scores"]["report"])
+        if report_score not in {0.0, 0.2}:
+            raise ValueError("invalid report component")
+        missing_files = payload["missing_files"]
+        if not isinstance(missing_files, list):
+            raise ValueError("invalid missing file list")
+        sample_bounds = tuple(payload["sample_bounds"])
+        if len(sample_bounds) != 2 or not all(type(value) is int for value in sample_bounds):
+            raise ValueError("invalid sample-size bounds")
+        expected_lift = float(payload["primary_absolute_lift"])
+        expected_recommendation = payload["expected_recommendation"]
+        if not math.isfinite(expected_lift) or expected_recommendation not in {"ship", "hold"}:
+            raise ValueError("invalid report reference facts")
+        report_size = payload["report_size"]
+        if type(report_size) is not int or report_size < 0:
+            raise ValueError("invalid report size")
+    except (ValueError, TypeError, KeyError) as exc:
+        raise RuntimeError("invalid digital marketing verifier output") from exc
     logger.info(
         "digital marketing verifier payload: %s", json.dumps(payload, ensure_ascii=False)[:2000]
     )
-    return [float(payload.get("score", 0.0))]
+    if "report" in missing_files or report_size == 0:
+        return [round(score - report_score, 10)]
+    if report_size > MAX_REPORT_CHARS * 4:
+        raise JudgeInfrastructureError("Report exceeds judge input capacity")
+    report_path = _remote_join(meta["remote_output_dir"], "experiment_report.md")
+    report = await session.read_file(report_path)
+    if not isinstance(report, str):
+        raise JudgeInfrastructureError("Report could not be read as text")
+    receipt = await judge_report(
+        report,
+        sample_bounds=sample_bounds,
+        expected_lift=expected_lift,
+        expected_recommendation=expected_recommendation,
+    )
+    logger.info("digital marketing report judge: %s", json.dumps(receipt, ensure_ascii=False))
+    return [round(score - report_score + (0.2 if receipt["passed"] else 0.0), 10)]

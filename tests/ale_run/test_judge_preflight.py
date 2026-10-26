@@ -20,6 +20,11 @@ def test_selected_task_requirements_are_deduplicated():
     }
 
 
+def test_digital_marketing_report_only_needs_text_judge():
+    task = "business_finance/digital_marketing_ab_test_analysis_1"
+    assert judge_preflight.judge_requirements([task]) == {"text": [task]}
+
+
 @pytest.mark.parametrize("task", [
     "business_finance/saas_onepager_brand_refresh_instance_1",
     "engineering/2d_drawings_to_3d_building_model",

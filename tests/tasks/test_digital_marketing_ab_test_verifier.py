@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import csv
 import importlib.util
+import json
 import math
+import subprocess
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -116,8 +121,15 @@ def write_results(path: Path, overrides: dict[str, dict[str, object]] | None = N
         ("## Recommendation\n**HOLD** the rollout.", "hold"),
         ("## Recommendation\nHold rather than ship it now.", "hold"),
         ("## Recommendation\nDo not ship this rollout.", "hold"),
+        ("## Recommendation\nWe cannot ship.", "hold"),
+        ("## Recommendation\nWe cannot safely ship.", "hold"),
+        ("## Recommendation\nDo not **ship** the rollout.", "hold"),
+        ("## Recommendation\nDo not wait to ship.", "ship"),
         ("## Recommendation\nShip this rollout; do not hold it.", "ship"),
+        ("## Recommendation\nWe recommend **ship**, not **hold**.", "ship"),
         ("## Recommendation\nShip or hold after another review.", None),
+        ("## Recommendation\nShip.\n\nActually hold.\n\n## Results\nDone.", None),
+        ("## Recommendation\nShip.\n\n## Recommendation\nHold.", None),
     ],
 )
 def test_extract_recommendation_resolves_section_semantics(
@@ -453,6 +465,35 @@ def test_existing_power_analysis_conventions_remain_accepted(
 
 
 @pytest.mark.parametrize(
+    ("sample_size", "valid"),
+    [
+        (3118, False),
+        (3119, True),
+        (3120, True),
+        (3121, True),
+        (3122, True),
+        (3123, True),
+        (3124, False),
+    ],
+)
+def test_sample_size_accepts_normal_approximation_variants(
+    tmp_path: Path, sample_size: int, valid: bool
+) -> None:
+    historical = tmp_path / "historical_metrics.csv"
+    historical.write_text("open_rate\n0.218575\n")
+    required_n = VERIFIER.sample_size_required(historical)
+    bounds = VERIFIER.sample_size_bounds(historical, required_n)
+    assert required_n == 3122
+    assert bounds == (3119, 3123)
+    assert (
+        VERIFIER.report_has_required_sample_size(
+            f"Required sample size per arm: {sample_size}", required_n, bounds
+        )
+        is valid
+    )
+
+
+@pytest.mark.parametrize(
     "lift",
     [
         "0.034",
@@ -537,16 +578,24 @@ def test_sample_size_accepts_integral_numeric_equivalence(text: str) -> None:
 @pytest.mark.parametrize(
     "text",
     [
-        "The primary opened_rate changed from 22.2499% to 25.6521%. "
-        "Its observed absolute lift is\n**+0.0340213200 (+3.4021 percentage points)**.",
+        (
+            "The primary opened_rate changed from 22.2499% to 25.6521%. "
+            "Its observed absolute lift is\n**+0.0340213200 (+3.4021 percentage points)**."
+        ),
         'Observed primary absolute lift:\n"3.4" pp.',
         "Observed primary absolute lift (percentage points): +3.4021",
         "Primary absolute lift: 0.034; relative lift: 15.29%",
         "Primary absolute lift: 0.034, relative lift: 15.29%",
-        "| Metric | Absolute lift (pp) | Relative lift (%) |\n"
-        "| --- | ---: | ---: |\n| opened_rate | +3.4021 | 15.29 |\n"
-        "| clicked_rate | -22.2499 | -100 |",
+        (
+            "| Metric | Absolute lift (pp) | Relative lift (%) |\n"
+            "| --- | ---: | ---: |\n| opened_rate | +3.4021 | 15.29 |\n"
+            "| clicked_rate | -22.2499 | -100 |"
+        ),
         "Metric | Absolute lift (basis points)\n--- | ---:\nopened_rate | 340.21",
+        (
+            "| Metric | Absolute lift | 95% CI for lift |\n"
+            "| --- | --- | --- |\n| opened_rate | 0.03402 | [0.01622, 0.05182] |"
+        ),
         "| Quantity | Value |\n| --- | --- |\n| Primary absolute lift | 0.034 |",
         "Primary absolute lift: `3.4021e-2` (3.4021 percentage points)",
         "Primary absolute lift: +3.4021pp",
@@ -562,9 +611,12 @@ def test_report_lift_accepts_layout_and_unit_equivalents(text: str) -> None:
         "Primary absolute lift: 0.015, relative lift: 3.4%",
         "Primary absolute lift: 0.015; 95% CI: [0.0, 0.034]",
         "Primary absolute lift: 0.015 (95% CI: [0.0, 0.034])",
-        "| Metric | Absolute lift (pp) | Relative lift (%) |\n"
-        "| --- | --- | --- |\n| opened_rate | 1.5 | 3.4 |",
+        (
+            "| Metric | Absolute lift (pp) | Relative lift (%) |\n"
+            "| --- | --- | --- |\n| opened_rate | 1.5 | 3.4 |"
+        ),
         "| Metric | Absolute lift |\n| --- | --- |\n| clicked_rate | 0.034 |",
+        "| Metric | 95% CI for lift |\n| --- | --- |\n| opened_rate | [0.034, 0.05] |",
         "Primary absolute lift: 0.034e1",
         "Primary absolute lift: 0.034wrong",
         "Primary absolute lift: 0.034_ignored",
@@ -572,3 +624,462 @@ def test_report_lift_accepts_layout_and_unit_equivalents(text: str) -> None:
 )
 def test_report_does_not_use_relative_lift_or_ci_as_absolute_lift(text: str) -> None:
     assert not VERIFIER.report_has_primary_lift(text, 150 / 4409)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        (
+            "The treatment increased the primary open rate by 3.402 percentage points, "
+            "from 22.250% to 25.652%."
+        ),
+        "The open rate increased by 3.402 percentage points.",
+        "The primary metric rose by 340.2 basis points.",
+        "The treatment open rate was 3.402 percentage points higher than control.",
+    ],
+)
+def test_report_accepts_primary_rate_increase_without_lift_label(text: str) -> None:
+    assert VERIFIER.report_has_primary_lift(text, 150 / 4409)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Revenue lift: 3.402 percentage points.",
+        "The primary open rate rose by 1.5 percentage points and revenue lift was 3.402 pp.",
+        "The open rate decreased by 3.402 percentage points.",
+        "The unsubscribe rate increased by 3.402 percentage points.",
+        "Primary absolute lift was not 3.402 percentage points.",
+        "Primary absolute lift wasn't 3.402 percentage points.",
+        "The open rate increased by 3.402% relative to control.",
+    ],
+)
+def test_report_rejects_other_metrics_or_wrong_lift_direction(text: str) -> None:
+    assert not VERIFIER.report_has_primary_lift(text, 150 / 4409)
+
+
+def test_report_rejects_conflicting_current_primary_lifts() -> None:
+    report = (
+        "Observed primary absolute lift: 3.402 percentage points. "
+        "Actually, the primary absolute lift is -8 percentage points."
+    )
+    assert not VERIFIER.report_has_primary_lift(report, 150 / 4409)
+
+
+def test_report_does_not_confuse_historical_lift_with_current_result() -> None:
+    report = (
+        "The historical primary absolute lift was -8 percentage points. "
+        "The observed primary absolute lift is 3.402 percentage points."
+    )
+    assert VERIFIER.report_has_primary_lift(report, 150 / 4409)
+
+
+def test_report_does_not_credit_historical_lift_as_current_result() -> None:
+    assert not VERIFIER.report_has_primary_lift(
+        "The historical primary absolute lift was 3.402 percentage points.", 150 / 4409
+    )
+
+
+def test_historical_context_does_not_hide_observed_lift() -> None:
+    assert VERIFIER.report_has_primary_lift(
+        "Using a historical benchmark, the observed primary absolute lift is 3.402 pp.",
+        150 / 4409,
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Required per-arm sample size: 3,122",
+        "| Required sample size per arm | 3,122 |",
+        "Power analysis requires 3,122 delivered emails per arm.",
+        "Power analysis gives n = 3,122 per arm.",
+        "## Power analysis\n\nThe normal-approximation requirement is 3,122 delivered emails per arm (6,244 total).",
+        "Required per arm (power analysis): 3,122",
+        "Required sample size per arm:\n3,122",
+        (
+            "## Power analysis\n\nThe normal approximation gives 3121.2398, which rounds up to "
+            "**3,122 participants per\narm** (6,244 total)."
+        ),
+    ],
+)
+def test_report_requires_sample_size_in_context(text: str) -> None:
+    assert VERIFIER.report_has_required_sample_size(text, 3122)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "There are 3,122 subscribers.",
+        "Observed sample size: 3,122.",
+        "Total sample size: 3,122.",
+        "Required sample size: 4,000; 3,122 subscribers responded.",
+        "Required sample size: 4,000 (3,122 observed).",
+        "Required sample size: 3,122 total (1,561 per arm).",
+        "Required sample size is not 3,122 per arm.",
+        "## Results\n\nThe requirement is 3,122 per arm.",
+    ],
+)
+def test_report_rejects_unrelated_or_observed_sample_size(text: str) -> None:
+    assert not VERIFIER.report_has_required_sample_size(text, 3122)
+
+
+def test_report_rejects_conflicting_required_sample_sizes() -> None:
+    report = (
+        "Required sample size per arm: 3,122. Actually, the required sample size per arm is 4,000."
+    )
+    assert not VERIFIER.report_has_required_sample_size(report, 3122)
+
+
+def test_report_accepts_historical_sample_size_with_correct_current_requirement() -> None:
+    report = (
+        "The previous required sample size per arm was 4,000. "
+        "The current required sample size per arm is 3,122."
+    )
+    assert VERIFIER.report_has_required_sample_size(report, 3122)
+
+
+def test_historical_data_and_formula_do_not_hide_required_sample_size() -> None:
+    report = (
+        "Using historical data, n = [z(1-alpha/2)]^2 / 0.03^2.\n"
+        "- Required per-arm sample size: 3,122\n"
+        "- Required total (both arms, 1:1): 6,244"
+    )
+    assert VERIFIER.report_has_required_sample_size(report, 3122)
+
+
+def test_report_does_not_credit_unrelated_counts_or_lifts(tmp_path: Path) -> None:
+    report = tmp_path / "report.md"
+    report.write_text(
+        "There are 3,122 subscribers. Revenue lift: 3.402 percentage points.\n\n"
+        "## Recommendation\nShip.\n",
+        encoding="utf-8",
+    )
+    assert not validate_report_md(report, EXPECTED_STATS, 3122)
+
+
+def test_results_accept_utf8_bom(tmp_path: Path) -> None:
+    results = tmp_path / "experiment_results.tsv"
+    write_results(results)
+    results.write_bytes(b"\xef\xbb\xbf" + results.read_bytes())
+    assert validate_results_tsv(results, EXPECTED_STATS)
+
+
+def test_invalid_result_encoding_is_an_incorrect_submission(tmp_path: Path) -> None:
+    results = tmp_path / "experiment_results.tsv"
+    results.write_bytes(b"\xff\xfeinvalid")
+    assert not any(validate_result_rows(results, EXPECTED_STATS).values())
+
+
+def test_invalid_assignment_encoding_is_an_incorrect_submission(
+    tmp_path: Path, assignment_raw: Path
+) -> None:
+    output = tmp_path / "assignment.csv"
+    output.write_bytes(b"\xff\xfeinvalid")
+    assert not VERIFIER.validate_assignment_csv(output, assignment_raw)
+
+
+@pytest.mark.parametrize(
+    "metric,field,value",
+    [
+        ("clicked_rate", "is_primary", "nonsense"),
+        ("converted_rate", "significant_at_05", ""),
+        ("converted_rate", "bh_significant", "nonsense"),
+        ("converted_rate", "control_rate", "-0.0001"),
+        ("opened_rate", "p_value_raw", "-0.0001"),
+        ("converted_rate", "bh_rank", "3.0001"),
+    ],
+)
+def test_invalid_metric_fields_lose_only_that_metric(
+    tmp_path: Path, metric: str, field: str, value: str
+) -> None:
+    results = tmp_path / "experiment_results.tsv"
+    write_results(results, {metric: {field: value}})
+    checks = validate_result_rows(results, EXPECTED_STATS)
+    assert checks == {name: name != metric for name in EXPECTED_STATS}
+
+
+def test_duplicate_results_header_is_rejected(tmp_path: Path) -> None:
+    results = tmp_path / "experiment_results.tsv"
+    write_results(results)
+    contents = results.read_text()
+    results.write_text(contents.replace("metric\t", "metric\tmetric\t", 1))
+    assert not any(validate_result_rows(results, EXPECTED_STATS).values())
+
+
+def test_extra_unheaded_result_cell_loses_only_that_metric(tmp_path: Path) -> None:
+    results = tmp_path / "experiment_results.tsv"
+    write_results(results)
+    lines = results.read_text().splitlines()
+    lines[1] += "\textra"
+    results.write_text("\n".join(lines) + "\n")
+    checks = validate_result_rows(results, EXPECTED_STATS)
+    assert checks == {name: name != "opened_rate" for name in EXPECTED_STATS}
+
+
+class LocalVerifierSession:
+    def __init__(self) -> None:
+        self.interface = self
+
+    async def create_dir(self, path: str) -> None:
+        Path(path).mkdir(parents=True, exist_ok=True)
+
+    async def write_file(self, path: str, data: str) -> None:
+        Path(path).write_text(data, encoding="utf-8")
+
+    async def read_file(self, path: str) -> str:
+        return Path(path).read_text(encoding="utf-8")
+
+    async def run_command(self, command: str, *, check: bool = False) -> dict[str, object]:
+        result = await asyncio.to_thread(
+            subprocess.run, command, shell=True, capture_output=True, text=True, check=check
+        )
+        return {"return_code": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
+
+
+@pytest.mark.parametrize(
+    ("rule_report", "judge_report", "expected"),
+    [
+        (0.0, True, 1.0),
+        (0.2, False, 0.8),
+        (0.2, True, 1.0),
+        (0.0, False, 0.8),
+    ],
+)
+def test_report_judge_controls_only_report_component(
+    monkeypatch: pytest.MonkeyPatch, rule_report: float, judge_report: bool, expected: float
+) -> None:
+    from tasks.business_finance.digital_marketing_ab_test_analysis_1 import main as task
+
+    payload = {
+        "score": 0.8 + rule_report,
+        "component_scores": {"report": rule_report},
+        "missing_files": [],
+        "sample_bounds": [3119, 3123],
+        "primary_absolute_lift": 0.034,
+        "expected_recommendation": "ship",
+        "report_size": 6,
+    }
+    session = SimpleNamespace(
+        interface=SimpleNamespace(create_dir=AsyncMock()),
+        write_file=AsyncMock(),
+        read_file=AsyncMock(return_value="report"),
+        run_command=AsyncMock(return_value={"return_code": 0, "stdout": json.dumps(payload)}),
+    )
+    judge = AsyncMock(return_value={"passed": judge_report})
+    monkeypatch.setattr(task, "judge_report", judge)
+    config = SimpleNamespace(
+        metadata={"input_dir": "/input", "reference_dir": "/reference", "remote_output_dir": "/out"}
+    )
+    assert asyncio.run(task.evaluate(config, session)) == [expected]
+    judge.assert_awaited_once_with(
+        "report", sample_bounds=(3119, 3123), expected_lift=0.034, expected_recommendation="ship"
+    )
+
+
+def test_report_judge_failure_is_not_a_score(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tasks.business_finance.digital_marketing_ab_test_analysis_1 import main as task
+    from tasks.utils.evaluation import JudgeInfrastructureError
+
+    payload = {
+        "score": 1.0,
+        "component_scores": {"report": 0.2},
+        "missing_files": [],
+        "sample_bounds": [3119, 3123],
+        "primary_absolute_lift": 0.034,
+        "expected_recommendation": "ship",
+        "report_size": 6,
+    }
+    session = SimpleNamespace(
+        interface=SimpleNamespace(create_dir=AsyncMock()),
+        write_file=AsyncMock(),
+        read_file=AsyncMock(return_value="report"),
+        run_command=AsyncMock(return_value={"return_code": 0, "stdout": json.dumps(payload)}),
+    )
+    monkeypatch.setattr(
+        task, "judge_report", AsyncMock(side_effect=JudgeInfrastructureError("judge failed"))
+    )
+    config = SimpleNamespace(
+        metadata={"input_dir": "/input", "reference_dir": "/reference", "remote_output_dir": "/out"}
+    )
+    with pytest.raises(JudgeInfrastructureError):
+        asyncio.run(task.evaluate(config, session))
+
+
+def test_oversized_report_is_not_read_or_graded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tasks.business_finance.digital_marketing_ab_test_analysis_1 import main as task
+    from tasks.utils.evaluation import JudgeInfrastructureError
+
+    input_dir, output_dir, reference_dir = (
+        tmp_path / name for name in ("input", "output", "reference")
+    )
+    for directory in (input_dir, output_dir, reference_dir):
+        directory.mkdir()
+    (input_dir / "experiment_results_raw.csv").write_text(
+        "variant,delivered,opened,clicked,converted,unsubscribed\n"
+        "control,1,0,0,0,0\ntreatment,1,1,0,0,0\n"
+    )
+    (input_dir / "historical_metrics.csv").write_text("open_rate\n0.2\n")
+    for name in ("randomization_assignment.csv", "experiment_results.tsv", "experiment_report.md"):
+        (reference_dir / name).write_text("reference")
+        (output_dir / name).write_text("reference")
+    (output_dir / "experiment_report.md").write_text("x" * (task.MAX_REPORT_CHARS * 4 + 1))
+    monkeypatch.setattr(task, "EVAL_TMP_DIR", str(tmp_path / "eval"))
+    judge = AsyncMock()
+    monkeypatch.setattr(task, "judge_report", judge)
+    session = LocalVerifierSession()
+    session.read_file = AsyncMock(side_effect=AssertionError("oversized report was read"))
+    config = SimpleNamespace(
+        metadata={
+            "input_dir": str(input_dir),
+            "reference_dir": str(reference_dir),
+            "remote_output_dir": str(output_dir),
+        }
+    )
+    with pytest.raises(JudgeInfrastructureError, match="input capacity"):
+        asyncio.run(task.evaluate(config, session))
+    session.read_file.assert_not_awaited()
+    judge.assert_not_called()
+
+
+def test_external_report_mode_skips_regex_grading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    input_dir, output_dir, reference_dir = (
+        tmp_path / name for name in ("input", "output", "reference")
+    )
+    for directory in (input_dir, output_dir, reference_dir):
+        directory.mkdir()
+    (input_dir / "experiment_results_raw.csv").write_text(
+        "variant,delivered,opened,clicked,converted,unsubscribed\n"
+        "control,1,0,0,0,0\ntreatment,1,1,0,0,0\n"
+    )
+    (input_dir / "historical_metrics.csv").write_text("open_rate\n0.2\n")
+    for name in ("randomization_assignment.csv", "experiment_results.tsv", "experiment_report.md"):
+        (output_dir / name).write_text("invalid")
+        (reference_dir / name).write_text("reference")
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "verify",
+            "--input-dir",
+            str(input_dir),
+            "--output-dir",
+            str(output_dir),
+            "--reference-dir",
+            str(reference_dir),
+            "--external-report",
+        ],
+    )
+    monkeypatch.setattr(VERIFIER, "validate_report_md", lambda *args: pytest.fail("used regex"))
+    assert VERIFIER.main() == 0
+    assert json.loads(capsys.readouterr().out)["component_scores"]["report"] == 0.0
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        {"return_code": 137, "stdout": '{"score": 0.0}', "stderr": "process killed"},
+        {"return_code": 0, "stdout": "", "stderr": '{"score": 0.0}'},
+        {"return_code": 0, "stdout": "not JSON", "stderr": ""},
+        {"return_code": 0, "stdout": "{}", "stderr": ""},
+        {"return_code": 0, "stdout": '{"score": "NaN"}', "stderr": ""},
+        {"return_code": 0, "stdout": '{"score": 1.1}', "stderr": ""},
+    ],
+)
+def test_verifier_execution_errors_do_not_produce_zero_scores(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, result: dict[str, object]
+) -> None:
+    from tasks.business_finance.digital_marketing_ab_test_analysis_1 import main as task
+
+    class FailedSession(LocalVerifierSession):
+        async def run_command(self, command: str, *, check: bool = False) -> dict[str, object]:
+            return result
+
+    monkeypatch.setattr(task, "EVAL_TMP_DIR", str(tmp_path / "eval"))
+    config = SimpleNamespace(
+        metadata={"input_dir": "/input", "reference_dir": "/reference", "remote_output_dir": "/out"}
+    )
+    with pytest.raises(RuntimeError):
+        asyncio.run(task.evaluate(config, FailedSession()))
+
+
+@pytest.mark.parametrize("missing_reference", [False, True])
+def test_verifier_reference_failure_propagates_as_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing_reference: bool
+) -> None:
+    from tasks.business_finance.digital_marketing_ab_test_analysis_1 import main as task
+
+    async def reject_report(*args, **kwargs):
+        return {"passed": False}
+
+    monkeypatch.setattr(task, "judge_report", reject_report)
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    reference_dir = tmp_path / "reference"
+    for directory in (input_dir, output_dir, reference_dir):
+        directory.mkdir()
+    (input_dir / "experiment_results_raw.csv").write_text(
+        "variant,delivered,opened,clicked,converted,unsubscribed\n"
+        "control,1,0,0,0,0\ntreatment,1,1,0,0,0\n"
+    )
+    (input_dir / "historical_metrics.csv").write_text("open_rate\n0.2\n")
+    for name in ("randomization_assignment.csv", "experiment_results.tsv", "experiment_report.md"):
+        (output_dir / name).write_text("invalid")
+        if not missing_reference:
+            (reference_dir / name).write_text("reference")
+    monkeypatch.setattr(task, "EVAL_TMP_DIR", str(tmp_path / "eval"))
+    config = SimpleNamespace(
+        metadata={
+            "input_dir": str(input_dir),
+            "reference_dir": str(reference_dir),
+            "remote_output_dir": str(output_dir),
+        }
+    )
+    if missing_reference:
+        with pytest.raises(RuntimeError, match="verifier failed"):
+            asyncio.run(task.evaluate(config, LocalVerifierSession()))
+    else:
+        assert asyncio.run(task.evaluate(config, LocalVerifierSession())) == [0.0]
+
+
+@pytest.mark.parametrize(
+    "directory_name",
+    ["randomization_assignment.csv", "experiment_results.tsv", "experiment_report.md"],
+)
+def test_output_directory_is_a_missing_submission_not_verifier_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, directory_name: str
+) -> None:
+    from tasks.business_finance.digital_marketing_ab_test_analysis_1 import main as task
+
+    async def reject_report(*args, **kwargs):
+        return {"passed": False}
+
+    monkeypatch.setattr(task, "judge_report", reject_report)
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    reference_dir = tmp_path / "reference"
+    for directory in (input_dir, output_dir, reference_dir):
+        directory.mkdir()
+    (input_dir / "experiment_results_raw.csv").write_text(
+        "variant,delivered,opened,clicked,converted,unsubscribed\n"
+        "control,1,0,0,0,0\ntreatment,1,1,0,0,0\n"
+    )
+    (input_dir / "historical_metrics.csv").write_text("open_rate\n0.2\n")
+    for name in ("randomization_assignment.csv", "experiment_results.tsv", "experiment_report.md"):
+        if name == directory_name:
+            (output_dir / name).mkdir()
+        else:
+            (output_dir / name).write_text("invalid")
+        (reference_dir / name).write_text("reference")
+    monkeypatch.setattr(task, "EVAL_TMP_DIR", str(tmp_path / "eval"))
+    config = SimpleNamespace(
+        metadata={
+            "input_dir": str(input_dir),
+            "reference_dir": str(reference_dir),
+            "remote_output_dir": str(output_dir),
+        }
+    )
+    assert asyncio.run(task.evaluate(config, LocalVerifierSession())) == [0.0]
