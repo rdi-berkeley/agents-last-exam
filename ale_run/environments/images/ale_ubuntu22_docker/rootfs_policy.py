@@ -151,7 +151,11 @@ CACHE_PREFIXES = (
 
 
 def beneath(path: str, prefix: str) -> bool:
-    return path == prefix or path.startswith(prefix.rstrip("/") + "/")
+    if path == prefix:
+        return True
+    if prefix.endswith("/"):
+        return path.startswith(prefix.rstrip("/") + "/")
+    return path.startswith(prefix) and path[len(prefix) : len(prefix) + 1] == "/"
 
 
 def canonical(name: str) -> str:
@@ -217,19 +221,31 @@ def validate_contract(contract: dict) -> None:
 def forbidden(path: str, contract: dict) -> bool:
     path = canonical(path)
     parts = path.strip("/").split("/")
-    parents = [path, *[str(item) for item in Path(path).parents]]
+    parents = None
     if path.startswith("/home/") and len(parts) > 1 and parts[1] != "user":
         return True
-    if any(COMPONENT_PATTERN.fullmatch(part) for part in parts):
+    if any(map(COMPONENT_PATTERN.fullmatch, parts)):
         return True
-    if any(beneath(path, prefix) for prefix in contract.get("exclude_paths", [])):
-        return True
+    for prefix in contract.get("exclude_paths", []):
+        if beneath(path, prefix):
+            return True
+    literal_candidate = path.startswith(EXCLUDED)
     for pattern in EXCLUDED:
-        matches = (
-            beneath(path, pattern)
-            if "*" not in pattern
-            else any(fnmatch.fnmatchcase(parent, pattern) for parent in parents)
-        )
+        if "*" not in pattern:
+            if not literal_candidate:
+                continue
+            matches = path == pattern or (
+                path.startswith(pattern) and path.startswith("/", len(pattern))
+            )
+        else:
+            literal = pattern.split("*", 1)[0].rsplit("/", 1)[-1]
+            if literal not in path:
+                continue
+            matches = fnmatch.fnmatchcase(path, pattern)
+            if not matches:
+                if parents is None:
+                    parents = [str(item) for item in Path(path).parents]
+                matches = any(fnmatch.fnmatchcase(parent, pattern) for parent in parents)
         if matches:
             if pattern == "/media/user/data" and any(
                 beneath(path, keep) or beneath(keep, path)
@@ -240,13 +256,25 @@ def forbidden(path: str, contract: dict) -> bool:
     for home in ("/home/user", "/root"):
         if not beneath(path, home):
             continue
+        relative = path[len(home) + 1 :]
+        literal_candidate = relative.startswith(HOME_STATE)
         for state in HOME_STATE:
-            prefix = home + "/" + state
-            matches = (
-                beneath(path, prefix)
-                if "*" not in state
-                else any(fnmatch.fnmatchcase(parent, prefix) for parent in parents)
-            )
+            if "*" not in state:
+                if not literal_candidate:
+                    continue
+                matches = relative == state or (
+                    relative.startswith(state) and relative.startswith("/", len(state))
+                )
+            else:
+                literal = state.split("*", 1)[0].rsplit("/", 1)[-1]
+                if literal not in path:
+                    continue
+                prefix = home + "/" + state
+                matches = fnmatch.fnmatchcase(path, prefix)
+                if not matches:
+                    if parents is None:
+                        parents = [str(item) for item in Path(path).parents]
+                    matches = any(fnmatch.fnmatchcase(parent, prefix) for parent in parents)
             if matches:
                 if state == ".cache" and any(
                     beneath(path, keep) or beneath(keep, path)
