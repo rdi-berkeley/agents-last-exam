@@ -58,11 +58,14 @@ def select(task_data_source: str):
     if task_data_source.startswith("local:"):
         from . import local_host
         return local_host
+    if task_data_source.startswith("localref:"):
+        from . import local_ref
+        return local_ref
     raise ValueError(
         f"unknown task_data_source {task_data_source!r}: expected "
         f"'baked_in_sandbox', 'gs://<bucket>', 's3://<bucket>', 'oss://<bucket>', "
         f"'hf://<dataset>', "
-        f"'local:<dir>'"
+        f"'local:<dir>', 'localref:<dir>'"
     )
 
 

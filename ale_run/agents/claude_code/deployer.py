@@ -22,6 +22,7 @@ import asyncio
 import json
 import logging
 import os
+import uuid
 import re
 import shutil
 import subprocess
@@ -104,6 +105,33 @@ def _installed_version(claude_path: str) -> str | None:
     return m.group(1) if probe.returncode == 0 and m else None
 
 
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """Kill a helper and its children. On Windows a venv ``pythonw.exe`` is a
+    launcher stub whose real interpreter is a child: terminating only the stub
+    leaves the interpreter (and the sandbox supervisor's job) alive."""
+    if proc.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                           capture_output=True, timeout=30)
+        else:
+            proc.kill()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("claude_code: killing helper pid=%s failed: %s", proc.pid, e)
+    try:
+        proc.wait(timeout=15)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _free_port() -> int:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
 class ClaudeCodeDeployer(BaseAgentDeployer):
     """Stdlib-only deployer for the @anthropic-ai/claude-code CLI."""
 
@@ -118,6 +146,15 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
         "stderr.log",
         "otel_requests.jsonl",
     )
+
+    @property
+    def _session_id(self) -> str:
+        """Stable per-deployer id for gateway session affinity."""
+        sid = getattr(self, "_gateway_session_id", None)
+        if not sid:
+            sid = f"ale-{uuid.uuid4().hex[:16]}"
+            self._gateway_session_id = sid
+        return sid
 
     @property
     def version(self) -> str | None:
@@ -224,6 +261,18 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
         )
         logger.info("claude_code: claude CLI ok — version %s", installed or "unknown")
 
+        # 2b. Optional PDF text extraction for the API proxy (best effort).
+        if cfg.api_proxy:
+            import sys
+            try:
+                r = await asyncio.to_thread(
+                    subprocess.run, [sys.executable, "-m", "pip", "install", "-q", "pypdf"],
+                    capture_output=True, text=True, timeout=300,
+                )
+                logger.info("claude_code: pypdf install rc=%s %s", r.returncode, (r.stderr or "").strip()[-200:])
+            except Exception as e:
+                logger.warning("claude_code: pypdf install skipped: %s", e)
+
         # 3. Make work_dir.
         wd = Path(self.executor.work_dir)
         wd.mkdir(parents=True, exist_ok=True)
@@ -256,12 +305,112 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
     # launch
     # =========================================================================
 
+    async def _run_cli(
+        self, *, argv: list[str], stdin_text: str, env: dict[str, str], wd: Path,
+        transcript_file: Path, stderr_log: Path, pid_file: Path, append: bool,
+    ) -> tuple[int | None, int, float]:
+        """Spawn the CLI once and wait; returns (exit_code, pid, duration_s)."""
+        prompt_file = wd / ("prompt_resume.txt" if append else "prompt.txt")
+        prompt_file.write_text(stdin_text, encoding="utf-8")
+        mode = "ab" if append else "wb"
+        t0 = time.monotonic()
+        with open(prompt_file, "rb") as pin, \
+             open(transcript_file, mode) as tout, \
+             open(stderr_log, mode) as terr:
+            proc = await asyncio.to_thread(
+                subprocess.Popen,
+                argv,
+                stdin=pin,
+                stdout=tout,
+                stderr=terr,
+                env=env,
+                cwd=str(wd),
+                # Detach: child outlives any incidental signal sent to us.
+                start_new_session=True if hasattr(os, "setsid") else False,
+            )
+        pid_file.write_text(str(proc.pid), encoding="ascii")
+        logger.info("claude_code: spawned pid=%s argv0=%s%s", proc.pid, argv[0],
+                    " (resume)" if append else "")
+        # Wait for the child to finish. The episode wall budget is
+        # orchestration-owned (asyncio.wait_for around launch()); on
+        # cancellation reap the child before propagating.
+        try:
+            while proc.poll() is None:
+                await asyncio.sleep(_POLL_INTERVAL_S)
+        except asyncio.CancelledError:
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                pass
+            try:
+                await asyncio.wait_for(asyncio.to_thread(proc.wait), timeout=_TERM_GRACE_S)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                try:
+                    proc.kill()
+                except ProcessLookupError:
+                    pass
+            raise
+        return proc.returncode, proc.pid, time.monotonic() - t0
+
+    @staticmethod
+    def _last_result(transcript_file: Path) -> tuple[dict | None, str | None]:
+        """(last ``result`` event, last seen session_id) from the stream-json transcript."""
+        result = None
+        session = None
+        try:
+            with open(transcript_file, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                f.seek(max(0, size - 4_000_000))
+                tail = f.read().decode("utf-8", "replace")
+        except OSError:
+            return None, None
+        for line in tail.splitlines():
+            if '"session_id"' not in line:
+                continue
+            try:
+                ev = json.loads(line)
+            except Exception:
+                continue
+            session = ev.get("session_id") or session
+            if ev.get("type") == "result":
+                result = ev
+        return result, session
+
+    async def _start_proxy(self, cfg: ClaudeCodeConfig, wd: Path) -> tuple[subprocess.Popen, int]:
+        """Start api_proxy.py in the sandbox (same interpreter as this worker)."""
+        import sys
+        port = _free_port()
+        ready = wd / "proxy.ready"
+        if ready.exists():
+            ready.unlink()
+        headers = [f"{k}: {v}" for k, v in (cfg.extra_headers or {}).items()]
+        if cfg.session_header:
+            headers.append(f"{cfg.session_header}: {self._session_id}")
+        # Run by file path: the module is stdlib-only, and the sandbox worker's
+        # import path for ale_run is process-local (not in PYTHONPATH).
+        argv = [sys.executable, str(Path(__file__).with_name("api_proxy.py")),
+                "--port", str(port), "--upstream", cfg.base_url or "https://api.anthropic.com",
+                "--ready-file", str(ready), "--parent-pid", str(os.getpid()),
+                "--diag-dir", str(wd / "proxy_diag")]
+        for h in headers:
+            argv += ["--header", h]
+        log = open(wd / "proxy.log", "ab")
+        proc = subprocess.Popen(argv, stdout=log, stderr=log, env=os.environ.copy(), cwd=str(wd))
+        for _ in range(100):
+            if ready.exists() or proc.poll() is not None:
+                break
+            await asyncio.sleep(0.2)
+        if proc.poll() is not None or not ready.exists():
+            raise RuntimeError(f"claude_code: api_proxy failed to start (rc={proc.returncode}); see {wd / 'proxy.log'}")
+        logger.info("claude_code: api_proxy on 127.0.0.1:%d -> %s (%d headers)", port, cfg.base_url, len(headers))
+        return proc, port
+
     async def launch(self, prompt: str) -> AgentRunResult:
         cfg: ClaudeCodeConfig = self.config  # type: ignore[assignment]
         wd = Path(self.executor.work_dir)
         wd.mkdir(parents=True, exist_ok=True)
 
-        prompt_file = wd / "prompt.txt"
         transcript_file = wd / "transcript.jsonl"
         stderr_log = wd / "stderr.log"
         pid_file = wd / "claude.pid"
@@ -277,8 +426,6 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
                 except OSError:
                     pass
 
-        prompt_file.write_text(prompt, encoding="utf-8")
-
         argv = self._build_argv(
             claude_path=self._claude_path,
             cfg=cfg,
@@ -293,59 +440,56 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
             logger.info("claude_code: OTel collector listening at %s", otel_endpoint)
         env = self._build_env(cfg, otel_endpoint=otel_endpoint)
 
+        proxy_proc: subprocess.Popen | None = None
         t0 = time.monotonic()
+        exit_code: int | None = None
+        pid = -1
+        resumes = 0
+        quick_failures = 0
         try:
-            # Open output files; subprocess inherits the descriptors and the
-            # parent's references can close after spawn (the child keeps them).
-            with open(prompt_file, "rb") as pin, \
-                 open(transcript_file, "wb") as tout, \
-                 open(stderr_log, "wb") as terr:
-                proc = await asyncio.to_thread(
-                    subprocess.Popen,
-                    argv,
-                    stdin=pin,
-                    stdout=tout,
-                    stderr=terr,
-                    env=env,
-                    cwd=str(wd),
-                    # Detach: child outlives any incidental signal sent to us.
-                    start_new_session=True if hasattr(os, "setsid") else False,
+            if cfg.api_proxy:
+                proxy_proc, port = await self._start_proxy(cfg, wd)
+                env["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{port}"
+                env.pop("ANTHROPIC_CUSTOM_HEADERS", None)
+            exit_code, pid, dur = await self._run_cli(
+                argv=argv, stdin_text=prompt, env=env, wd=wd, transcript_file=transcript_file,
+                stderr_log=stderr_log, pid_file=pid_file, append=False,
+            )
+            # Resume the session when the CLI stopped on an API error (the CLI
+            # does not retry 4xx answers; a fresh sample usually succeeds).
+            while cfg.resume_on_api_error and resumes < cfg.resume_on_api_error:
+                result, session = self._last_result(transcript_file)
+                if not result or not result.get("is_error") or not session:
+                    break
+                text = str(result.get("result") or "")
+                # The CLI ends the session on any transport-level failure it does
+                # not retry itself: "API Error: ..." (4xx/5xx) and "Request timed
+                # out" (a sample longer than API_TIMEOUT_MS). Both are resumable.
+                if not (text.startswith("API Error") or "timed out" in text.lower()):
+                    break
+                quick_failures = quick_failures + 1 if dur < 60 else 0
+                if quick_failures >= 3:
+                    logger.warning("claude_code: 3 consecutive immediate API errors; giving up resume (%s)", text[:160])
+                    break
+                resumes += 1
+                logger.warning("claude_code: API error ended session %s (%s); resuming (%d/%d)",
+                               session, text[:160], resumes, cfg.resume_on_api_error)
+                exit_code, pid, dur = await self._run_cli(
+                    argv=argv + ["--resume", session],
+                    stdin_text="The previous API request failed transiently. Continue working on the task "
+                               "from where you left off; do not start over.",
+                    env=env, wd=wd, transcript_file=transcript_file, stderr_log=stderr_log,
+                    pid_file=pid_file, append=True,
                 )
-            pid_file.write_text(str(proc.pid), encoding="ascii")
-            logger.info("claude_code: spawned pid=%s argv0=%s", proc.pid, argv[0])
-
-            # Wait for the child to finish.
-            # The episode wall budget is orchestration-owned: the executor
-            # wraps launch() in asyncio.wait_for(timeout=timeout_s) (derived
-            # from the task), so we just wait for the child here. If that
-            # budget fires we are cancelled mid-await; reap the child before
-            # propagating so it cannot outlive the run.
-            try:
-                while proc.poll() is None:
-                    await asyncio.sleep(_POLL_INTERVAL_S)
-            except asyncio.CancelledError:
-                try:
-                    proc.terminate()
-                except ProcessLookupError:
-                    pass
-                try:
-                    await asyncio.wait_for(
-                        asyncio.to_thread(proc.wait), timeout=_TERM_GRACE_S,
-                    )
-                except (asyncio.TimeoutError, asyncio.CancelledError):
-                    try:
-                        proc.kill()
-                    except ProcessLookupError:
-                        pass
-                raise
         finally:
+            if proxy_proc is not None:
+                _kill_tree(proxy_proc)
             # Stop the collector so it drains the final batch and writes the
             # derived telemetry files, whether the run completed or was killed.
             if collector is not None:
                 collector.stop()
 
         duration_s = time.monotonic() - t0
-        exit_code = proc.returncode
         status = "completed" if exit_code == 0 else "failed"
         error: str | None = None
         if status == "failed":
@@ -354,9 +498,11 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
                 transcript=transcript_file,
                 exit_code=exit_code,
             )
+        if resumes:
+            logger.info("claude_code: session resumed %d time(s) after API errors", resumes)
         return AgentRunResult(
             status=status,
-            pid=proc.pid,
+            pid=pid,
             exit_code=exit_code,
             transcript_path=str(transcript_file),
             stderr_path=str(stderr_log),
@@ -482,6 +628,16 @@ class ClaudeCodeDeployer(BaseAgentDeployer):
                 f"claude_code: unknown provider {cfg.provider!r} "
                 "(expected 'openrouter' or 'direct')"
             )
+
+        # Custom headers (gateway auth, session affinity) + extra env, applied
+        # after the provider routing so they can override anything above.
+        headers = [f"{k}: {v}" for k, v in (cfg.extra_headers or {}).items()]
+        if cfg.session_header:
+            headers.append(f"{cfg.session_header}: {self._session_id}")
+        if headers:
+            env["ANTHROPIC_CUSTOM_HEADERS"] = "\n".join(headers)
+        for k, v in (cfg.extra_env or {}).items():
+            env[k] = str(v)
 
         # OpenTelemetry: point Claude Code's built-in exporter at the run-local
         # OTLP/HTTP receiver. Claude Code emits per-event logs (api_request,

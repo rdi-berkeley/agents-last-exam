@@ -202,16 +202,21 @@ def test_worker_resets_oom_score_before_gate_and_deployer(launcher, monkeypatch,
     monkeypatch.setattr(Path, "write_text", write)
     solver = Mock(side_effect=lambda *args: events.append("solver") or {"ok": True})
     monkeypatch.setattr(entry, "run", solver)
-    assert entry.main() == int(failure is not None)
+    assert entry.main() == int(failure == "verify")
+    # A refused write (container hosts pin oom_score_adj above 0) keeps the
+    # inherited score and continues; a reset that did not take effect still fails.
     assert events == (
-        [("reset", "0"), "verify", "gate", "solver"] if failure is None
-        else [("reset", "0")] if failure == "write" else [("reset", "0"), "verify"]
+        [("reset", "0"), "verify", "gate", "solver"] if failure != "verify"
+        else [("reset", "0"), "verify"]
     )
     result = json.loads((spec_path.parent / "_worker_result.json").read_text())
-    if failure:
+    if failure == "verify":
         assert result["status"] == "failed"
         assert "worker OOM score reset" in result["error"]
         solver.assert_not_called()
+    else:
+        assert result == {"ok": True}
+        solver.assert_called_once()
 
 
 def test_supervisor_publishes_own_pid_before_worker_start(launcher, monkeypatch):

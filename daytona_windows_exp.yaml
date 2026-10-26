@@ -1,0 +1,30 @@
+# Agents' Last Exam, Windows subset on Daytona Windows sandboxes (docs/daytona-windows.md).
+#
+#     export DAYTONA_API_KEY=...            # or put it in secret/.env
+#     uv run python -m ale_run run daytona_windows_exp.yaml --dry-run
+#     uv run python -m ale_run run daytona_windows_exp.yaml
+name: ale_windows_daytona
+
+secret_file: secret/.env
+
+agents:
+  - configs/agents/claude_code.yaml
+environment: configs/environments/daytona_windows.yaml
+
+# selected_tasks/daytona_windows_cpu.txt is the full cpu-free Windows list; the _noodoo
+# variant drops business_finance/odoo, which needs Odoo 19 + PostgreSQL + a seeded template
+# database that env/packages-win does not provide.
+tasks: selected_tasks/daytona_windows_cpu_noodoo.txt
+
+output:
+  root: .logs/ale
+concurrency: 4               # Daytona org tiers cap total vCPUs; 4-vCPU sandboxes -> 5 slots on the starter tier
+wall_time_s: 18000           # ALE's 5h agent wall time for the benchmark lists
+auto_resume: true
+max_attempts: 3
+cleanup_mode: delete
+
+prompt_suffix: |
+  Complete the task fully autonomously; no user will intervene.
+  When finished, terminate all child processes you started.
+  The user will evaluate your performance based on your delivered artifacts.

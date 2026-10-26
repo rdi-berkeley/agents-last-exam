@@ -1,0 +1,34 @@
+# Daytona Windows sandboxes for the Windows (cpu-free) tasks.
+#
+# Each run unit gets a fresh sandbox created from a Daytona snapshot that carries ALE's
+# Windows runtime (built with env/daytona/build_snapshot.py): Python 3.12 + C:\ale-run\.venv,
+# Node 24.12.0, 7-Zip, Git, the cua computer-server as the interactive scheduled task
+# CuaServer-ale on :5000, the env/packages-win software the task cards require, and the task
+# data baked at E:\agenthle (an E: drive mapped onto C:\agenthle) with reference.7z archives,
+# so `task_data_source: baked_in_sandbox` works unchanged. `image: ale-win10` selects ALE's
+# Windows path conventions; the snapshot reproduces them (C:\Users\User is a junction onto
+# the sandbox's Administrator profile). See docs/daytona-windows.md.
+#
+# The provider reaches the cua-server through an SSH port-forward via ssh.app.daytona.io,
+# so the host needs an `ssh` client and outbound TCP/22 to that gateway.
+snapshots:
+  cpu-free:
+    provider: daytona
+    image: ale-win10
+    daytona:
+      snapshot: ale-win-20261025        # Daytona snapshot name (build_snapshot.py --name)
+      api_key: ${env:DAYTONA_API_KEY}
+      target: us                        # Daytona region the snapshot lives in
+      ttl_minutes: 600                  # wall-clock kill switch per sandbox (agent cap is 5h)
+      disable_windows_update: true      # no update reboots mid-run
+      isolate_task_data: true           # delete the other tasks' dirs under E:\agenthle after creation
+      # python: C:\ale-py\alepy.exe     # hardened interpreter (add_hardened_python.py); agents'
+      #                                 # "kill every python" habits then miss the in-box worker
+      # cpu: 8                          # optional hot-resize (increase only; org tier may refuse)
+      # memory: 32
+  # gpu-free: no GPU Windows sandboxes on Daytona; the 3 gpu-free tasks are not routed.
+task_data_source: baked_in_sandbox
+# Snapshots built without reference data (no ALE_REFERENCE_ARCHIVE_PASSWORD) can instead stage
+# the hidden reference from the host after the agent finishes:
+# task_data_source: localref:/path/to/task-data/tasks
+output_path: local

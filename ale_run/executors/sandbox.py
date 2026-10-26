@@ -723,6 +723,9 @@ def _build_launcher(
         f"$env:PYTHONPATH = '{src_quoted};' + $env:PYTHONPATH\n"
         f"$python = '{py_quoted}'\n"
         "$pythonw = Join-Path (Split-Path -Parent $python) 'pythonw.exe'\n"
+        # renamed interpreters (alepy.exe -> alepyw.exe) keep the no-console variant beside them
+        "$pyw2 = [IO.Path]::ChangeExtension($python, $null).TrimEnd('.') + 'w.exe'\n"
+        "if (-not (Test-Path -LiteralPath $pythonw) -and (Test-Path -LiteralPath $pyw2)) { $pythonw = $pyw2 }\n"
         "if (-not (Test-Path -LiteralPath $pythonw)) { $pythonw = $python }\n"
         "$proc = Start-Process -FilePath $pythonw "
         f"-ArgumentList '-m','ale_run.executors._sandbox_entry','{spec_quoted}' "

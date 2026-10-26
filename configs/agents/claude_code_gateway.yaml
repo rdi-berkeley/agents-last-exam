@@ -1,0 +1,33 @@
+# claude_code against a self-hosted Anthropic-compatible gateway that authenticates by
+# header and implements the Messages API only partially (e.g. an SGLang model gateway).
+#
+#   base_url / extra_headers   gateway endpoint + per-request auth headers (${env:...} values)
+#   session_header             per-run id header for gateways with session affinity
+#   api_proxy                  in-sandbox proxy: PDF -> text, non-streaming upstream with
+#                              re-sampling on malformed output / 5xx / 429, SSE re-emit
+#   resume_on_api_error        --resume the session when the CLI ends on an API error
+#   extra_env                  pin every Claude Code model slot to the served model id
+harness: claude_code
+model: ${env:GATEWAY_MODEL}
+config:
+  provider: openrouter            # = ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN bearer
+  base_url: ${env:GATEWAY_BASE_URL}
+  api_key: not-needed             # placeholder when the gateway authenticates by header
+  session_header: X-Session-Id
+  api_proxy: true
+  resume_on_api_error: 30
+  extra_headers:
+    CF-Access-Client-Id: ${env:CLOUDFLARE_ACCESS_CLIENT_ID}
+    CF-Access-Client-Secret: ${env:CLOUDFLARE_ACCESS_CLIENT_SECRET}
+  extra_env:
+    ANTHROPIC_MODEL: ${env:GATEWAY_MODEL}
+    ANTHROPIC_DEFAULT_OPUS_MODEL: ${env:GATEWAY_MODEL}
+    ANTHROPIC_DEFAULT_SONNET_MODEL: ${env:GATEWAY_MODEL}
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: ${env:GATEWAY_MODEL}
+    ANTHROPIC_SMALL_FAST_MODEL: ${env:GATEWAY_MODEL}
+    CLAUDE_CODE_SUBAGENT_MODEL: ${env:GATEWAY_MODEL}
+    DISABLE_TELEMETRY: "1"
+    API_TIMEOUT_MS: "1800000"     # the proxy answers only when the whole sample is done
+  auto_compact_token_limit: 150000   # compact well below the served context (the CLI assumes 200k for unknown model ids)
+  max_turns: -1
+  max_thinking_tokens: 31999

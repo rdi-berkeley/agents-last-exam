@@ -322,11 +322,11 @@ def _build_artifacts(raw: dict[str, Any]) -> ArtifactsSpec:
             and not tdp.startswith("s3://")
             and not tdp.startswith("oss://")
             and not tdp.startswith("hf://")
-            and not tdp.startswith("local:")):
+            and not tdp.startswith(("local:", "localref:"))):
         raise ValueError(
             f"artifacts_path.task_data_source must be 'baked_in_sandbox', "
             f"'gs://<bucket>', 's3://<bucket>', 'oss://<bucket>', 'hf://<dataset>', "
-            f"or 'local:<dir>'; "
+            f"or 'local:<dir>', or 'localref:<dir>'; "
             f"got {task_data_source!r}"
         )
 
@@ -418,6 +418,10 @@ _AWS_CRED_KEYS = (
 _ALIYUN_CRED_KEYS = (
     "region", "security_group", "instance_prefix", "key_name", "ram_role_name",
     "internet_max_bandwidth_out", "system_disk_category", "instance_charge_type",
+)
+_DAYTONA_WIDE_KEYS = (
+    "api_key", "api_url", "target", "ssh_gateway", "ttl_minutes", "cua_ready_timeout_s", "labels",
+    "disable_windows_update", "isolate_task_data", "data_root", "post_create_ps", "hide_cua_console",
 )
 
 
@@ -517,6 +521,8 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
     aliyun_creds: dict[str, Any] = {}   # region/sg/ram_role/... (reconciled, last wins)
     docker_cfg: dict[str, Any] | None = None
     qemu_snaps: dict[str, Any] = {}
+    daytona_snaps: dict[str, Any] = {}  # tag -> {image, snapshot, cpu, memory}
+    daytona_wide: dict[str, Any] = {}   # api_key/api_url/target/... (reconciled, last wins)
 
     for tag, entry in snapshots.items():
         if not isinstance(entry, dict):
@@ -575,6 +581,17 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
                     f"required `qemu.disk_source`"
                 )
             qemu_snaps[str(tag)] = {"image": str(image), **knobs}
+        elif kind == "daytona":
+            # same split as gcloud: provider-wide client settings vs the
+            # per-snapshot route (Daytona snapshot name + optional resize).
+            daytona_wide.update({k: knobs[k] for k in _DAYTONA_WIDE_KEYS if k in knobs})
+            routing = {k: v for k, v in knobs.items() if k not in _DAYTONA_WIDE_KEYS}
+            if not routing.get("snapshot"):
+                raise KeyError(
+                    f"environment {path!r}: daytona snapshot {tag!r} missing "
+                    f"required `daytona.snapshot` (the Daytona snapshot name)"
+                )
+            daytona_snaps[str(tag)] = {"image": str(image), **routing}
         elif kind == "static":
             raise ValueError(
                 f"environment {path!r}: `static` cannot be a per-snapshot "
@@ -628,6 +645,12 @@ def _build_per_snapshot_env(raw: dict[str, Any], path: str) -> EnvironmentSpec:
             kind="qemu",
             config=qemu_cfg,
         )
+    if daytona_snaps:
+        dt = dict(daytona_wide)
+        dt["snapshots"] = daytona_snaps
+        # No gcs_sa_key: Daytona sandboxes stage from the baked snapshot and the
+        # host pulls output over the cua tunnel (output_path: local).
+        provider_specs["daytona"] = ProviderSpec(kind="daytona", config=dt)
 
     return EnvironmentSpec(
         provider_specs=provider_specs,
@@ -662,6 +685,12 @@ def _validate_provider_required(provider: str, cfg: dict[str, Any], path: str = 
     elif provider == "static":
         if not cfg.get("endpoint"):
             raise KeyError(f"environment provider=static missing required field `endpoint`{where}")
+    elif provider == "daytona":
+        if not cfg.get("snapshots"):
+            raise KeyError(
+                f"environment provider=daytona needs per-snapshot routing{where} "
+                f"(use the `snapshots:` form with `daytona.snapshot` on each entry)"
+            )
 
 
 # ---- tasks ---------------------------------------------------------------

@@ -188,6 +188,7 @@ Set `tasks:` in your experiment to a compatible list:
 | `selected_tasks/gpu.txt` | 3 | Windows GPU tasks |
 | `selected_tasks/ale_cli.txt` | 86 | Linux tasks, including desktop workflows |
 | `selected_tasks/docker_support.txt` | 78 | Supported local-container subset |
+| `selected_tasks/daytona_windows_cpu.txt` | 33 | Windows CPU tasks on Daytona Windows sandboxes ([guide](docs/daytona-windows.md)) |
 
 Difficulty tracks contain 45 near-term, 46 full-spectrum, and 36 last-exam
 tasks. These lists overlap. The Hugging Face data packages cover the 122 selected
@@ -199,6 +200,9 @@ telemetry. Set `cleanup_mode: keep` to inspect deliverables there, then release
 the sandbox when finished. Normal resume checks each run's `task.revision`
 against the current task-folder hash; missing or changed revisions rerun.
 For existing v1 logs, follow the [short upgrade steps](docs/releases/v1.1.md#upgrade-existing-logs).
+
+Windows tasks can also run without a local hypervisor or cloud project on
+Daytona Windows sandboxes; see [docs/daytona-windows.md](docs/daytona-windows.md).
 
 The step-by-step (provider setup, configuring an experiment, choosing task lists)
 is in the docs site under **[Run

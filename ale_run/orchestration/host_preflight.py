@@ -39,7 +39,7 @@ def check_host_dependencies(task_paths: Iterable[str]) -> None:
             cwd=_ROOT,
             capture_output=True,
             text=True,
-            timeout=240,
+            timeout=int(os.environ.get("ALE_PREFLIGHT_TIMEOUT_S", "240")),
             env={**os.environ, "MPLBACKEND": "Agg"},
         )
     except (OSError, subprocess.TimeoutExpired) as error:

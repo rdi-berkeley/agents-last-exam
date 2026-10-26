@@ -38,6 +38,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sandbox_entry")
 _PROCESS_STOP_TIMEOUT_S = 20.0
+# After the worker has reported, how long leftover descendants may linger
+# before the supervisor terminates them and reports anyway.
+_DRAIN_GRACE_S = 60.0
 _SYSTEMD_RUNTIME = Path("/run/systemd/system")
 
 
@@ -321,6 +324,7 @@ def supervise(spec_path: Path, spec: dict, *, protected: bool = False) -> dict:
                         }
                         logger.error("%s", out["error"])
                     worker_finished = True
+                    worker_done_at = time.monotonic()
                     if out.get("status") == "timeout" or out.get("phase") == "install":
                         break
                 if stop_path.exists() and stop_path.read_text() == token:
@@ -336,6 +340,20 @@ def supervise(spec_path: Path, spec: dict, *, protected: bool = False) -> dict:
                     ))
                     break
                 if worker_finished and process_tree.is_empty():
+                    drained = True
+                    break
+                if worker_finished and time.monotonic() - worker_done_at >= _DRAIN_GRACE_S:
+                    # The agent left descendants behind (GUI apps it opened, a
+                    # helper it did not close). Its result is already in hand;
+                    # terminate the leftovers instead of idling until the
+                    # episode deadline.
+                    logger.warning("solver finished %.0fs ago but descendants remain; terminating them",
+                                   time.monotonic() - worker_done_at)
+                    try:
+                        process_tree.stop()
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("terminating leftover descendants failed: %s", exc)
+                    process_tree = None
                     drained = True
                     break
                 time.sleep(0.05)
@@ -509,11 +527,27 @@ def main() -> int:
     if sys.argv[2:] == ["--launch"]:
         return launch(spec_path, spec)
     if sys.argv[2:] == ["--worker"]:
+        # Deployer phases at INFO into the work dir (the supervisor only keeps
+        # stderr, which stays empty unless something raises).
+        try:
+            handler = logging.FileHandler(work_dir / "_worker.log", encoding="utf-8")
+            handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+            logging.getLogger().addHandler(handler)
+            logging.getLogger().setLevel(logging.INFO)
+        except Exception:  # noqa: BLE001
+            pass
         if sys.platform == "linux":
             try:
                 score = Path("/proc/self/oom_score_adj")
-                score.write_text("0")
-                if score.read_text().strip() != "0":
+                try:
+                    score.write_text("0")
+                    lowered = True
+                except PermissionError:
+                    # Container hosts (Kubernetes burstable pods pin oom_score_adj > 0) forbid lowering
+                    # it without CAP_SYS_RESOURCE; keep the inherited value rather than refusing to run.
+                    lowered = False
+                    logger.warning("worker OOM score reset not permitted; keeping oom_score_adj=%s", score.read_text().strip())
+                if lowered and score.read_text().strip() != "0":
                     raise RuntimeError("worker OOM score reset did not take effect")
             except Exception as exc:
                 logger.exception("worker OOM score reset failed")

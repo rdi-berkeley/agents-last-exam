@@ -49,6 +49,14 @@
     "selected_tasks/v1.1_modified.txt": {
       "count": 57,
       "sha256": "ffd7432ea2c7c45900d15f1e88638956c02f665650c232152106d75b77f9c9da"
+    },
+    "selected_tasks/daytona_windows_cpu.txt": {
+      "count": 33,
+      "sha256": "6e9b74724bfe1416091889a4fb10c8c0eb5a9802999c0493428c8bf4c52f7174"
+    },
+    "selected_tasks/daytona_windows_cpu_noodoo.txt": {
+      "count": 32,
+      "sha256": "13fb676afbf54f98d1adf3dbf24d50ca2b9e06c1ffced7da41fd98114b7ecb48"
     }
   },
   "huggingface": {

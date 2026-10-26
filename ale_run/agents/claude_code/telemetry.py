@@ -116,6 +116,10 @@ class ClaudeCodeOtelCollector:
                 return
 
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        # Never let stop() block on a handler thread stuck in a keep-alive read
+        # (server_close() joins non-daemon handler threads by default).
+        self._server.daemon_threads = True
+        self._server.block_on_close = False
         self._thread = threading.Thread(
             target=self._server.serve_forever,
             name="claude-code-otel-collector",

@@ -21,7 +21,7 @@ Typical usage::
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ClassVar
 
 @dataclass
@@ -66,6 +66,38 @@ class ClaudeCodeConfig:
     passthrough whitelist change needed and no collision with a real shell key.
     For ``openrouter`` it becomes ANTHROPIC_AUTH_TOKEN; for ``direct``,
     ANTHROPIC_API_KEY."""
+
+    extra_headers: dict[str, str] = field(default_factory=dict)
+    """Extra HTTP headers for every API request, joined into Claude Code's
+    ``ANTHROPIC_CUSTOM_HEADERS`` (newline-separated ``Name: value`` lines).
+    For gateways that authenticate by header (e.g. a Cloudflare Access service
+    token in front of an Anthropic-compatible endpoint). Values may use
+    ``${env:VAR}`` in the yaml; they travel with the serialized config."""
+
+    session_header: str | None = None
+    """Name of a header to send with a per-run random id (``ale-<hex>``) so a
+    gateway with session affinity pins the run's requests to one backend
+    (prefix-cache locality across turns). ``None`` sends no such header."""
+
+    extra_env: dict[str, str] = field(default_factory=dict)
+    """Extra environment variables for the CLI process (applied last, after the
+    provider routing). E.g. ``ANTHROPIC_SMALL_FAST_MODEL`` so Claude Code's
+    auxiliary calls hit the same custom model, or ``DISABLE_TELEMETRY``."""
+
+    api_proxy: bool = False
+    """Run a local Anthropic-Messages proxy inside the sandbox
+    (``api_proxy.py``) and point the CLI at it. The proxy forwards to
+    ``base_url`` with ``extra_headers`` (so the CLI never sees gateway
+    credentials), converts ``document`` blocks (PDF reads) to text, calls the
+    upstream non-streaming and re-samples on malformed-output / 5xx / 429
+    errors, then re-emits SSE to the CLI. For self-hosted gateways that only
+    partially implement the Anthropic Messages API."""
+
+    resume_on_api_error: int = 0
+    """When the CLI ends its session with an ``API Error`` or ``Request timed
+    out`` result (the CLI does not retry those), resume the same session
+    (``--resume``) with a "continue" prompt up to this many times. 0 disables.
+    Three consecutive failures within a minute stop the loop early."""
 
     # ---- CLI knobs ----
     max_budget_usd: float | None = None
