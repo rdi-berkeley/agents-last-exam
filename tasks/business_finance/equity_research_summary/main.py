@@ -1,5 +1,7 @@
 """equity_research_summary — Tesla one-page equity research workbook task."""
 
+import asyncio
+import base64
 import json
 import logging
 import sys
@@ -15,10 +17,6 @@ from tasks.common_setup import BaseTaskSetup
 _setup = BaseTaskSetup()
 
 SCRIPTS_DIR = Path(__file__).parent / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-from score_workbook import WorkbookScoreResult, score_workbook_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -144,14 +142,43 @@ async def start(task_cfg, session: cb.DesktopSession):
     await _setup(task_cfg, session)
 
 
-def _log_result(tag: str, result: WorkbookScoreResult) -> None:
+def _log_result(tag: str, result: dict[str, Any]) -> None:
     logger.info(
         "[%s] score=%.4f passed=%s reasons=%s",
         tag,
-        result.score,
-        result.passed,
-        result.reasons,
+        result["score"],
+        result["passed"],
+        result["reasons"],
     )
+
+
+async def _score_workbook(agent_bytes: bytes, manifest: dict[str, Any]) -> dict[str, Any]:
+    payload = json.dumps(
+        {"workbook": base64.b64encode(agent_bytes).decode("ascii"), "manifest": manifest}
+    ).encode("utf-8")
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        str(SCRIPTS_DIR / "score_workbook.py"),
+        "--stdin",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await process.communicate(payload)
+    except BaseException:
+        if process.returncode is None:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+        await process.wait()
+        raise
+    if process.returncode:
+        raise RuntimeError(
+            f"Workbook scorer failed: {stderr.decode('utf-8', errors='replace')[-4000:]}"
+        )
+    return json.loads(stdout)
 
 
 @cb.evaluate_task(split="train")
@@ -160,26 +187,24 @@ async def evaluate(task_cfg, session: cb.DesktopSession) -> list[float]:
     output_workbook = meta["output_workbook"]
     reference_manifest = meta["reference_manifest"]
 
-    if not (await session.file_exists(reference_manifest) or await session.directory_exists(reference_manifest)):
-        logger.error("Missing reference manifest: %s", reference_manifest)
-        return [0.0]
-    if not (await session.file_exists(output_workbook) or await session.directory_exists(output_workbook)):
+    if not (
+        await session.file_exists(reference_manifest)
+        or await session.directory_exists(reference_manifest)
+    ):
+        raise FileNotFoundError(f"Missing reference manifest: {reference_manifest}")
+    if not (
+        await session.file_exists(output_workbook)
+        or await session.directory_exists(output_workbook)
+    ):
         logger.error("Missing output workbook: %s", output_workbook)
         return [0.0]
 
-    try:
-        agent_bytes = await session.read_bytes(output_workbook)
-        manifest_text = await session.read_file(reference_manifest)
-    except Exception as exc:
-        logger.error("Failed to read staged workbook/manifest: %s", exc)
-        return [0.0]
-
-    try:
-        manifest = json.loads(manifest_text)
-        result = score_workbook_bytes(agent_bytes=agent_bytes, manifest=manifest)
-    except Exception as exc:
-        logger.error("Workbook scoring failed: %s", exc)
-        return [0.0]
+    agent_bytes = await session.read_bytes(output_workbook)
+    manifest_text = await session.read_file(reference_manifest)
+    manifest = json.loads(manifest_text)
+    if not isinstance(manifest, dict):
+        raise ValueError("Reference manifest must be a JSON object")
+    result = await _score_workbook(agent_bytes=agent_bytes, manifest=manifest)
 
     _log_result(meta["variant_name"], result)
-    return [result.score]
+    return [result["score"]]
