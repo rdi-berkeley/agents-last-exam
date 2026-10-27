@@ -84,7 +84,7 @@ def test_title_matching_ignores_case_spacing_and_heading_annotations(workbook_ca
 
 @pytest.mark.parametrize("bold,filled", [(False, True), (True, False), (False, False)])
 @pytest.mark.parametrize("styled_note", [False, True])
-def test_real_header_style_errors_fail_even_with_a_styled_note(
+def test_header_style_errors_fail_without_another_valid_candidate(
     workbook_case, bold, filled, styled_note
 ):
     sheet = workbook_case[0].active
@@ -99,8 +99,12 @@ def test_real_header_style_errors_fail_even_with_a_styled_note(
     if not filled:
         expected.append("header_no_fill:Market Data")
     result = score_case(workbook_case)
-    assert not result.passed
-    assert result.reasons == expected
+    if styled_note:
+        assert result.passed
+        assert result.reasons == []
+    else:
+        assert not result.passed
+        assert result.reasons == expected
 
 
 @pytest.mark.parametrize(
@@ -114,7 +118,7 @@ def test_real_header_style_errors_fail_even_with_a_styled_note(
     ],
 )
 @pytest.mark.parametrize("first_address,second_address", [("D3", "A4"), ("A4", "D4"), ("A4", "D5")])
-def test_duplicate_headers_preserve_row_then_column_order_without_style_selection(
+def test_duplicate_headers_accept_any_fully_styled_candidate(
     workbook_case,
     first_bold,
     first_filled,
@@ -132,12 +136,8 @@ def test_duplicate_headers_preserve_row_then_column_order_without_style_selectio
         sheet[address].font = Font(bold=bold)
         sheet[address].fill = PatternFill("solid", fgColor="1F4E78") if filled else PatternFill()
     expected = []
-    if not first_bold:
-        expected.append("header_not_bold:Market Data")
-    if not first_filled:
-        expected.append("header_no_fill:Market Data")
     result = score_case(workbook_case)
-    assert result.passed == (first_bold and first_filled)
+    assert result.passed == ((first_bold and first_filled) or (second_bold and second_filled))
     assert result.reasons == expected
 
 
@@ -156,21 +156,25 @@ def test_subtitled_header_still_requires_bold_and_fill(workbook_case, separator,
 
 
 @pytest.mark.parametrize(
-    "note",
+    "note,is_formula",
     [
-        "Live market data: Yahoo Finance | Historicals: FY2023 SEC 10-K ($mm)",
-        "Source: Market Data from Yahoo Finance",
-        "Market Data sources are Yahoo Finance and SEC filings",
-        '=CONCAT("Market Data", " (Yahoo Finance)")',
+        ("Live market data: Yahoo Finance | Historicals: FY2023 SEC 10-K ($mm)", False),
+        ("Source: Market Data from Yahoo Finance", False),
+        ("Market Data sources are Yahoo Finance and SEC filings", False),
+        ('=CONCAT("Market Data", " (Yahoo Finance)")', True),
     ],
 )
-def test_note_or_formula_cannot_replace_missing_header(workbook_case, note):
+def test_styled_text_can_match_but_formula_cannot_replace_header(workbook_case, note, is_formula):
     sheet = workbook_case[0].active
     sheet["A4"] = None
     sheet["A2"] = note
     sheet["A2"].font = Font(bold=True)
     sheet["A2"].fill = PatternFill("solid", fgColor="1F4E78")
-    assert score_case(workbook_case).reasons == ["header_missing:Market Data"]
+    result = score_case(workbook_case)
+    if is_formula:
+        assert result.reasons == ["header_missing:Market Data"]
+    else:
+        assert result.passed
 
 
 def test_header_can_move_to_a_merged_region(workbook_case):

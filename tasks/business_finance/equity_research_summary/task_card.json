@@ -1,15 +1,16 @@
 {
   "taskId": "business_finance/equity_research_summary",
   "title": "Equity Research Summary",
-  "summary": "Build a company equity-research workbook from staged filings and market sources, then produce the required summary outputs.",
+  "summary": "Build a company equity-research workbook from supplied FY2023 financial data and live market sources.",
   "category": "business_finance",
   "software": [
-    "Chrome"
+    "Chrome",
+    "LibreOffice Calc"
   ],
-  "taskPrompt": "You are an equity research analyst preparing a one-page Tesla workbook in LibreOffice Calc.\n\n## Variant\n`tsla_fy2023`: Single Tesla equity-research workbook using live Yahoo pages plus fixed FY2023 SEC values.\n\n## Runtime Entry Points\n- Read the staged instructions: `tsla_fy2023\\input\\instruction.md`\n- Read the allowed public source URLs: `tsla_fy2023\\input\\source_urls.txt`\n- Launch LibreOffice Calc from: `tsla_fy2023\\software\\launch_calc.bat`\n\n## Your Task\nCreate a single worksheet named for a Tesla financial summary workbook.\n\nUse Yahoo Finance for the live market-data / valuation fields and SEC EDGAR for the fixed\nFY2023 annual financial-statement sections.\n\nThe workbook must include these sections:\n- Market Data\n- Valuation Metrics\n- Income Statement (FY2023, $mm)\n- Balance Sheet (FY2023, $mm)\n- Cash Flow (FY2023, $mm)\n- Key Metrics Dashboard\n\n## Output Requirements\n- Save exactly one workbook to: `tsla_fy2023\\output\\TSLA_Financial_Summary.xlsx`\n- The filename must be exactly `TSLA_Financial_Summary.xlsx`\n- The worksheet name must contain `TSLA`, for example `TSLA Summary`\n- Use spreadsheet formulas, not hardcoded values, for derived cells such as margins,\n  free cash flow, equity, and dashboard metrics\n- Keep the live Yahoo Finance cells populated in the final workbook",
+  "taskPrompt": "You are an equity research analyst preparing a one-page Tesla workbook in LibreOffice Calc.\n\n## Variant\n`tsla_fy2023`: Single Tesla equity-research workbook using live Yahoo pages plus fixed FY2023 SEC values.\n\n## Runtime Entry Points\n- Read the staged instructions: `tsla_fy2023\\input\\instruction.md`\n- Read the FY2023 financial data: `tsla_fy2023\\input\\tsla_fy2023_financials.md`\n- Read the allowed public source URLs: `tsla_fy2023\\input\\source_urls.txt`\n- Launch LibreOffice Calc from: `tsla_fy2023\\software\\launch_calc.bat`\n\n## Your Task\nCreate a single worksheet for a Tesla financial summary workbook.\n\nUse Yahoo Finance for the live market-data / valuation fields. Use the supplied\nFY2023 financial data for the fixed annual financial-statement sections.\n\nThe workbook must include these sections:\n- Market Data\n- Valuation Metrics\n- Income Statement (FY2023, $mm)\n- Balance Sheet (FY2023, $mm)\n- Cash Flow (FY2023, $mm)\n- Key Metrics Dashboard\n\n## Output Requirements\n- Save exactly one workbook to: `tsla_fy2023\\output\\TSLA_Financial_Summary.xlsx`\n- The filename must be exactly `TSLA_Financial_Summary.xlsx`\n- The worksheet name must contain `TSLA`, for example `TSLA Summary`\n- Use spreadsheet formulas, not hardcoded values, for derived cells such as margins,\n  free cash flow, equity, and dashboard metrics\n- Section headers should be bold with a colored background fill\n- Keep the live Yahoo Finance cells populated in the final workbook",
   "agentMustDo": [
     "Open Yahoo Finance for Tesla (`TSLA`), visit the quote page and the Statistics page, and collect the live market-data and valuation fields listed in `input/instruction.md`.",
-    "Open SEC EDGAR for Tesla and locate the Tesla FY2023 annual 10-K financial statements needed for the workbook.",
+    "Use the supplied Tesla FY2023 financial data for the fixed annual financial-statement sections.",
     "Launch LibreOffice Calc via `software/launch_calc.bat`.",
     "Build a single-sheet workbook with the required title, section headers, labels, formulas, and formatting.",
     "Save the final workbook as `TSLA_Financial_Summary.xlsx` into the runtime `output/` directory."
@@ -26,6 +27,12 @@
       "format": "UTF-8 text",
       "path": "input/source_urls.txt",
       "description": "Public URLs the agent is allowed to use for data gathering"
+    },
+    {
+      "name": "tsla_fy2023_financials.md",
+      "format": "Markdown",
+      "path": "input/tsla_fy2023_financials.md",
+      "description": "Fixed Tesla FY2023 financial data"
     }
   ],
   "referenceFiles": [
@@ -36,7 +43,7 @@
       "description": "Single-sheet workbook with required sections, formulas, formatting, and Tesla FY2023 historical values plus live market-data fields"
     }
   ],
-  "evaluation": "**Hard gate conditions** (auto score=0 if triggered):\n- `output\\TSLA_Financial_Summary.xlsx` is missing or unreadable.\n- The workbook does not contain the expected sheet name or the required section headers.\n- Required calculated cells are hardcoded instead of formulas.\n- The workbook is for the wrong company or uses the wrong historical period.\n\n**Scoring method:**\nUse a local `openpyxl`-based evaluator against `reference/reference_manifest.json`.\n\nPlanned score components:\n- structure and required labels\n- fixed historical FY2023 values from the 10-K\n- formula integrity for calculated fields and dashboard cross-references\n- formatting of the required section headers and numeric cells\n- live market-data cells checked only for non-empty numeric content and expected number formatting, not for value correctness\n\nImportant normalization decisions:\n- The submission text says FY2024, but the provided reference workbook and the attached finance PDF both anchor the task to Tesla FY2023 annual financials. Stage 1 therefore treats FY2023 as canonical for the historical sections.\n- Live Yahoo Finance fields are intentionally **not** exact-match scored after the fact. They are checked only for being non-empty numeric cells with the expected number formats. This keeps the rubric objective without pretending later graders can reconstruct a historical Yahoo snapshot.\n- The reference workbook contains an extra color-legend block in `D11:E14`. That block is treated as optional and is not required for a perfect score.\n- Formula verification is explicit: the evaluator opens the workbook with `openpyxl` (`data_only=False`) and checks that the required formula cells (`B23`, `B24`, `B26`, `B27`, `B29`, `B34`, `B37`, `B42`, `B43`, `E5:E9`) contain formulas rather than literals.\n\n- **Where does the main scoring logic run?** local\n- **If any scoring step runs on the VM, why is that exception necessary?** no VM-side scoring is planned; the produced workbook is lightweight and can be inspected locally after retrieval.\n\n**What does a PERFECT output look like?**\nA readable workbook named `TSLA_Financial_Summary.xlsx` whose main sheet matches the canonical section layout, uses formulas for all derived fields, matches the hidden FY2023 reference values within tolerance for the fixed historical cells, and contains populated live market-data / valuation fields.\n\n**What does a WRONG/empty output look like?**\nMissing workbook, empty workbook, wrong company, wrong historical period, broken formulas, or a workbook with only hardcoded values should score near `0.0` and usually trigger a hard gate.",
+  "evaluation": "Checks the submitted workbook's required structure, supplied financial data, formulas, and market-data fields. Missing or unreadable submissions receive zero. Evaluator failures are reported separately.",
   "vm": {
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free",
