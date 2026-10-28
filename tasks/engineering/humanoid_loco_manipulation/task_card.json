@@ -1,0 +1,82 @@
+{
+  "taskId": "engineering/humanoid_loco_manipulation",
+  "title": "Humanoid Fetch-and-Return Loco-Manipulation",
+  "summary": "In a given simulation environment, generate an executable robot trajectory that controls a Unitree G1 humanoid to navigate to a target object, pick it up, and carry it back to its starting position. The robot starts facing AWAY from the thermos, so it must turn and walk to it, grasp it with the Dex3 hand, then turn around and carry it back to the start, ending with the object held there. Fully self-contained (mujoco/torch/numpy); no motion planner, grasp database, or IK helper is provided.",
+  "category": "engineering",
+  "software": [
+    "MuJoCo (mujoco==3.3.6)",
+    "PyTorch (torch, CUDA)",
+    "NumPy",
+    "transforms3d"
+  ],
+  "taskPrompt": "You are synthesizing a fetch-and-return whole-body trajectory for a Unitree G1 humanoid (43 DoF, right-hand Dex3 3-finger gripper) in a fixed MuJoCo scene. The robot starts facing AWAY from the target thermos.\n\n## Variant\n`base`: turn+walk to the thermos, grasp it, carry it back to the start, hold it\n\n## Input Files\n- Task brief: `/input/task_brief.md`\n- Success criteria and metrics: `/input/SUCCESS.md`\n- Trajectory format and deterministic replay/control contract: `/input/TRAJECTORY_SCHEMA.md`\n- Frozen self-contained simulation: `/input/assets` (scene.mjb, robot_params.json incl. spawn_xy, init_state.npy, amo_init_state.npz)\n- RL locomotion policy the robot is driven by: `/input/policy` (amo_policy.py + TorchScript weights)\n\n## What You Must Do\n1. Read the task brief, the trajectory schema, and the success criteria.\n2. Build your own control loop over `/input/assets/scene.mjb` + `/input/policy` (there is no planner, no grasp database, and no inverse-kinematics helper). Command base velocities + heading to the AMO locomotion policy to turn and walk to the thermos; command waist/arm/hand targets to grasp and lift it; then turn around and carry it back to the start position (`spawn_xy`). Solve navigation, grasp-pose selection, and arm kinematics yourself. Note: `amo_policy_target_yaw` is relative to the robot's initial facing.\n3. Save exactly one file in `/output`: `trajectory.npz`, containing the four float32 arrays defined in `/input/TRAJECTORY_SCHEMA.md`.\n\n## Output Requirements\n- `trajectory.npz` must contain `action` [T,43], `amo_policy_command` [T,9], `amo_policy_target_yaw` [T,1], and `amo_policy_turning_flag` [T,1], all finite and the same length T.\n- When replayed under the contract in `/input/TRAJECTORY_SCHEMA.md`, the robot must end upright (pelvis > 0.6 m), within 0.6 m of `spawn_xy`, holding the thermos aloft (object z > 0.6 m) AND still grasped in the right hand (within 0.15 m of the Dex3 fingertip center).\n- Do not write final answers outside `/output`.",
+  "agentMustDo": [
+    "Read /input/task_brief.md, /input/TRAJECTORY_SCHEMA.md, and /input/SUCCESS.md.",
+    "Drive the bundled MuJoCo sim + AMO RL locomotion policy from the fixed initial state (robot facing away from the object); turn and walk to the thermos without falling.",
+    "Solve grasping yourself: choose a grasp on the thermos, derive the arm joint angles (your own IK), and close the Dex3 fingers. No grasp poses or IK helper are provided.",
+    "Turn around and carry the object back to within 0.6 m of the start (spawn_xy), keeping it grasped in the right hand and aloft.",
+    "Record the run to /output/trajectory.npz with all four required arrays; verify success in your own loop (upright, returned, object held). No self-test harness is provided."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_brief.md",
+      "format": "md",
+      "path": "input/task_brief.md",
+      "description": "Agent-facing task contract: goal, what is given (self-contained sim + AMO policy) vs what must be solved."
+    },
+    {
+      "name": "SUCCESS.md",
+      "format": "md",
+      "path": "input/SUCCESS.md",
+      "description": "Hard gates, the exact grader command, metrics, and acceptance thresholds."
+    },
+    {
+      "name": "TRAJECTORY_SCHEMA.md",
+      "format": "md",
+      "path": "input/TRAJECTORY_SCHEMA.md",
+      "description": "The four-array trajectory.npz schema and the deterministic replay/control contract, so the file can be produced without a harness."
+    },
+    {
+      "name": "assets/",
+      "format": "directory",
+      "path": "input/assets/",
+      "description": "Frozen self-contained MuJoCo model (scene.mjb, meshes embedded), robot params (PD gains/joint order/target body), and the fixed initial physics + policy state."
+    },
+    {
+      "name": "policy/",
+      "format": "directory",
+      "path": "input/policy/",
+      "description": "The AMO RL locomotion/balance policy (amo_policy.py + TorchScript weights) the robot is driven by. The only control aid provided."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "trajectory.npz",
+      "format": "npz",
+      "path": "reference/trajectory.npz",
+      "description": "Hidden gold-standard fetch-and-return trajectory produced by an actual planner run; replays to a full turn->walk->grasp->lift->carry-back->hold (score 1.0). Scoring is functional (the grader replays the agent's own file)."
+    },
+    {
+      "name": "grader/run_grader.py",
+      "format": "py",
+      "path": "reference/grader/run_grader.py",
+      "description": "Hidden replay/scoring engine. Loads assets/scene.mjb + policy, restores the fixed state, replays the submitted trajectory under the AMO policy, and emits lift/upright metrics."
+    }
+  ],
+  "evaluation": "Functional, reference-free, and self-contained (only mujoco/torch/numpy/transforms3d; no `simple` framework). The evaluator enforces the one-file output structure (`trajectory.npz`) and a schema gate (four arrays, correct shapes, finite), then runs the hidden grader `reference/grader/run_grader.py` on the submission against `input/assets` + `input/policy`. The grader restores the frozen MuJoCo integration state + AMO policy state and replays the trajectory on GPU (deterministic; bit-identical across repeated replays). At the end it checks, ALL required: (1) upright -- robot pelvis height > 0.60 m; (2) returned -- robot base within 0.60 m of spawn_xy; (3) held -- thermos off the ground (z > 0.60 m) AND still grasped in the right hand (within 0.15 m of the Dex3 fingertip center). Score is binary: 1.0 iff all three hold, else 0.0. A malformed npz, a crashed replay, a fallen robot, a dropped/left object, or a non-return all score 0.0. The gold reference replays to score 1.0 (return_dist 0.49, object_z 1.14, hand_obj_dist 0.037); an idle/fallen trajectory scores 0.0.",
+  "vm": {
+    "machineType": "g2-standard-8",
+    "snapshot": "gpu-free",
+    "timeout": 3600
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.11",
+    "subdomain_code": "robotics",
+    "subdomain_name": "Robotics & Autonomous Systems"
+  },
+  "requiredSystemPackages": [
+    "mujoco-gl-libs"
+  ]
+}
