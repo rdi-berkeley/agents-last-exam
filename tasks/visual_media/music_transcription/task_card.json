@@ -68,7 +68,10 @@
     "machineType": "c4-standard-4",
     "snapshot": "cpu-free-ubuntu",
     "osType": "linux",
-    "timeout": 18000
+    "timeout": 18000,
+    "network": {
+      "mode": "off"
+    }
   },
   "taxonomy": {
     "domain_id": "8",
