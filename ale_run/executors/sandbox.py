@@ -38,7 +38,7 @@ import traceback
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, ClassVar
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, ClassVar
 
 from ..base_interface import (
     BaseExecutor,
@@ -133,6 +133,11 @@ class SandboxExecutor(BaseExecutor):
     on_run_result: Callable[[AgentRunResult], None] | None = field(
         default=None, init=False, repr=False,
     )
+    on_egress_request: Callable[[], Awaitable[str]] | None = field(
+        default=None, init=False, repr=False,
+    )
+    """Set for network-off runs: seals the sandbox after the deployer's
+    ``install()`` and returns the proxy URL the agent must use."""
 
     async def run_deployer(
         self,
@@ -217,10 +222,12 @@ class SandboxExecutor(BaseExecutor):
         await sb.mkdir(self.work_dir)
 
         # 3. Reset stale state from any prior attempt (best-effort)
+        egress_request = f"{wd}{sep}_egress_request"
         await sb.rm([
             pid_file, result_path, done_marker, entry_log, secrets_path,
             f"{wd}{sep}_worker_result.json", f"{wd}{sep}_cli_identity.json",
-            f"{wd}{sep}_agent_started",
+            f"{wd}{sep}_agent_started", egress_request,
+            f"{wd}{sep}_egress_sealed", f"{wd}{sep}_egress_failed",
         ])
 
         # 4. Write spec.json into the sandbox's work_dir.
@@ -241,6 +248,7 @@ class SandboxExecutor(BaseExecutor):
             "prompt": prompt,
             "timeout_s": float(timeout_s),
             "run_token": self._run_token,
+            "egress_handshake": self.on_egress_request is not None,
         }
         await sb.write_file(spec_path, json.dumps(spec, indent=2))
 
@@ -319,7 +327,10 @@ class SandboxExecutor(BaseExecutor):
         marker_hit = False
         consecutive_process_misses = 0
         transport_unavailable_since: float | None = None
+        egress_pending = self.on_egress_request is not None
         while time.monotonic() < deadline:
+            if egress_pending:
+                egress_pending = await self._answer_egress_request(egress_request, wd, sep)
             try:
                 if await sb.exists(done_marker):
                     marker_hit = True
@@ -586,6 +597,27 @@ class SandboxExecutor(BaseExecutor):
             parent = remote_path.rsplit(sep, 1)[0]
             await sandbox.mkdir(parent)
             await sandbox.write_file(remote_path, data)
+
+    async def _answer_egress_request(self, request_path: str, wd: str, sep: str) -> bool:
+        """Seal the sandbox once the entry asks; return True while no request has arrived."""
+        try:
+            if not await self.sandbox.exists(request_path):
+                return True
+        except Exception as e:                                      # noqa: BLE001
+            logger.debug("egress request probe failed: %s", e)
+            return True
+        try:
+            proxy_url = await self.on_egress_request()
+        except Exception as exc:                                    # noqa: BLE001
+            logger.exception("sandbox: network seal failed")
+            await self.sandbox.write_file(
+                f"{wd}{sep}_egress_failed", f"{type(exc).__name__}: {exc}",
+            )
+        else:
+            await self.sandbox.write_file(
+                f"{wd}{sep}_egress_sealed", json.dumps({"proxy_url": proxy_url}),
+            )
+        return False
 
     async def _read_pid(self, pid_file: str) -> int | None:
         """Poll for the launcher's pid file. Returns None on timeout."""

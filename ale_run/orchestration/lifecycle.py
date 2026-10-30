@@ -40,6 +40,7 @@ from ..base_interface import (
 )
 from ..environments.env import ALEEnv
 from ..executors import DockerExecutor, LocalExecutor, SandboxExecutor
+from ..networking.egress_gateway import allowlist_host_from_url
 from ..tasks.loader import TaskLoader
 from ..tasks.driver import TaskDriver
 from ..tasks.revision import task_revision
@@ -159,6 +160,8 @@ async def run_one_unit(
     cleanup_mode: str = "delete",
     prompt_suffix: str = "",
     wall_time_s: int | None = None,
+    network_off_policy: str = "allow_unenforced",
+    network_allowlist: tuple[str, ...] = (),
 ) -> UnitResult:
     started = time.monotonic()
     effective_cleanup_mode = cleanup_mode
@@ -225,6 +228,7 @@ async def run_one_unit(
     eval_error: dict[str, Any] | None = None
     task_revision_value: str | None = None
     environment_metadata: dict[str, Any] = {}
+    network_record: dict[str, Any] | None = None
     # Execution window timestamps. ``started`` (above) is the ENQUEUE time, so
     # it includes the concurrency-semaphore wait. For the reported per-unit
     # duration we want the actual work window: from when the sem is acquired
@@ -252,6 +256,15 @@ async def run_one_unit(
             # Resolve the provider for THIS task's snapshot (per-snapshot
             # routing: an environment can mix backends across snapshots).
             provider = router.provider_for(env_spec.snapshot)
+            network_record = _plan_network(
+                env_spec=env_spec,
+                provider=provider,
+                executor_type=executor_type,
+                config=config,
+                policy=network_off_policy,
+                extra_allowlist=network_allowlist,
+                writer=writer,
+            )
 
             # ============================================================
             # Phase 0 — provision the sandbox. Single-shot: with task data
@@ -264,6 +277,8 @@ async def run_one_unit(
             await env.reset_async()
             environment_metadata = dict(env.sandbox.metadata.get("image_provenance") or {})
             environment_metadata["snapshot"] = env_spec.snapshot
+            if network_record is not None:
+                environment_metadata["network"] = network_record
             writer.emit_event(
                 "provision_done",
                 env_id=env.sandbox.id,
@@ -321,6 +336,14 @@ async def run_one_unit(
                 host_artifacts_dir=host_artifacts_dir,
                 sandbox_task_name=getattr(task_meta.get("task_data"), "sandbox_task_name", None),
             )
+            if network_record is not None and network_record["enforced"]:
+                async def _seal_network() -> str:
+                    report = await provider.seal_network(env.sandbox, network_record["allowlist"])
+                    network_record.update(report)
+                    writer.emit_event("network_sealed", **report)
+                    return report["guest_proxy_url"]
+
+                executor.on_egress_request = _seal_network
             writer.emit_event(
                 "agent_run_started",
                 executor=executor_type,
@@ -662,6 +685,14 @@ async def run_one_unit(
                 await task_driver.close()
             except Exception as e:
                 logger.debug("TaskDriver.close failed: %s", e)
+        if network_record is not None and network_record["enforced"] and env is not None:
+            try:
+                connections = provider.network_summary(env.sandbox)
+                if connections is not None:
+                    network_record["connections"] = connections
+                    writer.emit_event("network_gateway_summary", **connections)
+            except Exception as e:
+                logger.warning("network gateway summary failed: %s", e)
         if env is not None:
             try:
                 await env.close_async(mode=effective_cleanup_mode)
@@ -825,7 +856,52 @@ def _build_env_spec(task_meta: dict[str, Any], *, unit: RunUnit | None = None) -
         task_id=task_id,
         harness=harness,
         model_tag=model_tag,
+        network_mode=task_meta.get("network_mode", "on"),
     )
+
+
+def _plan_network(
+    *,
+    env_spec: SandboxSpec,
+    provider: Provider,
+    executor_type: str,
+    config: Any,
+    policy: str,
+    extra_allowlist: tuple[str, ...],
+    writer: RunWriter,
+) -> dict[str, Any] | None:
+    """Decide, before any VM exists, how a ``vm.network.mode: off`` unit runs.
+
+    Returns None for network-on units, otherwise the run.json ``network``
+    record. Raises when ``network_off_policy: enforce`` cannot be honoured.
+    """
+    if env_spec.network_mode != "off":
+        return None
+    if policy == "allow_unenforced":
+        logger.warning(
+            "vm.network.mode=off NOT enforced for %s (network_off_policy=allow_unenforced)",
+            env_spec.task_id,
+        )
+        writer.emit_event("network_off_unenforced", reason="network_off_policy=allow_unenforced")
+        return {"mode": "off", "enforced": False}
+    if executor_type != "sandbox":
+        raise RuntimeError(
+            f"vm.network.mode=off: executor {executor_type!r} runs the agent outside the sandbox"
+        )
+    if not callable(getattr(provider, "seal_network", None)):
+        raise RuntimeError(
+            f"vm.network.mode=off: provider {type(provider).__name__} cannot seal a sandbox"
+        )
+    allowlist = set(extra_allowlist)
+    base_url = getattr(config, "base_url", None)
+    if base_url:
+        allowlist.add(allowlist_host_from_url(base_url))
+    if not allowlist:
+        raise RuntimeError(
+            "vm.network.mode=off: the agent config has no base_url; list the model "
+            "host in the experiment's network_allowlist"
+        )
+    return {"mode": "off", "enforced": True, "allowlist": sorted(allowlist)}
 
 
 def _build_executor(

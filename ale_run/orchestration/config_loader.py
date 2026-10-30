@@ -41,6 +41,7 @@ from typing import Any
 
 import yaml
 
+from ..networking.egress_gateway import canonical_host
 from .experiment_spec import (
     AgentSpec,
     ArtifactsSpec,
@@ -68,6 +69,8 @@ _TOP_LEVEL_KEYS = frozenset({
     "cleanup_mode",
     "prompt_suffix",
     "wall_time_s",
+    "network_off_policy",
+    "network_allowlist",
 })
 
 
@@ -228,6 +231,16 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
         wall_time_s = int(wall_time_s)
         if wall_time_s <= 0:
             raise ValueError(f"wall_time_s must be a positive integer, got {wall_time_s}")
+    network_off_policy = raw.get("network_off_policy", "allow_unenforced")
+    if network_off_policy not in ("enforce", "allow_unenforced"):
+        raise ValueError(
+            "network_off_policy must be 'enforce' or 'allow_unenforced', "
+            f"got {network_off_policy!r}"
+        )
+    raw_allowlist = raw.get("network_allowlist") or []
+    if not isinstance(raw_allowlist, list):
+        raise TypeError("network_allowlist must be a list of DNS names")
+    network_allowlist = tuple(sorted({canonical_host(host) for host in raw_allowlist}))
 
     if "agent" in raw and "agents" in raw:
         raise ValueError("set either `agent:` (single path) or `agents:` (list of paths), not both")
@@ -266,6 +279,8 @@ def _build_experiment(raw: dict[str, Any], *, base_dir: Path) -> ExperimentSpec:
         cleanup_mode=cleanup_mode,
         prompt_suffix=prompt_suffix,
         wall_time_s=wall_time_s,
+        network_off_policy=network_off_policy,
+        network_allowlist=network_allowlist,
     )
 
 

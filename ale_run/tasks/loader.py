@@ -40,6 +40,10 @@ _TASK_LOCAL_MODULE_NAMES = (
 _TASK_IMPORT_LOCK = threading.Lock()
 
 
+class _TaskCardNetworkError(ValueError):
+    """A malformed ``vm.network`` must fail loading, never trigger loader fallback."""
+
+
 def list_tasks(root: str | os.PathLike[str] = "tasks") -> list[str]:
     """Return sorted task paths without importing task modules or following directory links."""
     root_path = Path(root)
@@ -171,6 +175,8 @@ class TaskLoader:
                         "task_data": task_data,
                     }
                 )
+        except _TaskCardNetworkError:
+            raise
         except Exception as e:
             logger.warning(f"Failed to call load(): {e}")
 
@@ -210,6 +216,8 @@ class TaskLoader:
                             "task_data": task_data,
                         }
                     )
+                except _TaskCardNetworkError:
+                    raise
                 except Exception as e:
                     logger.warning(f"Failed to instantiate {attr_name}: {e}")
 
@@ -228,6 +236,14 @@ class TaskLoader:
                 "machineType": card.get("machineType"),
                 "timeout": card.get("timeout"),
             }
+        network_cfg = (vm_cfg or {}).get("network", {"mode": "on"})
+        network_mode = network_cfg.get("mode") if isinstance(network_cfg, dict) else None
+        if network_mode not in ("off", "on"):
+            raise _TaskCardNetworkError(
+                f"task_card.json for {self.task_path} has invalid vm.network={network_cfg!r}; "
+                "expected {\"mode\": \"off\"} or {\"mode\": \"on\"}"
+            )
+        task_info["network_mode"] = network_mode
         if vm_cfg:
             # Snapshot tag is the *logical* identifier the task asks for
             # (e.g. ``cpu-free``, ``gpu-free``). The gcloud Provider's yaml

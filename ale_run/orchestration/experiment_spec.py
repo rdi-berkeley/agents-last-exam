@@ -170,6 +170,20 @@ class ExperimentSpec:
     (or the framework default). Set via the top-level ``wall_time_s:`` yaml
     key — e.g. ``18000`` for a uniform 5h budget across all tasks."""
 
+    network_off_policy: str = "allow_unenforced"
+    """How ``vm.network.mode: off`` task cards are run.
+
+    - ``"allow_unenforced"`` (default): run with normal networking and record
+      ``network.enforced: false`` in run.json.
+    - ``"enforce"``: seal the sandbox before the agent starts. Only the
+      ``network_allowlist`` hosts stay reachable, through the provider's
+      egress gateway. Units on providers that cannot seal fail before any VM
+      is created."""
+
+    network_allowlist: tuple[str, ...] = ()
+    """Exact DNS names a sealed agent may reach on port 443, in addition to
+    the host of the agent config's ``base_url``."""
+
 
 # =============================================================================
 # Derived run units (one per agent × task × variant combination)

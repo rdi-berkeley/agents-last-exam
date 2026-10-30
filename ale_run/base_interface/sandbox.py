@@ -72,6 +72,8 @@ class SandboxSpec:
     task_id: str = ""
     harness: str = ""
     model_tag: str = ""
+    network_mode: Literal["off", "on"] = "on"
+    """Task-card ``vm.network.mode``. Cards without it keep normal access."""
 
 
 # ============================================================================

@@ -38,6 +38,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sandbox_entry")
 _PROCESS_STOP_TIMEOUT_S = 20.0
+_EGRESS_SEAL_TIMEOUT_S = 900.0
 _SYSTEMD_RUNTIME = Path("/run/systemd/system")
 
 
@@ -321,7 +322,7 @@ def supervise(spec_path: Path, spec: dict, *, protected: bool = False) -> dict:
                         }
                         logger.error("%s", out["error"])
                     worker_finished = True
-                    if out.get("status") == "timeout" or out.get("phase") == "install":
+                    if out.get("status") == "timeout" or out.get("phase") in ("install", "egress_seal"):
                         break
                 if stop_path.exists() and stop_path.read_text() == token:
                     prior_error = out.get("error") if worker_finished else None
@@ -375,6 +376,35 @@ def supervise(spec_path: Path, spec: dict, *, protected: bool = False) -> dict:
         temporary.replace(report_path)
     out["duration_s"] = time.monotonic() - started
     return out
+
+
+def _await_egress_seal(work_dir: Path) -> dict[str, str]:
+    """Ask the host to seal the sandbox network; return the agent's proxy env.
+
+    Protocol: write ``_egress_request``; the host answers with
+    ``_egress_sealed`` (``{"proxy_url": ...}``) or ``_egress_failed`` (reason).
+    """
+    (work_dir / "_egress_request").write_text("1", encoding="utf-8")
+    deadline = time.monotonic() + _EGRESS_SEAL_TIMEOUT_S
+    while time.monotonic() < deadline:
+        failed = work_dir / "_egress_failed"
+        if failed.exists():
+            raise RuntimeError(f"network seal failed: {failed.read_text(encoding='utf-8')[:500]}")
+        try:
+            proxy_url = json.loads((work_dir / "_egress_sealed").read_text(encoding="utf-8"))["proxy_url"]
+        except (OSError, ValueError, KeyError):
+            time.sleep(1)
+            continue
+        no_proxy = "127.0.0.1,localhost,::1"
+        return {
+            **{name: proxy_url for name in (
+                "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy",
+            )},
+            "NO_PROXY": no_proxy,
+            "no_proxy": no_proxy,
+            "NODE_USE_ENV_PROXY": "1",
+        }
+    raise TimeoutError(f"host did not seal the sandbox network within {_EGRESS_SEAL_TIMEOUT_S:.0f}s")
 
 
 def run(spec: dict, env: dict | None = None) -> dict:
@@ -446,6 +476,9 @@ def run(spec: dict, env: dict | None = None) -> dict:
             (Path(executor.work_dir) / "_cli_identity.json").write_text(
                 json.dumps(identity), encoding="utf-8",
             )
+            if spec.get("egress_handshake"):
+                phase = "egress_seal"
+                os.environ.update(_await_egress_seal(Path(executor.work_dir)))
             timeout_s = float(spec.get("timeout_s") or 1800.0)
             logger.info(
                 "sandbox_entry: %s.launch (timeout_s=%.0f)",
