@@ -64,7 +64,10 @@
     "machineType": "c4-standard-8",
     "snapshot": "cpu-free",
     "os": "windows",
-    "timeout": 7200
+    "timeout": 7200,
+    "network": {
+      "mode": "off"
+    }
   },
   "variants": [
     "base"

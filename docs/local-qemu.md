@@ -174,6 +174,9 @@ JSON key. The provider injects the key into the guest after CUA becomes ready,
 and the guest uploads its output directory directly with `gsutil`. Output bytes
 do not pass through CUA or the local exchange directory.
 
+Task cards with `vm.network.mode: off` can run sealed, with only the model
+host reachable. See [network-off.md](network-off.md).
+
 ## Initial limitations
 
 - GPU tasks are not supported. PCIe passthrough requires IOMMU/VFIO host setup,

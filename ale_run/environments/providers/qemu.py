@@ -22,9 +22,12 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from collections.abc import Sequence
 from typing import Any, Callable, Literal, cast
 
 from ...base_interface import Provider, ReleaseMode, SandboxHandle, SandboxSpec
+from ...networking.egress_gateway import EgressGateway
+from ...networking.probe import probe_sealed_guest
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +46,10 @@ _SLOT_CLEANUP_ATTEMPTS = 3
 _SLOT_CLEANUP_RETRY_S = 0.25
 _DEFAULT_GUEST_MTU = 1500
 _MIN_IPV4_MTU = 576
+# The runner bridges the guest on this interface and answers it at this address.
+_GUEST_BRIDGE = "docker"
+_GUEST_GATEWAY_IP = "172.30.0.1"
+_GUEST_PROXY_PORT = 3128
 
 
 @dataclass(frozen=True, slots=True)
@@ -460,6 +467,30 @@ async def _remove_container(container_name: str) -> None:
     )
 
 
+def _seal_script(host_ip: str, gateway_port: int) -> str:
+    """Runner-namespace rules that leave the guest one way out: the gateway.
+
+    Replies on connections made into the guest (CUA, VNC) still flow, as do
+    DHCP and the runner's SMB exchange share. ``--ctdir REPLY`` stops
+    connections the guest opened before sealing from sending more data.
+    """
+    bridge = _GUEST_BRIDGE
+    return "\n".join((
+        "set -e",
+        f"iptables -t nat -I PREROUTING 1 -i {bridge} -p tcp --dport {_GUEST_PROXY_PORT} "
+        f"-j DNAT --to-destination {host_ip}:{gateway_port}",
+        f"iptables -I FORWARD 1 -i {bridge} -j DROP",
+        f"iptables -I FORWARD 1 -i {bridge} -d {host_ip} -p tcp --dport {gateway_port} -j ACCEPT",
+        f"iptables -I FORWARD 1 -i {bridge} -m conntrack --ctstate ESTABLISHED,RELATED "
+        "--ctdir REPLY -j ACCEPT",
+        f"iptables -I INPUT 1 -i {bridge} -j DROP",
+        f"iptables -I INPUT 1 -i {bridge} -p udp --dport 67 -j ACCEPT",
+        f"iptables -I INPUT 1 -i {bridge} -p tcp -m multiport --dports 139,445 -j ACCEPT",
+        f"ip6tables -I FORWARD 1 -i {bridge} -j DROP",
+        f"ip6tables -I INPUT 1 -i {bridge} -j DROP",
+    ))
+
+
 def _remove_slot_root(slot_root: Path) -> None:
     def make_writable_and_retry(
         operation: Callable[[str], object],
@@ -506,6 +537,7 @@ class QemuProvider(Provider):
         self._preflight_lock = asyncio.Lock()
         self._preflight_done = False
         self._guest_network_mtu = min(_DEFAULT_GUEST_MTU, _detect_host_egress_mtu())
+        self._gateways: dict[str, EgressGateway] = {}
 
     @property
     def config(self) -> QemuProviderConfig:
@@ -741,6 +773,9 @@ class QemuProvider(Provider):
         *,
         mode: ReleaseMode = "delete",
     ) -> None:
+        gateway = self._gateways.pop(sandbox.id, None)
+        if gateway is not None:
+            await asyncio.to_thread(gateway.close)
         if mode == "keep":
             logger.info("QEMU sandbox %s kept alive", sandbox.id)
             return
@@ -756,6 +791,47 @@ class QemuProvider(Provider):
         slot_root = sandbox.metadata.get("slot_root")
         if slot_root:
             await asyncio.to_thread(_remove_slot_root, Path(slot_root))
+
+    async def seal_network(
+        self,
+        sandbox: SandboxHandle,
+        allowlist: Sequence[str],
+    ) -> dict[str, Any]:
+        """Leave the guest one way out: CONNECT to ``allowlist`` hosts via a host gateway.
+
+        Raises if the rules cannot be applied or the in-guest probe finds any
+        other path. The gateway lives until :meth:`release`.
+        """
+        container = sandbox.metadata["container_name"]
+        _, gateways, _ = await _run_docker(
+            "inspect", "--format", "{{range .NetworkSettings.Networks}}{{.Gateway}} {{end}}",
+            container,
+        )
+        host_ip = next(iter(gateways.split()), "")
+        if not host_ip:
+            raise RuntimeError(f"cannot find the host address of QEMU runner {container}")
+        gateway = EgressGateway(allowlist, bind_host=host_ip)
+        gateway.start()
+        self._gateways[sandbox.id] = gateway
+        port = gateway.address[1]
+        await _run_docker("exec", container, "sh", "-c", _seal_script(host_ip, port))
+        probe = await probe_sealed_guest(
+            sandbox,
+            proxy_host=_GUEST_GATEWAY_IP,
+            proxy_port=_GUEST_PROXY_PORT,
+            allowlist=sorted(gateway.allowlist),
+        )
+        return {
+            "guest_proxy_url": f"http://{_GUEST_GATEWAY_IP}:{_GUEST_PROXY_PORT}",
+            "gateway": f"{host_ip}:{port}",
+            "allowlist": sorted(gateway.allowlist),
+            "probe": probe,
+        }
+
+    def network_summary(self, sandbox: SandboxHandle) -> dict[str, dict[str, int]] | None:
+        """Gateway connection counts for a sealed sandbox, or None if never sealed."""
+        gateway = self._gateways.get(sandbox.id)
+        return gateway.summary() if gateway is not None else None
 
     def open_session(self, sandbox: SandboxHandle) -> Any:
         from cua_bench.computers.remote import RemoteDesktopSession

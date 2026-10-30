@@ -72,7 +72,10 @@
   "vm": {
     "snapshot": "cpu-free-ubuntu",
     "machineType": "c4-standard-16",
-    "timeout": 7200
+    "timeout": 7200,
+    "network": {
+      "mode": "off"
+    }
   },
   "taxonomy": {
     "domain_id": "3",

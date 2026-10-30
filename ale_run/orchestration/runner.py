@@ -111,6 +111,8 @@ class Runner:
                     cleanup_mode=self._spec.cleanup_mode,
                     prompt_suffix=self._spec.prompt_suffix,
                     wall_time_s=self._spec.wall_time_s,
+                    network_off_policy=self._spec.network_off_policy,
+                    network_allowlist=self._spec.network_allowlist,
                 )
                 logger.info(
                     "[%s] done: status=%s score=%s duration=%.1fs (attempt %d/%d)",
