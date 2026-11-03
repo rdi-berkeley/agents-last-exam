@@ -38,11 +38,11 @@ async def _run_command(
 ) -> dict[str, object]:
     try:
         if timeout is not None:
-            result = await session.run_command(command, timeout=timeout)
+            result = await session.run_command(command, timeout=timeout, check=False)
         else:
-            result = await session.run_command(command)
+            result = await session.run_command(command, check=False)
     except TypeError:
-        result = await session.run_command(command)
+        result = await session.run_command(command, check=False)
     if isinstance(result, dict):
         return {
             "return_code": result.get("return_code", result.get("returncode", 1)),
