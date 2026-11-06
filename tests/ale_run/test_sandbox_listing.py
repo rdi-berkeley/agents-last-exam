@@ -412,3 +412,57 @@ def test_download_failure_preserves_existing_destination(sandbox, monkeypatch, t
         sandbox, r"C:\logs\raw.bin", str(target), 30
     )
     assert target.read_bytes() == b"original"
+
+
+@pytest.mark.parametrize(
+    "rel",
+    [
+        r"..\..\outside.txt",
+        r"nested\..\..\outside.txt",
+        "../outside.txt",
+        "nested/../../outside.txt",
+        "/abs/outside.txt",
+        "..",
+    ],
+)
+@pytest.mark.asyncio
+async def test_linux_listing_rejects_nonrelative_entries(
+    sandbox, monkeypatch, tmp_path, rel
+):
+    if not sandbox.is_linux:
+        pytest.skip("Linux-only protocol")
+    payload = f"{rel}\tf\t1\n"
+    monkeypatch.setattr(
+        sandbox_interface,
+        "_post_cmd",
+        Mock(return_value={"success": True, "return_code": 0, "stdout": payload}),
+    )
+    download = AsyncMock()
+    monkeypatch.setattr(sandbox_executor, "_download_with_retry", download)
+    executor = SandboxExecutor(
+        config=DummyConfig(), work_dir=sandbox.work_dir_base, sandbox=sandbox
+    )
+    report = await executor.gather_dir(src=sandbox.work_dir_base, dst=tmp_path)
+    assert report.error, f"gather_dir accepted hostile listing entry {rel!r}"
+    download.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_linux_listing_forged_newline_entry_is_rejected(sandbox, monkeypatch, tmp_path):
+    if not sandbox.is_linux:
+        pytest.skip("Linux-only protocol")
+    forged = 'benign.txt\n..\\..\\outside.txt\tf\t1'
+    payload = f"real.txt\tf\t5\n{forged}\n"
+    monkeypatch.setattr(
+        sandbox_interface,
+        "_post_cmd",
+        Mock(return_value={"success": True, "return_code": 0, "stdout": payload}),
+    )
+    download = AsyncMock()
+    monkeypatch.setattr(sandbox_executor, "_download_with_retry", download)
+    executor = SandboxExecutor(
+        config=DummyConfig(), work_dir=sandbox.work_dir_base, sandbox=sandbox
+    )
+    report = await executor.gather_dir(src=sandbox.work_dir_base, dst=tmp_path)
+    assert report.error, "gather_dir accepted a newline-forged listing line"
+    download.assert_not_awaited()

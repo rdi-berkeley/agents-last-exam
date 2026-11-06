@@ -267,6 +267,12 @@ async def pull_to_host(
             continue
         remote_path = f"{src.rstrip(sep)}{sep}{rel}"
         local_path = dest_dir / rel.replace("\\", "/")
+        # Containment: assert the join stays inside dest_dir; see the
+        # matching check in executors/sandbox.py gather_dir.
+        if not local_path.resolve().is_relative_to(dest_dir.resolve()):
+            raise RuntimeError(
+                f"output pull refused to write outside destination: {rel!r}"
+            )
         local_path.parent.mkdir(parents=True, exist_ok=True)
         jobs.append((remote_path, local_path))
 

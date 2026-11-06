@@ -33,6 +33,7 @@ import json
 import logging
 import ntpath
 import os
+import posixpath
 import shlex
 import subprocess
 import tempfile
@@ -41,7 +42,6 @@ from pathlib import Path, PureWindowsPath
 from typing import Any, Iterable, Literal
 
 import requests
-
 
 OS = Literal["linux", "windows"]
 ReleaseMode = Literal["delete", "stop", "keep"]
@@ -570,6 +570,24 @@ print(json.dumps(entries, ensure_ascii=True))
         if len(parts) < 3:
             continue
         rel, kind, size = parts[0], parts[1], parts[2]
+        # Backslashes are legal filename bytes on Linux, but the download
+        # consumers replace them with "/" before joining onto the
+        # destination root, which turns a stored "..\..\x" name into a
+        # traversal: reject them here so the replacement is a no-op.
+        if "\\" in rel:
+            raise RuntimeError(
+                f"list_dir({remote_dir}) returned an entry containing a backslash;"
+                " refusing to path-join a name that consumers treat as a separator"
+            )
+        normalized = posixpath.normpath(rel)
+        if (
+            not normalized
+            or normalized in (".", "..")
+            or normalized.startswith("../")
+            or posixpath.isabs(normalized)
+        ):
+            raise RuntimeError(f"list_dir({remote_dir}) returned a nonrelative path")
+        rel = normalized
         try:
             size_int = int(size)
         except ValueError:
