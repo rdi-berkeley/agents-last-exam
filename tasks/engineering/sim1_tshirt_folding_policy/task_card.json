@@ -1,0 +1,87 @@
+{
+  "taskId": "engineering/sim1_tshirt_folding_policy",
+  "title": "SIM1 T-Shirt Folding Policy: Transfer to Unseen Fabrics",
+  "summary": "Learn a closed-loop dual-arm policy that folds a simulated T-shirt in the SIM1 / Newton cloth simulator flat, compact, and neatly rectangular within 10 s, and transfers to fabric materials never seen during development: train on 18 of SIM1's fabrics, get scored on 5 held-out ones.",
+  "category": "engineering",
+  "software": [
+    "SIM1",
+    "Newton",
+    "NVIDIA Warp",
+    "MuJoCo-Warp",
+    "PyTorch",
+    "CUDA"
+  ],
+  "taskPrompt": "You are learning a T-shirt folding policy for a dual-arm robot in the SIM1 cloth simulator (Newton physics: MuJoCo-Warp robot + VBD cloth) that must transfer to fabric materials it has never seen.\n\n## Variant\n`base`: SIM1 short-sleeve T-shirt fold, transfer to unseen fabric materials\n\n## Input Files\n- Task brief: `base/input/task_brief.md`\n- Simulator specification (world, robot, cloth, materials, control, observation/action): `base/input/SIM_SPEC.md`\n- Success criteria, metrics, test protocol and exact evaluation command: `base/input/SUCCESS.md`\n- Training fabric materials (18, each a `physics.json` plus SIM1 texture): `base/input/assets/materials/train`\n- Robot, shirt mesh, cloth topology and landmarks: `base/input/assets`\n- Evaluation harness (environment, metrics, `run_eval.py`): `base/input/eval`\n- Starter template: `base/input/submission_template`\n- Simulator install and Python env: `base/software`\n\n## What You Must Do\n1. Read the task brief, simulator specification, and success criteria.\n2. Train, script, or otherwise produce a closed-loop policy, using only the 18 training materials, that folds the shirt flat, compact, and neatly rectangular across randomized cloth poses AND across fabric materials, within a 10 s policy phase. The final score comes only from 5 held-out materials you never see (5 poses each, 25 episodes). Each episode earns continuous credit for how compact and neat the fold is, 0 for an unfolded shirt; the score is the mean credit over the 25 episodes. The policy is not told which material it is folding, so it must adapt from the observed cloth state.\n3. Save exactly two files in `base/output`: `policy.py` and `checkpoint.pt`.\n\n## Output Requirements\n- `policy.py` defines `Policy(checkpoint_path: str, device: str)` with `reset()` and `inference(obs)` returning exactly `{\"action\": tensor}` of shape `(N, 16)`, float32.\n- Do not modify files under `base/input` or `base/software`; the grader verifies them.\n- Do not write final answers outside `base/output`.",
+  "agentMustDo": [
+    "Read the task brief, simulator specification, and success criteria.",
+    "Develop, using only the 18 training fabric materials, a closed-loop `Policy` that maps cloth and robot state to 16-dim dual-arm end-effector targets and gripper commands and folds the shirt on fabrics it has never seen.",
+    "Save exactly `policy.py` and `checkpoint.pt` in the runtime output directory."
+  ],
+  "inputFiles": [
+    {
+      "name": "task_brief.md",
+      "format": "md",
+      "path": "input/task_brief.md",
+      "description": "Agent-facing summary of the folding policy task."
+    },
+    {
+      "name": "SIM_SPEC.md",
+      "format": "md",
+      "path": "input/SIM_SPEC.md",
+      "description": "World frame, table, robot, cloth model and fabric-material parameters, control loop, observation and action layout, limits."
+    },
+    {
+      "name": "SUCCESS.md",
+      "format": "md",
+      "path": "input/SUCCESS.md",
+      "description": "Hard gates, fold metrics, thresholds, the held-out-material test protocol, per-material all-pass scoring, and evaluation command."
+    },
+    {
+      "name": "assets/",
+      "format": "directory",
+      "path": "input/assets/",
+      "description": "Robot URDF and meshes, shirt USD mesh, cloth topology, landmark particle sets, API smoke observation, and the 18 training fabric materials (`materials/train/<name>/physics.json` + SIM1 texture)."
+    },
+    {
+      "name": "eval/",
+      "format": "directory",
+      "path": "input/eval/",
+      "description": "Headless SIM1 folding environment, fold metrics, and `run_eval.py` entry point."
+    },
+    {
+      "name": "submission_template/",
+      "format": "directory",
+      "path": "input/submission_template/",
+      "description": "Starter `policy.py` and empty `checkpoint.pt`."
+    }
+  ],
+  "referenceFiles": [
+    {
+      "name": "policy.py",
+      "format": "py",
+      "path": "output/policy.py",
+      "description": "Required policy implementation submitted by the agent."
+    },
+    {
+      "name": "checkpoint.pt",
+      "format": "pt",
+      "path": "output/checkpoint.pt",
+      "description": "Required checkpoint consumed by `Policy.__init__`."
+    }
+  ],
+  "evaluation": "The evaluator verifies the staged input/ and software/sim1 trees against hidden hashes, enforces the exact two-file structure and forbidden-import checks, and runs a deterministic `reset()`/`inference` API smoke test with action shape `(1, 16)`. It then runs the pristine hidden copy of `eval/run_eval.py` on the hidden test set: 5 SIM1 fabric materials never shown to the agent (held-out physical profiles from the same fabric families and parameter ranges as the 18 training materials) x 5 hidden cloth-pose seeds each = 25 episodes (1.5 s settle, 10 s policy control at 60 Hz, 2 s forced release), sharded by material across the VM's GPU. An episode succeeds when the final cloth is on the table, at rest, intact, flat (95th-percentile height <= 6 cm above the table and a near-horizontal triangle-area fraction >= 80% of the settled unfolded shirt's), compact (silhouette area <= 55% of the unfolded shirt), and neat (rectangularity >= 0.80). Each episode earns a continuous fold credit in [0, 1]: compactness and neatness are each scaled from the settled unfolded shirt (0) to their gate threshold (1), multiplied so credit requires both, and cubed, with the other five gates pass/fail; an untouched shirt scores exactly 0. Score = mean fold credit, averaged within each material first, in [0, 1]. materials_solved (every episode of a material passing all seven gates) is reported alongside; the task counts as solved only when all 5 materials are.",
+  "vm": {
+    "machineType": "g2-standard-16",
+    "snapshot": "gpu-free",
+    "os": "linux",
+    "timeout": 10800
+  },
+  "taxonomy": {
+    "domain_id": "1",
+    "domain_code": "engineering",
+    "subdomain_id": "1.11",
+    "subdomain_code": "robotics",
+    "subdomain_name": "Robotics & Autonomous Systems"
+  },
+  "requiredSystemPackages": []
+}
