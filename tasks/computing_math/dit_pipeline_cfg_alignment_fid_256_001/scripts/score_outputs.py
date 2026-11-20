@@ -144,6 +144,8 @@ def _diffusers_stubs():
     torch_utils.randn_tensor = _randn_tensor
     pipeline_utils.DiffusionPipeline = _DiffusionPipeline
     pipeline_utils.ImagePipelineOutput = _ImagePipelineOutput
+    diffusers.DiffusionPipeline = pipeline_utils.DiffusionPipeline
+    diffusers.ImagePipelineOutput = pipeline_utils.ImagePipelineOutput
 
     diffusers.models = models
     diffusers.schedulers = schedulers

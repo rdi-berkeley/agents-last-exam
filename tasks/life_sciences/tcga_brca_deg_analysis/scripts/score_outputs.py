@@ -170,23 +170,50 @@ def _validate_png(payload: bytes, filename: str) -> tuple[bool, str | None, dict
 
 
 def _parse_sample_counts(text: str) -> tuple[int | None, int | None]:
-    tumor_count: int | None = None
-    normal_count: int | None = None
-    for line in text.lower().splitlines():
-        numbers = [int(value) for value in re.findall(r"\d+", line)]
-        if not numbers:
+    number = r"(?:\d{1,3}(?:,\d{3})+|\d+)\b(?![.,]\d)"
+    tumor = r"(?:primary\s+)?tumou?r"
+    normal = r"(?:(?:solid tissue|adjacent)\s+)?normal"
+    group = rf"(?:{tumor}|{normal})"
+    paired = re.compile(
+        rf"\b({group})\s*(?:and|/)\s*({group})\s+samples?\s*[:=]\s*"
+        rf"({number})\s*(?:and|[,/])\s*({number})"
+    )
+    heading = re.compile(r"^\s*(?:matched samples|sample counts?|samples matched|samples)\s*:\s*")
+    short_count = re.compile(rf"({number})\s+({group})\b(?=\s*(?:[,;]|and\b|$))")
+    excluded = re.compile(
+        r"^\s*(?:we\s+)?(?:excluded|unmatched)\b|\bsamples?\s+(?:were\s+)?excluded\b"
+    )
+    lines = []
+    for line in re.split(r"[;\n]", text.lower()):
+        if excluded.search(line):
             continue
-        if "tumor" in line and "normal" not in line:
-            tumor_count = next((value for value in numbers if 500 <= value <= 1500), tumor_count)
-        elif "normal" in line and "tumor" not in line:
-            normal_count = next((value for value in numbers if 50 <= value <= 300), normal_count)
-        elif "tumor" in line and "normal" in line:
-            for value in numbers:
-                if 500 <= value <= 1500 and tumor_count is None:
-                    tumor_count = value
-                elif 50 <= value <= 300 and normal_count is None:
-                    normal_count = value
-    return tumor_count, normal_count
+        line = paired.sub(r"\1 samples: \3; \2 samples: \4", line)
+        if header := heading.match(line):
+            line = short_count.sub(r"\1 \2 samples", line[header.end() :])
+        lines.append(line)
+
+    def cohort_count(label: str) -> int | None:
+        # A bare cohort label is a field only at a boundary: "up in tumor: 1400" is not one.
+        samples = r"\s+samples?(?:\s+\(?(?:matched|used|included|count)\)?)?"
+        separator = r"(?:[:=|\t]|\(?n\s*=)"
+        field = re.compile(
+            rf"(?:^|[;,|]|(?<=[\d)])\s+and\b)\s*(?:[-*]\s*)?"
+            rf"(?:(?:number of|matched)\s+)*{label}\b"
+            rf"(?:{samples}\s*{separator}?|\s*{separator})\s*({number})"
+        )
+        prose = re.compile(
+            rf"(?<![\w.,-])({number})\s+(?:matched\s+)?{label}\b"
+            rf"(?:\s+samples?\b|(?=\s*(?:and|,)\s*{number}\s+{group}\s+samples?\b))"
+        )
+        counts = {
+            int(match[1].replace(",", ""))
+            for line in lines
+            for pattern in (field, prose)
+            for match in pattern.finditer(line)
+        }
+        return counts.pop() if len(counts) == 1 else None
+
+    return cohort_count(tumor), cohort_count(normal)
 
 
 def _truth_by_direction(reference_truth_csv: bytes) -> dict[str, dict[str, str]]:
