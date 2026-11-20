@@ -23,20 +23,28 @@ def reference_text():
     return reference.read_text()
 
 
-@pytest.mark.parametrize("model_name", ["AutoencoderKL", "DiTTransformer2DModel"])
-def test_diffusers_top_level_model_exports_match_nested(model_name, tmp_path):
+@pytest.mark.parametrize(
+    ("name", "nested_module"),
+    [
+        ("AutoencoderKL", "diffusers.models"),
+        ("DiTTransformer2DModel", "diffusers.models"),
+        ("DiffusionPipeline", "diffusers.pipelines.pipeline_utils"),
+        ("ImagePipelineOutput", "diffusers.pipelines.pipeline_utils"),
+    ],
+)
+def test_diffusers_top_level_exports_match_nested(name, nested_module, tmp_path):
     with score_outputs._diffusers_stubs():
         module = score_outputs._load_module_from_text(
             "dit_export_contract",
-            f"from diffusers import {model_name} as top_level\n"
-            f"from diffusers.models import {model_name} as nested\n",
+            f"from diffusers import {name} as top_level\n"
+            f"from {nested_module} import {name} as nested\n",
             tmp_path,
         )
         assert module.top_level is module.nested
 
 
 @pytest.mark.parametrize("scaled_step_state", [False, True])
-def test_top_level_model_imports_preserve_numerical_scores(reference_text, scaled_step_state):
+def test_top_level_imports_preserve_numerical_scores(reference_text, scaled_step_state):
     nested_import = "from diffusers.models import AutoencoderKL, DiTTransformer2DModel"
     candidate = reference_text.replace("from diffusers.models import AutoencoderKL", nested_import)
     candidate = candidate.replace("        transformer,", "        transformer: DiTTransformer2DModel,")
@@ -52,6 +60,13 @@ def test_top_level_model_imports_preserve_numerical_scores(reference_text, scale
     assert candidate.count(nested_import) == 1
     candidate = candidate.replace(
         nested_import, "from diffusers import AutoencoderKL, DiTTransformer2DModel"
+    )
+    pipeline_import = (
+        "from diffusers.pipelines.pipeline_utils import DiffusionPipeline, ImagePipelineOutput"
+    )
+    assert candidate.count(pipeline_import) == 1
+    candidate = candidate.replace(
+        pipeline_import, "from diffusers import DiffusionPipeline, ImagePipelineOutput"
     )
 
     result = score_outputs.score_submission_text(candidate, reference_text)
