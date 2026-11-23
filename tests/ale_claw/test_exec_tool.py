@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock
 
 from agent.tools.base import TOOL_REGISTRY
-from ale_run.agents.ale_claw.harness.tools.tools_shell import (
+from ale_claw.harness.tools.tools_shell import (
     ExecTool,
     _DEFAULT_MAX_OUTPUT_CHARS,
     _DEFAULT_TIMEOUT_SECONDS,
@@ -94,14 +94,14 @@ class TestRegistration:
     def test_exec_in_build_tools_default_list(self):
         from unittest.mock import patch
 
-        from ale_run.agents.ale_claw.harness.tools.tools import build_tools
+        from ale_claw.harness.tools.tools import build_tools
 
         session = MagicMock()
         session.interface = MagicMock()
         session._computer = object()
 
         with patch(
-            "ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool"
+            "ale_claw.harness.tools.analyze_image.AnalyzeImageTool"
         ):
             tools = build_tools(
                 session,

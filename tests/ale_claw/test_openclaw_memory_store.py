@@ -1,12 +1,11 @@
-"""Tests for ale_run.agents.ale_claw.harness.memory.memory (MemoryStore + SearchResult).
+"""Tests for ale_claw.harness.memory.memory (MemoryStore + SearchResult).
 
 Ported from tests/test_memory_store.py, adapted for the task workspace layout
 where session logs live in a memory/ subdirectory under the task dir.
 """
 
 import pytest
-
-from ale_run.agents.ale_claw.harness import MemoryStore, SearchResult
+from ale_claw.harness import MemoryStore, SearchResult
 
 
 @pytest.fixture

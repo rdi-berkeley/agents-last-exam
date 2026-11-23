@@ -12,8 +12,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from ale_run.agents.ale_claw.harness.tools.tools import (
+from ale_claw.harness.tools.tools import (
     COMPUTER_TOOL_SUMMARY,
     ToolLoggingCallback,
     _extract_result_summary,
@@ -74,7 +73,7 @@ class TestGetToolSummaries:
 
     def test_includes_basetool_instances(self):
         """All BaseTool subclasses should appear in summaries."""
-        from ale_run.agents.ale_claw.harness.memory.memory import (
+        from ale_claw.harness.memory.memory import (
             MemoryGetTool,
             MemorySearchTool,
             MemoryStore,
@@ -98,7 +97,7 @@ class TestGetToolSummaries:
 
     def test_mixed_tools_correct_count(self):
         """Mixed list should include Computer plus BaseTool summaries only."""
-        from ale_run.agents.ale_claw.harness.memory.memory import MemoryGetTool, MemoryStore
+        from ale_claw.harness.memory.memory import MemoryGetTool, MemoryStore
 
         store = MemoryStore(task_id="test", base_dir="/tmp/test_tools_mixed")
         computer = FakeComputer()
@@ -115,7 +114,7 @@ class TestBuildTools:
         session.interface = MagicMock()
         session._computer = object()
 
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool") as mock_analyze_image_tool:
+        with patch("ale_claw.harness.tools.analyze_image.AnalyzeImageTool") as mock_analyze_image_tool:
             store = MagicMock()
             build_tools(
                 session,
@@ -134,7 +133,7 @@ class TestBuildTools:
         session.interface = MagicMock()
         session._computer = object()
 
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool") as mock_analyze_image_tool:
+        with patch("ale_claw.harness.tools.analyze_image.AnalyzeImageTool") as mock_analyze_image_tool:
             store = MagicMock()
             build_tools(
                 session,
@@ -157,7 +156,7 @@ class TestBuildTools:
         sentinel = object()
         session._computer = sentinel
 
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool"):
+        with patch("ale_claw.harness.tools.analyze_image.AnalyzeImageTool"):
             tools = build_tools(
                 session,
                 MagicMock(),
@@ -175,7 +174,7 @@ class TestBuildTools:
         sentinel = object()
         session._computer = sentinel
 
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool"):
+        with patch("ale_claw.harness.tools.analyze_image.AnalyzeImageTool"):
             tools = build_tools(
                 session,
                 MagicMock(),
@@ -188,7 +187,7 @@ class TestBuildTools:
         # read, write, edit, exec, web_search, web_fetch, memory_search,
         # memory_get = 10). memory_write is no longer exposed to the main
         # agent — superseded by write(target='host').
-        from ale_run.agents.ale_claw.harness.tools.tools import _RestrictedComputerHandler
+        from ale_claw.harness.tools.tools import _RestrictedComputerHandler
 
         assert len(tools) == 10
         assert isinstance(tools[0], _RestrictedComputerHandler)
@@ -196,15 +195,15 @@ class TestBuildTools:
     def test_disable_main_computer_pairs_with_delegate_gui(self):
         """When computer is disabled, ``delegate_gui`` must still be exposed so
         the main agent has a path to the VM."""
-        from ale_run.agents.ale_claw.harness.subagent.subagent_registry import SubagentRegistry
-        from ale_run.agents.ale_claw.harness.subagent.subagent_tools import DelegateGUITool
+        from ale_claw.harness.subagent.subagent_registry import SubagentRegistry
+        from ale_claw.harness.subagent.subagent_tools import DelegateGUITool
 
         session = MagicMock()
         session.interface = MagicMock()
         session._computer = object()
         registry = SubagentRegistry()
 
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool"):
+        with patch("ale_claw.harness.tools.analyze_image.AnalyzeImageTool"):
             tools = build_tools(
                 session,
                 MagicMock(),
@@ -220,8 +219,8 @@ class TestBuildTools:
     def test_disable_delegate_gui_excludes_tool(self):
         """When ``disable_delegate_gui=True``, DelegateGUITool is omitted but
         DelegateGeneralTool and SubagentsTool remain."""
-        from ale_run.agents.ale_claw.harness.subagent.subagent_registry import SubagentRegistry
-        from ale_run.agents.ale_claw.harness.subagent.subagent_tools import (
+        from ale_claw.harness.subagent.subagent_registry import SubagentRegistry
+        from ale_claw.harness.subagent.subagent_tools import (
             DelegateGeneralTool,
             DelegateGUITool,
             SubagentsTool,
@@ -232,7 +231,7 @@ class TestBuildTools:
         session._computer = object()
         registry = SubagentRegistry()
 
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool"):
+        with patch("ale_claw.harness.tools.analyze_image.AnalyzeImageTool"):
             tools = build_tools(
                 session,
                 MagicMock(),
@@ -249,7 +248,7 @@ class TestBuildTools:
     def test_disable_delegate_gui_pairs_with_main_computer(self):
         """When delegate_gui is disabled, the main ``computer`` tool must
         remain intact so the agent can drive the VM directly."""
-        from ale_run.agents.ale_claw.harness.subagent.subagent_registry import SubagentRegistry
+        from ale_claw.harness.subagent.subagent_registry import SubagentRegistry
 
         session = MagicMock()
         session.interface = MagicMock()
@@ -257,7 +256,7 @@ class TestBuildTools:
         session._computer = sentinel
         registry = SubagentRegistry()
 
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool"):
+        with patch("ale_claw.harness.tools.analyze_image.AnalyzeImageTool"):
             tools = build_tools(
                 session,
                 MagicMock(),

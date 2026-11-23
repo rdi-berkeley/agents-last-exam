@@ -7,7 +7,7 @@ operator can see text-only turns in real time (e.g. when the model emits
 ``DONE`` to end a run).
 """
 
-from ale_run.agents.ale_claw.harness.agent_loop import OpenClawComputerAgent
+from ale_claw.harness.agent_loop import OpenClawComputerAgent
 
 
 _log = OpenClawComputerAgent._log_assistant_text

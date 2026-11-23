@@ -8,8 +8,8 @@ workspace rules and seeds a byte-stable cache prefix block.
 
 
 
-from ale_run.agents.ale_claw.harness.agent_loop import OpenClawComputerAgent
-from ale_run.agents.ale_claw.harness.prompt import ContextFile
+from ale_claw.harness.agent_loop import OpenClawComputerAgent
+from ale_claw.harness.prompt import ContextFile
 
 
 def _make_agent(context_files):

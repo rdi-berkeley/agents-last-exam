@@ -16,12 +16,12 @@ import base64
 from unittest.mock import AsyncMock, MagicMock
 
 from agent.tools.base import TOOL_REGISTRY
-from ale_run.agents.ale_claw.harness.tools._paths import (
+from ale_claw.harness.tools._paths import (
     _assert_within_workspace,
     _is_windows_path,
 )
-from ale_run.agents.ale_claw.harness.tools.fs_backends import FilesystemRegistry, VMBackend
-from ale_run.agents.ale_claw.harness.tools.tools_fs import (
+from ale_claw.harness.tools.fs_backends import FilesystemRegistry, VMBackend
+from ale_claw.harness.tools.tools_fs import (
     EditFileTool,
     ReadFileTool,
     WriteFileTool,

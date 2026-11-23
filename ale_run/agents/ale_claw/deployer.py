@@ -1,385 +1,34 @@
-"""AleClawDeployer — OpenClaw harness native deployer.
-
-Lives on the host (``runtime: local``) or in a docker container
-(``runtime: docker``) — same code, framework picks where to run.
-
-The deployer's surface:
-
-  __init__(executor): stores the executor (per-unit context + I/O)
-  install():          import-check the harness modules + at least one
-                      API key env var
-  launch(prompt):     runs the OpenClaw harness end-to-end, writes
-                      transcripts to executor.work_dir, returns
-                      AgentRunResult
-  parse_artifacts():  reads work_dir's transcripts → ATIF Steps via builder
-
-The in-tree harness lives at :mod:`.harness`.
-"""
+"""ALE integration for the standalone ALE-Claw harness."""
 from __future__ import annotations
 
 import logging
-import os
-import sys
-import time
-import uuid
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import ClassVar
 
-from ale_run.base_interface import (
-    AgentRunResult,
-    BaseAgentDeployer,
-    TrajectoryBuilder,
-)
+from ale_claw import AleClawConfig, run
+from ale_run.base_interface import AgentRunResult, BaseAgentDeployer, TrajectoryBuilder
 
-from .config import AleClawConfig
 from .transcript_to_trajectory import parse_transcripts_into
-
-# Harness imports (all in-tree under harness/).
-from .harness import (
-    OpenClawComputerAgent,
-    OpenClawComputerHandler,
-    SessionManager,
-    MemoryStore,
-    SubagentRegistry,
-    build_tools,
-    get_tool_summaries,
-    ToolLoggingCallback,
-    ContextOverflowCallback,
-    build_system_prompt_report,
-    PromptBuilder,
-    ContextFile,
-    ThinkingConfig,
-    ThinkLevel,
-    resolve_thinking_default,
-    build_replay_messages,
-    sanitize_history,
-    limit_history_turns,
-    convert_to_responses_api_items,
-)
-from .harness.agent_loop import has_done_signal
-from .harness.context.context import DEFAULT_CONTEXT_TOKENS, resolve_context_window
-from .harness.model.model_config import resolve_model
 
 logger = logging.getLogger(__name__)
 
-# System-prompt context file shipped with the harness; loaded fresh each launch
-_HARNESS_AGENTS_MD = Path(__file__).resolve().parent / "harness" / "AGENTS.md"
-
 
 class AleClawDeployer(BaseAgentDeployer):
-    """OpenClaw harness deployer. Runs on host or in docker container.
-
-    Both ``local`` and ``docker`` executors are supported — same code path.
-    The docker executor adds process / fs / env isolation; the local
-    one is faster for dev. yaml picks one explicitly when both apply
-    (with default ``local`` if omitted).
-    """
-
     default_executor: ClassVar[str] = "local"
     supported_executors: ClassVar[frozenset[str]] = frozenset({"local", "docker"})
 
-    # Modules ``install`` will import-fail-fast on (typo-catching).
-    _required_modules: ClassVar[tuple[str, ...]] = (".harness.agent_loop",)
-    # At least one of these env vars must be set or ``install`` raises.
-    _api_key_alternatives: ClassVar[tuple[str, ...]] = (
-        "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
-    )
-
-    # =========================================================================
-    # install — fast-fail on import + API key checks, then mkdir work_dir
-    # =========================================================================
-
     async def install(self) -> None:
-        import importlib
-        import os as _os
-
-        # Relative-imports anchor: this deployer's parent package
-        # (i.e. ``ale_run.agents.ale_claw``).
-        deployer_pkg = type(self).__module__.rsplit(".", 1)[0]
-        for mod in self._required_modules:
-            try:
-                if mod.startswith("."):
-                    importlib.import_module(mod, package=deployer_pkg)
-                else:
-                    importlib.import_module(mod)
-            except ImportError as e:
-                raise RuntimeError(
-                    f"{type(self).__name__}: failed to import {mod!r}: {e}"
-                ) from e
-        # A literal cfg.api_key (custom gateway, e.g. Meta) is passed directly to
-        # agent.run() and never lives in os.environ, so it satisfies the gate on
-        # its own — only require an env key when no cfg.api_key is provided.
-        if not self.config.api_key and not any(
-            _os.environ.get(k) for k in self._api_key_alternatives
-        ):
-            raise RuntimeError(
-                f"{type(self).__name__}: no LLM API key — set config.api_key or "
-                f"one of {', '.join(self._api_key_alternatives)} in env"
-            )
         Path(self.executor.work_dir).mkdir(parents=True, exist_ok=True)
-        logger.info(
-            "%s: install ok (model=%s, work_dir=%s, executor=%s)",
-            type(self).__name__,
-            getattr(self.config, "model", "?"),
-            self.executor.work_dir,
-            self.executor.type,
-        )
-
-    # =========================================================================
-    # launch / parse_artifacts
-    # =========================================================================
 
     async def launch(self, prompt: str) -> AgentRunResult:
-        """Drive the OpenClaw agent end-to-end against the eval VM.
-
-        Builds memory_store / session_mgr / tools / OpenClawComputerAgent,
-        runs the async-generator loop with wall-clock timeout, returns the
-        outcome. Transcripts land in ``self.executor.work_dir`` for
-        :meth:`parse_artifacts` to read later.
-        """
-        cfg: AleClawConfig = self.config  # type: ignore[assignment]
-        # work_dir from BaseExecutor is a substrate-native str; local /
-        # docker runtimes are host-visible so wrapping in Path is safe.
-        work_dir = Path(self.executor.work_dir)
-        work_dir.mkdir(parents=True, exist_ok=True)
-
-        # Harness-internal id for memory + session keying (just a folder name).
-        task_id = uuid.uuid4().hex[:12]
-        memory_base = work_dir / "openclaw_memory"
-        session_base = work_dir / "openclaw_sessions"
-        trajectory_dir = work_dir / "trajectories"
-        trajectory_dir.mkdir(parents=True, exist_ok=True)
-        logger.info("ale-claw: launch — work_dir=%s task_id=%s", work_dir, task_id)
-
-        # ---- 1. Drive-VM session (deployer-side, talks to eval cua-server) ----
-        # In local executor this is host → VM RPC. In docker executor it's
-        # container → VM RPC (container has --network host so endpoint reaches).
-        from cua_bench.computers.remote import RemoteDesktopSession
-
-        sb = self.executor.sandbox
-        session = RemoteDesktopSession(
-            api_url=sb.endpoint,
-            os_type=sb.os,
-            ephemeral=False,        # env lifecycle is owned by ALEEnv
-            headless=True,
+        sandbox = self.executor.sandbox
+        result = await run(
+            prompt, config=self.config, sandbox_url=sandbox.endpoint,
+            os_type=sandbox.os, output_dir=self.executor.work_dir,
         )
-        if not await session.check_status():
-            raise RuntimeError("ale-claw: sandbox desktop session is unavailable")
-
-        # ---- 2. Memory + session + subagent registry ----
-        memory_store = MemoryStore(task_id=task_id, base_dir=str(memory_base))
-        memory_store.init_session()
-        session_mgr = SessionManager(task_id=task_id, base_dir=str(session_base))
-        session_mgr.init_session(model=cfg.model)
-        registry = SubagentRegistry(persist_path=session_mgr.task_dir / "subagent-runs.jsonl")
-        registry.restore()
-
-        # ---- 3. Model resolution + context window ----
-        resolved_model = resolve_model(cfg.model)
-        summary_model = cfg.summary_model or cfg.auxiliary_model or cfg.model
-        resolved_summary_model = (
-            resolved_model if summary_model == cfg.model
-            else resolve_model(summary_model)
-        )
-        ctx_override = os.environ.get("CONTEXT_WINDOW_OVERRIDE")
-        if ctx_override:
-            context_window_tokens = int(ctx_override)
-        else:
-            context_window_tokens = (
-                resolved_model.context_window
-                or resolve_context_window(cfg.model)
-                or DEFAULT_CONTEXT_TOKENS
-            )
-
-        workspace_root: str | None = None    # permissive — full VM access
-        host_workspace_root = str(memory_store.task_dir.resolve())
-
-        # ---- 4. Thinking config ----
-        thinking_config = self._build_thinking_config()
-        thinking_api_params = thinking_config.to_api_params(cfg.model)
-        gui_model = cfg.gui_model or cfg.auxiliary_model or cfg.model
-        gui_thinking_params = thinking_config.gui_params(gui_model)
-
-        # ---- 5. Pre-build computer handler ----
-        # Pointer coordinate space — most models emit screen pixels, but the
-        # Gemini family grounds clicks to a normalized [0, 1000) grid. Detect
-        # from the model that actually drives the handler (gui_model when the
-        # main agent has no computer), unless the config forces a space.
-        from .harness.tools.computer_handler import coordinate_space_for_model
-        coord_driver_model = (
-            gui_model
-            if cfg.disable_main_computer
-            else cfg.model
-        )
-        coordinate_space = cfg.coordinate_space or coordinate_space_for_model(
-            coord_driver_model
-        )
-        logger.info(
-            "ale-claw: coordinate_space=%s (driver_model=%s, override=%s)",
-            coordinate_space, coord_driver_model, cfg.coordinate_space,
-        )
-
-        computer_handler = None
-        if not cfg.disable_main_computer:
-            computer_handler = OpenClawComputerHandler(
-                session.computer, coordinate_space=coordinate_space
-            )
-            await computer_handler._initialize()            # noqa: SLF001
-
-        # ---- 6. Tools + disabled_tools filter ----
-        tools = build_tools(
-            session, memory_store,
-            summary_model=summary_model,
-            vision_thinking_params=thinking_config.vision_params(
-                summary_model, runtime=resolved_summary_model,
-            ),
-            registry=registry,
-            parent_session_dir=session_mgr.task_dir,
-            default_model=cfg.model,
-            auxiliary_model=cfg.auxiliary_model,
-            thinking_params=thinking_api_params,
-            thinking_config=thinking_config,
-            gui_thinking_params=gui_thinking_params,
-            generation_kwargs=cfg.extra_generation_kwargs,
-            disable_main_computer=cfg.disable_main_computer,
-            disable_delegate_gui=cfg.disable_delegate_gui,
-            gui_model=gui_model,
-            workspace_root=workspace_root,
-            host_workspace_root=host_workspace_root,
-            context_window_tokens=context_window_tokens,
-            computer_handler=computer_handler,
-            api_key=cfg.api_key,
-            api_base=cfg.base_url,
-        )
-        if cfg.disabled_tools:
-            tools = [t for t in tools if getattr(t, "name", "") not in cfg.disabled_tools]
-            logger.info("ale-claw: disabled_tools=%s", cfg.disabled_tools)
-        tool_summaries = get_tool_summaries(tools)
-
-        # ---- 7. System prompt + AGENTS.md + TASK_MEMORY.md context ----
-        agents_md = _HARNESS_AGENTS_MD.read_text(encoding="utf-8")
-        context_files = [ContextFile(path="AGENTS.md", content=agents_md)]
-        bootstrap = memory_store.get_bootstrap_context()
-        if bootstrap:
-            context_files.append(ContextFile(path="TASK_MEMORY.md", content=bootstrap))
-        instructions = PromptBuilder().build(
-            tool_summaries=tool_summaries, context_files=context_files,
-            target_os=sb.os,
-        )
-        report = build_system_prompt_report(
-            system_prompt=instructions, context_files=context_files,
-            tool_summaries=tool_summaries, tools=tools,
-        )
-        session_mgr.set_system_prompt_report(report)
-
-        # ---- 8. Overflow callback + agent ----
-        overflow_cb = ContextOverflowCallback(
-            model=cfg.model,
-            context_window=context_window_tokens,
-            instructions_tokens=len(instructions) // 4,
-            resolved_model=resolved_model,
-        )
-        if session_mgr._state is not None:                       # noqa: SLF001
-            session_mgr._state.context_tokens = overflow_cb.context_window  # noqa: SLF001
-            session_mgr.save_state()
-
-        agent = OpenClawComputerAgent(
-            model=cfg.model,
-            tools=tools,
-            only_n_most_recent_images=3,
-            trajectory_dir=trajectory_dir,
-            instructions=instructions,
-            use_prompt_caching=True,
-            callbacks=[ToolLoggingCallback()],
-            context_files=context_files,
-            image_retention_mode=cfg.image_retention_mode,
-            auto_screenshot=False,
-            overflow_cb=overflow_cb,
-            session_mgr=session_mgr,
-            memory_store=memory_store,
-            summary_model=summary_model,
-            thinking_config=thinking_config,
-            resolved_model=resolved_model,
-            summary_runtime=resolved_summary_model,
-            registry=registry,
-            **thinking_api_params,
-        )
-
-        # ---- 9. Cross-run replay (always empty v1) ----
-        prior_entries = session_mgr.load_history()
-        replay_messages: list[dict[str, Any]] = []
-        if prior_entries:
-            replay_messages = build_replay_messages(prior_entries)
-            replay_messages = sanitize_history(replay_messages)
-            replay_messages = limit_history_turns(replay_messages, cfg.max_history_turns)
-            replay_messages = sanitize_history(replay_messages)
-            replay_messages = convert_to_responses_api_items(replay_messages)
-        run_input = (
-            replay_messages + [{"role": "user", "content": prompt}]
-            if replay_messages else prompt
-        )
-
-        # ---- 10. Drive loop ----
-        # The episode wall budget is orchestration-owned: the executor wraps
-        # launch() in asyncio.wait_for(timeout=timeout_s) (derived from the
-        # task), so we drive the loop directly here; a cancellation on the
-        # budget propagates cleanly (no subprocess to reap).
-        # litellm reads OPENROUTER_API_KEY / ANTHROPIC_API_KEY etc straight
-        # from os.environ — operator populates the shell, no patching needed.
-        max_steps = cfg.max_turns
-        t0 = time.monotonic()
-        step = 0
-        task_completed = False
-        transcript_path = work_dir / "openclaw_sessions" / task_id / "transcript.jsonl"
-        from .harness.model.usage import start_helper_usage, stop_helper_usage
-        usage_token = start_helper_usage(work_dir / "helper_usage.jsonl")
-
-        try:
-            async def _drive() -> None:
-                nonlocal step, task_completed
-                # cfg.base_url / cfg.api_key (custom OpenAI-compatible gateway,
-                # e.g. Meta) thread straight through OpenClawComputerAgent.run →
-                # litellm as api_base/api_key kwargs — no os.environ mutation.
-                async for result in agent.run(
-                    run_input, api_base=cfg.base_url, api_key=cfg.api_key,
-                    max_turns=max_steps,
-                    **cfg.extra_generation_kwargs,
-                ):
-                    sys.stdout.flush()
-                    step += 1
-                    if has_done_signal(result.get("output", [])):
-                        logger.info("ale-claw: done signal at step %d", step)
-                        task_completed = True
-            await _drive()
-        except Exception as exc:                             # noqa: BLE001
-            logger.exception("ale-claw: agent.run threw")
-            return AgentRunResult(
-                status="failed",
-                duration_s=time.monotonic() - t0,
-                error=f"{type(exc).__name__}: {exc}",
-                transcript_path=str(transcript_path) if transcript_path.exists() else None,
-            )
-        finally:
-            try:
-                await registry.close()
-            finally:
-                stop_helper_usage(usage_token)
-        # Outcome mapping
-        if task_completed:
-            status = "completed"
-            error: str | None = None
-        elif max_steps is not None and step >= max_steps:
-            status = "failed"
-            error = f"max_turns {max_steps} reached before DONE"
-        else:
-            status = "failed"
-            error = "loop exited without done signal"
-
         return AgentRunResult(
-            status=status,
-            duration_s=time.monotonic() - t0,
-            transcript_path=str(transcript_path) if transcript_path.exists() else None,
-            error=error,
+            status=result.status, duration_s=result.duration_s,
+            error=result.error, transcript_path=result.transcript_path,
         )
 
     @classmethod
@@ -401,7 +50,7 @@ class AleClawDeployer(BaseAgentDeployer):
             return
         try:
             parse_transcripts_into(work_dir, builder)
-        except Exception as exc:                                # noqa: BLE001
+        except Exception as exc:
             logger.exception("ale-claw: parse_artifacts failed")
             builder.add_step(
                 source="system",
@@ -414,27 +63,3 @@ class AleClawDeployer(BaseAgentDeployer):
             "transcript_path": run_result.transcript_path,
             "run_status": run_result.status,
         })
-
-    # =========================================================================
-    # helpers (private)
-    # =========================================================================
-
-    def _build_thinking_config(self) -> ThinkingConfig:
-        c: AleClawConfig = self.config  # type: ignore[assignment]
-        level = (
-            ThinkLevel(c.thinking_level) if c.thinking_level
-            else resolve_thinking_default(c.model)
-        )
-        flush = ThinkLevel(c.flush_thinking_level) if c.flush_thinking_level else level
-        compact = (
-            ThinkLevel(c.compaction_thinking_level) if c.compaction_thinking_level
-            else level
-        )
-        vision = ThinkLevel(c.vision_thinking_level)
-        gui = ThinkLevel(c.gui_thinking_level)
-        return ThinkingConfig(
-            level=level, flush_level=flush, compaction_level=compact,
-            vision_level=vision, gui_level=gui,
-            flush_level_overridden=c.flush_thinking_level is not None,
-            compaction_level_overridden=c.compaction_thinking_level is not None,
-        )

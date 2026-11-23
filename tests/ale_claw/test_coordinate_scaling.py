@@ -11,8 +11,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from ale_run.agents.ale_claw.harness.tools.computer_handler import (
+from ale_claw.harness.tools.computer_handler import (
     NORMALIZED_GRID,
     OpenClawComputerHandler,
     coordinate_space_for_model,

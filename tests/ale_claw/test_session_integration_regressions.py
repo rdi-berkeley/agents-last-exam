@@ -10,27 +10,27 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from PIL import Image
 
-from ale_run.agents.ale_claw.harness.adapters.trajectory_saver import (
+from ale_claw.harness.adapters.trajectory_saver import (
     OpenClawTrajectorySaverCallback,
 )
-from ale_run.agents.ale_claw.harness.agent_loop import OpenClawComputerAgent
-from ale_run.agents.ale_claw.harness.context.transcript import group_step_output
-from ale_run.agents.ale_claw.harness.model.model_config import model_credentials
-from ale_run.agents.ale_claw.harness.model.unified_loop import _convert_response_to_output
-from ale_run.agents.ale_claw.harness.subagent.subagent_gui import (
+from ale_claw.harness.agent_loop import OpenClawComputerAgent
+from ale_claw.harness.context.transcript import group_step_output
+from ale_claw.harness.model.model_config import model_credentials
+from ale_claw.harness.model.unified_loop import _convert_response_to_output
+from ale_claw.harness.subagent.subagent_gui import (
     _TranscriptWriter,
     _relay_until_done,
     run_gui_subagent,
 )
-from ale_run.agents.ale_claw.harness.subagent.subagent_registry import (
+from ale_claw.harness.subagent.subagent_registry import (
     SubagentRegistry,
     SubagentType,
     SubagentUsage,
 )
-from ale_run.agents.ale_claw.harness.subagent.subagent_tools import DelegateGUITool
-from ale_run.agents.ale_claw.harness.tools.computer_handler import OpenClawComputerHandler
-from ale_run.agents.ale_claw.harness.tools.fs_backends import FilesystemRegistry, VMBackend
-from ale_run.agents.ale_claw.harness.tools.tools_fs import WriteFileTool
+from ale_claw.harness.subagent.subagent_tools import DelegateGUITool
+from ale_claw.harness.tools.computer_handler import OpenClawComputerHandler
+from ale_claw.harness.tools.fs_backends import FilesystemRegistry, VMBackend
+from ale_claw.harness.tools.tools_fs import WriteFileTool
 from ale_run.agents.ale_claw.transcript_to_trajectory import parse_transcripts_into
 from ale_run.base_interface import TrajectoryBuilder
 
@@ -335,7 +335,7 @@ def test_cancelled_gui_subagent_persists_usage(tmp_path, monkeypatch):
             await asyncio.Event().wait()
 
     monkeypatch.setattr(
-        "ale_run.agents.ale_claw.harness.subagent.subagent_gui._build_gui_agent",
+        "ale_claw.harness.subagent.subagent_gui._build_gui_agent",
         AsyncMock(return_value=Agent()),
     )
 

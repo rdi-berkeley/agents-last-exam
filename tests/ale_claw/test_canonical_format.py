@@ -14,9 +14,9 @@ Covers:
 
 import json
 
-from ale_run.agents.ale_claw.harness.model.model_config import resolve_model
+from ale_claw.harness.model.model_config import resolve_model
 
-from ale_run.agents.ale_claw.harness.canonical.canonical import (
+from ale_claw.harness.canonical.canonical import (
     COMPACTION_PREAMBLE,
     CanonicalMessage,
     CompactionSummaryBlock,
@@ -1190,7 +1190,7 @@ class TestCompactionImageRoundTrip:
 
     def test_normalize_strips_base64_from_image_url(self):
         """Token estimate after normalization must not include raw base64."""
-        from ale_run.agents.ale_claw.harness.context.context import estimate_messages_tokens
+        from ale_claw.harness.context.context import estimate_messages_tokens
 
         b64 = "A" * 200_000  # ~150KB fake screenshot
         raw_msgs = [
@@ -1212,7 +1212,7 @@ class TestCompactionImageRoundTrip:
 
     def test_strip_images_from_messages(self):
         """_strip_images_from_messages replaces image blocks with placeholders."""
-        from ale_run.agents.ale_claw.harness.agent_loop import _strip_images_from_messages
+        from ale_claw.harness.agent_loop import _strip_images_from_messages
 
         b64 = "A" * 100_000
         messages = [
@@ -1236,7 +1236,7 @@ class TestCompactionImageRoundTrip:
 
     def test_strip_images_preserves_non_image_blocks(self):
         """Messages without images pass through unchanged (reference equality)."""
-        from ale_run.agents.ale_claw.harness.agent_loop import _strip_images_from_messages
+        from ale_claw.harness.agent_loop import _strip_images_from_messages
 
         messages = [
             {"role": "user", "content": "hello"},

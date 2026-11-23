@@ -4,9 +4,9 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from ale_run.agents.ale_claw.harness import agent_loop
-from ale_run.agents.ale_claw.harness.agent_loop import OpenClawComputerAgent
-from ale_run.agents.ale_claw.harness.context.compaction import CompactionResult
+from ale_claw.harness import agent_loop
+from ale_claw.harness.agent_loop import OpenClawComputerAgent
+from ale_claw.harness.context.compaction import CompactionResult
 
 
 class TestHelperCredentials:

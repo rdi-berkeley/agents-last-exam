@@ -10,7 +10,7 @@ find the matching computer_call by call_id, not by position.
 import pytest
 
 from agent.callbacks.image_retention import ImageRetentionCallback
-from ale_run.agents.ale_claw.harness.adapters.image_retention import (
+from ale_claw.harness.adapters.image_retention import (
     OpenClawImageRetentionCallback,
 )
 
@@ -301,7 +301,7 @@ def test_shim_treats_input_image_blocks_as_images_too():
     cache. The fix replaces the image with a stable text placeholder so
     the message structure is preserved.
     """
-    from ale_run.agents.ale_claw.harness.adapters.image_retention import (
+    from ale_claw.harness.adapters.image_retention import (
         PRUNED_HISTORY_IMAGE_MARKER,
     )
 

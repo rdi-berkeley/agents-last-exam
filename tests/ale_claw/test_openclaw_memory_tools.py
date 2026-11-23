@@ -5,8 +5,7 @@ so CUA agents can search, read, and write memory files during task execution.
 """
 
 import pytest
-
-from ale_run.agents.ale_claw.harness.memory.memory import (
+from ale_claw.harness.memory.memory import (
     MemoryGetTool,
     MemorySearchTool,
     MemoryStore,

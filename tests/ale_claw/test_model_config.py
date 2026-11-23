@@ -10,7 +10,7 @@ Verifies:
 
 import pytest
 
-from ale_run.agents.ale_claw.harness.model.model_config import (
+from ale_claw.harness.model.model_config import (
     HelperTransportDefaults,
     ModelConfig,
     ResolvedModel,
@@ -20,7 +20,7 @@ from ale_run.agents.ale_claw.harness.model.model_config import (
     register_model_config,
     resolve_model,
 )
-from ale_run.agents.ale_claw.harness.model.thinking import _is_openai_model
+from ale_claw.harness.model.thinking import _is_openai_model
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +217,7 @@ class TestPayoff:
 
     def test_gpt6_config_with_sanitize_items(self):
         """Register gpt-6, build canonical messages, sanitize — no code changes needed."""
-        from ale_run.agents.ale_claw.harness.canonical.canonical import (
+        from ale_claw.harness.canonical.canonical import (
             CanonicalMessage,
             FunctionCallBlock,
             TextBlock,

@@ -57,6 +57,7 @@ exclude = [
 # Two top-level packages: framework (`ale_run/`) and task library (`tasks/`).
 # `tasks/` is a PEP 420 namespace package — no __init__.py files.
 packages = ["ale_run", "tasks"]
+exclude = ["/ale_run/agents/ale_claw/src"]
 
 [tool.ruff]
 line-length = 100
