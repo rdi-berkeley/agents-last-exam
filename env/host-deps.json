@@ -38,6 +38,10 @@
     "cua-computer": [
       "computer"
     ],
+    "formulas": [
+      "formulas",
+      "formulas.tokens.operand"
+    ],
     "google-api-core": [
       "google.api_core"
     ],
