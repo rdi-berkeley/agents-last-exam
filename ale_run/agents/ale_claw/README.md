@@ -86,8 +86,10 @@ max_turns = 100
 Each invocation uses a fresh session. By default the artifacts are saved under
 `./ale-claw-runs/<run-id>/` on the machine running the agent. Use a separate
 output directory per run when specifying one. Progress goes to stderr. When the agent returns a result, stdout contains
-one JSON object with status, duration, error and transcript path. Failures
-exit nonzero; startup errors are reported on stderr.
+one JSON object with status, duration, error and transcript path. A turn limit or
+persistent context overflow sets `error_type` to `step_limit` or `context_limit`.
+`status_code` records the HTTP status when supplied by the provider exception.
+Failures exit nonzero; startup errors are reported on stderr.
 
 The same endpoint and artifact settings are available in Python:
 

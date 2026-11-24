@@ -37,7 +37,11 @@ from .harness import (
     sanitize_history,
 )
 from .harness.agent_loop import has_done_signal
-from .harness.context.context import DEFAULT_CONTEXT_TOKENS, resolve_context_window
+from .harness.context.context import (
+    DEFAULT_CONTEXT_TOKENS,
+    is_context_overflow_error,
+    resolve_context_window,
+)
 from .harness.model.model_config import resolve_model
 
 logger = logging.getLogger(__name__)
@@ -52,6 +56,8 @@ class RunResult:
     duration_s: float
     transcript_path: str | None
     error: str | None = None
+    error_type: str | None = None
+    status_code: int | None = None
 
 
 async def run(
@@ -290,6 +296,8 @@ async def _run_session(
             status="failed",
             duration_s=time.monotonic() - t0,
             error=f"{type(exc).__name__}: {exc}",
+            error_type="context_limit" if is_context_overflow_error(str(exc)) else None,
+            status_code=getattr(exc, "status_code", None),
             transcript_path=str(transcript_path) if transcript_path.exists() else None,
         )
     finally:
@@ -298,11 +306,13 @@ async def _run_session(
         finally:
             stop_helper_usage(usage_token)
     # Outcome mapping
+    error_type = None
     if task_completed:
         status = "completed"
         error: str | None = None
     elif max_steps is not None and step >= max_steps:
         status = "failed"
+        error_type = "step_limit"
         error = f"max_turns {max_steps} reached before DONE"
     else:
         status = "failed"
@@ -313,6 +323,7 @@ async def _run_session(
         duration_s=time.monotonic() - t0,
         transcript_path=str(transcript_path) if transcript_path.exists() else None,
         error=error,
+        error_type=error_type,
     )
 
 

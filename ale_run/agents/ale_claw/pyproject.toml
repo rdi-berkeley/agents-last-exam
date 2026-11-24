@@ -14,6 +14,7 @@ dependencies = [
     # litellm + Pillow + typing_extensions are transitive via cua-agent
     # but pin them explicitly so a cua-agent bump can't silently strip them.
     "litellm>=1.80",
+    "tenacity",  # Required by LiteLLM for async provider retries.
     "Pillow>=10.0",
 ]
 

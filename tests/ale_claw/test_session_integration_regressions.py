@@ -96,6 +96,28 @@ def _fake_agent(result):
     return agent
 
 
+@pytest.mark.parametrize("recovers", [False, True])
+async def test_overflow_compactions_bounded_per_turn(recovers):
+    error = ValueError("maximum context length exceeded")
+    turn = {"output": [], "usage": {}}
+    agent = _fake_agent(turn)
+    agent.max_compactions = 100
+    agent._compaction_count = 0
+    agent.overflow_cb = MagicMock(needs_compaction=False)
+    agent._compact_in_place = AsyncMock()
+    agent.agent_loop.predict_step.side_effect = (
+        [error, error, turn, error, error, turn] if recovers else [error] * 3
+    )
+    if recovers:
+        assert len([step async for step in agent.run("task", max_turns=2)]) == 2
+        assert agent._compact_in_place.await_count == 4
+    else:
+        with pytest.raises(ValueError, match="context length"):
+            async for _ in agent.run("task", max_turns=2):
+                pytest.fail("A rejected request cannot produce a step")
+        assert agent._compact_in_place.await_count == 2
+
+
 def test_last_budget_turn_executes_and_finalizes():
     result = {
         "output": [{"type": "function_call", "name": "write", "call_id": "a", "arguments": "{}"}],

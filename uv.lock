@@ -213,6 +213,7 @@ dependencies = [
     { name = "cua-core" },
     { name = "litellm" },
     { name = "pillow" },
+    { name = "tenacity" },
 ]
 
 [package.metadata]
@@ -223,6 +224,7 @@ requires-dist = [
     { name = "cua-core", specifier = "==0.1.18" },
     { name = "litellm", specifier = ">=1.80" },
     { name = "pillow", specifier = ">=10.0" },
+    { name = "tenacity" },
 ]
 
 [[package]]

@@ -564,7 +564,10 @@ def _convert_response_to_output(response: Any) -> Dict[str, Any]:
     if isinstance(cost, (int, float)):
         usage["response_cost"] = cost
 
-    return {"output": output_items, "usage": usage}
+    result = {"output": output_items, "usage": usage}
+    if response_id := getattr(response, "id", None):
+        result["id"] = response_id
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -621,6 +624,7 @@ class UnifiedAgentConfig(AsyncAgentConfig):
             "tools": chat_tools if chat_tools else None,
             "stream": stream,
             "num_retries": max_retries,
+            "retry_policy": {"BadRequestErrorRetries": 0, "AuthenticationErrorRetries": 0},
         }
 
         # Merge generation kwargs (thinking, api_key, etc.)

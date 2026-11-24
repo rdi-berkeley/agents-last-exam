@@ -220,6 +220,7 @@ class OpenClawComputerAgent(ComputerAgent):
         )
         new_items: List[Dict[str, Any]] = []
         turns = 0
+        overflow_retries = 0
         loop_kwargs: Dict[str, Any] = run_kwargs
 
         # Loop until the model emits an explicit DONE signal (or the outer
@@ -269,8 +270,10 @@ class OpenClawComputerAgent(ComputerAgent):
                 except Exception as e:
                     if (
                         is_context_overflow_error(str(e))
+                        and overflow_retries < 2
                         and self._compaction_count < self.max_compactions
                     ):
+                        overflow_retries += 1
                         self.overflow_cb.force_compaction()
                         print(f"[ContextOverflow] API rejected — reactive compaction: {e}")
                         await self._compact_in_place(items, new_items)
@@ -279,6 +282,7 @@ class OpenClawComputerAgent(ComputerAgent):
                         continue
                     raise
 
+                overflow_retries = 0
                 result = get_json(result)
                 usage = result.get("usage") or {}
                 self.session_mgr.update_step_count(turns + 1)
@@ -932,6 +936,7 @@ class OpenClawComputerAgent(ComputerAgent):
                 "assistant",
                 assistant_content,
                 usage=usage,
+                response_id=result.get("id"),
                 stop_reason=result.get("stop_reason") or ("tool_use" if has_tools else None),
                 api=(
                     self.resolved_model.transcript_api_label
