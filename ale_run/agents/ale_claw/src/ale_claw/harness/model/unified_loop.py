@@ -1,19 +1,4 @@
-"""
-Unified agent loop for OpenRouter — single acompletion() transport for all providers.
-
-Uses function-calling computer tools (not native hosted tools) and OpenRouter's
-unified reasoning parameter. Designed to replace per-provider loops when routing
-through OpenRouter.
-
-
-Vendored into the openclaw subpackage (single source of truth) so sparse-checkout
-consumers that only pull ``cua_bench/agents/openclaw/`` — and would otherwise
-fall through to the Responses-API ``loops/openai.py`` route — pick up the
-chat-completions OpenRouter route the moment openclaw is imported. The
-original ``agent/loops/unified.py`` is removed; this file is the canonical
-home. Registered via the side-effect import at the bottom of
-``cua_bench/agents/openclaw/__init__.py``.
-"""
+"""Chat Completions loop using structured function calls for computer and file tools."""
 
 import base64
 import json
@@ -564,7 +549,10 @@ def _convert_response_to_output(response: Any) -> Dict[str, Any]:
     if isinstance(cost, (int, float)):
         usage["response_cost"] = cost
 
-    return {"output": output_items, "usage": usage}
+    result = {"output": output_items, "usage": usage}
+    if response_id := getattr(response, "id", None):
+        result["id"] = response_id
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -573,12 +561,7 @@ def _convert_response_to_output(response: Any) -> Dict[str, Any]:
 
 @register_agent(models=r"openrouter/.*", priority=10)
 class UnifiedAgentConfig(AsyncAgentConfig):
-    """Unified agent loop for OpenRouter — all providers via acompletion().
-
-    Uses function-calling computer tools and OpenRouter's unified reasoning
-    parameter.  Registered at priority 10 to take precedence over the
-    per-provider loops for any ``openrouter/`` model string.
-    """
+    """Selected explicitly by function_calling or automatically for OpenRouter model IDs."""
 
     async def predict_step(
         self,
@@ -595,7 +578,7 @@ class UnifiedAgentConfig(AsyncAgentConfig):
         _on_screenshot=None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Predict the next step using litellm.acompletion() via OpenRouter."""
+        """Predict the next step using the configured LiteLLM model and endpoint."""
         tools = tools or []
 
         # Build Chat Completions tools
@@ -621,6 +604,7 @@ class UnifiedAgentConfig(AsyncAgentConfig):
             "tools": chat_tools if chat_tools else None,
             "stream": stream,
             "num_retries": max_retries,
+            "retry_policy": {"BadRequestErrorRetries": 0, "AuthenticationErrorRetries": 0},
         }
 
         # Merge generation kwargs (thinking, api_key, etc.)
@@ -633,7 +617,6 @@ class UnifiedAgentConfig(AsyncAgentConfig):
         if _on_api_start:
             await _on_api_start(api_kwargs)
 
-        # Call OpenRouter via litellm
         response = await litellm.acompletion(**api_kwargs)
 
         # Call API end hook

@@ -6,13 +6,13 @@ from unittest.mock import AsyncMock
 
 from litellm.types.utils import ModelResponse
 
-from ale_run.agents.ale_claw.harness.canonical.canonical import normalize_to_canonical, sanitize_items
-from ale_run.agents.ale_claw.harness.context.replay import convert_to_responses_api_items
-from ale_run.agents.ale_claw.harness.context.transcript import group_step_output
-from ale_run.agents.ale_claw.harness.model.model_config import merge_helper_generation_kwargs, model_generation_kwargs, resolve_model
-from ale_run.agents.ale_claw.harness.model.unified_loop import _convert_input_to_messages, _convert_response_to_output
-from ale_run.agents.ale_claw.harness.subagent.subagent_registry import SubagentRegistry
-from ale_run.agents.ale_claw.harness.subagent.subagent_session import GeneralSubagentSession
+from ale_claw.harness.canonical.canonical import normalize_to_canonical, sanitize_items
+from ale_claw.harness.context.replay import convert_to_responses_api_items
+from ale_claw.harness.context.transcript import group_step_output
+from ale_claw.harness.model.model_config import merge_helper_generation_kwargs, model_generation_kwargs, resolve_model
+from ale_claw.harness.model.unified_loop import _convert_input_to_messages, _convert_response_to_output
+from ale_claw.harness.subagent.subagent_registry import SubagentRegistry
+from ale_claw.harness.subagent.subagent_session import GeneralSubagentSession
 
 
 DETAILS = [
@@ -88,7 +88,7 @@ def test_general_subagent_keeps_reasoning_and_generation(tmp_path):
         generation_kwargs={"top_p": 0.95, "temperature": 0.7, "extra_body": {"provider": {"order": ["x"]}}},
     )
     message = response().choices[0].message
-    from ale_run.agents.ale_claw.harness.model.reasoning import reasoning_fields
+    from ale_claw.harness.model.reasoning import reasoning_fields
     session._append_assistant(message.content, message.tool_calls, reasoning=reasoning_fields(message))
     mock = SimpleNamespace(acompletion=AsyncMock(return_value=response()))
     asyncio.run(session._call_llm(mock, resolve_model("openrouter/deepseek/test")))
@@ -126,7 +126,7 @@ def test_helper_thinking_overrides_do_not_erase_sampling_or_routing():
 
 def test_tool_assembly_inherits_generation_options(tmp_path):
     from unittest.mock import MagicMock
-    from ale_run.agents.ale_claw.harness.tools.tools import build_tools
+    from ale_claw.harness.tools.tools import build_tools
     session = MagicMock()
     session._computer = object()
     options = {"top_p": 0.95, "extra_body": {"provider": {"order": ["chosen"]}}}
@@ -143,7 +143,7 @@ def test_tool_assembly_inherits_generation_options(tmp_path):
 
 def test_vision_default_off_removes_inherited_thinking(tmp_path):
     from unittest.mock import MagicMock
-    from ale_run.agents.ale_claw.harness.tools.tools import build_tools
+    from ale_claw.harness.tools.tools import build_tools
     session = MagicMock()
     session._computer = object()
     tools = build_tools(
@@ -158,7 +158,7 @@ def test_vision_default_off_removes_inherited_thinking(tmp_path):
 
 def test_memory_flush_receives_generation_options(tmp_path, monkeypatch):
     from unittest.mock import MagicMock
-    from ale_run.agents.ale_claw.harness import agent_loop
+    from ale_claw.harness import agent_loop
     agent = agent_loop.OpenClawComputerAgent.__new__(agent_loop.OpenClawComputerAgent)
     agent.session_mgr = SimpleNamespace(_state=object(), transcript_path=tmp_path / "transcript")
     agent.overflow_cb = SimpleNamespace(current_tokens=100, context_window=1000, compaction_threshold_ratio=.8)
@@ -177,7 +177,7 @@ def test_memory_flush_receives_generation_options(tmp_path, monkeypatch):
 
 
 def test_subagent_compaction_uses_summary_generation_options(tmp_path, monkeypatch):
-    from ale_run.agents.ale_claw.harness.subagent import subagent_session
+    from ale_claw.harness.subagent import subagent_session
     session = GeneralSubagentSession(
         run_id="worker", task="test", model="openrouter/deepseek/main", tools=[],
         registry=SubagentRegistry(), summary_model="openrouter/deepseek/helper",
@@ -191,7 +191,7 @@ def test_subagent_compaction_uses_summary_generation_options(tmp_path, monkeypat
 
 
 def test_subagent_compaction_explicit_off_overrides_inherited_thinking(tmp_path, monkeypatch):
-    from ale_run.agents.ale_claw.harness.subagent import subagent_session
+    from ale_claw.harness.subagent import subagent_session
     session = GeneralSubagentSession(
         run_id="worker", task="test", model="openrouter/deepseek/main", tools=[],
         registry=SubagentRegistry(), summary_model="openrouter/deepseek/helper",
@@ -206,8 +206,8 @@ def test_subagent_compaction_explicit_off_overrides_inherited_thinking(tmp_path,
 
 def test_subagent_thinking_is_resolved_for_selected_models(tmp_path, monkeypatch):
     from unittest.mock import MagicMock
-    from ale_run.agents.ale_claw.harness.model.thinking import ThinkLevel, ThinkingConfig
-    from ale_run.agents.ale_claw.harness.subagent import subagent_tools
+    from ale_claw.harness.model.thinking import ThinkLevel, ThinkingConfig
+    from ale_claw.harness.subagent import subagent_tools
     registry = SubagentRegistry()
     capture = AsyncMock()
     monkeypatch.setattr(subagent_tools, "run_general_subagent", capture)

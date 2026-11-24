@@ -210,13 +210,17 @@ class DockerExecutor(BaseExecutor):
         container_name = f"ale-{deployer_cls.__name__.lower()}-{uuid.uuid4().hex[:8]}"
         self._container_name = container_name
         host_repo = _host_repo_root()
+        pythonpath = "/ale_src"
+        member_src = Path(*deployer_cls.__module__.split(".")[:-1], "src")
+        if (host_repo / member_src).is_dir():
+            pythonpath += f":/ale_src/{member_src.as_posix()}"
         docker_argv = [
             "docker", "create", "--rm",
             "--name", container_name,
             "--network", "host",
             "-v", f"{host_work}:/work:rw",
             "-v", f"{host_repo}:/ale_src:ro",
-            "-e", "PYTHONPATH=/ale_src",
+            "-e", f"PYTHONPATH={pythonpath}",
             "--env-file", str(env_file),
             *self.extra_run_args,
             self.image,

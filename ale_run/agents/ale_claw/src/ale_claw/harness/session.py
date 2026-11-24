@@ -316,6 +316,7 @@ class SessionManager:
         usage: dict[str, Any] | None = None,
         stop_reason: str | None = None,
         api: str | None = None,
+        response_id: str | None = None,
     ) -> TranscriptEntry:
         """Append a message entry to the transcript.
 
@@ -330,6 +331,8 @@ class SessionManager:
             stop_reason: Optional stop reason (e.g. "tool_use", "end_turn")
             api: Optional API identifier for observability (e.g. "openai-responses")
 
+            response_id: Provider response ID for an assistant message.
+
         Returns the created TranscriptEntry.
         """
         if isinstance(content, str):
@@ -342,6 +345,8 @@ class SessionManager:
             message_data["usage"] = usage
         if stop_reason is not None:
             message_data["stopReason"] = stop_reason
+        if response_id:
+            message_data["responseId"] = response_id
         if api is not None:
             message_data["api"] = api
 

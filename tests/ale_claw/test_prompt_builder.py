@@ -1,6 +1,6 @@
 """Tests for PromptBuilder —: System Prompt Builder."""
 
-from ale_run.agents.ale_claw.harness import ContextFile, PromptBuilder, PromptConfig, SectionConfig
+from ale_claw.harness import ContextFile, PromptBuilder, PromptConfig, SectionConfig
 
 
 class TestPromptBuilderSections:

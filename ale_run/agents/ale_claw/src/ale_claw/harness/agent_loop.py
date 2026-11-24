@@ -33,7 +33,7 @@ import inspect
 import json
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
-from agent.agent import ComputerAgent, assert_callable_with, get_json, get_output_call_ids
+from agent.agent import assert_callable_with, get_json, get_output_call_ids
 from agent.computers.base import AsyncComputerHandler
 from agent.computers.cua import cuaComputerHandler
 from .model.model_config import ResolvedModel, merge_helper_generation_kwargs, model_generation_kwargs, resolve_model
@@ -43,6 +43,7 @@ from agent.types import ToolError
 from core.telemetry import is_telemetry_enabled, record_event
 
 
+from .model.tool_loop import ToolCallingComputerAgent
 from .model._message_shapes import _function_call_output, _image_url_block
 from .canonical.canonical import normalize_to_canonical, sanitize_items
 from .tools.computer_handler import OpenClawComputerHandler
@@ -81,7 +82,7 @@ _COMPUTER_ACTION_PARAMS: Dict[str, List[str]] = {
     "terminate": ["status"],
 }
 
-class OpenClawComputerAgent(ComputerAgent):
+class OpenClawComputerAgent(ToolCallingComputerAgent):
     """ComputerAgent subclass with mid-conversation compaction support.
 
     Overrides run() to manage a mutable message list, enabling in-place
@@ -220,6 +221,7 @@ class OpenClawComputerAgent(ComputerAgent):
         )
         new_items: List[Dict[str, Any]] = []
         turns = 0
+        overflow_retries = 0
         loop_kwargs: Dict[str, Any] = run_kwargs
 
         # Loop until the model emits an explicit DONE signal (or the outer
@@ -229,6 +231,14 @@ class OpenClawComputerAgent(ComputerAgent):
         # emitted bare text (e.g., the [!silent] memory-flush sentinel after
         # a contaminated compaction). OpenClaw semantics want "stop on DONE,"
         # not "stop when tool calls stop."
+        # Some CUA loops normalize the output and drop the provider response ID.
+        response_id = None
+
+        async def record_response(kwargs, response):
+            nonlocal response_id
+            response_id = response.get("id") if isinstance(response, dict) else getattr(response, "id", None)
+            await self._on_api_end(kwargs, response)
+
         run_status = "failed"
         try:
             while True:
@@ -258,19 +268,22 @@ class OpenClawComputerAgent(ComputerAgent):
                 }
 
                 # === REACTIVE OVERFLOW: try/except around predict_step ===
+                response_id = None
                 try:
                     result = await self.agent_loop.predict_step(
                         **loop_kwargs,
                         _on_api_start=self._on_api_start,
-                        _on_api_end=self._on_api_end,
+                        _on_api_end=record_response,
                         _on_usage=self._on_usage,
                         _on_screenshot=self._on_screenshot,
                     )
                 except Exception as e:
                     if (
                         is_context_overflow_error(str(e))
+                        and overflow_retries < 2
                         and self._compaction_count < self.max_compactions
                     ):
+                        overflow_retries += 1
                         self.overflow_cb.force_compaction()
                         print(f"[ContextOverflow] API rejected — reactive compaction: {e}")
                         await self._compact_in_place(items, new_items)
@@ -279,7 +292,10 @@ class OpenClawComputerAgent(ComputerAgent):
                         continue
                     raise
 
+                overflow_retries = 0
                 result = get_json(result)
+                if response_id:
+                    result["id"] = response_id
                 usage = result.get("usage") or {}
                 self.session_mgr.update_step_count(turns + 1)
                 self.session_mgr.update_tokens(
@@ -932,6 +948,7 @@ class OpenClawComputerAgent(ComputerAgent):
                 "assistant",
                 assistant_content,
                 usage=usage,
+                response_id=result.get("id"),
                 stop_reason=result.get("stop_reason") or ("tool_use" if has_tools else None),
                 api=(
                     self.resolved_model.transcript_api_label

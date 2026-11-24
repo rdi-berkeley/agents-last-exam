@@ -4,7 +4,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 
-from ale_run.agents.ale_claw.harness.model.usage import (
+from ale_claw.harness.model.usage import (
     record_helper_usage,
     start_helper_usage,
     stop_helper_usage,

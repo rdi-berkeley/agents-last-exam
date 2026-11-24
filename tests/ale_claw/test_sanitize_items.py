@@ -11,7 +11,7 @@ Covers:
 
 import json
 
-from ale_run.agents.ale_claw.harness.canonical.canonical import (
+from ale_claw.harness.canonical.canonical import (
     CanonicalMessage,
     CompactionSummaryBlock,
     ComputerCallBlock,

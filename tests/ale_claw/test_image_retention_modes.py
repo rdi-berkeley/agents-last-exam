@@ -11,8 +11,7 @@ native+shim mixed paths, and tool-pairing invariants in count mode.
 """
 
 import pytest
-
-from ale_run.agents.ale_claw.harness.adapters.image_retention import (
+from ale_claw.harness.adapters.image_retention import (
     PRUNED_HISTORY_IMAGE_MARKER,
     OpenClawImageRetentionCallback,
 )

@@ -10,27 +10,27 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from PIL import Image
 
-from ale_run.agents.ale_claw.harness.adapters.trajectory_saver import (
+from ale_claw.harness.adapters.trajectory_saver import (
     OpenClawTrajectorySaverCallback,
 )
-from ale_run.agents.ale_claw.harness.agent_loop import OpenClawComputerAgent
-from ale_run.agents.ale_claw.harness.context.transcript import group_step_output
-from ale_run.agents.ale_claw.harness.model.model_config import model_credentials
-from ale_run.agents.ale_claw.harness.model.unified_loop import _convert_response_to_output
-from ale_run.agents.ale_claw.harness.subagent.subagent_gui import (
+from ale_claw.harness.agent_loop import OpenClawComputerAgent
+from ale_claw.harness.context.transcript import group_step_output
+from ale_claw.harness.model.model_config import model_credentials
+from ale_claw.harness.model.unified_loop import _convert_response_to_output
+from ale_claw.harness.subagent.subagent_gui import (
     _TranscriptWriter,
     _relay_until_done,
     run_gui_subagent,
 )
-from ale_run.agents.ale_claw.harness.subagent.subagent_registry import (
+from ale_claw.harness.subagent.subagent_registry import (
     SubagentRegistry,
     SubagentType,
     SubagentUsage,
 )
-from ale_run.agents.ale_claw.harness.subagent.subagent_tools import DelegateGUITool
-from ale_run.agents.ale_claw.harness.tools.computer_handler import OpenClawComputerHandler
-from ale_run.agents.ale_claw.harness.tools.fs_backends import FilesystemRegistry, VMBackend
-from ale_run.agents.ale_claw.harness.tools.tools_fs import WriteFileTool
+from ale_claw.harness.subagent.subagent_tools import DelegateGUITool
+from ale_claw.harness.tools.computer_handler import OpenClawComputerHandler
+from ale_claw.harness.tools.fs_backends import FilesystemRegistry, VMBackend
+from ale_claw.harness.tools.tools_fs import WriteFileTool
 from ale_run.agents.ale_claw.transcript_to_trajectory import parse_transcripts_into
 from ale_run.base_interface import TrajectoryBuilder
 
@@ -94,6 +94,43 @@ def _fake_agent(result):
     agent.use_prompt_caching = False
     agent.session_mgr = MagicMock()
     return agent
+
+
+async def test_provider_response_id_is_scoped_to_one_turn():
+    agent = _fake_agent({})
+    replies = iter([SimpleNamespace(id="reply-1"), {}])
+
+    async def predict(**kwargs):
+        await kwargs["_on_api_end"]({}, next(replies))
+        return {"output": [], "usage": {}}
+
+    agent.agent_loop.predict_step.side_effect = predict
+    agent.overflow_cb = MagicMock(needs_compaction=False)
+    results = [step async for step in agent.run("task", max_turns=2)]
+    assert [step.get("id") for step in results] == ["reply-1", None]
+    assert agent._on_api_end.await_count == 2
+
+
+@pytest.mark.parametrize("recovers", [False, True])
+async def test_overflow_compactions_bounded_per_turn(recovers):
+    error = ValueError("maximum context length exceeded")
+    turn = {"output": [], "usage": {}}
+    agent = _fake_agent(turn)
+    agent.max_compactions = 100
+    agent._compaction_count = 0
+    agent.overflow_cb = MagicMock(needs_compaction=False)
+    agent._compact_in_place = AsyncMock()
+    agent.agent_loop.predict_step.side_effect = (
+        [error, error, turn, error, error, turn] if recovers else [error] * 3
+    )
+    if recovers:
+        assert len([step async for step in agent.run("task", max_turns=2)]) == 2
+        assert agent._compact_in_place.await_count == 4
+    else:
+        with pytest.raises(ValueError, match="context length"):
+            async for _ in agent.run("task", max_turns=2):
+                pytest.fail("A rejected request cannot produce a step")
+        assert agent._compact_in_place.await_count == 2
 
 
 def test_last_budget_turn_executes_and_finalizes():
@@ -335,7 +372,7 @@ def test_cancelled_gui_subagent_persists_usage(tmp_path, monkeypatch):
             await asyncio.Event().wait()
 
     monkeypatch.setattr(
-        "ale_run.agents.ale_claw.harness.subagent.subagent_gui._build_gui_agent",
+        "ale_claw.harness.subagent.subagent_gui._build_gui_agent",
         AsyncMock(return_value=Agent()),
     )
 

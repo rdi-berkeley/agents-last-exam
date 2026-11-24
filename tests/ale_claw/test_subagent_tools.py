@@ -16,14 +16,14 @@ import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from ale_run.agents.ale_claw.harness.subagent.subagent_registry import (
+from ale_claw.harness.subagent.subagent_registry import (
     SubagentLimitError,
     SubagentRegistry,
     SubagentStatus,
     SubagentType,
     SubagentUsage,
 )
-from ale_run.agents.ale_claw.harness.subagent.subagent_tools import (
+from ale_claw.harness.subagent.subagent_tools import (
     DELEGATE_GENERAL_DEFAULT_MAX_STEPS,
     DelegateGeneralTool,
     DelegateGUITool,
@@ -123,7 +123,7 @@ class TestDelegateGeneralTool:
                 parent_session_dir=tmp_path,
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_general_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_general_subagent",
                 side_effect=_fake_run_general,
             ):
                 result = tool.call({"task": "plan next move", "label": "plan"})
@@ -168,7 +168,7 @@ class TestDelegateGeneralTool:
                 auxiliary_model="openrouter/openai/gpt-5.4-mini",
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_general_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_general_subagent",
                 side_effect=_fake_run_general,
             ):
                 result = tool.call({
@@ -203,7 +203,7 @@ class TestDelegateGeneralTool:
                 auxiliary_model="openrouter/openai/gpt-5.4-mini",
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_general_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_general_subagent",
                 side_effect=_fake_run_general,
             ):
                 result = tool.call({
@@ -252,7 +252,7 @@ class TestDelegateGeneralTool:
                 registry=registry, parent_session_dir=tmp_path
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_general_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_general_subagent",
                 side_effect=SubagentLimitError("unreachable"),
             ):
                 result = tool.call({"task": "queued"})
@@ -299,7 +299,7 @@ class TestDelegateGeneralTool:
                 registry=registry, parent_session_dir=tmp_path
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_general_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_general_subagent",
                 side_effect=_fake_run_general,
             ):
                 result = tool.call({
@@ -330,7 +330,7 @@ class TestDelegateGeneralTool:
                 registry=registry, parent_session_dir=tmp_path
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_general_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_general_subagent",
                 side_effect=_fake_run_general,
             ):
                 result = tool.call({
@@ -359,7 +359,7 @@ class TestDelegateGeneralTool:
                 registry=registry, parent_session_dir=tmp_path
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_general_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_general_subagent",
                 side_effect=_fake_run_general,
             ):
                 result = tool.call({"task": "analyze"})
@@ -403,7 +403,7 @@ class TestDelegateGUITool:
                 registry=registry, session=session, parent_session_dir=tmp_path
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_gui_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_gui_subagent",
                 side_effect=_fake_relay,
             ):
                 result = tool.call({"instruction": "open notepad"})
@@ -431,7 +431,7 @@ class TestDelegateGUITool:
                 registry=registry, session=session, parent_session_dir=tmp_path
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_gui_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_gui_subagent",
                 side_effect=_fake_relay,
             ):
                 result = tool.call({"instruction": "break things"})
@@ -468,7 +468,7 @@ class TestDelegateGUITool:
                 registry=registry, session=session, parent_session_dir=tmp_path
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_gui_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_gui_subagent",
                 side_effect=_fake_relay,
             ):
                 result = tool.call({"instruction": "open notepad"})
@@ -515,7 +515,7 @@ class TestDelegateGUITool:
                 registry=registry, session=session, parent_session_dir=tmp_path
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_gui_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_gui_subagent",
                 side_effect=_fake_relay,
             ):
                 result = tool.call({"instruction": "bad action"})
@@ -540,7 +540,7 @@ class TestDelegateGUITool:
                 registry=registry, session=session, parent_session_dir=tmp_path
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_gui_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_gui_subagent",
                 side_effect=_fake_relay,
             ):
                 result = tool.call({"instruction": "open notepad"})
@@ -567,7 +567,7 @@ class TestDelegateGUITool:
                 registry=registry, session=session, parent_session_dir=tmp_path
             )
             with patch(
-                "ale_run.agents.ale_claw.harness.subagent.subagent_tools.run_gui_subagent",
+                "ale_claw.harness.subagent.subagent_tools.run_gui_subagent",
                 side_effect=_fake_relay,
             ):
                 result = tool.call({"instruction": "open notepad"})
@@ -742,7 +742,7 @@ class TestSubagentsToolSteer:
         assert "message" in result["reason"]
 
     def test_steer_message_too_long(self):
-        from ale_run.agents.ale_claw.harness.subagent.subagent_tools import MAX_STEER_MESSAGE_CHARS
+        from ale_claw.harness.subagent.subagent_tools import MAX_STEER_MESSAGE_CHARS
         reg = SubagentRegistry()
         run_id = self._make_running(reg)
         tool = SubagentsTool(registry=reg)

@@ -52,7 +52,57 @@ started by ALE Claw. File paths passed to `analyze_image` refer to the VM;
 optional `target: host` file operations are restricted to the configured host
 workspace.
 
-## Running it
+## Standalone
+
+Install from the repository root with Python 3.12 or 3.13:
+
+```bash
+pip install ./ale_run/agents/ale_claw
+ale-claw --model openai/gpt-4.1 "Read the files in the workspace and summarize them."
+```
+
+Set the API key for the chosen model. The default target is an existing Linux
+CUA service at `http://127.0.0.1:8000`. Inside a container, this address points
+to the container. For a different port or a remote desktop, pass the CUA HTTP
+endpoint and target OS:
+
+```bash
+ale-claw --config settings.toml --sandbox-url http://desktop:5000 --os-type windows "Open the spreadsheet."
+```
+
+`settings.toml` accepts these optional connection and output settings and the
+fields of `AleClawConfig` under `[agent]`. Command-line flags override the file.
+
+```toml
+sandbox_url = "http://127.0.0.1:8000"
+os_type = "linux"
+output_dir = "runs/example"
+
+[agent]
+model = "openai/gpt-4.1"
+tool_calling = "function_calling"
+max_turns = 100
+```
+
+Each invocation uses a fresh session. By default the artifacts are saved under
+`./ale-claw-runs/<run-id>/` on the machine running the agent. Use a separate
+output directory per run when specifying one. Progress goes to stderr. When the agent returns a result, stdout contains
+one JSON object with status, duration, error and transcript path. A turn limit or
+persistent context overflow sets `error_type` to `step_limit` or `context_limit`.
+`status_code` records the HTTP status when supplied by the provider exception.
+Failures exit nonzero; startup errors are reported on stderr.
+
+The same endpoint and artifact settings are available in Python:
+
+```python
+import asyncio
+from ale_claw import AleClawConfig, run
+
+result = asyncio.run(run("Read the workspace.", config=AleClawConfig(model="openai/gpt-4.1")))
+print(result.status, result.transcript_path)
+```
+
+## Running in ALE
 
 Use `harness: ale_claw` in an ALE agent config:
 
@@ -71,18 +121,17 @@ export OPENROUTER_API_KEY=...
 uv run python -m ale_run run experiments/my_experiment.yaml
 ```
 
-At least one LLM provider key must be present in the environment
-(`OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) — or set
-`base_url` + `api_key` in the config to point litellm at a custom
-OpenAI-compatible gateway instead (see the config knobs below).
+CLI and ALE runs both use LiteLLM's credentials for the selected provider.
+You can also supply `base_url` and `api_key` for a custom gateway.
 
 `web_search` requires `BRAVE_API_KEY` when invoked.
 
 ## The config knobs that matter first
 
-The full config surface lives in `config.py`, but most users only need these:
+The full config surface lives in `src/ale_claw/config.py`, but most users only need these:
 
 - `model`: main model id in LiteLLM format
+- `tool_calling`: tool protocol for the main agent and GUI delegates. `auto` (default) uses CUA's model registry. `function_calling` sends the tools through the model API. `prompt` describes tools in the system prompt. For this mode, install the prompt dependencies in the same Python environment with `pip install 'cua-agent[qwen]==0.7.38' torch torchvision soundfile`.
 - `base_url` / `api_key`: point litellm at a custom OpenAI-compatible gateway
 - `extra_generation_kwargs`: extra per-request params (gateway quirks)
 - `max_turns`: hard cap on the action loop
@@ -107,50 +156,13 @@ known costs may include LiteLLM's reported response cost. The final total cost
 is `null` if any call's cost is unavailable; known partial costs remain in the
 trajectory's usage details.
 
-Minimal direct usage looks like this:
-
-```python
-from ale_run.agents.ale_claw import AleClawConfig, AleClawDeployer
-
-cfg = AleClawConfig(
-    model="openrouter/anthropic/claude-sonnet-4.6",
-    max_turns=100,
-    thinking_level="off",
-)
-```
-
 ## Where to read the code
 
-If you want to understand the harness quickly, read these files in order:
-
-- `deployer.py`: ALE entry point
-- `config.py`: runtime knobs
-- `harness/agent_loop.py`: main loop
-- `harness/prompt.py`: system prompt assembly
-- `harness/tools/tools.py`: tool registry
-- `harness/context/`: transcript replay and compaction
-- `harness/memory/`: durable memory and memory flush
-- `harness/subagent/`: delegation
-
-## Directory map
-
-```text
-ale_run/agents/ale_claw/
-├── config.py
-├── deployer.py
-├── transcript_to_trajectory.py
-└── harness/
-    ├── AGENTS.md
-    ├── agent_loop.py
-    ├── prompt.py
-    ├── session.py
-    ├── tools/
-    ├── context/
-    ├── memory/
-    ├── subagent/
-    ├── model/
-    └── adapters/
-```
+- `src/ale_claw/runner.py`: shared session runner
+- `src/ale_claw/config.py`: model and tool settings
+- `src/ale_claw/harness/`: agent loop, tools, memory, context and delegation
+- `deployer.py`: ALE executor integration
+- `transcript_to_trajectory.py`: ALE trajectory export
 
 ## ALE Claw vs. OpenClaw
 

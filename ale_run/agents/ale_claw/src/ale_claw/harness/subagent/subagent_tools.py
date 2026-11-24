@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from agent.tools.base import BaseTool, register_tool
+from agent.types import AgentConfigInfo
 
 from ..memory.memory import MemoryStore
 from ..model.model_config import merge_helper_generation_kwargs, model_credentials, model_generation_kwargs
@@ -342,7 +343,9 @@ class DelegateGUITool(BaseTool):
         api_key: str | None = None,
         api_base: str | None = None,
         cfg: dict | None = None,
+        tool_loop: AgentConfigInfo | None = None,
     ) -> None:
+        self._tool_loop = tool_loop
         self._registry = registry
         self._session = session
         self._parent_session_dir = Path(parent_session_dir)
@@ -432,6 +435,7 @@ class DelegateGUITool(BaseTool):
         async def _drive() -> None:
             try:
                 await run_gui_subagent(
+                    tool_loop=self._tool_loop,
                     instruction=instruction,
                     session=self._session,
                     registry=self._registry,

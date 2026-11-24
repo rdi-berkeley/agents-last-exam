@@ -4,7 +4,7 @@ Tests build_replay_messages, sanitize_history, limit_history_turns,
 and convert_to_responses_api_items.
 """
 
-from ale_run.agents.ale_claw.harness.session import (
+from ale_claw.harness.session import (
     SessionManager,
     TranscriptEntry,
     build_replay_messages,

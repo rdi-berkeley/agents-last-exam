@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from PIL import Image as _PILImage
 
-from ale_run.agents.ale_claw.harness.tools.analyze_image import (
+from ale_claw.harness.tools.analyze_image import (
     AnalyzeImageTool,
     _decode_data_uri,
     _mime_from_extension,
@@ -212,7 +212,7 @@ class TestInputNormalization:
 class TestRemoteImageLoading:
     def test_remote_path_calls_interface(self):
         tool = _make_tool()
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
+        with patch("ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(return_value=_mock_vlm_response())
             result = tool.call({"image": r"C:\Users\User\test.png", "prompt": "What floor?"})
 
@@ -257,7 +257,7 @@ class TestDataUriLoading:
     def test_data_uri_accepted(self):
         tool = _make_tool()
         uri = _make_data_uri(_REAL_PNG_BYTES, "image/png")
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
+        with patch("ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(return_value=_mock_vlm_response("An image"))
             result = tool.call({"image": uri})
         assert "An image" in result
@@ -278,8 +278,8 @@ class TestHttpUrlLoading:
     def test_http_url_fetched(self):
         tool = _make_tool()
         with (
-            patch("ale_run.agents.ale_claw.harness.tools.analyze_image.litellm") as mock_litellm,
-            patch("ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool._fetch_http") as mock_fetch,
+            patch("ale_claw.harness.tools.analyze_image.litellm") as mock_litellm,
+            patch("ale_claw.harness.tools.analyze_image.AnalyzeImageTool._fetch_http") as mock_fetch,
         ):
             mock_fetch.return_value = (_REAL_PNG_BYTES, "image/png")
             mock_litellm.acompletion = AsyncMock(return_value=_mock_vlm_response("Web image"))
@@ -289,7 +289,7 @@ class TestHttpUrlLoading:
     def test_http_fetch_failure(self):
         tool = _make_tool()
         with patch(
-            "ale_run.agents.ale_claw.harness.tools.analyze_image.AnalyzeImageTool._fetch_http",
+            "ale_claw.harness.tools.analyze_image.AnalyzeImageTool._fetch_http",
             new_callable=AsyncMock,
             side_effect=Exception("timeout"),
         ):
@@ -340,7 +340,7 @@ class TestSizeEnforcement:
         img_file.write_bytes(_REAL_PNG_BYTES)
 
         tool = _make_tool()
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
+        with patch("ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(return_value=_mock_vlm_response("OK"))
             result = tool.call({"image": str(img_file), "maxBytesMb": 10})
         assert "OK" in result
@@ -359,7 +359,7 @@ class TestMultiImage:
         f2.write_bytes(_real_png(color=(0, 255, 0)))
 
         tool = _make_tool()
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
+        with patch("ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(return_value=_mock_vlm_response("Both images show..."))
             result = tool.call({
                 "images": [str(f1), str(f2)],
@@ -404,7 +404,7 @@ class TestNoImages:
 class TestVlmCall:
     def test_default_prompt(self):
         tool = _make_tool()
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
+        with patch("ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(return_value=_mock_vlm_response("A screenshot"))
             tool.call({"image": r"C:\test.png"})
             call_args = mock_litellm.acompletion.call_args
@@ -413,7 +413,7 @@ class TestVlmCall:
 
     def test_custom_prompt_forwarded(self):
         tool = _make_tool()
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
+        with patch("ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(return_value=_mock_vlm_response("Floor 3"))
             tool.call({"image": r"C:\test.png", "prompt": "What floor?"})
             call_args = mock_litellm.acompletion.call_args
@@ -422,7 +422,7 @@ class TestVlmCall:
 
     def test_model_forwarded(self):
         tool = _make_tool(model="my-custom-model")
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
+        with patch("ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(return_value=_mock_vlm_response("OK"))
             tool.call({"image": r"C:\test.png"})
             call_args = mock_litellm.acompletion.call_args
@@ -432,7 +432,7 @@ class TestVlmCall:
         tool = _make_tool(
             thinking_params={"thinking": {"type": "enabled", "budget_tokens": 5000}}
         )
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
+        with patch("ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(return_value=_mock_vlm_response("OK"))
             tool.call({"image": r"C:\test.png"})
             call_args = mock_litellm.acompletion.call_args
@@ -443,7 +443,7 @@ class TestVlmCall:
 
     def test_vlm_failure_returns_error(self):
         tool = _make_tool()
-        with patch("ale_run.agents.ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
+        with patch("ale_claw.harness.tools.analyze_image.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(side_effect=Exception("rate limited"))
             result = tool.call({"image": r"C:\test.png"})
         assert "Error" in result

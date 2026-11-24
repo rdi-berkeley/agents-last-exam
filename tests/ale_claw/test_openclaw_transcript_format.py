@@ -10,8 +10,8 @@ differently per provider on replay.
 
 import time
 
-from ale_run.agents.ale_claw.harness.context.transcript import _find_latest_screenshot, group_step_output
-from ale_run.agents.ale_claw.harness.session import SessionManager
+from ale_claw.harness.context.transcript import _find_latest_screenshot, group_step_output
+from ale_claw.harness.session import SessionManager
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +255,7 @@ class TestPartialItemTranscriptLogging:
         sm = SessionManager("t1", base_dir=tmp_path)
         sm.init_session()
 
-        from ale_run.agents.ale_claw.harness.agent_loop import OpenClawComputerAgent
+        from ale_claw.harness.agent_loop import OpenClawComputerAgent
 
         agent = object.__new__(OpenClawComputerAgent)
         agent.session_mgr = sm
@@ -384,7 +384,7 @@ class TestSessionReasoningRetention:
         Anthropic: thinking blocks are dropped (drop_thinking_blocks=True).
         OpenAI: orphaned reasoning blocks are downgraded; non-orphaned kept.
         """
-        from ale_run.agents.ale_claw.harness.canonical.canonical import (
+        from ale_claw.harness.canonical.canonical import (
             CanonicalMessage,
             TextBlock,
             ThinkingBlock,
@@ -421,7 +421,7 @@ class TestSessionReasoningRetention:
 
     def test_orphaned_openai_reasoning_dropped_on_replay(self):
         """Orphaned OpenAI reasoning (no following content) is dropped on replay."""
-        from ale_run.agents.ale_claw.harness.canonical.canonical import (
+        from ale_claw.harness.canonical.canonical import (
             CanonicalMessage,
             TextBlock,
             ThinkingBlock,

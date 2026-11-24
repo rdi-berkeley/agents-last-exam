@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from ale_run.agents.ale_claw.harness.session import (
+from ale_claw.harness.session import (
     DEFAULT_BASE_DIR,
     DEFAULT_MEMORY_FLUSH_FORCE_TRANSCRIPT_BYTES,
     DEFAULT_MEMORY_FLUSH_RESERVE_TOKENS_FLOOR,

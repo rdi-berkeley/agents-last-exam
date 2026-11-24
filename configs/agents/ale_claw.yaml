@@ -5,7 +5,7 @@
 # base_url/api_key in config: (see below) — no env var needed.
 #
 # Consolidated preset; `model:` is an example, every `config:` key is the
-# dataclass default (ale_run/agents/ale_claw/config.py).
+# dataclass default (ale_run/agents/ale_claw/src/ale_claw/config.py).
 # Reference as:  agents: [ configs/agents/ale_claw.yaml ]
 
 harness: ale_claw

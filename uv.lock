@@ -13,9 +13,9 @@ resolution-markers = [
 [manifest]
 members = [
     "agent-last-exam",
-    "ale-ale-claw",
     "ale-antigravity-cli",
     "ale-claude-code",
+    "ale-claw",
     "ale-codex",
     "ale-cursor-cli",
     "ale-droid",
@@ -193,27 +193,6 @@ wheels = [
 ]
 
 [[package]]
-name = "ale-ale-claw"
-version = "0.1.0"
-source = { editable = "ale_run/agents/ale_claw" }
-dependencies = [
-    { name = "cua-agent" },
-    { name = "cua-computer" },
-    { name = "cua-core" },
-    { name = "litellm" },
-    { name = "pillow" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "cua-agent", specifier = "==0.7.38" },
-    { name = "cua-computer", specifier = "==0.5.17" },
-    { name = "cua-core", specifier = "==0.1.18" },
-    { name = "litellm", specifier = ">=1.80" },
-    { name = "pillow", specifier = ">=10.0" },
-]
-
-[[package]]
 name = "ale-antigravity-cli"
 version = "0.1.0"
 source = { editable = "ale_run/agents/antigravity_cli" }
@@ -222,6 +201,31 @@ source = { editable = "ale_run/agents/antigravity_cli" }
 name = "ale-claude-code"
 version = "0.1.0"
 source = { editable = "ale_run/agents/claude_code" }
+
+[[package]]
+name = "ale-claw"
+version = "0.1.0"
+source = { editable = "ale_run/agents/ale_claw" }
+dependencies = [
+    { name = "cua-agent" },
+    { name = "cua-bench" },
+    { name = "cua-computer" },
+    { name = "cua-core" },
+    { name = "litellm" },
+    { name = "pillow" },
+    { name = "tenacity" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cua-agent", specifier = "==0.7.38" },
+    { name = "cua-bench", specifier = "==0.2.7" },
+    { name = "cua-computer", specifier = "==0.5.17" },
+    { name = "cua-core", specifier = "==0.1.18" },
+    { name = "litellm", specifier = ">=1.80" },
+    { name = "pillow", specifier = ">=10.0" },
+    { name = "tenacity" },
+]
 
 [[package]]
 name = "ale-codex"

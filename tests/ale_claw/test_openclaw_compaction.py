@@ -16,9 +16,9 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from ale_run.agents.ale_claw.harness.model.model_config import HelperTransportDefaults, ModelConfig, register_model_config
+from ale_claw.harness.model.model_config import HelperTransportDefaults, ModelConfig, register_model_config
 
-from ale_run.agents.ale_claw.harness.context.context import (
+from ale_claw.harness.context.context import (
     BASE_CHUNK_RATIO,
     DEFAULT_SUMMARY_FALLBACK,
     IDENTIFIER_PRESERVATION_INSTRUCTIONS,
@@ -43,7 +43,7 @@ from ale_run.agents.ale_claw.harness.context.context import (
     summarize_chunks_iterative,
     summarize_with_fallback,
 )
-from ale_run.agents.ale_claw.harness.agent_loop import _extract_messages_for_compaction
+from ale_claw.harness.agent_loop import _extract_messages_for_compaction
 
 
 # ---------------------------------------------------------------------------
@@ -469,7 +469,7 @@ class TestSummarizeChunksIterative:
         assert result == "Combined summary"
 
     def test_custom_resolved_runtime_can_switch_compaction_transport(self):
-        from ale_run.agents.ale_claw.harness.model.model_config import _MODEL_CONFIGS
+        from ale_claw.harness.model.model_config import _MODEL_CONFIGS
 
         original = list(_MODEL_CONFIGS)
         mock_resp = MagicMock()
@@ -547,12 +547,12 @@ class TestSummarizeWithFallback:
 class TestRemovedSymbols:
     def test_merge_summaries_instructions_removed(self):
         """MERGE_SUMMARIES_INSTRUCTIONS should no longer exist in context module."""
-        import ale_run.agents.ale_claw.harness.context.context as ctx
+        import ale_claw.harness.context.context as ctx
         assert not hasattr(ctx, "MERGE_SUMMARIES_INSTRUCTIONS")
 
     def test_merge_summaries_function_removed(self):
         """_merge_summaries should no longer exist in context module."""
-        import ale_run.agents.ale_claw.harness.context.context as ctx
+        import ale_claw.harness.context.context as ctx
         assert not hasattr(ctx, "_merge_summaries")
 
 

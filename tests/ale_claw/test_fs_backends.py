@@ -18,14 +18,13 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from ale_run.agents.ale_claw.harness.tools.fs_backends import (
+from ale_claw.harness.tools.fs_backends import (
     FilesystemRegistry,
     HostBackend,
     VMBackend,
     detect_host_workspace_root,
 )
-from ale_run.agents.ale_claw.harness.tools.tools_fs import (
+from ale_claw.harness.tools.tools_fs import (
     EditFileTool,
     ReadFileTool,
     WriteFileTool,

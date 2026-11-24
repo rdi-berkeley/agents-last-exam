@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ale_run.agents.ale_claw.harness.agent_loop import OpenClawComputerAgent
-from ale_run.agents.ale_claw.harness.model.model_config import resolve_model
-from ale_run.agents.ale_claw.harness.model.helper_runtime import call_helper_model
+from ale_claw.harness.agent_loop import OpenClawComputerAgent
+from ale_claw.harness.model.model_config import resolve_model
+from ale_claw.harness.model.helper_runtime import call_helper_model
 
 
 @pytest.mark.parametrize(
