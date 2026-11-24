@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar, Literal
+
+if TYPE_CHECKING:
+    from agent.types import AgentConfigInfo
 
 
 @dataclass
@@ -12,9 +15,7 @@ class AleClawConfig:
     name: ClassVar[str] = "ale-claw"
 
     model: str = "openrouter/anthropic/claude-sonnet-4.6"
-    """LiteLLM-format model id. Maps to OpenClaw's ``model`` kwarg verbatim.
-    OpenRouter routes work via the vendored ``unified_loop`` (registered for
-    ``openrouter/.*`` regex)."""
+    """LiteLLM model id used for the provider request."""
 
     # ---- custom OpenAI-compatible gateway (optional) ----
     base_url: str | None = None
@@ -110,7 +111,24 @@ class AleClawConfig:
     """``openclaw`` (default — last N completed turns) or ``cua`` (last N images
     by count). OpenClaw mode reduces cache thrash on multi-screenshot turns."""
 
+    tool_calling: Literal["auto", "function_calling", "prompt"] = "auto"
+    """Main and GUI tool protocol. Auto uses the model's registered CUA loop."""
+
+    @property
+    def tool_loop_override(self) -> AgentConfigInfo | None:
+        if self.tool_calling == "auto":
+            return None
+        from agent.decorators import get_agent_configs
+        from agent.loops.generic_vlm import GenericVlmConfig
+
+        from .harness.model.unified_loop import UnifiedAgentConfig
+
+        loop = UnifiedAgentConfig if self.tool_calling == "function_calling" else GenericVlmConfig
+        return next(info for info in get_agent_configs() if info.agent_class is loop)
+
     def __post_init__(self) -> None:
+        if self.tool_calling not in ("auto", "function_calling", "prompt"):
+            raise ValueError("tool_calling must be auto, function_calling or prompt")
         if self.disable_main_computer and self.disable_delegate_gui:
             raise ValueError(
                 "Both disable_main_computer and disable_delegate_gui set — "

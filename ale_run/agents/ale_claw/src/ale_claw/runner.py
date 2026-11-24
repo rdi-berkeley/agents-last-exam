@@ -165,6 +165,7 @@ async def _run_session(
         await computer_handler._initialize()
 
     # ---- 6. Tools + disabled_tools filter ----
+    tool_loop = cfg.tool_loop_override
     tools = build_tools(
         session,
         memory_store,
@@ -184,6 +185,7 @@ async def _run_session(
         disable_main_computer=cfg.disable_main_computer,
         disable_delegate_gui=cfg.disable_delegate_gui,
         gui_model=gui_model,
+        tool_loop=tool_loop,
         workspace_root=workspace_root,
         host_workspace_root=host_workspace_root,
         context_window_tokens=context_window_tokens,
@@ -227,12 +229,13 @@ async def _run_session(
         session_mgr.save_state()
 
     agent = OpenClawComputerAgent(
+        tool_loop=tool_loop,
         model=cfg.model,
         tools=tools,
         only_n_most_recent_images=3,
         trajectory_dir=trajectory_dir,
         instructions=instructions,
-        use_prompt_caching=True,
+        use_prompt_caching=cfg.tool_calling != "prompt",
         callbacks=[ToolLoggingCallback()],
         context_files=context_files,
         image_retention_mode=cfg.image_retention_mode,

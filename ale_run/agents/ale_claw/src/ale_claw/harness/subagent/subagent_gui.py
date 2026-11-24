@@ -31,10 +31,11 @@ from typing import Any
 from agent import ComputerAgent
 from agent.callbacks.base import AsyncCallbackHandler
 from agent.responses import make_tool_error_item
-from agent.types import ToolError
+from agent.types import AgentConfigInfo, ToolError
 from PIL import Image
 
 from ..agent_loop import OpenClawComputerAgent
+from ..model.tool_loop import ToolCallingComputerAgent
 from ..agent_loop_helpers import _maybe_sanitize_screenshot
 from ..context.transcript import group_step_output
 from ..memory.memory import MemoryGetTool, MemorySearchTool, MemoryStore, MemoryWriteTool
@@ -119,7 +120,7 @@ class _GUIComputerHandler(OpenClawComputerHandler):
         return resized
 
 
-class _GUIAgent(ComputerAgent):
+class _GUIAgent(ToolCallingComputerAgent):
     """Dispatch the function-form computer tool used by OpenRouter models."""
 
     auto_screenshot = True
@@ -353,6 +354,7 @@ async def _build_gui_agent(
     memory_store: MemoryStore | None,
     inbox: "asyncio.Queue[str]",
     max_steps: int,
+    tool_loop: AgentConfigInfo | None = None,
 ) -> ComputerAgent:
     """Construct the lightweight GUI ComputerAgent (computer tool + optional memory).
 
@@ -377,6 +379,7 @@ async def _build_gui_agent(
             MemoryWriteTool(memory_store),
         ])
     return _GUIAgent(
+        tool_loop=tool_loop,
         model=model,
         tools=tools,
         instructions=_build_system_prompt(),
@@ -456,6 +459,7 @@ async def run_gui_subagent(
     registry: SubagentRegistry,
     run_id: str,
     model: str = DEFAULT_MODEL,
+    tool_loop: AgentConfigInfo | None = None,
     max_steps: int = DEFAULT_MAX_STEPS,
     thinking_params: dict[str, Any] | None = None,
     parent_session_dir: str | Path | None = None,
@@ -489,7 +493,9 @@ async def run_gui_subagent(
     registry.attach_inbox(run_id, inbox)
 
     try:
-        agent = await _build_gui_agent(session, model, thinking_params, memory_store, inbox, max_steps)
+        agent = await _build_gui_agent(
+            session, model, thinking_params, memory_store, inbox, max_steps, tool_loop
+        )
         summary = await _relay_until_done(
             agent, instruction, run_id, max_steps, usage, transcript, credentials
         )

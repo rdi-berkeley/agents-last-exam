@@ -80,6 +80,7 @@ output_dir = "runs/example"
 
 [agent]
 model = "openai/gpt-4.1"
+tool_calling = "function_calling"
 max_turns = 100
 ```
 
@@ -130,6 +131,7 @@ You can also supply `base_url` and `api_key` for a custom gateway.
 The full config surface lives in `src/ale_claw/config.py`, but most users only need these:
 
 - `model`: main model id in LiteLLM format
+- `tool_calling`: tool protocol for the main agent and GUI delegates. `auto` (default) uses CUA's model registry. `function_calling` sends the tools through the model API. `prompt` describes tools in the system prompt. For this mode, install the prompt dependencies in the same Python environment with `pip install 'cua-agent[qwen]==0.7.38' torch torchvision soundfile`.
 - `base_url` / `api_key`: point litellm at a custom OpenAI-compatible gateway
 - `extra_generation_kwargs`: extra per-request params (gateway quirks)
 - `max_turns`: hard cap on the action loop

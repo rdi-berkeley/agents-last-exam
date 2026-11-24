@@ -96,6 +96,21 @@ def _fake_agent(result):
     return agent
 
 
+async def test_provider_response_id_is_scoped_to_one_turn():
+    agent = _fake_agent({})
+    replies = iter([SimpleNamespace(id="reply-1"), {}])
+
+    async def predict(**kwargs):
+        await kwargs["_on_api_end"]({}, next(replies))
+        return {"output": [], "usage": {}}
+
+    agent.agent_loop.predict_step.side_effect = predict
+    agent.overflow_cb = MagicMock(needs_compaction=False)
+    results = [step async for step in agent.run("task", max_turns=2)]
+    assert [step.get("id") for step in results] == ["reply-1", None]
+    assert agent._on_api_end.await_count == 2
+
+
 @pytest.mark.parametrize("recovers", [False, True])
 async def test_overflow_compactions_bounded_per_turn(recovers):
     error = ValueError("maximum context length exceeded")

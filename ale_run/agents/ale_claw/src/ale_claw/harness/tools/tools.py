@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from agent.callbacks.base import AsyncCallbackHandler
 from agent.computers.base import AsyncComputerHandler
 from agent.tools.base import BaseTool
-from agent.types import ToolError
+from agent.types import AgentConfigInfo, ToolError
 
 from .fs_backends import FilesystemRegistry, HostBackend, VMBackend
 from ..memory.memory import MemoryGetTool, MemorySearchTool, MemoryStore  # MemoryWriteTool retained in memory.py; intentionally not exposed to the main agent (write(target='host') covers journaling).
@@ -175,6 +175,7 @@ def build_tools(
     disable_main_computer: bool = False,
     disable_delegate_gui: bool = False,
     gui_model: str | None = None,
+    tool_loop: AgentConfigInfo | None = None,
     workspace_root: str | None = None,
     host_workspace_root: str | None = None,
     context_window_tokens: int | None = None,
@@ -329,6 +330,7 @@ def build_tools(
             "session": session,
             "parent_session_dir": parent_session_dir,
             "thinking_params": gui_thinking_params,
+            "tool_loop": tool_loop,
             "generation_kwargs": generation_kwargs,
             "memory_store": memory_store,
             "primary_model": default_model,
