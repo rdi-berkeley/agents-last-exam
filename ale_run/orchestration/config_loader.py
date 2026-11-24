@@ -80,7 +80,7 @@ def load_experiment(path: str | Path) -> ExperimentSpec:
 
     Two-pass parse: first pass extracts ``secret_file:`` (if present) without
     ``${env:VAR}`` substitution; that file is loaded into ``os.environ``
-    (shell env wins on conflict); second pass parses for real, with
+    (its non-empty values override the shell env); second pass parses for real, with
     substitution. If ``secret_file:`` is unset, falls back to auto-loading
     ``<main yaml's directory>/secret/.env`` (then ``.../.env``) when they
     exist. Profile yamls referenced from the main file inherit the same
@@ -126,7 +126,9 @@ def _load_dotenv(path: Path, *, override: bool = False) -> None:
     When ``override=False`` (default / auto-detected files), shell env
     wins — never overwrites an already-set os.environ key.  When
     ``override=True`` (explicit ``secret_file:`` in the experiment yaml),
-    the file is the authoritative source and overwrites shell values.
+    the file is the authoritative source and overwrites shell values, except
+    that an empty value (``KEY=``, as in the unfilled template) never clears
+    a shell value.
 
     Missing file is silently ignored — most setups have one, some don't.
     """
@@ -153,7 +155,7 @@ def _load_dotenv(path: Path, *, override: bool = False) -> None:
         if not key.isidentifier():
             logger.debug("dotenv %s:%d skipped (bad key): %r", path, line_no, raw)
             continue
-        if override:
+        if override and value:
             os.environ[key] = value
         else:
             os.environ.setdefault(key, value)
