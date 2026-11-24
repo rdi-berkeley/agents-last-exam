@@ -2,6 +2,7 @@
 
 import json
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -45,6 +46,31 @@ async def test_missing_cua_stops_before_agent(monkeypatch):
         await runner.run("goal", config=AleClawConfig())
     execute.assert_not_awaited()
     session.close.assert_awaited_once()
+
+
+async def test_runs_in_same_output_directory_start_independent_sessions(monkeypatch, tmp_path):
+    prompts = []
+
+    async def record_turn(self, prompt, **kwargs):
+        prompts.append(prompt)
+        self.session_mgr.append_message("user", prompt)
+        yield {"output": [{"type": "message", "content": "DONE"}]}
+
+    monkeypatch.setattr(runner, "RemoteDesktopSession", Mock(return_value=AsyncMock()))
+    monkeypatch.setattr(runner.OpenClawComputerAgent, "run", record_turn)
+    config = AleClawConfig(disable_main_computer=True)
+    paths = []
+    for prompt in ("First task", "Second task"):
+        result = await runner.run(prompt, config=config, output_dir=tmp_path)
+        assert result.status == "completed"
+        paths.append(Path(result.transcript_path))
+
+    assert prompts == ["First task", "Second task"]
+    assert paths[0].parent != paths[1].parent
+    for path, prompt in zip(paths, prompts, strict=True):
+        events = [json.loads(line) for line in path.read_text().splitlines()]
+        contents = [e["message"]["content"] for e in events if e["type"] == "message"]
+        assert contents == [[{"type": "text", "text": prompt}]]
 
 
 def test_cli_overrides_config_and_returns_failure_status(monkeypatch, tmp_path, capsys):

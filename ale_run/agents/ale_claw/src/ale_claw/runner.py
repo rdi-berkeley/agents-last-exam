@@ -9,7 +9,6 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlsplit
 
 from cua_bench.computers.remote import RemoteDesktopSession
@@ -27,14 +26,10 @@ from .harness import (
     ThinkingConfig,
     ThinkLevel,
     ToolLoggingCallback,
-    build_replay_messages,
     build_system_prompt_report,
     build_tools,
-    convert_to_responses_api_items,
     get_tool_summaries,
-    limit_history_turns,
     resolve_thinking_default,
-    sanitize_history,
 )
 from .harness.agent_loop import has_done_signal
 from .harness.context.context import (
@@ -251,20 +246,7 @@ async def _run_session(
         **thinking_api_params,
     )
 
-    # ---- 9. Cross-run replay (always empty v1) ----
-    prior_entries = session_mgr.load_history()
-    replay_messages: list[dict[str, Any]] = []
-    if prior_entries:
-        replay_messages = build_replay_messages(prior_entries)
-        replay_messages = sanitize_history(replay_messages)
-        replay_messages = limit_history_turns(replay_messages, cfg.max_history_turns)
-        replay_messages = sanitize_history(replay_messages)
-        replay_messages = convert_to_responses_api_items(replay_messages)
-    run_input = (
-        replay_messages + [{"role": "user", "content": prompt}] if replay_messages else prompt
-    )
-
-    # ---- 10. Drive loop ----
+    # ---- 9. Drive loop ----
     # The episode wall budget is orchestration-owned: the executor wraps
     # launch() in asyncio.wait_for(timeout=timeout_s) (derived from the
     # task), so we drive the loop directly here; a cancellation on the
@@ -282,7 +264,7 @@ async def _run_session(
 
     try:
         async for result in agent.run(
-            run_input,
+            prompt,
             api_base=cfg.base_url,
             api_key=cfg.api_key,
             max_turns=max_steps,
