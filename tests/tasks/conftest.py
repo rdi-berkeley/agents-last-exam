@@ -1,4 +1,17 @@
+import sys
+
 import pytest
+
+# Task main.py files import their scorer by bare name, which TaskLoader isolates
+# per task. Test modules import task mains directly, so drop the previous task's
+# copy before each test module is imported.
+_TASK_LOCAL_MODULE_NAMES = ("score_outputs", "verify_outputs")
+
+
+def pytest_collectstart(collector):
+    if isinstance(collector, pytest.Module):
+        for name in _TASK_LOCAL_MODULE_NAMES:
+            sys.modules.pop(name, None)
 
 
 @pytest.fixture(autouse=True)
