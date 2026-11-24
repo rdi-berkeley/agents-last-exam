@@ -16,8 +16,8 @@
 # Secrets & env vars: copy `secret/.env.example` → `secret/.env` and fill in.
 # The loader reads `secret_file` (relative to this yaml) before parsing, so any
 # $-env reference (UPPER_SNAKE form) in a referenced config resolves without a
-# manual `export`. Shell env still wins, so `export FOO=bar` overrides for a
-# one-off run.
+# manual `export`. Non-empty values in that file override the shell env; a key
+# left empty (`FOO=`) keeps the value exported in your shell.
 # =============================================================================
 
 name: my_experiment
