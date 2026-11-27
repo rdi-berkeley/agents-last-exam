@@ -154,6 +154,12 @@ def beneath(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(prefix.rstrip("/") + "/")
 
 
+def _parent_matches(path: str, pattern: str) -> bool:
+    if pattern.split("*")[0].rsplit("/", 1)[-1] not in path:
+        return False
+    return any(fnmatch.fnmatchcase(item, pattern) for item in (path, *map(str, Path(path).parents)))
+
+
 def canonical(name: str) -> str:
     if "\x00" in name or "\n" in name or ".." in name.split("/"):
         raise ValueError("unsafe archive path")
@@ -217,18 +223,18 @@ def validate_contract(contract: dict) -> None:
 def forbidden(path: str, contract: dict) -> bool:
     path = canonical(path)
     parts = path.strip("/").split("/")
-    parents = [path, *[str(item) for item in Path(path).parents]]
     if path.startswith("/home/") and len(parts) > 1 and parts[1] != "user":
         return True
-    if any(COMPONENT_PATTERN.fullmatch(part) for part in parts):
+    if any(map(COMPONENT_PATTERN.fullmatch, parts)):
         return True
     if any(beneath(path, prefix) for prefix in contract.get("exclude_paths", [])):
         return True
+    literal = path.startswith(EXCLUDED)
     for pattern in EXCLUDED:
         matches = (
-            beneath(path, pattern)
+            literal and path.startswith(pattern) and beneath(path, pattern)
             if "*" not in pattern
-            else any(fnmatch.fnmatchcase(parent, pattern) for parent in parents)
+            else _parent_matches(path, pattern)
         )
         if matches:
             if pattern == "/media/user/data" and any(
@@ -240,12 +246,13 @@ def forbidden(path: str, contract: dict) -> bool:
     for home in ("/home/user", "/root"):
         if not beneath(path, home):
             continue
+        relative = path[len(home) + 1 :]
+        literal = relative.startswith(HOME_STATE)
         for state in HOME_STATE:
-            prefix = home + "/" + state
             matches = (
-                beneath(path, prefix)
+                literal and relative.startswith(state) and beneath(relative, state)
                 if "*" not in state
-                else any(fnmatch.fnmatchcase(parent, prefix) for parent in parents)
+                else _parent_matches(path, home + "/" + state)
             )
             if matches:
                 if state == ".cache" and any(
